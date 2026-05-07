@@ -160,15 +160,17 @@ export type UpdateResult = {
     preserved: string[];
     removed: string[];
     /**
-     * Phase 3.5 A2/A3/A4 — opportunistic cleanups during `migratePreSplitAgentSkills`:
-     * stale `SKILL.legacy.md` files removed (A2), byte-equal aux files
-     * dedup'd from `.agents/skills/<name>/` (A3), and empty user-skill
-     * dirs pruned (A4). Each entry is a per-cleanup record so the CLI
-     * can surface counts in the update summary.
+     * Phase 3.5 A2/A3/A4/B1 — opportunistic cleanups during
+     * `migratePreSplitAgentSkills`: stale `SKILL.legacy.md` files
+     * removed (A2), byte-equal aux files dedup'd from
+     * `.agents/skills/<name>/` (A3), empty user-skill dirs pruned (A4),
+     * and `.fork-base/` auto-recorded from git history (B1). Each entry
+     * is a per-cleanup record so the CLI can surface counts in the
+     * update summary.
      */
     cleaned?: Array<{
         name: string;
-        kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir';
+        kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir' | 'auto_fork_base';
         path: string;
     }>;
 };

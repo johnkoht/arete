@@ -537,7 +537,12 @@ export class WorkspaceService {
             // is gone post-MC5), byte-equal aux files (A3), and empty user-
             // skill directories (A4).
             try {
-                const migrated = await migratePreSplitAgentSkills(this.storage, paths.agentSkills, paths.managedSkills, { sourceSkillsDir: options.sourcePaths.skills });
+                const migrated = await migratePreSplitAgentSkills(this.storage, paths.agentSkills, paths.managedSkills, {
+                    sourceSkillsDir: options.sourcePaths.skills,
+                    // Phase 3.5 B1 — opportunistic git-history match for
+                    // user-edited forks with no recorded base. Best-effort.
+                    autoForkBase: true,
+                });
                 for (const name of migrated.removed) {
                     if (!result.removed.includes(name))
                         result.removed.push(name);

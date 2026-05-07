@@ -609,7 +609,12 @@ export class WorkspaceService {
           this.storage,
           paths.agentSkills,
           paths.managedSkills,
-          { sourceSkillsDir: options.sourcePaths.skills },
+          {
+            sourceSkillsDir: options.sourcePaths.skills,
+            // Phase 3.5 B1 — opportunistic git-history match for
+            // user-edited forks with no recorded base. Best-effort.
+            autoForkBase: true,
+          },
         );
         for (const name of migrated.removed) {
           if (!result.removed.includes(name)) result.removed.push(name);

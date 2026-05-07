@@ -31,6 +31,7 @@
 
 import { join, basename, dirname } from 'path';
 import { createHash } from 'crypto';
+import { execFileSync } from 'child_process';
 import type { StorageAdapter } from '../storage/adapter.js';
 import {
   diffMarkdownSections,
@@ -63,6 +64,13 @@ export interface ForkSkillResult {
    * `mergeSkill` to detect upstream drift.
    */
   baseHash?: string;
+  /**
+   * Phase 3.5 B2 — when forking onto a pre-existing user dir, the
+   * names of aux files copied from managed because they were missing
+   * in the fork. Empty/undefined when `alreadyExisted` is false (full
+   * fresh-fork copies everything via `copyDirectory`).
+   */
+  auxFilesCopied?: string[];
 }
 
 /** Options for `forkSkill`. */
@@ -187,10 +195,22 @@ export async function forkSkill(
 
   const forkExists = await storage.exists(forkPath);
   if (forkExists) {
-    // Already forked. NEVER overwrite the fork SKILL.md — that's the
-    // user's hand-edited content. With or without `--force`, we only
-    // (re-)record `.fork-base/` from current managed content.
+    // Already forked. Phase 3.5 B2 semantics:
+    //
+    // - SKILL.md: NEVER overwrite. The user's hand-edited content is
+    //   the load-bearing artifact and is the only thing this skill
+    //   resolution prefers from the user tier.
+    // - Auxiliary files (templates/, LEARNINGS.md, anything else
+    //   under managed except `.fork-base/` and SKILL.md): copy from
+    //   managed only when MISSING in the fork. Never overwrite an
+    //   existing user-tier copy. This makes `arete skill fork`
+    //   idempotent against partial manual setups (e.g., user
+    //   hand-created `.agents/skills/<name>/SKILL.md` and now wants a
+    //   proper fork-base recorded — re-running fork backfills the aux
+    //   files without trampling their SKILL.md).
+    // - `.fork-base/`: (re-)record only when missing OR `--force`.
     const basePath = join(forkPath, FORK_BASE_DIRNAME);
+    const auxCopied = await backfillAuxFiles(storage, managedPath, forkPath);
     const baseExists = await storage.exists(basePath);
     if (!baseExists || force) {
       const hash = await snapshotManagedAsBase(storage, managedPath, basePath);
@@ -200,6 +220,7 @@ export async function forkSkill(
         managedPath,
         alreadyExisted: true,
         baseHash: hash,
+        auxFilesCopied: auxCopied,
       };
     }
     return {
@@ -207,6 +228,7 @@ export async function forkSkill(
       forkPath,
       managedPath,
       alreadyExisted: true,
+      auxFilesCopied: auxCopied,
     };
   }
 
@@ -224,6 +246,51 @@ export async function forkSkill(
     alreadyExisted: false,
     baseHash: hash,
   };
+}
+
+/**
+ * Phase 3.5 B2 — copy aux files (anything under managed except
+ * `SKILL.md` and `.fork-base/`) into the fork only when the
+ * corresponding user-tier path doesn't exist. Never overwrites an
+ * existing user-tier file. Returns the list of relative paths
+ * copied.
+ *
+ * This runs on the "fork already exists" branch of `forkSkill` so
+ * that aux files (templates/, LEARNINGS.md) end up in the fork even
+ * when the user hand-created the fork before running `arete skill
+ * fork`.
+ */
+async function backfillAuxFiles(
+  storage: StorageAdapter,
+  managedPath: string,
+  forkPath: string,
+): Promise<string[]> {
+  const copied: string[] = [];
+  let managedFiles: string[];
+  try {
+    managedFiles = await storage.list(managedPath, { recursive: true });
+  } catch {
+    return copied;
+  }
+  for (const managedFile of managedFiles) {
+    const rel = managedFile.slice(managedPath.length).replace(/^[/\\]/, '');
+    if (rel.length === 0) continue;
+    const topSegment = rel.split(/[/\\]/)[0];
+    if (topSegment === 'SKILL.md') continue;
+    if (topSegment === FORK_BASE_DIRNAME) continue;
+    const forkFile = join(forkPath, rel);
+    if (await storage.exists(forkFile)) continue;
+    try {
+      const content = await storage.read(managedFile);
+      if (content === null) continue;
+      await storage.mkdir(dirname(forkFile));
+      await storage.write(forkFile, content);
+      copied.push(rel);
+    } catch {
+      // Non-fatal; skip this file.
+    }
+  }
+  return copied;
 }
 
 /**
@@ -522,6 +589,33 @@ export async function migratePreSplitAgentSkills(
 
     // Case 2: user fork (edited).
     preserved.push(name);
+
+    // Phase 3.5 B1 — auto-record `.fork-base/` when the user's
+    // SKILL.md content matches a known prior shipped version. Without
+    // this, `arete skill diff <name>` errors with "no fork base
+    // recorded" and the user has to choose between
+    // `arete skill fork --force` or manual recovery. Best-effort —
+    // skipped silently if git history is unavailable or no match
+    // found.
+    if (options.autoForkBase && options.sourceSkillsDir) {
+      const forkBasePath = join(userPath, FORK_BASE_DIRNAME);
+      const forkBaseExists = await storage.exists(forkBasePath);
+      if (!forkBaseExists) {
+        const matched = await tryAutoForkBase(
+          storage,
+          userPath,
+          managedPath,
+          options.sourceSkillsDir,
+          name,
+          userContent,
+          options.gitWorkingDir,
+        );
+        if (matched) {
+          cleaned.push({ name, kind: 'auto_fork_base', path: forkBasePath });
+        }
+      }
+    }
+
     // Phase 3.5 A4 — empty-dir cleanup after aux dedup may have
     // emptied the user dir (e.g., user removed SKILL.md but left
     // templates/ behind which then byte-deduped to the managed copy).
@@ -540,16 +634,34 @@ export interface MigratePreSplitOptions {
    * is gone. Without this, A2 cleanup is a no-op (safer default).
    */
   sourceSkillsDir?: string;
+  /**
+   * Phase 3.5 B1 — when true, attempt to auto-record `.fork-base/`
+   * for user-edited forks whose content matches a known prior shipped
+   * version of `<sourceSkillsDir>/<name>/SKILL.md` in the package
+   * root's git history. Best-effort: silently skipped if git history
+   * is unavailable or no match is found. Requires `sourceSkillsDir`
+   * AND a `gitWorkingDir` (or it will be inferred from
+   * `sourceSkillsDir`).
+   */
+  autoForkBase?: boolean;
+  /**
+   * Phase 3.5 B1 — git working directory for history queries.
+   * Defaults to the parent of `sourceSkillsDir` (which is the package
+   * root in production). Override for tests.
+   */
+  gitWorkingDir?: string;
 }
 
 export interface MigrationCleanup {
   name: string;
   /**
-   * `legacy_skill` — stale `SKILL.legacy.md` removed (A2).
-   * `aux_dedup`    — byte-equal aux file removed (A3).
-   * `empty_dir`    — empty user-skill dir pruned (A4).
+   * `legacy_skill`   — stale `SKILL.legacy.md` removed (A2).
+   * `aux_dedup`      — byte-equal aux file removed (A3).
+   * `empty_dir`      — empty user-skill dir pruned (A4).
+   * `auto_fork_base` — `.fork-base/` auto-recorded from a prior
+   *                    shipped version matched in git history (B1).
    */
-  kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir';
+  kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir' | 'auto_fork_base';
   /** Workspace-relative or absolute path of the entry that was removed. */
   path: string;
 }
@@ -672,6 +784,148 @@ async function pruneEmptyUserDir(
   } catch {
     // Non-fatal.
   }
+}
+
+/**
+ * Phase 3.5 B1 — search the runtime source's git history for a prior
+ * shipped version of `<name>/SKILL.md` whose content matches the
+ * user's `<userPath>/SKILL.md`. On match, snapshot the matched
+ * revision's tree into `<userPath>/.fork-base/`.
+ *
+ * Returns true when a match was recorded, false otherwise (no git,
+ * no match, or any failure path — all best-effort and silent).
+ *
+ * Implementation walks at most 30 commits of the file's history (the
+ * file rarely has more than 5–10 substantive revisions; 30 is a
+ * generous ceiling that bounds latency). Uses `git log --pretty=%H`
+ * and `git show <sha>:<path>` via execFileSync. Each git invocation
+ * is best-effort; any throw aborts the search and returns false.
+ */
+async function tryAutoForkBase(
+  storage: StorageAdapter,
+  userPath: string,
+  managedPath: string,
+  sourceSkillsDir: string,
+  name: string,
+  userContent: string,
+  gitWorkingDirOverride?: string,
+): Promise<boolean> {
+  // Resolve git working dir. Default: the parent of the runtime source
+  // skills dir (e.g., package root if sourceSkillsDir is
+  // "<repo>/packages/runtime/skills").
+  const gitDir = gitWorkingDirOverride ?? findGitWorkingDir(sourceSkillsDir);
+  if (!gitDir) return false;
+
+  // Determine the relative path inside the git repo of
+  // `<sourceSkillsDir>/<name>/SKILL.md`.
+  const sourceSkillMd = join(sourceSkillsDir, name, 'SKILL.md');
+  const relPath = relativizeForGit(gitDir, sourceSkillMd);
+  if (!relPath) return false;
+
+  let commits: string[];
+  try {
+    const out = execFileSync(
+      'git',
+      ['log', '--pretty=%H', '-n', '30', '--', relPath],
+      { cwd: gitDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    commits = out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0);
+  } catch {
+    return false;
+  }
+  if (commits.length === 0) return false;
+
+  for (const sha of commits) {
+    let revContent: string;
+    try {
+      revContent = execFileSync(
+        'git',
+        ['show', `${sha}:${relPath}`],
+        { cwd: gitDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+    } catch {
+      // File may not have existed at this commit; keep walking.
+      continue;
+    }
+    if (revContent === userContent) {
+      // Match found. Snapshot the *current managed* tree as
+      // `.fork-base/` rather than the matched commit's tree, because
+      // we're recording "what the user's fork was based on" and the
+      // user's SKILL.md is the source of truth for that base. We
+      // record the SKILL.md byte-for-byte to ensure the diff against
+      // current managed shows accurate "what changed since you
+      // forked" output.
+      try {
+        const basePath = join(userPath, FORK_BASE_DIRNAME);
+        if (await storage.exists(basePath)) {
+          // Don't overwrite an existing fork-base — caller already
+          // gated on its absence, but handle race defensively.
+          return false;
+        }
+        await storage.mkdir(basePath);
+        // Write the matched historical SKILL.md as the base.
+        await storage.write(join(basePath, 'SKILL.md'), revContent);
+        // Hash of the matched content.
+        const hash = createHash('sha256').update(revContent).digest('hex');
+        const manifest = [
+          `# Phase 3.5 auto-recorded fork-base manifest. Recorded by`,
+          `# \`arete update\` migration when the user's SKILL.md byte-equaled`,
+          `# a prior shipped revision found in git history.`,
+          `version: 1`,
+          `recorded_at: ${new Date().toISOString()}`,
+          `skill_md_sha256: ${hash}`,
+          `auto_recorded: true`,
+          `matched_commit: ${sha}`,
+          '',
+        ].join('\n');
+        await storage.write(join(basePath, FORK_BASE_MANIFEST), manifest);
+        // Reference managedPath to silence unused-arg lint; reserved
+        // for future use (e.g., snapshot full managed tree alongside
+        // SKILL.md).
+        void managedPath;
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Walk up from `<sourceSkillsDir>` looking for a `.git/` directory.
+ * Returns the directory containing it, or null if none found.
+ */
+function findGitWorkingDir(sourceSkillsDir: string): string | null {
+  let current = sourceSkillsDir;
+  while (current && current !== dirname(current)) {
+    const gitDir = join(current, '.git');
+    try {
+      // execFileSync rev-parse to confirm it's a real git repo.
+      execFileSync('git', ['rev-parse', '--git-dir'], {
+        cwd: current,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      return current;
+    } catch {
+      // Try parent.
+    }
+    void gitDir;
+    current = dirname(current);
+  }
+  return null;
+}
+
+/**
+ * Compute the path of `target` relative to `base`, suitable for use
+ * as a git pathspec. Returns null if `target` isn't under `base`.
+ */
+function relativizeForGit(base: string, target: string): string | null {
+  if (!target.startsWith(base)) return null;
+  const rel = target.slice(base.length).replace(/^[/\\]/, '');
+  if (rel.length === 0) return null;
+  return rel.split(/[/\\]/).join('/');
 }
 
 // ---- internal helpers ----

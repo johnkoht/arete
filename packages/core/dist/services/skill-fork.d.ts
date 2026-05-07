@@ -48,6 +48,13 @@ export interface ForkSkillResult {
      * `mergeSkill` to detect upstream drift.
      */
     baseHash?: string;
+    /**
+     * Phase 3.5 B2 — when forking onto a pre-existing user dir, the
+     * names of aux files copied from managed because they were missing
+     * in the fork. Empty/undefined when `alreadyExisted` is false (full
+     * fresh-fork copies everything via `copyDirectory`).
+     */
+    auxFilesCopied?: string[];
 }
 /** Options for `forkSkill`. */
 export interface ForkSkillOptions {
@@ -212,15 +219,33 @@ export interface MigratePreSplitOptions {
      * is gone. Without this, A2 cleanup is a no-op (safer default).
      */
     sourceSkillsDir?: string;
+    /**
+     * Phase 3.5 B1 — when true, attempt to auto-record `.fork-base/`
+     * for user-edited forks whose content matches a known prior shipped
+     * version of `<sourceSkillsDir>/<name>/SKILL.md` in the package
+     * root's git history. Best-effort: silently skipped if git history
+     * is unavailable or no match is found. Requires `sourceSkillsDir`
+     * AND a `gitWorkingDir` (or it will be inferred from
+     * `sourceSkillsDir`).
+     */
+    autoForkBase?: boolean;
+    /**
+     * Phase 3.5 B1 — git working directory for history queries.
+     * Defaults to the parent of `sourceSkillsDir` (which is the package
+     * root in production). Override for tests.
+     */
+    gitWorkingDir?: string;
 }
 export interface MigrationCleanup {
     name: string;
     /**
-     * `legacy_skill` — stale `SKILL.legacy.md` removed (A2).
-     * `aux_dedup`    — byte-equal aux file removed (A3).
-     * `empty_dir`    — empty user-skill dir pruned (A4).
+     * `legacy_skill`   — stale `SKILL.legacy.md` removed (A2).
+     * `aux_dedup`      — byte-equal aux file removed (A3).
+     * `empty_dir`      — empty user-skill dir pruned (A4).
+     * `auto_fork_base` — `.fork-base/` auto-recorded from a prior
+     *                    shipped version matched in git history (B1).
      */
-    kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir';
+    kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir' | 'auto_fork_base';
     /** Workspace-relative or absolute path of the entry that was removed. */
     path: string;
 }

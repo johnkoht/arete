@@ -191,12 +191,14 @@ export function registerUpdateCommand(program: Command): void {
           }
         }
 
-        // Phase 3.5 (A2/A3/A4): surface migration cleanups (stale
-        // SKILL.legacy.md, byte-equal aux files, empty user dirs).
+        // Phase 3.5 (A2/A3/A4/B1): surface migration cleanups (stale
+        // SKILL.legacy.md, byte-equal aux files, empty user dirs,
+        // auto-recorded fork bases).
         if (result.cleaned && result.cleaned.length > 0) {
           const legacyCount = result.cleaned.filter((c) => c.kind === 'legacy_skill').length;
           const auxCount = result.cleaned.filter((c) => c.kind === 'aux_dedup').length;
           const emptyCount = result.cleaned.filter((c) => c.kind === 'empty_dir').length;
+          const autoBaseCount = result.cleaned.filter((c) => c.kind === 'auto_fork_base').length;
           const parts: string[] = [];
           if (legacyCount > 0) parts.push(`${legacyCount} stale SKILL.legacy.md`);
           if (auxCount > 0) parts.push(`${auxCount} byte-equal aux file${auxCount > 1 ? 's' : ''}`);
@@ -204,6 +206,10 @@ export function registerUpdateCommand(program: Command): void {
           if (parts.length > 0) {
             console.log('');
             info(`Cleaned ${parts.join(', ')}.`);
+          }
+          if (autoBaseCount > 0) {
+            console.log('');
+            info(`Auto-recorded ${autoBaseCount} fork base${autoBaseCount > 1 ? 's' : ''} from git history (matched prior shipped versions).`);
           }
         }
 
