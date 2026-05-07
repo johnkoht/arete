@@ -208,10 +208,28 @@ files, missing area state, stale topic pages. Brief.}
 What's your call?
 ```
 
-### Step 4 — Engage user once
+### Step 4 — Persist the curated view + engage user once
 
-Send the curated review. Wait for response. Standard response format
-(see PATTERNS.md Pattern 3).
+**Persist the curated view to disk BEFORE engaging the user.** Write
+the full Step-3 output verbatim to `now/weekly-winddown-YYYY-MM-DD.md`
+(date is the Friday or end-of-week date). This is the audit trail —
+without it the curated view exists only in the chat buffer and is
+lost when the conversation scrolls. AC10/AC11 soak evaluation depends
+on it.
+
+```bash
+mkdir -p now
+cat > "now/weekly-winddown-$(date +%Y-%m-%d).md" <<'EOF'
+{full Step-3 curated weekly review}
+EOF
+```
+
+If the file already exists for today (re-run within the same week),
+append a `## Re-run at HH:MM` divider rather than silently
+overwriting.
+
+After persisting, send the curated review. Wait for response.
+Standard response format (see PATTERNS.md Pattern 3).
 
 ### Step 5 — Execute approved + commit
 
@@ -268,6 +286,29 @@ In addition to the standard taxonomy in PATTERNS.md:
 - **Carryover age** — `unresolved from Wed Lindsay 1:1`
 - **Stale (week)** — `in week.md, no movement 7d`
 - **Cold meeting** — `meeting produced nothing; importance unset`
+
+## Uncertain-tier judgment (when in doubt, surface)
+
+The weekly horizon collects more signal than daily, so dismissal-as-
+auto-defer carries more risk: a quietly-dropped customer-touching item
+won't resurface this week. Bias toward Uncertain.
+
+**Category-level rule — these defer reasons are LOW-confidence
+auto-defers; surface to Uncertain instead unless the chef can
+articulate a specific, confident defer reason** (already approved this
+week; explicitly out of scope per APPEND; superseded by a later same-
+week decision):
+
+- **"needs verification"** — a claim or fact mentioned across the week
+  that the user might want to confirm before next week starts. Don't
+  auto-defer; surface as "Verify before Monday or skip?"
+- **"interesting future"** — a forward-looking idea / observation
+  surfaced this week that may or may not become a next-week priority.
+  Don't auto-defer; surface as "Add to next-week themes or skip?"
+- **"covered elsewhere"** — chef thinks an active commitment, area
+  page, or week-plan priority already covers this — but the overlap
+  is fuzzy. Don't auto-defer; surface with the proposed cover-by
+  reference for the user to confirm.
 
 ## Error handling
 
