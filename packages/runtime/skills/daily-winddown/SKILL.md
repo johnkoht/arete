@@ -83,6 +83,47 @@ which initiatives are active, which people to watch, which action
 verbs to propose. Treat its content as the user's running briefing
 for this skill.
 
+### Step 0.5 — Scan previous day's deferred sidecar for pulled-back items
+
+**Phase 3.5 D2 — dismissal-as-signal feedback loop.** Before any
+gather, scan `./deferred-YYYY-MM-DD.md` for the prior calendar day
+(or the most recent sidecar with date < today). For each item the
+user pulled back — i.e., bullet lines that no longer carry the
+`[[defer]]` tag, OR lines explicitly marked `[[pull-back]]` — log a
+`deferral_disagreement` event so future runs can tighten
+defer-confidence.
+
+```bash
+# Find most recent prior-day sidecar (skip today's own).
+prior_sidecar=$(ls -t ./deferred-*.md 2>/dev/null \
+  | grep -v "deferred-$(date +%Y-%m-%d).md" \
+  | head -n 1)
+
+if [ -n "$prior_sidecar" ]; then
+  # For each pulled-back item, log the disagreement event:
+  #   - <item-text>: the bullet line content (stripped of bullet prefix and tags)
+  #   - <original-reason>: the reason label from the bullet (text after the em-dash)
+  arete events log deferral-disagreement \
+    --item "<item-text>" \
+    --source "$prior_sidecar" \
+    --reason "<original-reason>" \
+    --json
+fi
+```
+
+Pull-back detection rules:
+
+- A bullet that previously had `[[defer]]` and no longer does → pulled
+  back.
+- A bullet explicitly tagged `[[pull-back]]` → pulled back.
+- A bullet with no defer/pull-back tags but present in the sidecar
+  → not yet decided; do NOT log.
+
+The event is fire-and-forget — if the CLI fails (workspace
+unresolved, log write race), continue with Step 1 gather. The
+disagreement signal is best-effort context for the chef's defer
+calibration over time, not a hard dependency.
+
 ### Step 1 — Gather (all primitives, parallelize where independent)
 
 **Run in parallel (no engagement gates between).** The chef-orchestrator
