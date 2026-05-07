@@ -908,6 +908,32 @@ export class WorkspaceService {
     }
   }
 
+  /**
+   * Phase 3.5 A1 helper. Guarantees `<targetSkillDir>/SKILL.md` exists.
+   * Reads `<sourceSkillDir>/SKILL.md`; if missing in target, writes it.
+   * Idempotent and best-effort — a non-fatal storage error here must
+   * not wedge `arete update`.
+   */
+  private async ensureManagedSkillMd(
+    sourceSkillDir: string,
+    targetSkillDir: string,
+  ): Promise<void> {
+    try {
+      const targetSkillMd = join(targetSkillDir, 'SKILL.md');
+      const targetMdExists = await this.storage.exists(targetSkillMd);
+      if (targetMdExists) return;
+      const sourceSkillMd = join(sourceSkillDir, 'SKILL.md');
+      const sourceMdExists = await this.storage.exists(sourceSkillMd);
+      if (!sourceMdExists) return;
+      const content = await this.storage.read(sourceSkillMd);
+      if (content === null) return;
+      await this.storage.mkdir(targetSkillDir);
+      await this.storage.write(targetSkillMd, content);
+    } catch {
+      // Non-fatal: defensive write must never wedge update.
+    }
+  }
+
   private async isCommunitySkill(skillDir: string): Promise<boolean> {
     const metaPath = join(skillDir, '.arete-meta.yaml');
     const exists = await this.storage.exists(metaPath);
@@ -948,11 +974,22 @@ export class WorkspaceService {
 
       if (overrides.has(skillName)) {
         preserved.push(skillName);
+        // AC3.5.1 (Phase 3.5 A1) — even when this skill is overridden,
+        // ensure the managed copy of SKILL.md exists. The override
+        // signals "don't overwrite the managed prose if the user has
+        // customized it via skills.overrides", but a missing managed
+        // SKILL.md leaves the resolver with no fallback if the user
+        // later removes their override. Defensive write.
+        await this.ensureManagedSkillMd(sourceSkillDir, targetSkillDir);
         continue;
       }
 
       if (targetExists && await this.isCommunitySkill(targetSkillDir)) {
         preserved.push(skillName);
+        // Same guarantee for community-tagged managed entries: the
+        // managed copy of SKILL.md must exist. Community metadata
+        // shouldn't suppress upstream prose refresh.
+        await this.ensureManagedSkillMd(sourceSkillDir, targetSkillDir);
         continue;
       }
 
@@ -962,6 +999,17 @@ export class WorkspaceService {
       } else {
         added.push(skillName);
       }
+    }
+
+    // AC3.5.1 (Phase 3.5 A1) defensive verification — for every
+    // source skill, confirm `<targetSkillsDir>/<name>/SKILL.md` exists.
+    // If any are missing (prior-bug residue, or a partial earlier
+    // failure), force-write SKILL.md from source. Idempotent.
+    for (const sourceSkillDir of sourceSkillDirs) {
+      const skillName = sourceSkillDir.split(/[/\\]/).pop() ?? '';
+      if (!skillName) continue;
+      const targetSkillDir = join(targetSkillsDir, skillName);
+      await this.ensureManagedSkillMd(sourceSkillDir, targetSkillDir);
     }
 
     // Copy root-level .md files to target (always overwrite — consistent with copyDirectory behavior for core content)
