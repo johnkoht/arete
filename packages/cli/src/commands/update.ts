@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { header, listItem, success, error, info, warn } from '../formatters.js';
+import { detectRunningBackend, formatBackendWarning } from '../lib/backend-detect.js';
 
 export function registerUpdateCommand(program: Command): void {
   program
@@ -68,6 +69,15 @@ export function registerUpdateCommand(program: Command): void {
       // topics for this one update; next refresh restores them).
       const paths = services.workspace.getPaths(root);
       const memorySummary = await loadMemorySummary(services.topicMemory, paths).catch(() => undefined);
+
+      // Phase 3.5 E1 — warn before update when a backend is
+      // detected. Stale backends silently bypass new event writers /
+      // migration paths until restart.
+      const backendBefore = await detectRunningBackend(root);
+      if (backendBefore.running && !opts.json) {
+        warn(formatBackendWarning(backendBefore));
+        console.log('');
+      }
 
       const result = await services.workspace.update(root, {
         sourcePaths,
