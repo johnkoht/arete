@@ -245,5 +245,5 @@ Would you like me to prepare a meeting agenda?
 ## References
 
 - **CLI Commands**: `arete calendar create`, `arete availability find`, `arete resolve`
-- **Related Skills**: [meeting-prep](../meeting-prep/SKILL.md), [daily-plan](../daily-plan/SKILL.md)
+- **Related Skills**: [meeting-prep](../meeting-prep/SKILL.md), [week-plan](../week-plan/SKILL.md)
 - **Patterns**: [PATTERNS.md](../PATTERNS.md) — entity resolution
