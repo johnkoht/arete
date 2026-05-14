@@ -292,15 +292,15 @@ What's your call?
 ### Step 4 — Persist the curated view + engage user once
 
 **Persist the curated view to disk BEFORE engaging the user.** Write
-the full Step-3 output verbatim to `now/winddown-YYYY-MM-DD.md`. This
+the full Step-3 output verbatim to `now/archive/daily-winddown/winddown-YYYY-MM-DD.md`. This
 is the audit trail: reason labels, Uncertain tier, action proposals,
 sidecar references. Without this, the curated view exists only in
 the chat buffer and is lost when the conversation scrolls. AC10/AC11
 soak evaluation depends on it.
 
 ```bash
-mkdir -p now
-cat > "now/winddown-$(date +%Y-%m-%d).md" <<'EOF'
+mkdir -p now/archive/daily-winddown
+cat > "now/archive/daily-winddown/winddown-$(date +%Y-%m-%d).md" <<'EOF'
 {full Step-3 curated view, including all sections}
 EOF
 ```

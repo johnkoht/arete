@@ -177,18 +177,18 @@ What's your call?
 
 **Persist the curated view to disk BEFORE engaging the user.** Write
 the full Step-3 output verbatim to
-`now/process-meetings-YYYY-MM-DD.md` (or append a numeric suffix if
+`now/archive/process-meetings/process-meetings-YYYY-MM-DD.md` (or append a numeric suffix if
 the skill runs multiple times same-day with distinct batches —
-`now/process-meetings-YYYY-MM-DD-2.md`). When called as a primitive
+`now/archive/process-meetings/process-meetings-YYYY-MM-DD-2.md`). When called as a primitive
 from daily-winddown / weekly-winddown, the **caller** is responsible
 for persisting their consolidated view; this skill's standalone
 runs persist independently.
 
 ```bash
-mkdir -p now
+mkdir -p now/archive/process-meetings
 # Standalone-run path — caller skill writes its own file when invoked
 # as a primitive
-cat > "now/process-meetings-$(date +%Y-%m-%d).md" <<'EOF'
+cat > "now/archive/process-meetings/process-meetings-$(date +%Y-%m-%d).md" <<'EOF'
 {full Step-3 curated batch review}
 EOF
 ```

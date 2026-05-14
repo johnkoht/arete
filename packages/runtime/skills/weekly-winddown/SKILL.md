@@ -211,15 +211,15 @@ What's your call?
 ### Step 4 — Persist the curated view + engage user once
 
 **Persist the curated view to disk BEFORE engaging the user.** Write
-the full Step-3 output verbatim to `now/weekly-winddown-YYYY-MM-DD.md`
+the full Step-3 output verbatim to `now/archive/weekly-winddown/weekly-winddown-YYYY-MM-DD.md`
 (date is the Friday or end-of-week date). This is the audit trail —
 without it the curated view exists only in the chat buffer and is
 lost when the conversation scrolls. AC10/AC11 soak evaluation depends
 on it.
 
 ```bash
-mkdir -p now
-cat > "now/weekly-winddown-$(date +%Y-%m-%d).md" <<'EOF'
+mkdir -p now/archive/weekly-winddown
+cat > "now/archive/weekly-winddown/weekly-winddown-$(date +%Y-%m-%d).md" <<'EOF'
 {full Step-3 curated weekly review}
 EOF
 ```

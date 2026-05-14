@@ -215,14 +215,14 @@ What's your call? Approve actions before the meeting, or just take the brief.
 
 **Persist the prep brief to disk BEFORE engaging the user.** Write
 the full Step-3 brief verbatim to
-`now/meeting-prep-{meeting-slug}.md` (the slug is the meeting's slug,
+`now/archive/meeting-prep/meeting-prep-{meeting-slug}.md` (the slug is the meeting's slug,
 not a date — meeting-prep maps to a single upcoming meeting). This is
 the audit trail and gives the user a hand-readable artifact they can
 glance at on a separate device before the meeting.
 
 ```bash
-mkdir -p now
-cat > "now/meeting-prep-{meeting-slug}.md" <<'EOF'
+mkdir -p now/archive/meeting-prep
+cat > "now/archive/meeting-prep/meeting-prep-{meeting-slug}.md" <<'EOF'
 {full Step-3 prep brief}
 EOF
 ```

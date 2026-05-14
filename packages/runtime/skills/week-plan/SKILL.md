@@ -145,14 +145,14 @@ Cap suggested priorities at **5 max** (3-5 sweet spot per the
 ### Step 3 — Persist + Engage 1 (priorities conversation)
 
 **Persist the curated priorities view to disk BEFORE engaging.** Write
-the full Engage-1 output verbatim to `now/week-plan-YYYY-MM-DD.md`
+the full Engage-1 output verbatim to `now/archive/week-plan/week-plan-YYYY-MM-DD.md`
 (date is the planning date — typically Sunday or Monday). This is
 the audit trail — without it the priorities-tier curated view is lost
 when the conversation scrolls. AC10/AC11 soak evaluation needs it.
 
 ```bash
-mkdir -p now
-cat > "now/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
+mkdir -p now/archive/week-plan
+cat > "now/archive/week-plan/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
 {full Engage-1 priorities view}
 EOF
 ```
@@ -225,12 +225,12 @@ With confirmed priorities, build the full week plan:
 
 ### Step 5 — Persist + Engage 2 (plan draft)
 
-**Append the plan draft to `now/week-plan-YYYY-MM-DD.md` BEFORE
+**Append the plan draft to `now/archive/week-plan/week-plan-YYYY-MM-DD.md` BEFORE
 engaging.** Use a `## Engage 2 — Plan draft` divider to separate from
 the priorities view written at Step 3.
 
 ```bash
-cat >> "now/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
+cat >> "now/archive/week-plan/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
 
 ## Engage 2 — Plan draft
 
