@@ -48,8 +48,9 @@ Auto-filtered threads (newsletters, bot DMs, bulk channels) roll up
 to a single count line. The persistent digest file at
 `resources/notes/YYYY-MM-DD-slack-digest.md` IS the durable
 artifact; the curated view in chat is the engagement surface
-(Pattern 4 adapted — digest file = sidecar-equivalent for the wiki
-trail).
+(Pattern 4: `surface-deferred-as-sidecar` adapted — the digest
+file is the sidecar-equivalent for the wiki trail, and Slack
+itself remains the durable backing store for the source threads).
 
 **Read first** (if exists): `.arete/skills-local/slack-digest.md`.
 This is the user's per-skill APPEND: significance rules

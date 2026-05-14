@@ -1,22 +1,30 @@
 /**
- * Phase 2 chef-orchestrator skill prose smoke tests.
+ * Chef-orchestrator skill prose smoke tests.
  *
  * Lightweight assertion-only tests that validate the SHIPPED structure
- * of each rewritten SKILL.md against the chef-orchestrator pattern
+ * of each chef-rewritten SKILL.md against the chef-orchestrator pattern
  * envelope. These do NOT exercise an agent harness — they verify the
  * static prose includes the load-bearing sections an agent harness
  * would consult.
  *
- * Each rewritten skill must:
+ * Each chef-rewritten skill must:
  * - Have a "Read first" stanza referencing .arete/skills-local/<slug>.md
  * - Reference the four chef-orchestrator patterns from PATTERNS.md
- * - Include a Rollback section (`git revert` of the Phase 2 commit per
+ * - Include a Rollback section (`git revert` of the rewrite commit per
  *   Phase 3 Step 9 / MC5 sunset; the previous `ARETE_LEGACY_SKILL_PROSE`
  *   env var routing was removed when Phase 3 sunset legacy artifacts).
  *
  * Note: pre-MC5-sunset, this suite also asserted `SKILL.legacy.md`
  * presence and `ARETE_LEGACY_SKILL_PROSE` references — both have been
  * removed per Phase 3 plan §(g).
+ *
+ * Phase 2 shipped 5 chef skills; Phase 4 added 4 more (inbox-triage,
+ * email-triage, slack-digest, schedule-meeting). The same envelope
+ * checks apply to all 9. Schedule-meeting differs in two ways:
+ * (1) it's a two-engage skill so the persist path uses {slug}-{date}.md
+ * (with the meeting/person slug, not just date); (2) it's small enough
+ * that the sidecar pattern doesn't apply — the curated-view persistence
+ * IS the audit trail.
  */
 
 import { describe, it } from 'node:test';
@@ -27,7 +35,7 @@ import { join } from 'node:path';
 const REPO_ROOT = join(import.meta.dirname ?? '', '..', '..', '..', '..');
 const SKILLS_DIR = join(REPO_ROOT, 'packages', 'runtime', 'skills');
 
-const CHEF_ORCHESTRATOR_SKILLS = [
+const PHASE_2_CHEF_SKILLS = [
   'daily-winddown',
   'weekly-winddown',
   'week-plan',
@@ -35,7 +43,19 @@ const CHEF_ORCHESTRATOR_SKILLS = [
   'meeting-prep',
 ] as const;
 
-describe('Phase 2 chef-orchestrator skill prose', () => {
+const PHASE_4_CHEF_SKILLS = [
+  'inbox-triage',
+  'email-triage',
+  'slack-digest',
+  'schedule-meeting',
+] as const;
+
+const CHEF_ORCHESTRATOR_SKILLS = [
+  ...PHASE_2_CHEF_SKILLS,
+  ...PHASE_4_CHEF_SKILLS,
+] as const;
+
+describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
   for (const slug of CHEF_ORCHESTRATOR_SKILLS) {
     describe(slug, () => {
       const skillDir = join(SKILLS_DIR, slug);
@@ -113,25 +133,35 @@ describe('Phase 2 chef-orchestrator skill prose', () => {
       });
 
       // Phase 3.5 C1 — every chef SKILL.md must instruct the agent to
-      // persist the curated view to `now/<skill-pattern>.md` BEFORE
-      // engaging the user. AC3.5.7.
-      it('Phase 3.5 C1 — instructs agent to persist curated view to now/...md (AC3.5.7)', () => {
+      // persist the curated view to `now/archive/<skill>/...md` BEFORE
+      // engaging the user. AC3.5.7. The Phase 3.5 followup commit
+      // (7ca3ea47) moved the path from `now/<skill>-...md` to
+      // `now/archive/<skill>/<skill>-...md`.
+      it('Phase 3.5 C1 — instructs agent to persist curated view to now/archive/<skill>/...md (AC3.5.7)', () => {
         const content = readFileSync(skillPath, 'utf8');
-        // Each skill uses a distinct filename pattern; assert the
-        // skill-specific filename appears AND the persist directive is
-        // close to it.
+        // Each skill uses a distinct filename pattern under
+        // `now/archive/<skill>/`. Assert the skill-specific filename
+        // base appears AND the persist directive is in the prose.
         const expectedPath = (() => {
           switch (slug) {
             case 'daily-winddown':
-              return 'now/winddown-';
+              return 'now/archive/daily-winddown/winddown-';
             case 'weekly-winddown':
-              return 'now/weekly-winddown-';
+              return 'now/archive/weekly-winddown/weekly-winddown-';
             case 'week-plan':
-              return 'now/week-plan-';
+              return 'now/archive/week-plan/week-plan-';
             case 'process-meetings':
-              return 'now/process-meetings-';
+              return 'now/archive/process-meetings/process-meetings-';
             case 'meeting-prep':
-              return 'now/meeting-prep-';
+              return 'now/archive/meeting-prep/meeting-prep-';
+            case 'inbox-triage':
+              return 'now/archive/inbox-triage/inbox-triage-';
+            case 'email-triage':
+              return 'now/archive/email-triage/email-triage-';
+            case 'slack-digest':
+              return 'now/archive/slack-digest/slack-digest-';
+            case 'schedule-meeting':
+              return 'now/archive/schedule-meeting/schedule-meeting-';
             default:
               return null;
           }
@@ -142,11 +172,11 @@ describe('Phase 2 chef-orchestrator skill prose', () => {
           `${slug} SKILL.md missing persist-path "${expectedPath}"`,
         );
         // Persist directive lives in the prose: "Persist the curated
-        // view" is the canonical phrase used across the five skills.
+        // view" is the canonical phrase across the chef skills.
         assert.match(
           content,
-          /Persist (the )?(curated|prep) (view|brief|priorities)/i,
-          `${slug} missing "Persist the curated view/brief/priorities" directive`,
+          /Persist (the )?(curated|prep|Phase-?4|Step-?3|full Step|full Phase) (view|brief|priorities|output)/i,
+          `${slug} missing "Persist the curated/prep view" directive`,
         );
       });
 

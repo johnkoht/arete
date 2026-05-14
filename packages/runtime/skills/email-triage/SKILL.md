@@ -23,17 +23,20 @@ against the user-tuned PM rubric, and engages **once** with a
 curated triage view (Pattern 1: `do-all-work-then-engage`).
 
 Every staged thread carries a one-line "why surfaced" reason; every
-auto-filtered thread carries a "why filtered" reason. When uncertain
-(thread sender unknown, action item ambiguous), surface to
-`## Uncertain — your call` (Pattern 2).
+auto-filtered thread carries a "why filtered" reason (Pattern 2:
+`curate-with-reason-labels`). When uncertain (thread sender unknown,
+action item ambiguous), surface to `## Uncertain — your call`.
 
 Action proposals — save-as-conversation, create-commitment,
 send-reply-via-MCP, escalate-to-jira — appear at the end with mode
-tags (Pattern 3). Never auto-execute.
+tags (Pattern 3: `propose-with-mcp-action`). Never auto-execute.
 
 Low-relevance threads roll up to a single count line — they're not
-written to a sidecar (gmail itself is the durable backing store;
-the curated view is the lens) (Pattern 4 adapted).
+written to a sidecar file (Gmail itself is the durable backing
+store; the curated view is the lens) (Pattern 4:
+`surface-deferred-as-sidecar` adapted — Gmail's own threading is
+the sidecar-equivalent durable store, so no separate `.md` file
+is needed for the deferred tier).
 
 **Read first** (if exists): `.arete/skills-local/email-triage.md`.
 This is the user's per-skill APPEND: which senders are

@@ -38,6 +38,12 @@ Action proposals (`calendar.create_event`, `slack.send_dm` to
 confirm to attendee, `meeting-prep` skill chain) appear at the end
 with mode tags (Pattern 3: `propose-with-mcp-action`).
 
+Pattern 4 (`surface-deferred-as-sidecar`) is **minimal here** —
+schedule-meeting is a low-volume per-invocation skill, not a daily
+batch. The curated-view persistence at
+`now/archive/schedule-meeting/` IS the audit trail; no separate
+sidecar file is generated.
+
 This skill is **two-engage by design** for the meeting flow:
 - **Engage 1**: agent surfaces parsed details + resolved person +
   candidate slots → user picks a slot

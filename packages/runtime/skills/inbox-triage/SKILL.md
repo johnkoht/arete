@@ -43,9 +43,11 @@ curated view with full parameters and mode tags (Pattern 3:
 move and every memory write requires user approval.
 
 Items kept in `inbox/` with `status: needs-review` are NOT a sidecar —
-they're the deferred tier with a reason label inline (Pattern 4
-adapted to inbox scope: deferred items stay in inbox/ with a status
-flag, not a separate file).
+they're the deferred tier with a reason label inline (Pattern 4:
+`surface-deferred-as-sidecar` adapted to inbox scope — deferred
+items stay in inbox/ with a status flag, not a separate file. The
+canonical sidecar shape in PATTERNS.md doesn't apply because the
+inbox IS the durable surface).
 
 **Read first** (if exists): `.arete/skills-local/inbox-triage.md`.
 This is the user's per-skill APPEND file — what kinds of content
