@@ -104,26 +104,37 @@ for below.
 | 15 | `week-review` | Dropped | Subsumed by weekly-winddown (Phase 2 chef rewrite). Triggers "review the week" / "week review" / "what did I accomplish this week" added to weekly-winddown frontmatter. Reference cleanup in weekly-winddown/SKILL.md |
 | 16 | `generate-mockup` | Dropped (tombstone) | Was a README.md tombstone pointing users to `generate-prototype-prompt`; the live replacement has been shipped for multiple phases. Tombstone retired. |
 
+### Group D — Audited, leave-as-is (4) ✓
+
+Per plan §Group D, these four were AUDIT candidates (not pre-confirmed drops). Each was audited for consumer surface and invocation history. None had recent invocations in `.arete/memory/log.md`, but all four retain non-trivial consumer surface in surviving skills (`meeting-prep`, `goals-alignment`, `quarter-plan`, README/PATTERNS planning row). Per scope discipline (the AC11 hard-stop residual risk: don't degrade working workflows whose user-felt pain isn't characterized), leave as-is for Phase 4 and defer to the Group C follow-on triage alongside the other 7 PM-shaped artifacts.
+
+| # | Skill | Verdict | Justification |
+|---|---|---|---|
+| 17 | `prepare-meeting-agenda` | Leave-as-is (defer to Group C follow-on) | Consumer refs: `meeting-prep/SKILL.md` (companion-skill cross-link), `PATTERNS.md` (3 patterns list it as "Used by"), `schedule-meeting/LEARNINGS.md`. No log invocations, but the consumer surface is real. Chef-rewrite is plausible (template-driven multi-step); fold into Group C follow-on with `meeting-prep` convergence check. |
+| 18 | `quarter-plan` | Leave-as-is (defer to Group C follow-on) | Consumer refs: `goals-alignment/SKILL.md` (2 refs as the upstream skill that produces `goals/quarter.md`), README planning row, `PATTERNS.md` (template + structural-thinking patterns). No log invocations, but quarter cadence is naturally infrequent. Chef-rewrite is plausible (structured-thinking template); defer to follow-on with `create-prd` / `discovery`. |
+| 19 | `goals-alignment` | Leave-as-is (defer to Group C follow-on) | Consumer refs: `quarter-plan/SKILL.md` (cross-link as the next-step view), README planning row. No log invocations. Reads strategy + quarter.md and produces an alignment view; convergence candidate with `quarter-plan`. Defer to follow-on. |
+| 20 | `periodic-review` | Leave-as-is (defer to Group C follow-on) | Consumer refs: README operations row (self-references only). No log invocations. Quarterly cadence inherently infrequent. Lowest consumer surface of the four — possible drop candidate at follow-on if the workspace-tour + winddown loops cover its purpose. Audit again with usage data. |
+
 ### Group E — Leave as-is (4) ✓
 
 True universal primitives. No action.
 
 | # | Skill |
 |---|---|
-| 17 | `getting-started` (post-onboard guidance updated to reference week-plan + daily-winddown instead of daily-plan) |
-| 18 | `workspace-tour` |
-| 19 | `rapid-context-dump` |
-| 20 | `capture-conversation` |
+| 21 | `getting-started` (post-onboard guidance updated to reference week-plan + daily-winddown instead of daily-plan) |
+| 22 | `workspace-tour` |
+| 23 | `rapid-context-dump` |
+| 24 | `capture-conversation` |
 
 ### Already Phase 2 chef pattern (5) — skipped in Phase 4
 
 | # | Skill |
 |---|---|
-| 21 | `daily-winddown` |
-| 22 | `weekly-winddown` (Phase 4 triggers extended to absorb week-review's phrases) |
-| 23 | `week-plan` |
-| 24 | `process-meetings` |
-| 25 | `meeting-prep` |
+| 25 | `daily-winddown` |
+| 26 | `weekly-winddown` (Phase 4 triggers extended to absorb week-review's phrases) |
+| 27 | `week-plan` |
+| 28 | `process-meetings` |
+| 29 | `meeting-prep` |
 
 ### Group C — PM artifact audit (11 verdicts)
 
@@ -137,17 +148,17 @@ working workflows (the AC11 hard-stop residual risk).
 
 | # | Skill | Consumer refs | Verdict | Justification |
 |---|---|---|---|---|
-| 26 | `create-prd` | 2 | Defer to follow-on (chef-pattern likely fit) | Multi-step judgment; user-tunable templates registered in `TEMPLATE_REGISTRY`. Worth chef-rewriting after Group B soaks (see if patterns hold). |
-| 27 | `discovery` | 6 | Defer to follow-on (chef-pattern likely fit) | Heavy consumer surface (synthesize, finalize-project, getting-started reference it). Chef-rewrite is reasonable; defer for scope discipline. |
-| 28 | `pre-mortem` | 3 | Leave as-is (or chef-rewrite later) | Mostly a structured-thinking template; user-facing prose is the value. Could chef-rewrite, but the multi-step judgment surface is small. |
-| 29 | `competitive-analysis` | 2 | Defer to follow-on | Multi-step + user-tunable; same shape as discovery. Defer. |
-| 30 | `construct-roadmap` | 1 | Defer to follow-on | Lower consumer surface; chef-rewrite is possible but not urgent. |
-| 31 | `review-plan` | 2 | Leave as-is | Less judgment-heavy, more checklist-shaped. Chef-rewrite would be marginal. |
-| 32 | `synthesize` | 4 | Defer to follow-on (chef-pattern likely fit) | Multi-step judgment; referenced by discovery + getting-started + rapid-context-dump. Chef-rewrite would improve. Defer for scope discipline. |
-| 33 | `generate-prototype-prompt` | 0 | Leave as-is | Tool-specific (Lovable). User-invoked directly. No chef-pattern fit. |
-| 34 | `finalize-project` | 2 | Defer to follow-on (chef-pattern possible fit) | Multi-step wrap criteria. Overlaps wrap; could converge. Defer to follow-on. |
-| 35 | `general-project` | 0 | Leave as-is (audit at next phase) | No consumer-skill refs, but user may invoke for "start a project". Project creator (`creates_project: true`). Keep until usage data shows zero invocations. |
-| 36 | `wrap` | 3 | Leave as-is (potential drop later) | Overlaps `finalize-project` per parent plan. Both shipped; no breaking issue. Audit again after follow-on chef-rewrites if convergence becomes obvious. |
+| 30 | `create-prd` | 2 | Defer to follow-on (chef-pattern likely fit) | Multi-step judgment; user-tunable templates registered in `TEMPLATE_REGISTRY`. Worth chef-rewriting after Group B soaks (see if patterns hold). |
+| 31 | `discovery` | 6 | Defer to follow-on (chef-pattern likely fit) | Heavy consumer surface (synthesize, finalize-project, getting-started reference it). Chef-rewrite is reasonable; defer for scope discipline. |
+| 32 | `pre-mortem` | 3 | Leave as-is (or chef-rewrite later) | Mostly a structured-thinking template; user-facing prose is the value. Could chef-rewrite, but the multi-step judgment surface is small. |
+| 33 | `competitive-analysis` | 2 | Defer to follow-on | Multi-step + user-tunable; same shape as discovery. Defer. |
+| 34 | `construct-roadmap` | 1 | Defer to follow-on | Lower consumer surface; chef-rewrite is possible but not urgent. |
+| 35 | `review-plan` | 2 | Leave as-is | Less judgment-heavy, more checklist-shaped. Chef-rewrite would be marginal. |
+| 36 | `synthesize` | 4 | Defer to follow-on (chef-pattern likely fit) | Multi-step judgment; referenced by discovery + getting-started + rapid-context-dump. Chef-rewrite would improve. Defer for scope discipline. |
+| 37 | `generate-prototype-prompt` | 0 | Leave as-is | Tool-specific (Lovable). User-invoked directly. No chef-pattern fit. |
+| 38 | `finalize-project` | 2 | Defer to follow-on (chef-pattern possible fit) | Multi-step wrap criteria. Overlaps wrap; could converge. Defer to follow-on. |
+| 39 | `general-project` | 0 | Leave as-is (audit at next phase) | No consumer-skill refs, but user may invoke for "start a project". Project creator (`creates_project: true`). Keep until usage data shows zero invocations. |
+| 40 | `wrap` | 3 | Leave as-is (potential drop later) | Overlaps `finalize-project` per parent plan. Both shipped; no breaking issue. Audit again after follow-on chef-rewrites if convergence becomes obvious. |
 
 **Group C follow-on recommendation**: After Phase 4 soaks (≥7
 days), revisit Group C with usage data. High-priority chef rewrites
@@ -161,19 +172,19 @@ chef-rewrite.
 |---|---|---|
 | Demoted to CLI | 9 | krisp, fathom, notion, doc-pull, drive-search, email-search, calendar, save-meeting, people-intelligence |
 | Chef-rewritten (Phase 4) | 4 | inbox-triage, email-triage, slack-digest, schedule-meeting |
-| Dropped | 3 | daily-plan, week-review, generate-mockup |
+| Dropped (Group D) | 3 | daily-plan, week-review, generate-mockup |
+| Audited, leave-as-is (Group D, deferred to Group C follow-on) | 4 | prepare-meeting-agenda, quarter-plan, goals-alignment, periodic-review |
+| Universal primitives (Group E, no action) | 4 | getting-started, workspace-tour, rapid-context-dump, capture-conversation |
 | Already chef pattern (Phase 2) | 5 | daily-winddown, weekly-winddown, week-plan, process-meetings, meeting-prep |
-| Leave-as-is (audited, no action) | 8 | getting-started, workspace-tour, rapid-context-dump, capture-conversation, pre-mortem, review-plan, generate-prototype-prompt, general-project + wrap |
-| Deferred to Group C follow-on | 7 | create-prd, discovery, competitive-analysis, construct-roadmap, synthesize, finalize-project + general-project audit |
-| **Total accounted** | **36 unique skills + 4 leave-as-is overlap categories** | **= 40 baseline skill dirs** |
+| Group C audited, leave-as-is in Phase 4 | 4 | pre-mortem, review-plan, generate-prototype-prompt, general-project (with wrap counted under deferred-or-leave below) |
+| Group C deferred to follow-on | 7 | create-prd, discovery, competitive-analysis, construct-roadmap, synthesize, finalize-project, wrap |
+| **Total accounted** | **40 unique skills** | **= 40 baseline skill dirs** |
 
-(The "leave-as-is" and "deferred" rows overlap slightly because
-some Group C verdicts are both "leave-as-is for Phase 4" AND
-"revisit in follow-on". The 40-dir tally is hit exactly: 9 + 4 +
-3 + 5 + 4 universal + 4 audit-leave-as-is (pre-mortem,
-review-plan, generate-prototype-prompt, general-project) + 7
-defer-to-follow-on + 4 already-chef-but-listed (wrap stays as-is
-in this phase counted once) = 40.)
+Exact accounting (no overlaps): 9 demoted + 4 chef-rewritten + 3
+dropped + 4 audited-leave-as-is (Group D) + 4 universal primitives +
+5 already-chef + 4 Group-C leave-as-is + 7 Group-C deferred = **40**.
+This replaces the prior fuzzy-overlap math; every skill is in
+exactly one row.
 
 ## Files touched (per group)
 
