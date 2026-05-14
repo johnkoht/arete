@@ -479,3 +479,65 @@ Sub-branch: `worktree-phase-4-skills-audit`
 HEAD: `7664ba81` (19 commits ahead of `88ebd8d1`)
 
 Ready for eng-lead reviewer.
+
+## Post-review fix-ups
+
+Eng-lead review verdict: APPROVE WITH MINOR CONCERNS. Two
+documentation-hygiene items (not behavior). Both addressed in
+follow-up commits on `worktree-phase-4-skills-audit` after the
+initial ship:
+
+### Fix 1 — AC4.10 disposition table completed (4 entries added)
+
+Per eng-lead review §5 "AC4.10 disposition table — PARTIAL MISS":
+the original disposition table omitted four Group D AUDIT candidates
+called out in plan §Group D. Each was audited; none had log
+invocations in `.arete/memory/log.md`, but all four retained
+non-trivial consumer surface. Verdict for all four: **leave-as-is,
+defer to Group C follow-on** (scope discipline per AC11 — don't
+degrade workflows whose user-felt pain isn't characterized).
+
+| Skill | Verdict | Notes |
+|---|---|---|
+| `prepare-meeting-agenda` | Leave-as-is (defer to Group C follow-on) | Consumer refs in meeting-prep, PATTERNS.md (3 patterns), schedule-meeting; chef-rewrite plausible. Convergence candidate with `meeting-prep`. |
+| `quarter-plan` | Leave-as-is (defer to Group C follow-on) | Upstream skill for `goals-alignment`; structured-thinking template; fold into follow-on with `create-prd`/`discovery`. |
+| `goals-alignment` | Leave-as-is (defer to Group C follow-on) | Reads strategy + quarter.md; convergence candidate with `quarter-plan`. |
+| `periodic-review` | Leave-as-is (defer to Group C follow-on) | Lowest consumer surface of the four — possible drop candidate at follow-on if winddown loops cover its purpose. |
+
+Added as Group D "Audited, leave-as-is (4)" subsection (rows 17–20).
+Group E / Phase 2 / Group C rows renumbered. Final disposition
+counts table re-tabulated with no overlapping rows: 9 + 4 + 3 + 4
++ 4 + 5 + 4 + 7 = **40** exact (replaces the prior fuzzy-overlap
+math).
+
+### Fix 2 — AC4.9 dangling references cleaned (5 files, 19 refs)
+
+Per eng-lead review §5 "AC4.9 — PARTIAL MISS": the 78ee9e1c cleanup
+commit addressed Group A demoted-skill refs but did not extend to
+the Group D drops (`daily-plan`, `week-review`, `generate-mockup`).
+Eng-lead grep surfaced 18 dangling refs across 4 files; one
+additional ref in `_authoring-guide.md` was found by post-cleanup
+grep and folded in (5th file).
+
+| File | Refs cleaned | Replacement strategy |
+|---|---|---|
+| `packages/runtime/skills/PATTERNS.md` | 9 (lines 81, 102, 111, 216, 561, 567, 688, 742, 773) | `daily-plan` → `daily-winddown`; `week-review` → `weekly-winddown` |
+| `packages/runtime/skills/README.md` | 2 (planning row + customizing-skills example) | `week-review` → `weekly-winddown`; `daily-plan` (override example) → `week-plan` |
+| `packages/runtime/skills/week-plan/LEARNINGS.md` | 6 (Section Semantics + Invariants + Pre-Edit Checklist) | `daily-plan` → `daily-winddown` (the surviving daily skill that owns Today/Daily Progress rotation post-drop) |
+| `packages/runtime/skills/week-plan/templates/week-priorities.md` | 2 (section comments) | `daily-plan` → `daily-winddown` |
+| `packages/runtime/skills/_authoring-guide.md` | 1 (UX example, surfaced by post-cleanup grep) | `daily-plan` → `daily-winddown` |
+
+Final verification: `grep -rn 'daily-plan\|week-review\|generate-mockup' packages/runtime/skills/` returns one remaining hit at `weekly-winddown/SKILL.md:330` — an intentional historical note ("The former `week-review` skill…") which eng-lead review §1 explicitly approved as a "former skill, now subsumed" reference. All other dangling refs cleaned.
+
+### Post-review commits
+
+| Commit | Subject |
+|---|---|
+| `5b895358` | `phase-4(docs): clean dangling references to dropped skills in PATTERNS.md` |
+| `f648530f` | `phase-4(docs): clean dangling references in skills/README.md` |
+| `eba11a86` | `phase-4(docs): clean dangling references in week-plan LEARNINGS + templates` |
+| `09af8b93` | `phase-4(docs): clean dangling daily-plan ref in _authoring-guide.md` |
+| `6a10138f` | `phase-4(docs): complete AC4.10 disposition table — 4 audit verdicts for prepare-meeting-agenda/quarter-plan/goals-alignment/periodic-review` |
+| (this commit) | `phase-4(docs): record post-review fix-ups in build-report` |
+
+Ready for merge to parent.
