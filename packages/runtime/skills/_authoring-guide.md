@@ -238,7 +238,7 @@ Inline steps reduce cognitive load when a skill already has many pattern referen
 ### Empty Results Handling
 
 Always handle empty results gracefully:
-- **Silent skip**: Don't mention when nothing found (for inline context, like daily-plan meeting notes)
+- **Silent skip**: Don't mention when nothing found (for inline context, like daily-winddown meeting notes)
 - **Brief note**: "No directly relevant past decisions found." (for explicit memory step, like week-plan priorities)
 - **Never**: "I searched memory and found nothing relevant. Does this change anything?" (awkward UX)
 

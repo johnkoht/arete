@@ -28,6 +28,7 @@ export declare function pullCalendarHelper(services: Awaited<ReturnType<typeof i
 export declare function pullGmailHelper(services: Awaited<ReturnType<typeof import('@arete/core').createServices>>, workspaceRoot: string, opts: {
     days: number;
     json: boolean;
+    query?: string;
 }): Promise<void>;
 export declare function pullDriveHelper(services: Awaited<ReturnType<typeof import('@arete/core').createServices>>, workspaceRoot: string, opts: {
     days: number;

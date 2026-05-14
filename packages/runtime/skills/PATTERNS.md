@@ -37,10 +37,10 @@ Where `{category}` matches the template group:
 | `construct-roadmap` | Roadmap output | `templates/outputs/construct-roadmap/` | `roadmap` |
 | `week-plan` | Week file | `templates/plans/` | `week-priorities` |
 | `quarter-plan` | Quarter file | `templates/plans/` | `quarter-goals` |
-| `fathom` | Meeting output | `templates/outputs/fathom/` | `meeting` |
-| `krisp` | Meeting output | `templates/outputs/krisp/` | `meeting` |
 
-> **Template path convention**: Integration skills (fathom, krisp, calendar, notion) use `templates/outputs/{skill-id}/` for workspace override paths. Older skills use descriptive paths (e.g. `templates/meeting-agendas/`, `templates/projects/`). Both conventions are supported. **New skills should use `templates/outputs/{skill-id}/`**.
+> **Template path convention**: User-tunable workflow skills use `templates/outputs/{skill-id}/` for workspace override paths. Older skills use descriptive paths (e.g. `templates/meeting-agendas/`, `templates/projects/`). Both conventions are supported. **New skills should use `templates/outputs/{skill-id}/`**.
+>
+> Integration ingest (krisp / fathom / notion / calendar / google-drive / gmail) is now handled by CLI verbs (`arete pull <integration>`), not skills; their output formats are owned by the integration code, not the templates system.
 
 ### How to customize a template
 
@@ -78,7 +78,7 @@ templates/outputs/{skill-id}/default.md
 
 **Purpose**: Given a meeting (title and/or attendees), assemble full context: people, prior meetings, related projects, outstanding action items.
 
-**Used by**: meeting-prep, daily-plan, prepare-meeting-agenda (for suggested agenda items; gather when meeting has specific purpose, named attendees, or relevant plan files—see skill step 4)
+**Used by**: meeting-prep, prepare-meeting-agenda (for suggested agenda items; gather when meeting has specific purpose, named attendees, or relevant plan files—see skill step 4)
 
 **Inputs**: Meeting title (optional), attendee names or slugs.
 
@@ -99,7 +99,7 @@ templates/outputs/{skill-id}/default.md
 
 **Canonical source distinction**:
 - For meeting-prep context (relationship brief): use `arete people show <slug> --memory` — includes commitments inline with full relationship context.
-- For task-management view (week-review/week-plan): use `arete commitments list` — returns structured commitment data for review/resolution.
+- For task-management view (week-plan, weekly-winddown): use `arete commitments list` — returns structured commitment data for review/resolution.
 - Do NOT call both in the same step — they overlap on commitment data.
 
 ---
@@ -108,7 +108,7 @@ templates/outputs/{skill-id}/default.md
 
 **Purpose**: Given a meeting title OR area slug, retrieve the relevant area's context — recurring meeting mappings, current state, key decisions, and backlog. Use this to enrich meeting prep, route extracted intelligence, and maintain area-specific knowledge.
 
-**Used by**: meeting-prep, process-meetings, daily-plan, week-plan
+**Used by**: meeting-prep, process-meetings, week-plan, daily-winddown
 
 **Inputs**: Meeting title (for auto-lookup) OR area slug (for direct access).
 
@@ -213,7 +213,7 @@ recurring_meetings:
 **Integration with other patterns**:
 - **meeting-prep**: Use `get_area_context` after attendee resolution to inject area-specific context
 - **process-meetings**: Use `getAreaForMeeting()` to route extracted decisions to the correct area file
-- **daily-plan**: Use for today's meetings to show area context in daily focus
+- **daily-winddown**: Use for today's meetings to show area context in daily focus
 - **week-plan**: Aggregate area states for weekly planning view
 
 ---
@@ -304,7 +304,7 @@ arete people memory refresh --person jane-doe
 
 **Purpose**: Cross-reference calendar event data to fill in missing or incomplete attendee information in meeting files — e.g., email-only identifiers, first-name-only entries, or attendees with no displayable name.
 
-**Used by**: fathom (process-meetings via fathom pull), krisp (process-meetings via krisp pull), process-meetings
+**Used by**: process-meetings (entity-resolution step, after `arete pull krisp` or `arete pull fathom` populates meeting files with attendee metadata)
 
 **Integration point**: Apply during **process-meetings step 2** (entity resolution) — before slug generation and person-file creation, so enriched names and emails feed into the slug and category logic.
 
@@ -558,13 +558,13 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 
 **Purpose**: Assemble the structured context bundle that expert agent patterns consume. Standardizes how skills gather strategy, memory, and people context before shifting into expert reasoning mode.
 
-**Used by**: process-meetings (before significance_analyst), meeting-prep (before relationship_intelligence), week-review (before significance_analyst), slack-digest (before significance_analyst)
+**Used by**: process-meetings (before significance_analyst), meeting-prep (before relationship_intelligence), weekly-winddown (before significance_analyst), slack-digest (before significance_analyst)
 
 **Inputs**: Topic string, list of relevant person slugs (optional).
 
 **Steps**:
 
-1. **Derive topic string** — Use meeting title + first 100 characters of summary or key points. For week-review, use the week's focus areas. Do not use raw filenames as topics.
+1. **Derive topic string** — Use meeting title + first 100 characters of summary or key points. For weekly-winddown, use the week's focus areas. Do not use raw filenames as topics.
 
 2. **Gather strategy & goals** — Run `arete search "<topic>" --scope context`. Take the top 3 results, max 300 words each. If results are empty, note: `context_quality: sparse-strategy`.
 
@@ -685,7 +685,7 @@ Skills consuming the JSON should prefer `bodyForContext` (already truncated to b
 
 **Purpose**: Lightweight memory retrieval for planning skills based on user-confirmed context. Unlike `context_bundle_assembly` which gathers comprehensive context, this pattern searches memory for decisions and learnings based on topics the user has already confirmed (priorities, meeting titles, attendees). Use this when you need targeted memory context without full bundle assembly.
 
-**Used by**: week-plan, daily-plan, meeting-prep
+**Used by**: week-plan, daily-winddown, meeting-prep
 
 **Relationship to `context_bundle_assembly`**: This is a lightweight alternative for planning skills that need memory context without full bundle assembly. Use `contextual_memory_search` when you need targeted memory search based on user-confirmed items. Use `context_bundle_assembly` for comprehensive intelligence analysis requiring strategy, memory, and people context together.
 
@@ -739,7 +739,7 @@ Skills consuming the JSON should prefer `bodyForContext` (already truncated to b
 
 6. **Offer to adjust** — After surfacing (only if results found):
    - "Anything here that changes your priorities?" (for week-plan)
-   - Or surface inline with meeting context (for daily-plan, meeting-prep)
+   - Or surface inline with meeting context (for daily-winddown, meeting-prep)
 
 **Outputs**: 
 - 3-5 relevant memory items, or "no relevant results" note
@@ -770,7 +770,7 @@ Anything here that changes how you want to frame these priorities?"
 
 **Purpose**: Context-aware judgment about what from this content actually matters given everything we know — the builder's strategy, goals, existing decisions, and relationship context. Replaces keyword scanning with reasoning.
 
-**Used by**: process-meetings (Step 7 — extraction to workspace memory), week-review (weekly significance assessment), slack-digest (Phase 2c — conversation extraction)
+**Used by**: process-meetings (Step 7 — extraction to workspace memory), weekly-winddown (weekly significance assessment), slack-digest (Phase 2c — conversation extraction)
 
 **Inputs**:
 - Context bundle (assembled via `context_bundle_assembly`)
@@ -848,7 +848,7 @@ architecture, not a new decision or actionable insight.
 
 **Purpose**: Context-aware judgment about what changed in a relationship and what should be tracked — assesses relationship health evolution, new stances, and generates prep recommendations based on trajectory.
 
-**Used by**: meeting-prep (after get_meeting_context), people-intelligence
+**Used by**: meeting-prep (after get_meeting_context). The `arete people intelligence digest` CLI applies the analogous classification logic for batch people-mention triage.
 
 **Inputs**:
 - Context bundle (with person profiles from `context_bundle_assembly` or reused from `get_meeting_context`)

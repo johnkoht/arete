@@ -1,6 +1,6 @@
 ---
 name: schedule-meeting
-description: Schedule a meeting or block focus time through conversation. Finds mutual availability and books the event.
+description: Schedule a meeting or block focus time — agent does all parsing + person-resolution + availability-finding upfront, then engages once with a curated slot proposal + create-and-followup action plan.
 triggers:
   - schedule a meeting
   - book time with
@@ -18,9 +18,49 @@ intelligence:
   - entity_resolution
 ---
 
-# Schedule Meeting Skill
+# Schedule Meeting — chef-orchestrator pattern
 
-Schedule a meeting with someone or block focus time through natural conversation. Finds mutual availability via FreeBusy, presents options, and books the event with a single letter response.
+This skill is built on the four chef-orchestrator patterns from
+`PATTERNS.md`. The agent parses the request, resolves the person,
+finds mutual availability, and engages **once** with a curated slot
+proposal + downstream action plan (Pattern 1:
+`do-all-work-then-engage`).
+
+Every proposed slot carries a reason label ("matches your preferred
+1:1 time window", "fits before sender's standing 2pm block",
+"first mutual availability") (Pattern 2:
+`curate-with-reason-labels`). When ambiguous — multiple matching
+people, no clear time preference, no availability in the requested
+window — surface to `## Uncertain — your call` rather than
+auto-defaulting.
+
+Action proposals (`calendar.create_event`, `slack.send_dm` to
+confirm to attendee, `meeting-prep` skill chain) appear at the end
+with mode tags (Pattern 3: `propose-with-mcp-action`).
+
+Pattern 4 (`surface-deferred-as-sidecar`) is **minimal here** —
+schedule-meeting is a low-volume per-invocation skill, not a daily
+batch. The curated-view persistence at
+`now/archive/schedule-meeting/` IS the audit trail; no separate
+sidecar file is generated.
+
+This skill is **two-engage by design** for the meeting flow:
+- **Engage 1**: agent surfaces parsed details + resolved person +
+  candidate slots → user picks a slot
+- **Engage 2** (optional): agent surfaces "meeting created, want
+  meeting-prep or agenda?" → user picks follow-up actions
+
+For the **block time** flow (no person), the agent does
+`do-all-work-then-engage` in a single pass — block specs are usually
+self-contained ("Block 2 hours for focus time tomorrow morning").
+
+**Read first** (if exists):
+`.arete/skills-local/schedule-meeting.md`. This is the user's
+per-skill APPEND: preferred meeting durations, default block-time
+ranges, communication style for invites, which people should auto-
+get a pre-meeting Slack DM ("hey, calendar invite incoming for
+Wed"), preferred Slack channels for FYI'ing about new meetings.
+Treat its content as opinion-defining context.
 
 ## When to Use
 
@@ -32,218 +72,292 @@ Schedule a meeting with someone or block focus time through natural conversation
 - "Block 2 hours for focus time"
 - "Book focus time tomorrow morning"
 
-## Workflow
+## Workflow — chef-orchestrator pattern
 
-### 1. Parse Request
+**Gather → judge → engage twice (meeting flow) or once (block
+flow).** Do not engage between gather and judge.
 
-Extract from the user's request:
+### Step 0 — Read APPEND
+
+```bash
+arete skill resolve schedule-meeting
+cat .arete/skills-local/schedule-meeting.md 2>/dev/null || echo "(no APPEND file)"
+```
+
+The APPEND file (if present) provides default duration, preferred
+windows, default invitation messages, FYI channels.
+
+### Step 1 — Parse + Gather
+
+Extract from the user's request, then run parallel gathers:
 
 | Element | Default | Examples |
 |---------|---------|----------|
 | **Person** | None (block time if missing) | "Sarah", "John Smith", "sarah@example.com" |
 | **Time preference** | Today + 2 days | "today", "tomorrow", "next week", "Monday" |
-| **Duration** | 30 minutes | "30-min sync", "hour-long meeting", "2 hours" |
-| **Meeting type** | Inferred or ask | "1:1", "sync", "call", "meeting" |
+| **Duration** | 30 minutes (or APPEND default) | "30-min sync", "hour-long", "2 hours" |
+| **Meeting type** | Inferred | "1:1", "sync", "call", "meeting" |
 
 **Time preference mapping**:
-- No time preference → search today + 2 days (3 days total)
+- No time preference → today + 2 days (3 days total)
 - "today" → today only (1 day)
 - "tomorrow" → tomorrow only (1 day)
 - "next week" → Monday through Friday of next week (5 days)
 
-**Duration extraction**:
-- "30-min" / "30 minute" → 30
-- "hour" / "1 hour" / "hour-long" → 60
-- "90 minutes" / "1.5 hours" → 90
-- "2 hours" → 120
+**Duration extraction**: "30-min" / "30 minute" → 30; "hour" /
+"hour-long" / "1 hour" → 60; "90 minutes" / "1.5 hours" → 90;
+"2 hours" → 120.
 
-**Detect block time**: If no person is mentioned and the request sounds like personal time (focus time, deep work, heads down, block time), use the Block Time Flow.
+**Detect block time**: no person mentioned + "focus", "deep work",
+"heads down", "block time" → block-time flow.
 
-### 2. Block Time Flow (no person)
+**Parallel gather (if person specified)**:
 
-When the user wants to block time for themselves:
+```bash
+# 1a. Resolve person
+arete resolve "<person>" --type person --json
 
-1. **Confirm details** if not specified:
-   - "What time would you like to block? (e.g., 'tomorrow 9am' or '2pm for 2 hours')"
+# 1b. Pull recent meetings with that person (for context-aware proposals)
+ls resources/meetings/ | tail -20
 
-2. **Create the event**:
-   ```bash
-   arete calendar create --title "<title>" --start "<time>" --duration <minutes>
-   ```
+# 1c. Read APPEND-defined preferences (already loaded in Step 0)
 
-3. **Confirm**:
-   ```
-   ✅ Blocked: Focus Time at Mon, Feb 26, 9:00 AM CT (2 hours)
-   Calendar link: <url>
-   ```
+# 1d. Pull calendar window for the time preference
+arete pull calendar --days <N> --json
 
-Skip to Step 6 (Confirm).
-
-### 3. Meeting Flow — Resolve Person
-
-When a person is specified:
-
-1. **Resolve to email**:
-   ```bash
-   arete resolve "<person>" --type person --json
-   ```
-
-2. **Handle results**:
-   - **Single match** → proceed with that email
-   - **Multiple matches** → ask user to clarify: "I found multiple people named Sarah. Which one? Sarah Chen (sarah.chen@company.com) or Sarah Miller (sarah.m@example.com)?"
-   - **No match** → ask: "I couldn't find [person] in your contacts. What's their email address?"
-
-### 4. Meeting Flow — Find Availability
-
-1. **Calculate days** based on time preference (see Step 1).
-
-2. **Find mutual availability**:
-   ```bash
-   arete availability find --with <email> --days <N> --duration <D> --limit 3 --json
-   ```
-
-3. **Present options** with numbered selection, grouped by day:
-   ```
-   Here's availability with Sarah:
-   
-   Tomorrow (Wed, Feb 26):
-   1) 2:00 PM CT
-   
-   Thursday (Feb 27):
-   2) 10:00 AM CT
-   3) 1:00 PM CT
-   
-   Which should I book?
-   ```
-
-   **Format rules**:
-   - Group slots by day with date headers
-   - Use "Tomorrow" or "Today" when applicable
-   - Always include timezone abbreviation (CT, ET, PT, etc.)
-   - Number sequentially (1, 2, 3) not by day
-
-4. **Handle no availability**:
-   ```
-   No mutual availability found with Sarah in the next 3 days.
-   Would you like me to:
-   - Check a different time range?
-   - Send a scheduling link instead?
-   ```
-
-### 5. Handle User Response
-
-**Parse the response**:
-- Accept numbers: "1", "2", "3" (matching the presented options)
-- Trim whitespace and punctuation: " 2. " → "2"
-- Accept: "none", "cancel", "nevermind" → cancel gracefully
-
-**If invalid response**:
-```
-I didn't catch that. Please pick a number (1, 2, or 3) or type 'none' to cancel.
+# 1e. (After 1a returns) find mutual availability
+arete availability find --with <email> --days <N> --duration <D> --limit 3 --json
 ```
 
-Re-prompt up to 2 times, then offer to start over.
+### Step 2 — Apply judgment
 
-### 6. Create Event
+**Resolve person** (from 1a):
+- Single match → proceed with that email
+- Multiple matches → surface to Uncertain ("multiple Sarahs found")
+- No match → surface to Uncertain ("not in contacts; provide
+  email?")
 
-1. **Generate title**:
-   - Use meeting type from request: "1:1 with Sarah", "Sync with John", "Call with Jane"
-   - If ambiguous, use: "Meeting with [Name]"
-   - For block time: use the user's description ("Focus Time", "Deep Work", etc.)
+**Score slots** (from 1e, if person flow):
+- Mark slots that match APPEND-defined preferred windows
+- Mark slots that fit between user's existing calendar (from 1d)
+- Note any "back-to-back" risks (slot immediately after another
+  meeting)
 
-2. **Create the event**:
-   ```bash
-   arete calendar create --title "<title>" --with <email> --start "<ISO time>" --duration <minutes> --json
-   ```
+**Block-time flow**: validate the time spec; if ambiguous (no
+specific time mentioned), surface to Uncertain.
 
-3. **Parse response** for success or error.
+### Step 3 — Compose curated view (Engage 1)
 
-### 7. Confirm and Follow Up
+#### Meeting flow output
 
-**On success**:
+```markdown
+## Schedule — Resolved
+
+**With**: Sarah Chen (sarah@example.com) — last met 12d ago
+**Time window**: tomorrow + 2 days (Wed–Fri)
+**Duration**: 30 min
+**Type**: 1:1
+
+## Candidate slots (your pick)
+
+| # | When | Why |
+|---|------|-----|
+| 1 | Wed Feb 26 · 2:00 PM CT | matches your preferred 1:1 window (APPEND) |
+| 2 | Thu Feb 27 · 10:00 AM CT | fits before Sarah's standing 11am block |
+| 3 | Thu Feb 27 · 1:00 PM CT | first mutual availability post-lunch |
+
+## Uncertain — your call
+
+- [ ] No slot matches your preference (1:1s before noon). **Take #1 (2pm CT), or extend the window to next week?**
+
+## Proposed actions (after you pick a slot)
+
+[1] calendar.create_event title="1:1 with Sarah" attendees=[sarah@example.com] when=<picked> duration=30m
+[2] slack.send_dm to @sarah: "Calendar invite for our 1:1 incoming — see you <picked>"  (APPEND-gated)
+[3] meeting-prep skill (chained) — prep context for the new meeting
+
+Which slot? (e.g., "1" or "1 with description=Glance review")
 ```
+
+#### Block-time flow output (single engage)
+
+```markdown
+## Block — Ready to create
+
+**Title**: Focus Time
+**When**: tomorrow · 9:00 AM CT
+**Duration**: 2 hours
+
+## Proposed action
+
+[1] calendar.create_event title="Focus Time" when="2026-02-27T09:00" duration=120m
+
+Approve? ("yes" / "edit when=...")
+```
+
+**Reason-label rules** (Pattern 2): ≤12 words, in "Why" column.
+Skill-specific:
+- **Preferred-window match** — `matches your preferred <type> window (APPEND)`
+- **Sender-window fit** — `fits before sender's standing <block>`
+- **First-available** — `first mutual availability post-<time>`
+- **No-match** — `outside your preferred window; explicit override needed`
+
+**Uncertain-tier rule (Phase 3.5 C2 convention)** — surface to
+Uncertain when ambiguous. Three explicit defer-category examples:
+
+- **"needs verification"** — multiple people match the name; agent
+  isn't sure which the user meant.
+- **"interesting future"** — slot exists but outside the user's
+  preferred window; agent asks before booking.
+- **"covered elsewhere"** — request might overlap an existing
+  recurring meeting (e.g., "1:1 with Sarah" when there's already a
+  weekly 1:1); agent asks before adding.
+
+### Step 4 — Persist curated view + engage user (Engage 1)
+
+Write the full Step-3 output verbatim to
+`now/archive/schedule-meeting/schedule-meeting-{slug}.md` where
+`{slug}` is the person slug + ISO date (or "focus-time-<date>" for
+block flow).
+
+```bash
+mkdir -p now/archive/schedule-meeting
+cat > "now/archive/schedule-meeting/schedule-meeting-{slug}-$(date +%Y-%m-%d).md" <<'EOF'
+{full Step-3 curated view, including all sections}
+EOF
+```
+
+After persisting, send the curated view as a single message. Wait
+for user response.
+
+Acceptable responses:
+- `1` / `2` / `3` → pick that slot
+- `1 with description="..."` → edit and execute
+- `none` / `cancel` → drop
+- `extend to next week` → re-run availability with broader window
+
+If invalid response (e.g., "tomorrow at 2pm but on Sarah's calendar
+not mine"), re-prompt up to 2 times then offer to start over.
+
+### Step 5 — Create event + Engage 2 (follow-up)
+
+Execute the create:
+
+```bash
+arete calendar create --title "<title>" --with <email> \
+  --start "<ISO time>" --duration <minutes> --json
+```
+
+Then surface the follow-up engage:
+
+```markdown
 ✅ Booked: 1:1 with Sarah
-   📅 Mon, Feb 26, 2:00 PM CT (30 min)
+   📅 Wed, Feb 26 · 2:00 PM CT (30 min)
    📧 Invite sent to sarah@example.com
-   🔗 Calendar link: <url>
+   🔗 <calendar link>
 
-Would you like me to prepare a meeting agenda?
+## Proposed follow-ups
+
+[1] meeting-prep — build context + agenda for the new meeting
+[2] slack.send_dm to @sarah: "Calendar invite for our 1:1 is in your inbox — see you Wed"  (APPEND-gated)
+[3] (draft) jira.create_ticket project=GLANCE type=Meeting summary="1:1 prep notes — Sarah Chen Feb 26"
+
+Want any of these? (e.g., "1" or "1, 2")
 ```
 
-**If user says yes**: Use the [meeting-prep](../meeting-prep/SKILL.md) skill to build context, then offer to create an agenda via [prepare-meeting-agenda](../prepare-meeting-agenda/SKILL.md).
+If the user picks meeting-prep, hand off to the meeting-prep skill
+with the new meeting context.
 
-**If user says no or doesn't respond**: Done — no further action needed.
+### Step 6 — Execute approved follow-ups
 
-**On error**:
-- Auth error → "Calendar not configured. Run: arete integration configure google-calendar"
-- API error → Show the error message, offer to retry
-- Unknown error → "Something went wrong. Would you like to try again?"
+After approval (and only after), execute the chosen actions:
+- `meeting-prep` → invoke the skill with the new meeting context
+- `slack.send_dm` → MCP call with the prepared message
+- Draft-only verbs → format and confirm acknowledgment; do not
+  execute
+
+## Action verbs this skill may propose
+
+| Verb | Mode | When |
+|---|---|---|
+| `calendar.create_event` | executable | After user picks a slot (or for block-time) |
+| `slack.send_dm` | executable | APPEND-gated FYI to attendee about incoming invite |
+| `meeting-prep` (skill chain) | n/a | User wants prep context for the newly booked meeting |
+| `jira.create_ticket` | draft-only | Meeting-prep wants a ticket for the agenda |
+
+User extends or restricts via `.arete/skills-local/schedule-meeting.md`.
 
 ## Examples
 
-### Example 1: Simple scheduling
+### Example 1: Simple meeting
 
 **User**: "1:1 with Sarah tomorrow"
 
-**Agent**:
-1. Parse: person=Sarah, time=tomorrow, duration=30min, type=1:1
-2. Resolve: `arete resolve "Sarah" --type person --json` → sarah@example.com
-3. Find: `arete availability find --with sarah@example.com --days 1 --duration 30 --limit 3 --json`
-4. Present:
-   ```
-   Here's availability with Sarah:
-   
-   Tomorrow (Tue, Feb 27):
-   1) 10:00 AM CT
-   2) 2:00 PM CT
-   
-   Which should I book?
-   ```
+**Agent**: parses → resolves → finds availability → composes
+Step-3 curated view → engages once with 2-3 candidate slots +
+reason labels + proposed `calendar.create_event` action.
 
 **User**: "1"
 
-**Agent**:
-1. Create: `arete calendar create --title "1:1 with Sarah" --with sarah@example.com --start "2026-02-27T10:00:00" --duration 30 --json`
-2. Confirm:
-   ```
-   ✅ Booked: 1:1 with Sarah
-      📅 Tue, Feb 27, 10:00 AM CT (30 min)
-      📧 Invite sent to sarah@example.com
-   
-   Would you like me to prepare a meeting agenda?
-   ```
+**Agent**: creates event → engages once with confirm + proposed
+follow-ups (meeting-prep / FYI DM / draft ticket).
 
 ### Example 2: Block time
 
 **User**: "Block 2 hours for focus time tomorrow morning"
 
-**Agent**:
-1. Parse: no person (block time), time=tomorrow morning, duration=120min, title=Focus Time
-2. Create: `arete calendar create --title "Focus Time" --start "2026-02-27T09:00:00" --duration 120 --json`
-3. Confirm: "✅ Blocked: Focus Time at Tue, Feb 27, 9:00 AM CT (2 hours)"
+**Agent**: parses → no person → block flow → engages once with
+proposed `calendar.create_event` action.
 
-### Example 3: Flexible time range
+**User**: "yes"
 
-**User**: "Schedule a sync with John"
+**Agent**: creates the event. Done.
 
-**Agent**:
-1. Parse: person=John, time=default (today+2 days), duration=30min, type=sync
-2. Resolve: `arete resolve "John" --type person --json` → john@example.com
-3. Find: `arete availability find --with john@example.com --days 3 --duration 30 --limit 3 --json`
-4. Present options...
+### Example 3: Ambiguous person
+
+**User**: "Schedule with Sarah"
+
+**Agent**: parses → resolves (multiple matches) → composes
+Step-3 with the Uncertain tier surfacing: "Sarah Chen or Sarah
+Miller?" → engages once with disambiguation.
 
 ## Error Handling
 
 | Scenario | Response |
 |----------|----------|
-| Person not found | Ask for email or clarification |
-| No availability | Offer to check different range or send scheduling link |
-| Calendar not configured | Direct to: `arete integration configure google-calendar` |
-| Invalid slot selection | Re-prompt: "Please pick a number (1, 2, or 3) or type 'none' to cancel" |
-| API error | Show error, offer to retry |
+| Person not found | Surface to Uncertain — ask for email |
+| No availability | Curated view notes "no mutual availability in <window>"; offer to extend |
+| Calendar not configured | "Calendar not configured. Run: arete integration configure google-calendar" |
+| API error during create | Show error, offer to retry; do not silently abandon the booking |
+| Invalid slot selection | Re-prompt twice, then offer to start over |
+
+## Files this skill touches
+
+- **Reads**: `arete resolve`, `arete pull calendar`,
+  `arete availability find`, `resources/meetings/` (recent context),
+  `people/<slug>.md` (for stance/preferences).
+- **Writes (after user approval)**: calendar event via
+  `arete calendar create`,
+  `now/archive/schedule-meeting/schedule-meeting-{slug}-YYYY-MM-DD.md`
+  (curated-view persistence), optional MCP actions per user.
+- **APPEND**: `.arete/skills-local/schedule-meeting.md`.
 
 ## References
 
-- **CLI Commands**: `arete calendar create`, `arete availability find`, `arete resolve`
-- **Related Skills**: [meeting-prep](../meeting-prep/SKILL.md), [daily-plan](../daily-plan/SKILL.md)
-- **Patterns**: [PATTERNS.md](../PATTERNS.md) — entity resolution
+- **Patterns**: [PATTERNS.md](../PATTERNS.md) — chef-orchestrator
+  patterns 1–4. The week-plan-style two-engage variant of Pattern 1
+  is documented in PATTERNS.md.
+- **CLI**: `arete resolve`, `arete pull calendar`,
+  `arete availability find`, `arete calendar create`.
+- **Related skills**: [meeting-prep](../meeting-prep/SKILL.md)
+  (chain after create), [week-plan](../week-plan/SKILL.md)
+  (longer-horizon planning where this skill's outputs land).
+
+## Rollback
+
+```bash
+git log --oneline -- packages/runtime/skills/schedule-meeting/
+git revert <commit-hash>
+```
+
+MC5 sunset applies — no `SKILL.legacy.md` ships.

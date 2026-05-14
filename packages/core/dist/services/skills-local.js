@@ -6,12 +6,10 @@
  * at the start of every skill run. Seeded on `arete install` and
  * `arete update`. Idempotent: never overwrites existing user content.
  *
- * The five Phase 2 chef-orchestrator skills are seeded by default:
- *   - daily-winddown
- *   - weekly-winddown
- *   - week-plan
- *   - process-meetings
- *   - meeting-prep
+ * Phase 2 seeded five chef skills (daily-winddown, weekly-winddown,
+ * week-plan, process-meetings, meeting-prep). Phase 4 propagated the
+ * chef pattern to four more (inbox-triage, email-triage, slack-digest,
+ * schedule-meeting), all of which are user-tunable workflows.
  *
  * If a skill file already exists at `.arete/skills-local/<slug>.md`,
  * it is preserved verbatim. Only missing files are seeded.
@@ -28,6 +26,18 @@ export const PHASE_2_CHEF_ORCHESTRATOR_SKILLS = [
     'week-plan',
     'process-meetings',
     'meeting-prep',
+];
+/** Skills that get an APPEND-file template seeded by Phase 4 (Group B chef rewrites). */
+export const PHASE_4_CHEF_ORCHESTRATOR_SKILLS = [
+    'inbox-triage',
+    'email-triage',
+    'slack-digest',
+    'schedule-meeting',
+];
+/** All chef-orchestrator skills with APPEND-file seeding (Phase 2 + Phase 4). */
+export const CHEF_ORCHESTRATOR_SKILLS = [
+    ...PHASE_2_CHEF_ORCHESTRATOR_SKILLS,
+    ...PHASE_4_CHEF_ORCHESTRATOR_SKILLS,
 ];
 /**
  * Render the seed template for a given skill slug.
@@ -99,7 +109,7 @@ workflow envelope, and this file provides your per-skill context.
  * (handled via BASE_WORKSPACE_DIRS in workspace-structure.ts).
  */
 export async function seedSkillsLocal(storage, workspaceRoot, options = {}) {
-    const skills = options.skills ?? PHASE_2_CHEF_ORCHESTRATOR_SKILLS;
+    const skills = options.skills ?? CHEF_ORCHESTRATOR_SKILLS;
     const baseDir = join(workspaceRoot, '.arete', 'skills-local');
     const result = {
         added: [],

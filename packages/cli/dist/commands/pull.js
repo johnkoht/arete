@@ -71,6 +71,7 @@ export function registerPullCommand(program) {
             await pullGmailHelper(services, root, {
                 days,
                 json: opts.json ?? false,
+                query: opts.query,
             });
             if (!opts.json)
                 showInboxTip(root);
@@ -499,10 +500,15 @@ export async function pullGmailHelper(services, workspaceRoot, opts) {
         const dd = String(afterDate.getDate()).padStart(2, '0');
         queryExtra = ` after:${yyyy}/${mm}/${dd}`;
     }
-    // getImportantUnread will add the base query; if we have a date filter,
-    // use searchThreads directly with the combined query
+    // If --query is provided, use it directly as the Gmail search expression
+    // (date filter applied as a constraint if --days also passed). Otherwise,
+    // fall back to the importance-gated default (legacy "inbox triage" flow).
     let threads;
-    if (queryExtra) {
+    if (opts.query && opts.query.trim().length > 0) {
+        const userQuery = opts.query.trim();
+        threads = await provider.searchThreads(`${userQuery}${queryExtra}`, { maxResults: 25 });
+    }
+    else if (queryExtra) {
         threads = await provider.searchThreads(`is:important is:unread -category:promotions -category:social${queryExtra}`, { maxResults: 20 });
     }
     else {
