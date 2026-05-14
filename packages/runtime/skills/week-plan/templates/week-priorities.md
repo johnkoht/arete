@@ -23,7 +23,7 @@
 <!-- Process during next triage to move items to Tasks or tasks.md -->
 
 ## Notes
-<!-- Working notes captured throughout the week. This section is preserved across daily-plan updates. -->
+<!-- Working notes captured throughout the week. This section is preserved across daily-winddown updates. -->
 
 ## Tasks
 ### Must complete
@@ -47,4 +47,4 @@
 - [ ] 
 
 ## Daily Progress
-<!-- Auto-populated by daily-plan. Previous day's Today section moves here. -->
+<!-- Auto-populated by daily-winddown. Previous day's Today section moves here. -->

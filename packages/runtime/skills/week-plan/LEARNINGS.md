@@ -12,19 +12,19 @@ The `now/week.md` file has specific sections with defined purposes:
 |---------|---------|--------|--------------|
 | **Weekly Priorities** | Top 3-5 high-level goals for the week | Numbered list (1. 2. 3.) | week-plan skill |
 | **Key Meetings** | Prep-worthy meetings flagged by importance inference | `- [ ] Day Time: Title (attendees) — prep: [link] or "needs prep"` | week-plan skill (Step 2.5 → Step 4) |
-| **Today** | Current day's focus and meetings | Focus line + meeting list | daily-plan skill |
+| **Today** | Current day's focus and meetings | Focus line + meeting list | daily-winddown skill |
 | **Inbox** | Quick capture during daily winddown | Plain text, no metadata required | User (via daily-winddown) |
 | **Notes** | Working notes throughout the week | Free-form, preserved across updates | User |
 | **Tasks** | Week's actionable items by priority | Checkboxes in Must/Should/Could subsections | week-plan, daily-winddown |
 | **Waiting On** | What others owe you | `- [ ] Person: Description @person(slug) @from(commitment:id)` | Meeting processing (they_owe_me) |
 | **Carried from last week** | Incomplete items from previous week | Checkboxes | week-plan (auto-populated) |
-| **Daily Progress** | Archive of previous days | Auto-generated from Today section | daily-plan skill |
+| **Daily Progress** | Archive of previous days | Auto-generated from Today section | daily-winddown skill |
 
 ### Section Invariants
 
 1. **Notes is sacred** — Never overwritten or moved by any skill. User's working scratchpad.
-2. **Daily Progress is append-only** — daily-plan archives previous Today here; never deletes entries.
-3. **Today is transient** — Replaced daily by daily-plan; previous content moves to Daily Progress.
+2. **Daily Progress is append-only** — daily-winddown archives previous Today here; never deletes entries.
+3. **Today is transient** — Replaced daily by daily-winddown; previous content moves to Daily Progress.
 4. **Inbox is temporary** — Items should be triaged to Tasks or tasks.md during daily winddown.
 
 ### Backward Compatibility
@@ -54,9 +54,9 @@ Unlike Tasks which support `@area()`, `@project()`, `@person()`, `@due()` metada
 Before modifying week.md template or parsing:
 
 - [ ] Check if `parseWeekPriorities()` in backend uses any section headers (currently: no)
-- [ ] Check if daily-plan skill assumes specific section names (references Today, Notes, Daily Progress)
+- [ ] Check if daily-winddown skill assumes specific section names (references Today, Notes, Daily Progress)
 - [ ] Check if Key Meetings section is parsed by any skill or backend route
-- [ ] Verify Notes section preservation logic in daily-plan
+- [ ] Verify Notes section preservation logic in daily-winddown
 - [ ] Test with existing week.md files to ensure backward compatibility
 
 ---
