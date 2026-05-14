@@ -6,12 +6,10 @@
  * at the start of every skill run. Seeded on `arete install` and
  * `arete update`. Idempotent: never overwrites existing user content.
  *
- * The five Phase 2 chef-orchestrator skills are seeded by default:
- *   - daily-winddown
- *   - weekly-winddown
- *   - week-plan
- *   - process-meetings
- *   - meeting-prep
+ * Phase 2 seeded five chef skills (daily-winddown, weekly-winddown,
+ * week-plan, process-meetings, meeting-prep). Phase 4 propagated the
+ * chef pattern to four more (inbox-triage, email-triage, slack-digest,
+ * schedule-meeting), all of which are user-tunable workflows.
  *
  * If a skill file already exists at `.arete/skills-local/<slug>.md`,
  * it is preserved verbatim. Only missing files are seeded.
@@ -23,7 +21,11 @@
 import type { StorageAdapter } from '../storage/adapter.js';
 /** Skills that get an APPEND-file template seeded by Phase 2. */
 export declare const PHASE_2_CHEF_ORCHESTRATOR_SKILLS: readonly ["daily-winddown", "weekly-winddown", "week-plan", "process-meetings", "meeting-prep"];
-export type ChefOrchestratorSkillSlug = (typeof PHASE_2_CHEF_ORCHESTRATOR_SKILLS)[number];
+/** Skills that get an APPEND-file template seeded by Phase 4 (Group B chef rewrites). */
+export declare const PHASE_4_CHEF_ORCHESTRATOR_SKILLS: readonly ["inbox-triage", "email-triage", "slack-digest", "schedule-meeting"];
+/** All chef-orchestrator skills with APPEND-file seeding (Phase 2 + Phase 4). */
+export declare const CHEF_ORCHESTRATOR_SKILLS: readonly ["daily-winddown", "weekly-winddown", "week-plan", "process-meetings", "meeting-prep", "inbox-triage", "email-triage", "slack-digest", "schedule-meeting"];
+export type ChefOrchestratorSkillSlug = (typeof CHEF_ORCHESTRATOR_SKILLS)[number];
 /**
  * Render the seed template for a given skill slug.
  *
@@ -50,7 +52,7 @@ export interface SeedSkillsLocalResult {
  * (handled via BASE_WORKSPACE_DIRS in workspace-structure.ts).
  */
 export declare function seedSkillsLocal(storage: StorageAdapter, workspaceRoot: string, options?: {
-    /** Override which skills get seeded (defaults to all Phase 2 chef skills). */
+    /** Override which skills get seeded (defaults to all chef-orchestrator skills). */
     skills?: readonly string[];
 }): Promise<SeedSkillsLocalResult>;
 //# sourceMappingURL=skills-local.d.ts.map

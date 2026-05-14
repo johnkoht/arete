@@ -7,7 +7,7 @@ export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
-export { seedSkillsLocal, renderSkillsLocalTemplate, PHASE_2_CHEF_ORCHESTRATOR_SKILLS, } from './skills-local.js';
+export { seedSkillsLocal, renderSkillsLocalTemplate, PHASE_2_CHEF_ORCHESTRATOR_SKILLS, PHASE_4_CHEF_ORCHESTRATOR_SKILLS, CHEF_ORCHESTRATOR_SKILLS, } from './skills-local.js';
 export type { SeedSkillsLocalResult, ChefOrchestratorSkillSlug, } from './skills-local.js';
 export { resolveSkillDirTwoTier, resolveSkillFileTwoTier, } from './skill-resolver.js';
 export type { ResolveSkillDirResult, TwoTierResolveResult, } from './skill-resolver.js';

@@ -17,7 +17,8 @@ import { FileStorageAdapter } from '../../src/storage/file.js';
 import {
   seedSkillsLocal,
   renderSkillsLocalTemplate,
-  PHASE_2_CHEF_ORCHESTRATOR_SKILLS,
+  PHASE_4_CHEF_ORCHESTRATOR_SKILLS,
+  CHEF_ORCHESTRATOR_SKILLS,
 } from '../../src/services/skills-local.js';
 
 describe('renderSkillsLocalTemplate', () => {
@@ -64,13 +65,21 @@ describe('seedSkillsLocal', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('seeds all five Phase 2 skill templates on a fresh workspace', async () => {
+  it('seeds all chef-orchestrator skill templates on a fresh workspace (Phase 2 + Phase 4)', async () => {
     const result = await seedSkillsLocal(storage, tmpDir);
-    assert.equal(result.added.length, 5);
+    assert.equal(result.added.length, CHEF_ORCHESTRATOR_SKILLS.length);
     assert.equal(result.preserved.length, 0);
-    for (const slug of PHASE_2_CHEF_ORCHESTRATOR_SKILLS) {
+    for (const slug of CHEF_ORCHESTRATOR_SKILLS) {
       const file = join(tmpDir, '.arete', 'skills-local', `${slug}.md`);
       assert.ok(existsSync(file), `expected ${slug}.md to exist`);
+    }
+  });
+
+  it('seeds the four Phase 4 chef skills (inbox-triage, email-triage, slack-digest, schedule-meeting)', async () => {
+    await seedSkillsLocal(storage, tmpDir);
+    for (const slug of PHASE_4_CHEF_ORCHESTRATOR_SKILLS) {
+      const file = join(tmpDir, '.arete', 'skills-local', `${slug}.md`);
+      assert.ok(existsSync(file), `expected Phase 4 ${slug}.md to exist`);
     }
   });
 
@@ -89,17 +98,17 @@ describe('seedSkillsLocal', () => {
     );
     assert.equal(after, userContent, 'existing file must be preserved verbatim');
 
-    // The other four are still seeded
-    assert.equal(result.added.length, 4);
+    // The other chef skills are still seeded
+    assert.equal(result.added.length, CHEF_ORCHESTRATOR_SKILLS.length - 1);
   });
 
   it('is fully idempotent on second run', async () => {
     const first = await seedSkillsLocal(storage, tmpDir);
-    assert.equal(first.added.length, 5);
+    assert.equal(first.added.length, CHEF_ORCHESTRATOR_SKILLS.length);
 
     const second = await seedSkillsLocal(storage, tmpDir);
     assert.equal(second.added.length, 0);
-    assert.equal(second.preserved.length, 5);
+    assert.equal(second.preserved.length, CHEF_ORCHESTRATOR_SKILLS.length);
   });
 
   it('respects skills override option', async () => {
@@ -109,8 +118,8 @@ describe('seedSkillsLocal', () => {
     assert.equal(result.added.length, 1);
     assert.ok(result.added[0].endsWith('daily-winddown.md'));
 
-    // Other four files should NOT exist
-    for (const slug of PHASE_2_CHEF_ORCHESTRATOR_SKILLS) {
+    // Other chef-orchestrator skills should NOT exist
+    for (const slug of CHEF_ORCHESTRATOR_SKILLS) {
       if (slug === 'daily-winddown') continue;
       const file = join(tmpDir, '.arete', 'skills-local', `${slug}.md`);
       assert.ok(!existsSync(file), `${slug}.md should not be seeded`);
