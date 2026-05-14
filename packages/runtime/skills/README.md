@@ -12,24 +12,28 @@ Areté ships with default skills for core PM workflows. They live in `.agents/sk
 
 | Area | Examples |
 |------|----------|
-| Planning | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
+| Planning | quarter-plan, week-plan, week-review, goals-alignment |
 | Discovery & definition | discovery, create-prd, competitive-analysis, construct-roadmap |
-| Execution | meeting-prep, save-meeting, process-meetings, schedule-meeting, synthesize |
-| Operations | fathom, krisp, notion, calendar, finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
+| Execution | meeting-prep, process-meetings, schedule-meeting, synthesize |
+| Operations | finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
+| Triage (chef-orchestrator) | inbox-triage, email-triage, slack-digest |
 
 Run `arete skill list` to see all available skills.
 
-## Integration skill routing
+## Integration triggers (CLI verbs, not skills)
 
-The former `sync` skill has been split into focused integration skills. If you used sync triggers before, here's how they now route:
+Phase 4 demoted thin integration wrappers (krisp, fathom, notion, calendar, drive-search, email-search, doc-pull, save-meeting, people-intelligence) to existing CLI verbs. Trigger phrases now resolve to the corresponding CLI, which the agent invokes directly:
 
-| Old trigger | Routes to | Notes |
-|-------------|-----------|-------|
-| "sync my meetings" | `fathom` or `krisp` | Agent chooses based on configured integration |
-| "pull from fathom" / "fathom recording" | `fathom` | All Fathom pull operations |
-| "sync from krisp" / "krisp recording" | `krisp` | All Krisp pull operations |
-| "import notion page" / "sync notion" | `notion` | Page import by URL |
-| "what's on my calendar" / "pull my calendar" | `calendar` | Calendar view and event creation |
+| Trigger | CLI verb |
+|---------|----------|
+| "sync my meetings" / "pull fathom" / "pull krisp" | `arete pull fathom` or `arete pull krisp` |
+| "import notion page" / "sync notion" | `arete pull notion --page <url>` |
+| "what's on my calendar" / "pull my calendar" | `arete pull calendar [--today \| --days N]` |
+| "block time" / "schedule with X" | `arete calendar create` + `arete availability find` (or the schedule-meeting skill, which orchestrates both) |
+| "save this meeting" (pasted content) | `arete meeting add --file <json>` |
+| "search drive" / "find docs" | `arete pull drive --query <q>` |
+| "search email" / "find emails" | `arete pull gmail --query <q>` |
+| "people intelligence digest" | `arete people intelligence digest --input <json>` |
 
 ## Customizing a skill
 

@@ -37,10 +37,10 @@ Where `{category}` matches the template group:
 | `construct-roadmap` | Roadmap output | `templates/outputs/construct-roadmap/` | `roadmap` |
 | `week-plan` | Week file | `templates/plans/` | `week-priorities` |
 | `quarter-plan` | Quarter file | `templates/plans/` | `quarter-goals` |
-| `fathom` | Meeting output | `templates/outputs/fathom/` | `meeting` |
-| `krisp` | Meeting output | `templates/outputs/krisp/` | `meeting` |
 
-> **Template path convention**: Integration skills (fathom, krisp, calendar, notion) use `templates/outputs/{skill-id}/` for workspace override paths. Older skills use descriptive paths (e.g. `templates/meeting-agendas/`, `templates/projects/`). Both conventions are supported. **New skills should use `templates/outputs/{skill-id}/`**.
+> **Template path convention**: User-tunable workflow skills use `templates/outputs/{skill-id}/` for workspace override paths. Older skills use descriptive paths (e.g. `templates/meeting-agendas/`, `templates/projects/`). Both conventions are supported. **New skills should use `templates/outputs/{skill-id}/`**.
+>
+> Integration ingest (krisp / fathom / notion / calendar / google-drive / gmail) is now handled by CLI verbs (`arete pull <integration>`), not skills; their output formats are owned by the integration code, not the templates system.
 
 ### How to customize a template
 
@@ -304,7 +304,7 @@ arete people memory refresh --person jane-doe
 
 **Purpose**: Cross-reference calendar event data to fill in missing or incomplete attendee information in meeting files — e.g., email-only identifiers, first-name-only entries, or attendees with no displayable name.
 
-**Used by**: fathom (process-meetings via fathom pull), krisp (process-meetings via krisp pull), process-meetings
+**Used by**: process-meetings (entity-resolution step, after `arete pull krisp` or `arete pull fathom` populates meeting files with attendee metadata)
 
 **Integration point**: Apply during **process-meetings step 2** (entity resolution) — before slug generation and person-file creation, so enriched names and emails feed into the slug and category logic.
 
@@ -848,7 +848,7 @@ architecture, not a new decision or actionable insight.
 
 **Purpose**: Context-aware judgment about what changed in a relationship and what should be tracked — assesses relationship health evolution, new stances, and generates prep recommendations based on trajectory.
 
-**Used by**: meeting-prep (after get_meeting_context), people-intelligence
+**Used by**: meeting-prep (after get_meeting_context). The `arete people intelligence digest` CLI applies the analogous classification logic for batch people-mention triage.
 
 **Inputs**:
 - Context bundle (with person profiles from `context_bundle_assembly` or reused from `get_meeting_context`)
