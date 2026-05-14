@@ -8,6 +8,9 @@ triggers:
   - friday winddown
   - weekly review and plan
   - wind down the week
+  - review the week
+  - week review
+  - what did I accomplish this week
 work_type: planning
 category: essential
 intelligence:
@@ -324,8 +327,10 @@ week decision):
   `arete search ... --timeline --days 7` for thread arcs.
 - **Sidecar** — `./deferred-week-YYYY-WNN.md`.
 - **Related skills**: `daily-winddown`, `week-plan` (consumes this
-  skill's "stage for next week" output), `week-review` (legacy
-  sibling; may converge into this skill in Phase 4).
+  skill's "stage for next week" output). The former `week-review`
+  skill was dropped in Phase 4; its functionality is fully covered
+  by this skill (triggers "close the week" / "review the week" route
+  here).
 
 ## Rollback
 
