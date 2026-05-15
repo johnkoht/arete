@@ -171,6 +171,20 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
 
+## Decisions log — 2026-05-15 (parser-bug observation → Phase 5 input)
+
+User reported during 2026-05-15 winddown: extraction creates **duplicate commitments with mirror direction** for compound-sentence action items. Example: transcript says "John to reach out to compliance, then follow up with Anthony" → extractor emits both `i_owe_them` (person=john-koht) and `they_owe_me` (person=anthony-avina) with identical verbatim text.
+
+User's APPEND file (`scratchpad 2026-04-22`) already flags this heuristic for chef-pattern cleanup. Volume:
+- 2026-05-14 winddown: resolved 5 pairs
+- 2026-05-15 winddown: 11 pairs flagged
+
+Chef-pattern handling (working as intended): identify pairs by verbatim text match across direction-mirror, resolve the buggy duplicate via `arete commitments resolve <hash> --status resolved --reason "Parser-bug duplicate; tracked via counterpart commitment"`. Spot-check pattern: chef offered to show pairs first OR batch-resolve OR skip; meta recommended show-first for trust calibration.
+
+**Phase 5 input**: when `meeting extract` decomposition happens, the parser bug should be fixed at source. The bug almost certainly lives in the monolithic extraction LLM prompt — compound sentences ("X to A, then B with C") emit duplicate entries with mirrored direction. Decomposing into chat-agent-driven primitives lets the orchestrator reason about subject/object/direction in one judgment pass instead of letting the frozen prompt produce both halves.
+
+Chef-pattern resolution stays useful indefinitely (covers any compound-sentence edge cases that survive Phase 5's prompt fix), but Phase 5 should aim to drop daily volume from ~11 pairs to ~0–1 pairs.
+
 ## Decisions log — 2026-05-06 (Phase 3 polish bugs surfaced during user testing)
 
 John ran `arete update` from the worktree to pick up Phase 3. Migration reported "4 skills have upstream changes vs. your fork (no fork base recorded)" + "Migrated 24 pre-Phase-3 skill copies." Subsequent inspection surfaced multiple Phase 3 polish issues; aggregating here for the inevitable Phase 3 polish pass before Phase 4:
