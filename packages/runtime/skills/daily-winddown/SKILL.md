@@ -161,6 +161,17 @@ ls now/agendas/$(date +%Y-%m-%d)-*.md 2>/dev/null
 #   - insert as ## Agenda / Notes section in meeting file (after frontmatter)
 #   - delete agenda file from now/agendas/
 # If no match: leave agenda for future / unmatched.
+#
+# ALWAYS perform the body merge, EVEN IF the meeting frontmatter already
+# has an `agenda:` pointer to the source file. The body is the durable
+# record: the meeting markdown file stays in `resources/meetings/` forever,
+# but `now/agendas/` is ephemeral and gets cleaned by this step. A
+# frontmatter pointer alone is not sufficient durability — once the source
+# agenda file is deleted (which step 1g also does), the pointer becomes
+# dangling. Always-merge keeps the agenda content in the meeting body so
+# it survives any future agenda-folder cleanup, ships with the meeting on
+# any export, and is human-readable inside the meeting file. DO NOT
+# skip the merge as "redundant" because frontmatter points at the agenda.
 
 # 1h. Process meetings (extract + stage + reconcile, all in one pass per file)
 # For each meeting file from 1b, run:
