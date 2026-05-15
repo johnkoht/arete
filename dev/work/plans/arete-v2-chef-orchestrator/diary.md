@@ -182,7 +182,13 @@ Meta interpreted that as endorsing `daily-plan` skill removal. Actually user was
 
 Real signal: user DOES use day planning — just via natural-language ad-hoc rather than `/daily-plan` slash command. That's still a real workflow that deserves a chef-pattern envelope.
 
-**Decision pending user**: four options surfaced (restore daily-plan as chef-pattern skill | fold into daily-winddown | extend week-plan with --scope daily | leave ad-hoc). Meta-recommends restore + chef-rewrite (~30 min, same shape as week-plan two-engage variant scoped to tomorrow). User signing off; decision queued for next session.
+**Decision pending user**: four options surfaced (restore daily-plan as chef-pattern skill | fold into daily-winddown | extend week-plan with --scope daily | leave ad-hoc). Meta-recommended restore + chef-rewrite.
+
+**User correction 2026-05-15 evening**: clarified usage — user DOES use `/daily-plan` skill regularly. The skill writes daily progress to `week.md`, NOT to its own file. Meta's earlier proposed "Option A persists to `now/archive/daily-plan/<date>.md`" was wrong — the existing skill's write target is `week.md`, which is the user's actual workflow integration.
+
+**Action taken**: pure-restore via `git revert f7b1b90b` at commit `67e4394f`. Skill returns to exact pre-Phase-4 state. No behavior change. Schedule-meeting References section also restored to mention both `daily-plan` and `week-plan`. User runs `arete update` in arete-reserv to pick up.
+
+**Deferred to Group C follow-on**: chef-rewrite of daily-plan (same envelope as week-plan two-engage variant) — keeping `week.md` as the durable write target while adding chef-pattern envelope + Phase 3.5 conventions (`now/archive/daily-plan/<date>.md` for audit trail of the chef's reasoning, complementing not replacing the week.md daily-progress write).
 
 **Phase 4 retro lesson**: disposition decisions based on user input need clearer "is this the skill or the CLI verb?" disambiguation. The disposition table should record the user's exact quote when the verdict cites user input, so future-meta can spot conflations like this one before the drop ships.
 
