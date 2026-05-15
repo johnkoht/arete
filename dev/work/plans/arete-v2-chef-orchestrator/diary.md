@@ -171,6 +171,23 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
 
+## Decisions log — 2026-05-15 (Phase 4 disposition error: daily-plan dropped prematurely)
+
+User asked the agent in arete-reserv "Let's plan my day for tomorrow." Agent did it ad-hoc using chat context (from earlier slack-digest + daily-winddown runs) instead of invoking a skill. User asked "is the router gone?" — implying they expected a structured skill response.
+
+**Root cause**: Phase 4 dropped `daily-plan` as confirmed-unused. The drop was based on a misread of user's Phase 4 planning input. User had said:
+> "daily can be removed. i have never used that. is that just the daily plan skill as a cli?"
+
+Meta interpreted that as endorsing `daily-plan` skill removal. Actually user was asking about the `daily` CLI verb (`arete daily`), not the `daily-plan` skill. Two different things. Conflation.
+
+Real signal: user DOES use day planning — just via natural-language ad-hoc rather than `/daily-plan` slash command. That's still a real workflow that deserves a chef-pattern envelope.
+
+**Decision pending user**: four options surfaced (restore daily-plan as chef-pattern skill | fold into daily-winddown | extend week-plan with --scope daily | leave ad-hoc). Meta-recommends restore + chef-rewrite (~30 min, same shape as week-plan two-engage variant scoped to tomorrow). User signing off; decision queued for next session.
+
+**Phase 4 retro lesson**: disposition decisions based on user input need clearer "is this the skill or the CLI verb?" disambiguation. The disposition table should record the user's exact quote when the verdict cites user input, so future-meta can spot conflations like this one before the drop ships.
+
+**Router status note**: `model-router.ts` / `arete route` CLI held pending decision per hygiene-pass-1. Still in main, unchanged. Natural-language → skill routing was always agent-decided in chat, not router-mediated. Router covers programmatic / automated cases.
+
 ## Decisions log — 2026-05-15 (parser-bug observation → Phase 5 input)
 
 User reported during 2026-05-15 winddown: extraction creates **duplicate commitments with mirror direction** for compound-sentence action items. Example: transcript says "John to reach out to compliance, then follow up with Anthony" → extractor emits both `i_owe_them` (person=john-koht) and `they_owe_me` (person=anthony-avina) with identical verbatim text.
