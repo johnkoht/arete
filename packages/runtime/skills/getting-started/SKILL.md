@@ -358,9 +358,8 @@ What you've accomplished:
 Your workspace is no longer empty. The agent now knows your business.
 
 What to do next:
-- Start the week with "Plan my week" (week-plan)
+- Start your day with "Plan my day" (daily-plan)
 - After meetings: "Process my meetings" (process-meetings)
-- End of day: "Daily winddown" (daily-winddown)
 - Drop files into inbox/ anytime — run "inbox triage" to classify
 - For more data: "seed my context from [integration]"
 

@@ -363,8 +363,8 @@ that user already declined last week):
 - **Sidecar** — `./deferred-week-YYYY-WNN.md` (shared with
   weekly-winddown).
 - **Related skills**: `weekly-winddown` (produces "stage for next
-  week" inputs that this skill consumes), `daily-winddown` (daily
-  reconciliation; rolls today's outcomes into the week), `meeting-prep`.
+  week" inputs that this skill consumes), `daily-plan` (daily-level
+  tactical follow-up), `meeting-prep`.
 
 ## Rollback
 

@@ -351,7 +351,9 @@ Miller?" → engages once with disambiguation.
   `arete availability find`, `arete calendar create`.
 - **Related skills**: [meeting-prep](../meeting-prep/SKILL.md)
   (chain after create), [week-plan](../week-plan/SKILL.md)
-  (longer-horizon planning where this skill's outputs land).
+  (longer-horizon planning where this skill's outputs land),
+  [daily-plan](../daily-plan/SKILL.md) (next-day planning that
+  consumes this skill's calendar outputs).
 
 ## Rollback
 
