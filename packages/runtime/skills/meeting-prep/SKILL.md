@@ -252,7 +252,7 @@ Meeting-prep usually doesn't need a sidecar — the prep brief itself
 is the curated view, and "deferred" context simply isn't surfaced.
 If the meeting has a lot of historical context (e.g., 10+ recent
 meetings, 5+ topic pages), surface a short tier ("12 prior meetings
-on this topic — see ./deferred-{meeting-slug}.md").
+on this topic — see now/archive/meeting-prep/deferred-{meeting-slug}.md").
 
 ## Action verbs this skill may propose
 
@@ -329,7 +329,7 @@ in Phase 2; the patterns themselves stay.
 - **Local files** — `people/`, `resources/meetings/`,
   `.arete/memory/topics/`, `.arete/memory/summaries/meetings/`,
   `areas/`, `now/agendas/`, `goals/quarter.md`.
-- **Sidecar** (rarely): `./deferred-{meeting-slug}.md`.
+- **Sidecar** (rarely): `now/archive/meeting-prep/deferred-{meeting-slug}.md`.
 - **Related skills**: `process-meetings` (post-meeting sister
   skill), `prepare-meeting-agenda` (creates the agenda this skill
   reads), `daily-winddown` (post-meeting consumer).

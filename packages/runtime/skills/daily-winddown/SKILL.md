@@ -86,7 +86,7 @@ for this skill.
 ### Step 0.5 — Scan previous day's deferred sidecar for pulled-back items
 
 **Phase 3.5 D2 — dismissal-as-signal feedback loop.** Before any
-gather, scan `./deferred-YYYY-MM-DD.md` for the prior calendar day
+gather, scan `now/archive/daily-winddown/deferred-YYYY-MM-DD.md` for the prior calendar day
 (or the most recent sidecar with date < today). For each item the
 user pulled back — i.e., bullet lines that no longer carry the
 `[[defer]]` tag, OR lines explicitly marked `[[pull-back]]` — log a
@@ -95,7 +95,7 @@ defer-confidence.
 
 ```bash
 # Find most recent prior-day sidecar (skip today's own).
-prior_sidecar=$(ls -t ./deferred-*.md 2>/dev/null \
+prior_sidecar=$(ls -t now/archive/daily-winddown/deferred-*.md 2>/dev/null \
   | grep -v "deferred-$(date +%Y-%m-%d).md" \
   | head -n 1)
 
@@ -248,7 +248,7 @@ text + reason label.}
 - Stale Notion doc from March — no movement in 35d
 - Closed commitment to Jamie — already resolved per today's meeting
 
-{N} items deferred — see ./deferred-YYYY-MM-DD.md
+{N} items deferred — see now/archive/daily-winddown/deferred-YYYY-MM-DD.md
 
 ## Threads that moved today
 
@@ -285,7 +285,7 @@ What's your call?
   dismissal pattern / confidence / importance gate / status).
 
 **Sidecar rules** (Pattern 4):
-- Write `./deferred-YYYY-MM-DD.md` only if ≥4 items deferred. Smaller
+- Write `now/archive/daily-winddown/deferred-YYYY-MM-DD.md` only if ≥4 items deferred. Smaller
   counts roll inline ("3 items auto-deferred (low importance / no
   sidecar)").
 - Sidecar contents: full deferred list grouped by reason category.
@@ -475,7 +475,7 @@ item recently with same source/topic):
   - `.arete/commitments.json` — tracked commitments.
   - `.arete/memory/item-fates.jsonl` — Phase 0 item-fate log
     (deferral_disagreement events appended on pull-back).
-- **Sidecar**: `./deferred-YYYY-MM-DD.md` (workspace root,
+- **Sidecar**: `now/archive/daily-winddown/deferred-YYYY-MM-DD.md` (workspace root,
   user-facing).
 - **Related skills**: `process-meetings`, `weekly-winddown`,
   `week-plan`, `meeting-prep`.

@@ -157,7 +157,7 @@ references.
 | 2026-05-15-anthony-1-1 | processed | 5/2/3 | glance-comms | — |
 | 2026-05-15-cw-sync | processed | 2/1/0 | cover-whale | unknown attendee: alice@cw.com |
 
-{N} items deferred — see ./deferred-batch-{date}.md (or inline if small)
+{N} items deferred — see now/archive/process-meetings/deferred-batch-{date}.md (or inline if small)
 
 ## Unknown attendees
 
@@ -218,7 +218,7 @@ arete index
 
 ## Sidecar conventions
 
-- File: `./deferred-batch-{date-or-label}.md` (when invoked
+- File: `now/archive/process-meetings/deferred-batch-{date-or-label}.md` (when invoked
   standalone) OR shares the parent skill's sidecar (e.g., when called
   from daily-winddown, the daily-winddown sidecar is the right home;
   the parent skill owns the file).
@@ -238,7 +238,7 @@ When called by `daily-winddown` or `weekly-winddown` as a primitive:
 When called standalone (`/process-meetings` directly):
 
 - This skill owns the engagement at Step 4.
-- Sidecar is `./deferred-batch-{date}.md`.
+- Sidecar is `now/archive/process-meetings/deferred-batch-{date}.md`.
 
 ## Action verbs this skill may propose
 

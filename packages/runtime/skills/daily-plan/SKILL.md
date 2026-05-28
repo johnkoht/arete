@@ -25,6 +25,11 @@ Build a daily plan: today's focus from week priorities, meeting list with contex
 - "Daily plan"
 - "Today's focus"
 
+**Phase 0 instrumentation** — at skill start, run
+`arete events log daily-plan --event start`. At the end (after the
+plan is written to week.md), run `arete events log daily-plan --event end`.
+Best-effort; do not block the workflow on logging failures.
+
 ## Workflow
 
 ### 1. Check Timing

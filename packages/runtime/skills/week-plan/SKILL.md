@@ -36,7 +36,7 @@ Pattern names applied here:
   end of the plan-draft engage).
 - Pattern 4 — `surface-deferred-as-sidecar` (pruning candidates
   the user accepts roll to the shared
-  `./deferred-week-YYYY-WNN.md` sidecar).
+  `now/archive/week-plan/deferred-week-YYYY-WNN.md` sidecar).
 
 Two engages are warranted because:
 
@@ -301,7 +301,7 @@ arete index
 
 ## Sidecar conventions
 
-- File: `./deferred-week-YYYY-WNN.md` (same convention as
+- File: `now/archive/week-plan/deferred-week-YYYY-WNN.md` (same convention as
   weekly-winddown — they share the file when run consecutively;
   weekly-winddown writes first, week-plan reads + augments).
 - Pruning candidates from week-plan that the user accepts get
@@ -360,7 +360,7 @@ that user already declined last week):
   --active --slugs --json`, `arete pull calendar --days 7 --json`.
 - **Local files** — `now/week.md`, `goals/quarter.md`,
   `now/scratchpad.md`, `projects/active/*/README.md`, `areas/*.md`.
-- **Sidecar** — `./deferred-week-YYYY-WNN.md` (shared with
+- **Sidecar** — `now/archive/week-plan/deferred-week-YYYY-WNN.md` (shared with
   weekly-winddown).
 - **Related skills**: `weekly-winddown` (produces "stage for next
   week" inputs that this skill consumes), `daily-plan` (daily-level

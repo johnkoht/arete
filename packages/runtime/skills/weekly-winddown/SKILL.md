@@ -177,7 +177,7 @@ themes, energy / focus quality.}
 - Stale commitment to Jamie — 23d, no movement
 - Old week.md task "review Snapsheet roadmap" — 14d untouched
 
-{N} items deferred — see ./deferred-week-YYYY-WNN.md
+{N} items deferred — see now/archive/weekly-winddown/deferred-week-YYYY-WNN.md
 
 ## Threads that moved (week view)
 
@@ -263,7 +263,7 @@ arete events log winddown --event end
 
 ## Sidecar conventions (Pattern 4 specifics)
 
-- File: `./deferred-week-YYYY-WNN.md` (ISO week number)
+- File: `now/archive/weekly-winddown/deferred-week-YYYY-WNN.md` (ISO week number)
 - Group by reason category for easier scan: importance / dismissal /
   confidence / status / stale.
 - Pull-back: `[[pull-back]]` marker in sidecar OR mention in next
@@ -325,7 +325,7 @@ week decision):
 - **APPEND** — `.arete/skills-local/weekly-winddown.md`.
 - **CLI primitives** — same as daily-winddown plus
   `arete search ... --timeline --days 7` for thread arcs.
-- **Sidecar** — `./deferred-week-YYYY-WNN.md`.
+- **Sidecar** — `now/archive/weekly-winddown/deferred-week-YYYY-WNN.md`.
 - **Related skills**: `daily-winddown`, `week-plan` (consumes this
   skill's "stage for next week" output). The former `week-review`
   skill was dropped in Phase 4; its functionality is fully covered
