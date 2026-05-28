@@ -520,6 +520,85 @@ export class TaskService {
   }
 
   /**
+   * F1: mark open tasks complete by linked commitment id prefix.
+   *
+   * Used by CommitmentsService.resolve() to back-propagate commitment
+   * resolution onto the working surface (week.md / tasks.md) so the
+   * user's task checkboxes match commitments.json. Without this, a
+   * resolved commitment leaves its linked task open — the Cover Whale
+   * orphan class.
+   *
+   * Iterates both files, finds tasks with `@from(commitment:<prefix>)`,
+   * marks `[x]` + `@completedAt`. Does NOT call commitments.resolve();
+   * the caller (commitments.resolve itself) has already updated
+   * commitments.json. Already-completed tasks are skipped.
+   *
+   * Returns list of tasks that were marked complete (empty if none).
+   */
+  async completeTaskByCommitmentId(
+    commitmentIdPrefix: string,
+  ): Promise<{ id: string; text: string }[]> {
+    const openTasks = await this.listTasks({ completed: false });
+    const matches = openTasks.filter(
+      (t) =>
+        t.metadata.from?.type === 'commitment' &&
+        t.metadata.from.id === commitmentIdPrefix,
+    );
+    if (matches.length === 0) return [];
+
+    const today = new Date().toISOString().split('T')[0];
+    const completed: { id: string; text: string }[] = [];
+
+    // Group by file so we only read/write each file once even if a
+    // commitment has multiple linked tasks across different sections
+    // of the same file.
+    const byFile = new Map<string, WorkspaceTask[]>();
+    for (const task of matches) {
+      const arr = byFile.get(task.source.file) ?? [];
+      arr.push(task);
+      byFile.set(task.source.file, arr);
+    }
+
+    for (const [filePath, tasksInFile] of byFile) {
+      const lines = await this.readFile(filePath);
+      for (const task of tasksInFile) {
+        const section = findSection(lines, task.source.section);
+        if (!section) continue;
+        for (let i = section.start + 1; i < section.end; i++) {
+          const parsed = parseTaskLine(lines[i]);
+          if (parsed && !parsed.completed && computeTaskId(parsed.text) === task.id) {
+            const newMetadata = { ...parsed.metadata, completedAt: today };
+            lines[i] = formatTask(parsed.text, newMetadata, true);
+            completed.push({ id: task.id, text: task.text });
+            break;
+          }
+        }
+      }
+      await this.writeFile(filePath, lines);
+    }
+
+    return completed;
+  }
+
+  /**
+   * F2: returns true if any OPEN task references the given commitment
+   * prefix via `@from(commitment:<prefix>)`. Used by
+   * CommitmentsService.save() to refuse pruning commitments with live
+   * task references. Completed tasks with stale references are
+   * intentionally NOT counted — those references are historical and
+   * pruning the commitment leaves only a harmless dangling reference
+   * in a checked-off line.
+   */
+  async hasOpenTaskReferenceToCommitment(commitmentIdPrefix: string): Promise<boolean> {
+    const openTasks = await this.listTasks({ completed: false });
+    return openTasks.some(
+      (t) =>
+        t.metadata.from?.type === 'commitment' &&
+        t.metadata.from.id === commitmentIdPrefix,
+    );
+  }
+
+  /**
    * Uncomplete a task — change [x] back to [ ] and remove @completedAt.
    */
   async uncompleteTask(taskId: string): Promise<WorkspaceTask> {

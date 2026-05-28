@@ -80,6 +80,12 @@ export async function createServices(workspaceRoot, options) {
         const task = await tasks.addTask(text, 'inbox', metadata);
         return { id: task.id, text: task.text };
     });
+    // F1: back-propagate commitment resolve → task [x] in week.md / tasks.md.
+    // Same injection pattern as setCreateTaskFn above.
+    commitments.setCompleteTaskFromCommitmentFn((prefix) => tasks.completeTaskByCommitmentId(prefix));
+    // F2: refuse to auto-prune commitments still referenced by an OPEN
+    // task — prevents the dangling-@from(commitment:xxx) orphan class.
+    commitments.setHasOpenTaskReferenceFn((prefix) => tasks.hasOpenTaskReferenceToCommitment(prefix));
     // AI service (depends on config)
     const ai = new AIService(config);
     // GWS detection (non-blocking — returns { installed: false } if binary missing)

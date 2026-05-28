@@ -124,6 +124,44 @@ unresolved, log write race), continue with Step 1 gather. The
 disagreement signal is best-effort context for the chef's defer
 calibration over time, not a hard dependency.
 
+### Step 0.6 — Scan previous winddown for unactioned `commitments_resolve` proposals
+
+**F4 — closes the "approved [6,7] of 4" leak.** Before Step 1 gather,
+read the prior `now/archive/daily-winddown/winddown-YYYY-MM-DD.md` (most recent
+file with date < today), extract every `arete.commitments_resolve
+id=<ID>` from its `## Proposed actions` section, and cross-check each
+ID against `commitments.json` status. Any ID still `status: open`
+means: the chef proposed it, the user didn't approve it (or approved
+a subset), and the proposal never resurfaced. Surface these at the
+top of today's curated view in a short block:
+
+```markdown
+## Unactioned resolves from {prior date}
+N commitments were proposed for resolve last run but not approved. Re-propose?
+
+- <text> — `arete.commitments_resolve id=<ID>` (originally proposed [<N>])
+```
+
+Treat as an Uncertain-tier item, not auto-staged: the user may have
+deliberately skipped it. If still relevant, lift into today's
+`## Proposed actions` with the same ID. If not, propose as a `dropped`
+status (or skip — non-action is fine).
+
+```bash
+prior_winddown=$(ls -t now/archive/daily-winddown/winddown-*.md 2>/dev/null \
+  | grep -v "winddown-$(date +%Y-%m-%d).md" \
+  | head -n 1)
+
+# Then parse `commitments_resolve id=<X>` lines from its
+# `## Proposed actions` section; for each, call
+# `arete commitments list --json` and check whether the ID still
+# appears as status=open. Open IDs are unactioned proposals.
+```
+
+Best-effort: if no prior winddown file exists (first run, or files
+cleaned), skip. If `commitments list` fails, surface the file count
+inline and proceed without the cross-check.
+
 ### Step 1 — Gather (all primitives, parallelize where independent)
 
 **Run in parallel (no engagement gates between).** The chef-orchestrator
@@ -294,6 +332,21 @@ What's your call?
 - Sidecar contents: full deferred list grouped by reason category.
 - User pulls back via sidecar edit (`[[pull-back]]` marker) or
   next-run mention.
+
+**Pruning-to-action rule** (F3 — closes the "prose-only pruning" leak):
+- **Every prune candidate that proposes resolve, drop, or close MUST be
+  lifted to a numbered `arete.commitments_resolve` (status=resolved or
+  dropped) action in `## Proposed actions`.** Prose-only pruning is not
+  actionable — the user reads the bullet, agrees mentally, and the
+  commitment stays open forever.
+- This includes aging-batch lists ("Aging i_owe_them ≥3wk: <IDs>") —
+  each ID gets a corresponding numbered action, OR a single batched
+  action with all IDs and one resolution string.
+- The 5/27 winddown's 6-item "Aging i_owe_them" prose block had ZERO
+  numbered actions; all 6 are still open. Do not repeat.
+- A prune candidate that is NOT proposing resolve (e.g., "Reframe this
+  task" or "Carry to next week") does not need an action — those are
+  user-judgment items.
 
 **Batch-resolution rules** (parser-bug mirror-pairs — stopgap until Phase 5):
 - The direction-parser bug emits mirror-pair commitments (e.g.,

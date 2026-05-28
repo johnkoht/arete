@@ -81,20 +81,58 @@ export type CreateTaskFn = (text: string, metadata: {
     id: string;
     text: string;
 }>;
+/**
+ * Function to mark linked tasks complete given a commitment id prefix.
+ * Returns the list of tasks that were marked complete (empty if none found).
+ * Injected by factory to avoid circular dep.
+ */
+export type CompleteTaskFromCommitmentFn = (commitmentIdPrefix: string) => Promise<{
+    id: string;
+    text: string;
+}[]>;
+/**
+ * Function returning true if any OPEN task references the given commitment
+ * via `@from(commitment:<prefix>)`. Used by save() to refuse pruning a
+ * commitment that still has live task references. Completed tasks with
+ * stale references are prune-OK and intentionally not counted here.
+ * Injected by factory to avoid circular dep.
+ */
+export type HasOpenTaskReferenceFn = (commitmentIdPrefix: string) => Promise<boolean>;
 export declare class CommitmentsService {
     private readonly storage;
     private readonly filePath;
     private createTaskFn?;
+    private completeTaskFromCommitmentFn?;
+    private hasOpenTaskReferenceFn?;
     constructor(storage: StorageAdapter, workspaceRoot: string);
     /**
      * Set the task creation function. Called by factory after TaskService is created.
      * Avoids circular dependency.
      */
     setCreateTaskFn(fn: CreateTaskFn): void;
+    /**
+     * Set the back-propagation function that marks linked tasks complete
+     * when a commitment is resolved. Called by factory after TaskService
+     * is created. Without this injection, resolve() still works but the
+     * linked tasks in week.md / tasks.md remain unchecked — the orphan
+     * class that motivated F1.
+     */
+    setCompleteTaskFromCommitmentFn(fn: CompleteTaskFromCommitmentFn): void;
+    /**
+     * Set the open-task-reference checker that save() consults before
+     * auto-pruning resolved commitments. Without this injection, save()
+     * falls back to pure age-based pruning (current behavior).
+     */
+    setHasOpenTaskReferenceFn(fn: HasOpenTaskReferenceFn): void;
     private load;
     /**
      * Write commitments to disk, applying pruning first.
      * ⚠️ Pruning uses `resolvedAt`, never `date`. Open items are never pruned.
+     *
+     * F2: when `hasOpenTaskReferenceFn` is injected, commitments still
+     * referenced by an OPEN task in week.md / tasks.md are NOT pruned,
+     * preventing the dangling-`@from(commitment:xxx)` orphan class. Tasks
+     * already marked complete (with stale refs) are prune-OK.
      */
     private save;
     /**

@@ -279,6 +279,26 @@ export type CreateTaskFn = (
   },
 ) => Promise<{ id: string; text: string }>;
 
+/**
+ * Function to mark linked tasks complete given a commitment id prefix.
+ * Returns the list of tasks that were marked complete (empty if none found).
+ * Injected by factory to avoid circular dep.
+ */
+export type CompleteTaskFromCommitmentFn = (
+  commitmentIdPrefix: string,
+) => Promise<{ id: string; text: string }[]>;
+
+/**
+ * Function returning true if any OPEN task references the given commitment
+ * via `@from(commitment:<prefix>)`. Used by save() to refuse pruning a
+ * commitment that still has live task references. Completed tasks with
+ * stale references are prune-OK and intentionally not counted here.
+ * Injected by factory to avoid circular dep.
+ */
+export type HasOpenTaskReferenceFn = (
+  commitmentIdPrefix: string,
+) => Promise<boolean>;
+
 // ---------------------------------------------------------------------------
 // CommitmentsService
 // ---------------------------------------------------------------------------
@@ -286,6 +306,8 @@ export type CreateTaskFn = (
 export class CommitmentsService {
   private readonly filePath: string;
   private createTaskFn?: CreateTaskFn;
+  private completeTaskFromCommitmentFn?: CompleteTaskFromCommitmentFn;
+  private hasOpenTaskReferenceFn?: HasOpenTaskReferenceFn;
 
   constructor(
     private readonly storage: StorageAdapter,
@@ -300,6 +322,26 @@ export class CommitmentsService {
    */
   setCreateTaskFn(fn: CreateTaskFn): void {
     this.createTaskFn = fn;
+  }
+
+  /**
+   * Set the back-propagation function that marks linked tasks complete
+   * when a commitment is resolved. Called by factory after TaskService
+   * is created. Without this injection, resolve() still works but the
+   * linked tasks in week.md / tasks.md remain unchecked — the orphan
+   * class that motivated F1.
+   */
+  setCompleteTaskFromCommitmentFn(fn: CompleteTaskFromCommitmentFn): void {
+    this.completeTaskFromCommitmentFn = fn;
+  }
+
+  /**
+   * Set the open-task-reference checker that save() consults before
+   * auto-pruning resolved commitments. Without this injection, save()
+   * falls back to pure age-based pruning (current behavior).
+   */
+  setHasOpenTaskReferenceFn(fn: HasOpenTaskReferenceFn): void {
+    this.hasOpenTaskReferenceFn = fn;
   }
 
   // -------------------------------------------------------------------------
@@ -320,9 +362,27 @@ export class CommitmentsService {
   /**
    * Write commitments to disk, applying pruning first.
    * ⚠️ Pruning uses `resolvedAt`, never `date`. Open items are never pruned.
+   *
+   * F2: when `hasOpenTaskReferenceFn` is injected, commitments still
+   * referenced by an OPEN task in week.md / tasks.md are NOT pruned,
+   * preventing the dangling-`@from(commitment:xxx)` orphan class. Tasks
+   * already marked complete (with stale refs) are prune-OK.
    */
   private async save(commitments: Commitment[]): Promise<void> {
-    const pruned = commitments.filter((c) => !shouldPrune(c));
+    const candidates = commitments.filter((c) => shouldPrune(c));
+    let prunable: Set<string>;
+    if (this.hasOpenTaskReferenceFn && candidates.length > 0) {
+      const checks = await Promise.all(
+        candidates.map(async (c) => ({
+          id: c.id,
+          referenced: await this.hasOpenTaskReferenceFn!(c.id.slice(0, 8)),
+        })),
+      );
+      prunable = new Set(checks.filter((r) => !r.referenced).map((r) => r.id));
+    } else {
+      prunable = new Set(candidates.map((c) => c.id));
+    }
+    const pruned = commitments.filter((c) => !prunable.has(c.id));
     const file: CommitmentsFile = { commitments: pruned };
     await this.storage.write(this.filePath, JSON.stringify(file, null, 2));
   }
@@ -388,6 +448,21 @@ export class CommitmentsService {
 
     const next = all.map((c) => (c.id === target.id ? updated : c));
     await this.save(next);
+
+    // F1: back-propagate to linked task(s) in week.md / tasks.md so
+    // resolution shows up on the user's working surface, not just in
+    // commitments.json. Silent on failure — task may have been
+    // hand-completed already, or the workspace may not have a task
+    // linked to this commitment. The commitment write above is the
+    // source of truth either way.
+    if (this.completeTaskFromCommitmentFn) {
+      try {
+        await this.completeTaskFromCommitmentFn(target.id.slice(0, 8));
+      } catch {
+        // Silent — back-prop is best-effort, mirrors tasks.ts:507-517.
+      }
+    }
+
     return updated;
   }
 

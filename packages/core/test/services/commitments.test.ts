@@ -1738,3 +1738,166 @@ describe('CommitmentsService.purgeResolved()', () => {
     assert.equal(result.purged, 1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F1: back-propagate resolve → task [x]
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService.resolve() — F1 back-propagation', () => {
+  it('calls completeTaskFromCommitmentFn with 8-char id prefix after resolve', async () => {
+    const fullId = 'a'.repeat(64);
+    const expectedPrefix = fullId.slice(0, 8);
+    const open = makeCommitment({ id: fullId, status: 'open', resolvedAt: null });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([open])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const calls: string[] = [];
+    svc.setCompleteTaskFromCommitmentFn(async (prefix) => {
+      calls.push(prefix);
+      return [{ id: 'task1', text: 'matched task' }];
+    });
+
+    await svc.resolve(fullId);
+
+    assert.deepEqual(calls, [expectedPrefix], 'fn must be called once with 8-char prefix');
+  });
+
+  it('still resolves commitment when back-prop fn throws (silent)', async () => {
+    const fullId = 'b'.repeat(64);
+    const open = makeCommitment({ id: fullId, status: 'open', resolvedAt: null });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([open])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    svc.setCompleteTaskFromCommitmentFn(async () => {
+      throw new Error('back-prop failed');
+    });
+
+    const result = await svc.resolve(fullId);
+    assert.equal(result.status, 'resolved');
+
+    const written = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(written.commitments[0].status, 'resolved');
+  });
+
+  it('works without back-prop fn injected (backward compat)', async () => {
+    const fullId = 'c'.repeat(64);
+    const open = makeCommitment({ id: fullId, status: 'open', resolvedAt: null });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([open])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // No setCompleteTaskFromCommitmentFn call.
+    const result = await svc.resolve(fullId);
+    assert.equal(result.status, 'resolved');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F2: refuse to prune commitments with open task references
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService pruning — F2 task-reference safety', () => {
+  it('does NOT prune resolved commitment when an open task references it', async () => {
+    const fullId = 'd'.repeat(64);
+    const prefix = fullId.slice(0, 8);
+    const resolved = makeCommitment({
+      id: fullId,
+      status: 'resolved',
+      resolvedAt: daysAgo(45), // would normally be pruned
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([resolved])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    svc.setHasOpenTaskReferenceFn(async (p) => p === prefix);
+
+    // Trigger a write
+    await svc.sync(new Map());
+
+    const written = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(
+      written.commitments.length,
+      1,
+      'Commitment with live open-task reference must NOT be pruned',
+    );
+    assert.equal(written.commitments[0].id, fullId);
+  });
+
+  it('DOES prune resolved commitment when no open task references it', async () => {
+    const fullId = 'e'.repeat(64);
+    const resolved = makeCommitment({
+      id: fullId,
+      status: 'resolved',
+      resolvedAt: daysAgo(45),
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([resolved])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Injection present but always returns false (no live references).
+    svc.setHasOpenTaskReferenceFn(async () => false);
+
+    await svc.sync(new Map());
+
+    const written = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(
+      written.commitments.length,
+      0,
+      'Resolved commitment with no open-task reference should still prune at age threshold',
+    );
+  });
+
+  it('falls back to pure age-based prune when no injection (backward compat)', async () => {
+    const fullId = 'f'.repeat(64);
+    const resolved = makeCommitment({
+      id: fullId,
+      status: 'resolved',
+      resolvedAt: daysAgo(45),
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([resolved])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // No setHasOpenTaskReferenceFn — preserves Phase 0 behavior.
+    await svc.sync(new Map());
+
+    const written = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(written.commitments.length, 0, 'Default behavior: age-based prune still works');
+  });
+
+  it('checks references only for prune-candidates (not all commitments)', async () => {
+    const oldId = '1'.repeat(64);
+    const recentId = '2'.repeat(64);
+    const openId = '3'.repeat(64);
+    const oldResolved = makeCommitment({
+      id: oldId,
+      status: 'resolved',
+      resolvedAt: daysAgo(45),
+    });
+    const recentResolved = makeCommitment({
+      id: recentId,
+      status: 'resolved',
+      resolvedAt: daysAgo(5),
+    });
+    const openCommitment = makeCommitment({ id: openId, status: 'open', resolvedAt: null });
+    const store = new Map([
+      [COMMITMENTS_PATH, makeFile([oldResolved, recentResolved, openCommitment])],
+    ]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const checked: string[] = [];
+    svc.setHasOpenTaskReferenceFn(async (p) => {
+      checked.push(p);
+      return false;
+    });
+
+    await svc.sync(new Map());
+
+    // Only oldResolved is a prune-candidate; recent + open should NOT trigger
+    // the (potentially expensive) tasks-file scan.
+    assert.deepEqual(checked, [oldId.slice(0, 8)]);
+  });
+});

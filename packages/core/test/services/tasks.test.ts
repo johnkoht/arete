@@ -1680,3 +1680,148 @@ describe('TaskService edge cases', () => {
     assert.equal(tasks[0].text, 'Match');
   });
 });
+
+// ---------------------------------------------------------------------------
+// F1: completeTaskByCommitmentId — back-propagation target
+// ---------------------------------------------------------------------------
+
+describe('TaskService.completeTaskByCommitmentId (F1)', () => {
+  it('marks linked task [x] in week.md and adds @completedAt', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Send the deck @from(commitment:abcd1234)
+- [ ] Unrelated work
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const completed = await service.completeTaskByCommitmentId('abcd1234');
+    assert.equal(completed.length, 1);
+    assert.equal(completed[0].text, 'Send the deck');
+
+    const updated = store.get(WEEK_FILE)!;
+    assert.match(updated, /- \[x\] Send the deck @from\(commitment:abcd1234\) @completedAt\(/);
+    assert.match(updated, /- \[ \] Unrelated work/, 'Unlinked task must stay open');
+  });
+
+  it('marks linked task [x] in tasks.md (separate file)', async () => {
+    const tasksContent = `# Tasks
+## Anytime
+- [ ] Long-running task @from(commitment:beef1234)
+`;
+    const store = makeTasksFile(tasksContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const completed = await service.completeTaskByCommitmentId('beef1234');
+    assert.equal(completed.length, 1);
+
+    const updated = store.get(TASKS_FILE)!;
+    assert.match(updated, /- \[x\] Long-running task/);
+  });
+
+  it('handles multiple tasks linked to same commitment across both files', async () => {
+    const weekContent = `# Week
+### Must complete
+- [ ] Step 1 @from(commitment:cafe1234)
+`;
+    const tasksContent = `# Tasks
+## Anytime
+- [ ] Step 2 @from(commitment:cafe1234)
+`;
+    const store = makeBothFiles(weekContent, tasksContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const completed = await service.completeTaskByCommitmentId('cafe1234');
+    assert.equal(completed.length, 2);
+    assert.match(store.get(WEEK_FILE)!, /- \[x\] Step 1/);
+    assert.match(store.get(TASKS_FILE)!, /- \[x\] Step 2/);
+  });
+
+  it('returns empty array when no task references the commitment', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Unrelated @from(commitment:dead1234)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const completed = await service.completeTaskByCommitmentId('aaaaaaaa');
+    assert.deepEqual(completed, []);
+    // File must remain untouched.
+    assert.match(store.get(WEEK_FILE)!, /- \[ \] Unrelated/);
+  });
+
+  it('skips already-completed tasks (idempotent)', async () => {
+    const weekContent = `# Week
+## Inbox
+- [x] Already done @from(commitment:1234abcd) @completedAt(2026-01-01)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const completed = await service.completeTaskByCommitmentId('1234abcd');
+    assert.deepEqual(completed, [], 'Already-completed task must not be re-completed');
+    // @completedAt date must not be overwritten.
+    assert.match(store.get(WEEK_FILE)!, /@completedAt\(2026-01-01\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F2: hasOpenTaskReferenceToCommitment — prune-safety check
+// ---------------------------------------------------------------------------
+
+describe('TaskService.hasOpenTaskReferenceToCommitment (F2)', () => {
+  it('returns true when an open task references the commitment', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Pending @from(commitment:11112222)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    assert.equal(await service.hasOpenTaskReferenceToCommitment('11112222'), true);
+  });
+
+  it('returns false when only a COMPLETED task references the commitment', async () => {
+    const weekContent = `# Week
+## Inbox
+- [x] Done @from(commitment:33334444) @completedAt(2026-01-01)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    assert.equal(
+      await service.hasOpenTaskReferenceToCommitment('33334444'),
+      false,
+      'Completed tasks with stale @from references must NOT block prune',
+    );
+  });
+
+  it('returns false when no task references the commitment', async () => {
+    const store = makeWeekFile('# Week\n## Inbox\n- [ ] Unrelated\n');
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    assert.equal(await service.hasOpenTaskReferenceToCommitment('55556666'), false);
+  });
+
+  it('checks across both week.md and tasks.md', async () => {
+    const weekContent = '# Week\n## Inbox\n- [ ] Unrelated\n';
+    const tasksContent = `# Tasks
+## Anytime
+- [ ] Living long @from(commitment:77778888)
+`;
+    const store = makeBothFiles(weekContent, tasksContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    assert.equal(await service.hasOpenTaskReferenceToCommitment('77778888'), true);
+  });
+});
