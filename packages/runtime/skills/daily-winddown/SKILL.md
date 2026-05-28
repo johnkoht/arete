@@ -247,6 +247,7 @@ text + reason label.}
 
 - Stale Notion doc from March — no movement in 35d
 - Closed commitment to Jamie — already resolved per today's meeting
+- 7 parser-bug mirror-pair duplicates — see action [4]
 
 {N} items deferred — see now/archive/daily-winddown/deferred-YYYY-MM-DD.md
 
@@ -285,12 +286,29 @@ What's your call?
   dismissal pattern / confidence / importance gate / status).
 
 **Sidecar rules** (Pattern 4):
-- Write `now/archive/daily-winddown/deferred-YYYY-MM-DD.md` only if ≥4 items deferred. Smaller
-  counts roll inline ("3 items auto-deferred (low importance / no
-  sidecar)").
+- Write `now/archive/daily-winddown/deferred-YYYY-MM-DD.md` if ≥3 items
+  deferred. Only ≤2-item cases roll inline ("2 items auto-deferred (low
+  importance / no sidecar)"). Count raw deferred items, not "substantive
+  after dedup" — the substantive-count loophole keeps low-signal items
+  in the primary view and bloats it. When in doubt, write the sidecar.
 - Sidecar contents: full deferred list grouped by reason category.
 - User pulls back via sidecar edit (`[[pull-back]]` marker) or
   next-run mention.
+
+**Batch-resolution rules** (parser-bug mirror-pairs — stopgap until Phase 5):
+- The direction-parser bug emits mirror-pair commitments (e.g.,
+  `personSlug=john-koht direction=i_owe_them` paired with the real
+  counterparty commitment) — typically from compound sentences in
+  transcripts. These are zero-judgment cleanup.
+- **Do not enumerate each pair** in `## Pruning candidates`. Surface
+  as a single line referencing the batch action:
+  `N parser-bug mirror-pair duplicates — see action [X]`
+- Full IDs appear only in one corresponding `arete.commitments_resolve`
+  batch action with a single resolution string (e.g., "Parser-bug
+  duplicate; tracked via counterpart commitment"). One action per
+  batch, not per pair.
+- On heavy days (≥5 mirror pairs), this alone saves 5-10 lines of
+  scrollage with no judgment cost.
 
 **Action proposal rules** (Pattern 3):
 - Inline numbered list. Include verb name + parameters.
