@@ -75,7 +75,19 @@ export interface TopicIdentity {
 }
 /**
  * Tokenize a slug for Jaccard comparison.
- * `cover-whale-templates` → `['cover', 'whale', 'templates']`.
+ * `cover-whale-templates` → `['cover', 'whale', 'template']`.
+ *
+ * Post-AC3 (phase-3-5-followup-5):
+ *   - Stop-word filter: drops `vs`, `and`, `or` before tokenization
+ *     (so `belongings-vs-property-claims` tokenizes without `vs`).
+ *   - Singularize-or-stem: strips trailing `s` on tokens of length ≥4
+ *     when the second-to-last char isn't `s`. Closes the
+ *     `templates`/`template`, `decisions`/`decision`,
+ *     `learnings`/`learning`, `meetings`/`meeting` clash in tokenizeSlug.
+ *
+ * Edge cases preserved: `process`, `address`, `business`, `class` (all
+ * `-ss` endings). Accepted edge cases: `status` → `statu`, `news` →
+ * `new` (benign; see `singularizeToken` doc).
  */
 export declare function tokenizeSlug(slug: string): string[];
 /**

@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -883,9 +883,30 @@ export function registerMeetingCommands(program) {
             if (!dryRun) {
                 // Clone frontmatter before mutating (pre-mortem mitigation: caching/mutation)
                 const fm = { ...frontmatter };
-                // Write full metadata (snake_case keys)
-                fm['status'] = effectiveImportance === 'light' ? 'approved' : 'processed';
-                fm['processed_at'] = new Date().toISOString();
+                // Topics + counts + status via unified writer (phase-3-5-followup-5
+                // AC1). Pre-AC1, path 3 (`extract --stage`) silently omitted
+                // `topics`/counts — the chef-orchestrator regression caught by the
+                // 2026-05-27 wiki-discoverability investigation. Alias/merge uses the
+                // 'synthesis' tier to match path 1/2.
+                const stageStatus = effectiveImportance === 'light' ? 'approved' : 'processed';
+                const aliasCallLLM = services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1'
+                    ? async (prompt) => {
+                        const r = await services.ai.call('synthesis', prompt);
+                        return r.text;
+                    }
+                    : undefined;
+                await writeMeetingApplyFrontmatter(fm, extractionResult.intelligence, { status: stageStatus, processedAt: new Date().toISOString() }, {
+                    topicMemory: services.topicMemory,
+                    workspacePaths: paths,
+                    callLLM: aliasCallLLM,
+                    onWarning: (msg) => {
+                        if (!opts.json)
+                            warn(msg);
+                    },
+                });
+                // Staged-item maps (path-3-specific; written AFTER unified writer
+                // so insertion order keeps status/processed_at/topics/counts up
+                // front, then per-item metadata).
                 fm['staged_item_source'] = processed.stagedItemSource;
                 fm['staged_item_confidence'] = processed.stagedItemConfidence;
                 fm['staged_item_status'] = processed.stagedItemStatus;

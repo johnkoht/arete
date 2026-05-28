@@ -12,6 +12,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { formatStagedSections, updateMeetingContent } from './meeting-extraction.js';
 import { writeMeetingSummary } from './summary-writer.js';
 import { refreshOrgs } from './org-entity.js';
+import { writeMeetingApplyFrontmatter } from './meeting-frontmatter.js';
 function parseFrontmatter(content) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
     if (!match)
@@ -133,10 +134,7 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
     const stagedSections = formatStagedSections(extractionResult);
     // 5. Update meeting content with staged sections
     const updatedBody = updateMeetingContent(body, stagedSections);
-    // 6. Update frontmatter
-    data['status'] = 'processed';
-    data['processed_at'] = new Date().toISOString();
-    // Write topics + item counts for agent-facing frontmatter.
+    // 6. Update frontmatter — unified writer (phase-3-5-followup-5 AC1).
     //
     // Alias/merge pass (Phase A #1 of topic-wiki-memory): coerce LLM-proposed
     // slugs against existing topic pages so near-duplicates (e.g.,
@@ -144,29 +142,13 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
     // one canonical slug instead of sprawling into two topic pages on next
     // refresh. Skipped when `options.skipTopicAlias` or when dependencies
     // aren't provided (pre-topic-wiki-memory behavior).
-    const proposedTopics = intelligence.topics ?? [];
-    let normalizedTopics = proposedTopics;
-    if (!options.skipTopicAlias &&
-        deps.topicMemory !== undefined &&
-        deps.workspacePaths !== undefined &&
-        proposedTopics.length > 0) {
-        try {
-            const { TopicMemoryService } = await import('./topic-memory.js');
-            const { topics: existingPages } = await deps.topicMemory.listAll(deps.workspacePaths);
-            const existingIdentities = TopicMemoryService.toIdentities(existingPages);
-            const aliasResults = await deps.topicMemory.aliasAndMerge(proposedTopics, existingIdentities, { callLLM: deps.callLLM });
-            normalizedTopics = aliasResults.map((r) => r.resolved);
-        }
-        catch (err) {
-            warnings.push(`topic alias/merge failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
-        }
-    }
-    data['topics'] = normalizedTopics;
-    data['open_action_items'] = intelligence.actionItems.length;
-    data['my_commitments'] = intelligence.actionItems.filter(i => i.direction === 'i_owe_them').length;
-    data['their_commitments'] = intelligence.actionItems.filter(i => i.direction === 'they_owe_me').length;
-    data['decisions_count'] = intelligence.decisions.length;
-    data['learnings_count'] = intelligence.learnings.length;
+    await writeMeetingApplyFrontmatter(data, intelligence, { status: 'processed', processedAt: new Date().toISOString() }, {
+        topicMemory: deps.topicMemory,
+        workspacePaths: deps.workspacePaths,
+        callLLM: deps.callLLM,
+        skipTopicAlias: options.skipTopicAlias,
+        onWarning: (msg) => warnings.push(msg),
+    });
     // 7. Write meeting file
     const updatedContent = serializeFrontmatter(data, updatedBody);
     await storage.write(absPath, updatedContent);
@@ -233,13 +215,20 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
                 // Phase 1: pass `could_include` headlines through so the summary
                 // writer's `## FYI` section can surface them — the body-block
                 // rendering on the meeting source file was removed.
+                // Read the post-write topics from `data` — the unified writer
+                // mutated `data.topics` with the alias-coerced result (or proposed
+                // slugs as fallback). This keeps the summary writer's topics field
+                // consistent with what was just written to meeting frontmatter.
+                const writtenTopics = Array.isArray(data['topics'])
+                    ? data['topics'].filter((t) => typeof t === 'string')
+                    : undefined;
                 const summaryInput = {
                     sourcePath: wsRel,
                     date: meetingDate,
                     sourceBody: updatedBody,
                     area,
                     importance,
-                    topics: normalizedTopics,
+                    topics: writtenTopics,
                     participants,
                     couldInclude: intelligence.could_include,
                 };
