@@ -225,6 +225,48 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
     });
   });
 
+  describe('Phase 3.5 followup-5 AC6 — daily-winddown surfaces stale-topic alias candidates', () => {
+    it('daily-winddown SKILL.md surfaces stale topics with concrete alias candidates in Uncertain tier', () => {
+      const content = readFileSync(
+        join(SKILLS_DIR, 'daily-winddown', 'SKILL.md'),
+        'utf8',
+      );
+      // Stale-topic + alias surfacing must be referenced. Regex is
+      // intentionally LOOSE (per pre-mortem R9: brittle exact phrasing
+      // breaks on small wording tweaks). Just assert the key concepts
+      // appear together somewhere in the doc.
+      assert.match(
+        content,
+        /stale.*topic/i,
+        'AC6: daily-winddown should mention stale topics',
+      );
+      assert.match(
+        content,
+        /alias/i,
+        'AC6: daily-winddown should mention alias candidates',
+      );
+      // The CLI command the user runs to integrate after adding aliases.
+      assert.match(
+        content,
+        /arete topic refresh/,
+        'AC6: daily-winddown should reference `arete topic refresh` as the user-facing CLI',
+      );
+      // The Uncertain-tier surface (not auto-defer).
+      assert.match(
+        content,
+        /Uncertain/,
+        'AC6: stale-topic surface should appear in the Uncertain tier',
+      );
+      // Cap rule: ONE per winddown. Searches loosely for "one" near
+      // "winddown" / "per run" / "stale".
+      assert.match(
+        content,
+        /(ONE|one) (per winddown|stale-topic|stale topic)/i,
+        'AC6: cap rule (one stale-topic surface per winddown) must be documented',
+      );
+    });
+  });
+
   describe('week-plan two-engage variant', () => {
     it('explicitly documents the two-engage pattern', () => {
       const content = readFileSync(
