@@ -171,6 +171,38 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
 
+## Decisions log — 2026-05-27 (2-week soak check-in + sidecar unification)
+
+User check-in after ~2 weeks of v2 use. Subjective: **"faster, much faster. Somewhat more accurate."** Real positive signal on Phase 2 chef pattern.
+
+**Data audit (7 logged winddowns 5/11–5/27)**:
+- 156 approved item-fate events
+- 0 deferral_disagreement events (Phase 3.5 D2 not firing — needs debug; chef may not be scanning prior-day sidecar correctly OR user not pulling back)
+- Clean-run median ~21m (vs ≤15m AC10 target; vs 30–45m pre-v2 baseline; better but not hitting)
+- 2 long runs today (80m, 2h27m) — user confirmed walked-away time, not chef stall
+- Logging gap real: user reports running "quite a few" winddowns; only 7 logged. Cause: daily-plan had no logging stanza (fixed in this session); chef agents sometimes skip the fire-and-forget `arete events log` call under judgment.
+- Last week (5/16–5/21): 6-day gap due to user offsite; some unlogged runs during.
+
+**now/ pollution surfaced and unified (commit `f1aacec5`)**:
+User flagged: "deferred lists are added all over the place" + "now/ folder is getting polluted." Diagnosed three concurrent conventions:
+1. `now/archive/<skill>/<file>` (Phase 3.5 followup — correct)
+2. `now/archive/<wrong-skill-name>/<file>` (drift; e.g., `now/archive/winddown/` from weekly-winddown)
+3. `./deferred-<date>.md` at workspace root (Phase 2 chef-prose; pre-unification)
+
+Unified to single convention: **all chef artifacts (curated views + sidecars) land at `now/archive/<skill>/<filename>`. Workspace root + `now/` root are user-facing only.**
+
+Changes shipped (this session, on parent worktree):
+- 5 SKILL.md sidecar path updates (daily-winddown, weekly-winddown, week-plan, process-meetings, meeting-prep)
+- Daily-winddown Step 0.5 scan path also updated
+- Daily-plan logging stanza added (closes the "I ran some but they weren't logged" cause)
+- 3 existing sidecar files moved in user's arete-reserv workspace (deferred-2026-05-06, deferred-2026-05-27, deferred-week-2026-W21)
+- Removed empty `now/archive/winddown/` directory
+
+**Open issues for next session**:
+1. **Phase 3.5 D2 not firing** (0 deferral_disagreement events despite sidecars being written + user pulling items back per 5/14 conversation). Likely cause: chef Step 0.5 prose for sidecar scan was looking at `./deferred-*.md` at workspace root, but Phase 3.5 followup moved sidecars to `now/archive/daily-winddown/` (today's unification fix). Should fire correctly from next winddown onward.
+2. **AC10 ~21m median vs ≤15m target** — Phase 2 chef pattern improved on baseline but not hitting goal. Worth digging: where's the time going? Gather is fast (~2 min per Phase 2 review); user-review time is the bulk.
+3. **Three followup commits accumulated on parent without dedicated plans**: 7ca3ea47 (archive move), 8c507f7d (always-merge agenda), 67e4394f (daily-plan restore), 8c507f7d (always-merge), f1aacec5 (sidecar unification). Could capture as "Phase 3.5 followups" retrospective if helpful.
+
 ## Decisions log — 2026-05-15 (Phase 4 disposition error: daily-plan dropped prematurely)
 
 User asked the agent in arete-reserv "Let's plan my day for tomorrow." Agent did it ad-hoc using chat context (from earlier slack-digest + daily-winddown runs) instead of invoking a skill. User asked "is the router gone?" — implying they expected a structured skill response.
