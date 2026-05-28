@@ -652,3 +652,166 @@ Talked about foo on ${date}.
     assert.strictEqual(result.topics[0].status, 'no-sources');
   });
 });
+
+// ---------------------------------------------------------------------------
+// AC2 (phase-3-5-followup-5) — alias-aware integration filter.
+//
+// Pre-AC2: only sources tagged with the canonical slug integrated. Sources
+// tagged with an alias (e.g., `default-email-template` while canonical is
+// `email-templates`) were orphaned forever even after the user added
+// `aliases:` to the topic page.
+//
+// Post-AC2: sources tagged with the canonical slug OR any declared alias
+// integrate when `arete topic refresh <slug>` runs. Closes the orphan-
+// rescue path required by AC6.
+// ---------------------------------------------------------------------------
+describe('TopicMemoryService.refreshAllFromSources (AC2 alias-aware filter)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let storage: FileStorageAdapter;
+
+  // Topic page with two declared aliases. The canonical is `email-templates`;
+  // sources may tag the canonical OR `default-email-template` OR
+  // `rollout-strategy`.
+  const SEED_TOPIC: TopicPage = {
+    frontmatter: {
+      topic_slug: 'email-templates',
+      status: 'active',
+      first_seen: '2026-03-01',
+      last_refreshed: '2026-04-15',
+      aliases: ['default-email-template', 'rollout-strategy'],
+      sources_integrated: [],
+    },
+    sections: { 'Current state': 'Email-templates work spans Snapsheet + Glance.' },
+  };
+
+  function meeting(date: string, slug: string, tags: string[]): string {
+    return `---
+title: "Sync ${date}"
+date: ${date}
+attendees:
+  - { name: "Jane Doe", email: "jane@reserv.com" }
+topics: [${tags.join(', ')}]
+---
+
+# Sync ${date}
+
+## Transcript
+
+Discussed ${slug} on ${date}.
+`;
+  }
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'refresh-alias-'));
+    paths = makePathsForRefresh(tmpDir);
+    storage = new FileStorageAdapter();
+
+    writeFileForRefresh(
+      tmpDir,
+      '.arete/memory/topics/email-templates.md',
+      renderTopicPage(SEED_TOPIC),
+    );
+    // Three sources, each tagged with a different surface:
+    //   - canonical `email-templates`
+    //   - alias `default-email-template`
+    //   - alias `rollout-strategy`
+    writeFileForRefresh(
+      tmpDir,
+      'resources/meetings/2026-04-20-canonical.md',
+      meeting('2026-04-20', 'canonical', ['email-templates']),
+    );
+    writeFileForRefresh(
+      tmpDir,
+      'resources/meetings/2026-04-22-alias-a.md',
+      meeting('2026-04-22', 'alias-a', ['default-email-template']),
+    );
+    writeFileForRefresh(
+      tmpDir,
+      'resources/meetings/2026-04-25-alias-b.md',
+      meeting('2026-04-25', 'alias-b', ['rollout-strategy']),
+    );
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('integrates sources tagged with canonical OR declared aliases', async () => {
+    const svc = new TopicMemoryService(storage);
+
+    const result = await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['email-templates'],
+      skipLock: true,
+    });
+
+    assert.strictEqual(result.topics.length, 1);
+    assert.strictEqual(result.topics[0].status, 'ok');
+    // All 3 sources integrate (1 canonical + 2 alias-tagged), each via
+    // the fallback path because no LLM was provided.
+    assert.strictEqual(result.topics[0].fallback, 3, 'all 3 sources matched alias-set');
+
+    // Re-read the topic page and confirm all 3 source paths appear.
+    const written = await storage.read(join(tmpDir, '.arete/memory/topics/email-templates.md'));
+    const { parseTopicPage } = await import('../../src/models/topic-page.js');
+    const parsed = parseTopicPage(written!);
+    assert.notStrictEqual(parsed, null);
+    const sources = parsed!.frontmatter.sources_integrated;
+    assert.strictEqual(sources.length, 3, 'canonical + 2 alias-tagged in sources_integrated');
+    assert.match(sources[0].path, /2026-04-20-canonical\.md$/);
+    assert.match(sources[1].path, /2026-04-22-alias-a\.md$/);
+    assert.match(sources[2].path, /2026-04-25-alias-b\.md$/);
+  });
+
+  it('skips sources tagged with a non-aliased slug (filter still excludes unrelated)', async () => {
+    // Add a fourth source tagged with an UNDECLARED alias.
+    writeFileForRefresh(
+      tmpDir,
+      'resources/meetings/2026-04-26-unrelated.md',
+      meeting('2026-04-26', 'unrelated', ['some-other-slug']),
+    );
+
+    const svc = new TopicMemoryService(storage);
+    const result = await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['email-templates'],
+      skipLock: true,
+    });
+
+    // 3 alias-matched, NOT 4.
+    assert.strictEqual(result.topics[0].fallback, 3);
+    const written = await storage.read(join(tmpDir, '.arete/memory/topics/email-templates.md'));
+    const { parseTopicPage } = await import('../../src/models/topic-page.js');
+    const parsed = parseTopicPage(written!);
+    const sources = parsed!.frontmatter.sources_integrated;
+    assert.strictEqual(sources.length, 3);
+    // The unrelated source path must NOT appear.
+    for (const s of sources) {
+      assert.doesNotMatch(s.path, /2026-04-26-unrelated\.md$/);
+    }
+  });
+
+  it('degrades gracefully when target slug has no topic page yet (no aliases set)', async () => {
+    const svc = new TopicMemoryService(storage);
+
+    // Add a source tagged ONLY with a brand-new slug not in any topic page.
+    writeFileForRefresh(
+      tmpDir,
+      'resources/meetings/2026-04-27-new-slug.md',
+      meeting('2026-04-27', 'new-slug', ['brand-new-slug']),
+    );
+
+    // Request refresh for `brand-new-slug` — no existing page, no aliases.
+    // The filter degrades to canonical-only (the exact pre-AC2 behavior),
+    // and the single source tagged `brand-new-slug` integrates.
+    const result = await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['brand-new-slug'],
+      skipLock: true,
+    });
+
+    assert.strictEqual(result.topics[0].status, 'ok');
+    assert.strictEqual(result.topics[0].fallback, 1);
+  });
+});

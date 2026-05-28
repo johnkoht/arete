@@ -1130,8 +1130,26 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (
       content: string;
       type: 'meeting' | 'slack-digest';
     }> = [];
+    // AC2 (phase-3-5-followup-5) — alias-aware integration filter.
+    //
+    // Pre-AC2: only sources tagged with the canonical `targetSlug`
+    // integrated; sources tagged with an alias (e.g.,
+    // `default-email-template` while canonical is `email-templates`)
+    // were orphaned forever, even after a user added `aliases:` to the
+    // topic page.
+    //
+    // Post-AC2: a source integrates when ANY of its `topics:` matches
+    // the canonical slug OR one of the topic page's declared aliases.
+    // `page` is undefined when the target slug is a newly-discovered
+    // slug-only target (no page yet) — in that case `aliases ?? []` is
+    // empty, so the filter degrades to the canonical-only check (the
+    // exact pre-AC2 behavior). Nil-safe by construction.
+    const aliasSet = new Set<string>([
+      targetSlug,
+      ...(page?.frontmatter.aliases ?? []),
+    ]);
     for (const src of allSources) {
-      if (!src.topics.includes(targetSlug)) continue;
+      if (!src.topics.some((t) => aliasSet.has(t))) continue;
       matching.push({ path: src.path, date: src.date, content: src.content, type: src.type });
     }
     // `allSources` is already sorted by date asc; the filter preserves
