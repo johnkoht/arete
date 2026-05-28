@@ -19,11 +19,13 @@ import { renderTopicPage, type TopicPage } from '../../src/models/topic-page.js'
 import type { WorkspacePaths } from '../../src/models/workspace.js';
 
 describe('tokenizeSlug', () => {
-  it('splits kebab-case into tokens', () => {
+  it('splits kebab-case into tokens (with AC3 singularize on plural endings)', () => {
+    // Post-AC3 (phase-3-5-followup-5): `templates` singularizes to
+    // `template`. Pre-AC3 behavior was the raw `templates` token.
     assert.deepStrictEqual(tokenizeSlug('cover-whale-templates'), [
       'cover',
       'whale',
-      'templates',
+      'template',
     ]);
   });
 
@@ -33,6 +35,111 @@ describe('tokenizeSlug', () => {
 
   it('handles empty slug', () => {
     assert.deepStrictEqual(tokenizeSlug(''), []);
+  });
+
+  // -------------------------------------------------------------------------
+  // AC3 (phase-3-5-followup-5) — singularize-or-stem rule.
+  //
+  // Rule: strip trailing `s` if length ≥4 AND second-to-last char is not `s`.
+  // The mandatory enumeration from the plan + pre-mortem R1:
+  // -------------------------------------------------------------------------
+  describe('AC3 singularize-or-stem', () => {
+    it('templates → template', () => {
+      assert.deepStrictEqual(tokenizeSlug('templates'), ['template']);
+    });
+
+    it('decisions → decision', () => {
+      assert.deepStrictEqual(tokenizeSlug('decisions'), ['decision']);
+    });
+
+    it('learnings → learning', () => {
+      assert.deepStrictEqual(tokenizeSlug('learnings'), ['learning']);
+    });
+
+    it('meetings → meeting', () => {
+      assert.deepStrictEqual(tokenizeSlug('meetings'), ['meeting']);
+    });
+
+    // -ss endings preserved (the R1 mitigation core).
+    it('process → process (preserved, -ss ending)', () => {
+      assert.deepStrictEqual(tokenizeSlug('process'), ['process']);
+    });
+
+    it('address → address (preserved, -ss ending)', () => {
+      assert.deepStrictEqual(tokenizeSlug('address'), ['address']);
+    });
+
+    it('business → business (preserved, -ss ending)', () => {
+      assert.deepStrictEqual(tokenizeSlug('business'), ['business']);
+    });
+
+    it('class → class (preserved, -ss ending; falls under 4-char floor anyway)', () => {
+      // `class` is 5 chars ending `-ss` → second-to-last char IS `s` → preserved.
+      assert.deepStrictEqual(tokenizeSlug('class'), ['class']);
+    });
+
+    // Documented benign edge cases per plan + pre-mortem R1. The test
+    // pins the actual shipped behavior so a future change is intentional.
+    it('status → statu (accepted edge case: -us ending, benign)', () => {
+      // length 6, ends `us`, second-to-last `u` ≠ `s` → rule strips → `statu`.
+      // Plan: "accept `status → statu` (benign; `statu` unlikely to collide
+      // with any real slug)".
+      assert.deepStrictEqual(tokenizeSlug('status'), ['statu']);
+    });
+
+    it('news → new (accepted edge case: -ws ending, benign)', () => {
+      // length 4, ends `ws`, second-to-last `w` ≠ `s` → rule strips → `new`.
+      assert.deepStrictEqual(tokenizeSlug('news'), ['new']);
+    });
+
+    // Multi-token slugs combining singularize with the stop-word filter.
+    it('belongings-vs-property-claims tokenizes to [belonging, property, claim] (singularize + stop-word vs filter)', () => {
+      assert.deepStrictEqual(tokenizeSlug('belongings-vs-property-claims'), [
+        'belonging',
+        'property',
+        'claim',
+      ]);
+    });
+
+    it('drops "and" / "or" stop-words alongside "vs"', () => {
+      assert.deepStrictEqual(tokenizeSlug('apples-and-oranges'), ['apple', 'orange']);
+      assert.deepStrictEqual(tokenizeSlug('design-or-build'), ['design', 'build']);
+    });
+
+    // Sub-4-char tokens NEVER stem regardless of trailing letter
+    // (`bus` stays `bus`; `cat` stays `cat`).
+    it('preserves short tokens under the 4-char floor (bus, cat)', () => {
+      assert.deepStrictEqual(tokenizeSlug('bus-cat'), ['bus', 'cat']);
+    });
+  });
+
+  describe('AC3 closes the email-templates Jaccard gap', () => {
+    // Pre-AC3: jaccard(['default', 'email', 'templates'], ['email', 'templates'])
+    //   = |{default, email, templates} ∩ {email, templates}| / |union| = 2/3 = 0.67
+    //   — actually right at the threshold; but the canonical 5/27 case is
+    //   `default-email-template` (singular) vs `email-templates` (plural):
+    //   pre-AC3 these were {default, email, template} vs {email, templates}
+    //   = 1/4 = 0.25.
+    //
+    // Post-AC3: both singularize to {default, email, template} vs
+    //   {email, template} = 2/3 = 0.67 → meets COERCE_THRESHOLD.
+    it('default-email-template vs email-templates now overlaps for coerce', () => {
+      const a = tokenizeSlug('default-email-template');
+      const b = tokenizeSlug('email-templates');
+      const setA = new Set(a);
+      const setB = new Set(b);
+      const intersection = [...setA].filter((w) => setB.has(w)).length;
+      const union = new Set([...setA, ...setB]).size;
+      const jaccard = union === 0 ? 0 : intersection / union;
+      // Document the post-AC3 value. The exact ratio depends on shared
+      // tokens; the assertion below is intentionally loose — the
+      // mandatory check is that we cross the 0.5 line, which we couldn't
+      // do pre-AC3.
+      assert.ok(
+        jaccard >= 0.5,
+        `expected jaccard ≥ 0.5 post-AC3 (got ${jaccard})`,
+      );
+    });
   });
 });
 
