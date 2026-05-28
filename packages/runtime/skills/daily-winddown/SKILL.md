@@ -162,6 +162,72 @@ Best-effort: if no prior winddown file exists (first run, or files
 cleaned), skip. If `commitments list` fails, surface the file count
 inline and proceed without the cross-check.
 
+### Step 0.7 — Surface ONE stale topic with concrete alias candidates (AC6)
+
+**Phase 3.5 followup-5 AC6 — wiki source discoverability.** A topic
+page is "stale" when its canonical slug stops collecting sources because
+the LLM proposes a sub-slug (e.g., `default-email-template`) instead of
+the canonical (`email-templates`) at extract time. The chef can spot
+this by scanning topic-memory status for pages with:
+
+1. `stale === true` (no source integrated since `last_refreshed`), AND
+2. ≥3 sources in `resources/meetings/` or `resources/notes/` since
+   `last_refreshed` whose `topics:` include a slug that token-overlaps
+   the canonical (≥1 shared token after singularize, per AC3 tokenizer).
+
+When such a page is found, surface ONE — the page with the highest
+adjacent-source count — in the `## Uncertain — your call` tier of the
+curated view. Cap at ONE per winddown to protect the AC10 ≤15-min
+target.
+
+```bash
+# Read topic-memory status (stale flag + last_refreshed per page)
+arete topic list --json --status all
+```
+
+Adjacent-slug detection is a chef-side scan: for each stale topic, look
+at recent `resources/meetings/*.md` + `resources/notes/*.md` frontmatter
+since the topic's `last_refreshed` date. Count which non-canonical slugs
+appear in `topics:` that token-overlap the canonical (use `tokenizeSlug`-
+equivalent logic: split on `-`, filter `vs`/`and`/`or`, singularize
+trailing `s` on length-≥4 tokens unless `-ss` ending).
+
+Surface format (write into the `## Uncertain` block of Step 3's curated
+view):
+
+```markdown
+- **{canonical} topic stale ({Nd}, {M} adjacent-slug sources since {last_refreshed})**.
+  Suspected slug drift. Proposed aliases to add to `{canonical}.md`:
+    - `{adjacent-slug-1}` ({K1} sources)
+    - `{adjacent-slug-2}` ({K2} sources)
+    - `{adjacent-slug-3}` ({K3} sources)
+  Add aliases + run `arete topic refresh {canonical}`? [skip / accept / list-only]
+```
+
+The bash command the user runs after editing the topic page's
+frontmatter to add `aliases: [...]`:
+
+```bash
+arete topic refresh <canonical-slug>
+```
+
+Post-AC2 (phase-3-5-followup-5), this re-integrates every source tagged
+with the canonical OR any declared alias. The orphan sources rescue in
+one call.
+
+**Cap rule**: surface AT MOST ONE stale-topic-with-aliases prompt per
+winddown. The one with the highest adjacent-source count wins. Other
+stale topics roll up to a single line if you want to mention them at
+all: "{N-1} other stale topics — see `arete topic list --status active`."
+
+**Gate**: do NOT surface on the first chef run after a major install
+upgrade (user hasn't established adjacent-slug patterns yet). Skip if
+no topic page in the workspace has ≥1 `sources_integrated` entry.
+
+**Surface tier**: `## Uncertain — your call`. This is a wiki-hygiene
+suggestion, not an operational must-do. The user can `skip` without
+penalty; the chef re-surfaces on a future run if the staleness persists.
+
 ### Step 1 — Gather (all primitives, parallelize where independent)
 
 **Run in parallel (no engagement gates between).** The chef-orchestrator

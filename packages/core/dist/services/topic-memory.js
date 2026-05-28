@@ -44,11 +44,64 @@ export const AMBIGUOUS_LOW_THRESHOLD = 0.4;
 // Pure helpers (testable without storage)
 // ---------------------------------------------------------------------------
 /**
+ * Stop-word / connector tokens filtered before Jaccard tokenization
+ * (AC3, phase-3-5-followup-5). Stems like `belongings-vs-property-claims`
+ * shouldn't include `vs` in the token set — it's a connector, not a
+ * meaningful slug component.
+ */
+const TOKENIZE_STOP_WORDS = new Set(['vs', 'and', 'or']);
+/**
+ * Singularize a single token (AC3, phase-3-5-followup-5).
+ *
+ * Rule: strip trailing `s` if and only if
+ *   - token length ≥ 4 AND
+ *   - second-to-last char is NOT `s` (preserves `-ss` endings like
+ *     `process`, `address`, `business`, `class`).
+ *
+ * Known accepted edge cases (documented per pre-mortem R1):
+ *   - `status` → `statu` (ends `-us`; benign — unlikely real slug clash)
+ *   - `news` → `new` (ends `-ws`; benign — unlikely real slug clash)
+ *
+ * The rule deliberately stops at "drop trailing `s`": no Porter-style
+ * suffix stripping. The goal is to collapse `templates`/`template`,
+ * `decisions`/`decision`, `learnings`/`learning`, `meetings`/`meeting` —
+ * the four high-traffic plural/singular pairs in observed slug drift.
+ */
+function singularizeToken(token) {
+    if (token.length < 4)
+        return token;
+    if (!token.endsWith('s'))
+        return token;
+    // Preserve -ss endings (process, address, business, class).
+    if (token.charAt(token.length - 2) === 's')
+        return token;
+    return token.slice(0, -1);
+}
+/**
  * Tokenize a slug for Jaccard comparison.
- * `cover-whale-templates` → `['cover', 'whale', 'templates']`.
+ * `cover-whale-templates` → `['cover', 'whale', 'template']`.
+ *
+ * Post-AC3 (phase-3-5-followup-5):
+ *   - Stop-word filter: drops `vs`, `and`, `or` before tokenization
+ *     (so `belongings-vs-property-claims` tokenizes without `vs`).
+ *   - Singularize-or-stem: strips trailing `s` on tokens of length ≥4
+ *     when the second-to-last char isn't `s`. Closes the
+ *     `templates`/`template`, `decisions`/`decision`,
+ *     `learnings`/`learning`, `meetings`/`meeting` clash in tokenizeSlug.
+ *
+ * Edge cases preserved: `process`, `address`, `business`, `class` (all
+ * `-ss` endings). Accepted edge cases: `status` → `statu`, `news` →
+ * `new` (benign; see `singularizeToken` doc).
  */
 export function tokenizeSlug(slug) {
-    return normalizeForJaccard(slug.replace(/-/g, ' '));
+    const rawTokens = normalizeForJaccard(slug.replace(/-/g, ' '));
+    const out = [];
+    for (const t of rawTokens) {
+        if (TOKENIZE_STOP_WORDS.has(t))
+            continue;
+        out.push(singularizeToken(t));
+    }
+    return out;
 }
 /**
  * Compute the best Jaccard score of a candidate against all identity
@@ -783,8 +836,26 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
             let fallback = 0;
             let skipped = 0;
             const matching = [];
+            // AC2 (phase-3-5-followup-5) — alias-aware integration filter.
+            //
+            // Pre-AC2: only sources tagged with the canonical `targetSlug`
+            // integrated; sources tagged with an alias (e.g.,
+            // `default-email-template` while canonical is `email-templates`)
+            // were orphaned forever, even after a user added `aliases:` to the
+            // topic page.
+            //
+            // Post-AC2: a source integrates when ANY of its `topics:` matches
+            // the canonical slug OR one of the topic page's declared aliases.
+            // `page` is undefined when the target slug is a newly-discovered
+            // slug-only target (no page yet) — in that case `aliases ?? []` is
+            // empty, so the filter degrades to the canonical-only check (the
+            // exact pre-AC2 behavior). Nil-safe by construction.
+            const aliasSet = new Set([
+                targetSlug,
+                ...(page?.frontmatter.aliases ?? []),
+            ]);
             for (const src of allSources) {
-                if (!src.topics.includes(targetSlug))
+                if (!src.topics.some((t) => aliasSet.has(t)))
                     continue;
                 matching.push({ path: src.path, date: src.date, content: src.content, type: src.type });
             }

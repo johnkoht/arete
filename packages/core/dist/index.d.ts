@@ -44,6 +44,8 @@ export type { SeedLockInfo } from './services/seed-lock.js';
 export { formatEvent as formatMemoryLogEvent, parseEvent as parseMemoryLogEvent, parseLog as parseMemoryLog, appendEvent as appendMemoryLogEvent, nowIsoSeconds, } from './utils/memory-log.js';
 export type { LogEvent as MemoryLogEvent } from './utils/memory-log.js';
 export { parseMeetingFile } from './services/meeting-context.js';
+export { writeMeetingApplyFrontmatter } from './services/meeting-frontmatter.js';
+export type { MeetingApplyStatus, MeetingApplyAliasDeps, } from './services/meeting-frontmatter.js';
 export { parseApprovedSection } from './services/meeting-reconciliation.js';
 export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';
 export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCredentials } from './integrations/calendar/google-auth.js';

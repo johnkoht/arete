@@ -212,6 +212,15 @@ export type { LogEvent as MemoryLogEvent } from './utils/memory-log.js';
 
 // Meeting parsing helper
 export { parseMeetingFile } from './services/meeting-context.js';
+// Phase 3.5 followup-5 — unified meeting-frontmatter writer (AC1).
+// Shared across CLI `meeting apply` / `meeting extract --stage` and
+// backend `/process`. Closes the path-3 regression where extract --stage
+// silently dropped topics + counts.
+export { writeMeetingApplyFrontmatter } from './services/meeting-frontmatter.js';
+export type {
+  MeetingApplyStatus,
+  MeetingApplyAliasDeps,
+} from './services/meeting-frontmatter.js';
 // Phase 3.5 D4 — backfill CLI needs to scan approved meeting bodies
 // for staged-then-approved items. `parseApprovedSection` is the
 // minimal pure helper exposed for that purpose.
