@@ -28,6 +28,13 @@ import { jaccardSimilarity } from '../utils/similarity.js';
 const COMMITMENTS_FILE = '.arete/commitments.json';
 const PRUNE_DAYS = 30;
 
+/**
+ * Hard ceiling — commitments older than this always prune regardless of
+ * task references. Prevents sticky-open `[ ]` task lines from holding
+ * stale commitments alive indefinitely. See FU2.
+ */
+const PRUNE_HARD_CEILING_DAYS = 90;
+
 // ---------------------------------------------------------------------------
 // Priority scoring
 // ---------------------------------------------------------------------------
@@ -289,15 +296,22 @@ export type CompleteTaskFromCommitmentFn = (
 ) => Promise<{ id: string; text: string }[]>;
 
 /**
- * Function returning true if any OPEN task references the given commitment
- * via `@from(commitment:<prefix>)`. Used by save() to refuse pruning a
- * commitment that still has live task references. Completed tasks with
- * stale references are prune-OK and intentionally not counted here.
+ * Function returning the subset of commitment-id prefixes that are
+ * referenced by an OPEN task via `@from(commitment:<prefix>)`. Used by
+ * save() to refuse pruning commitments that still have live task
+ * references. Completed tasks with stale references are prune-OK and
+ * intentionally not counted here.
+ *
+ * Batched signature (FU3): one call per save() reads task files once,
+ * regardless of how many prune-candidates exist. Replaces the earlier
+ * per-prefix `HasOpenTaskReferenceFn` so a sync() processing K
+ * candidates doesn't multiply the file-read cost.
+ *
  * Injected by factory to avoid circular dep.
  */
-export type HasOpenTaskReferenceFn = (
-  commitmentIdPrefix: string,
-) => Promise<boolean>;
+export type HasOpenTaskReferencesFn = (
+  commitmentIdPrefixes: string[],
+) => Promise<Set<string>>;
 
 // ---------------------------------------------------------------------------
 // CommitmentsService
@@ -307,7 +321,7 @@ export class CommitmentsService {
   private readonly filePath: string;
   private createTaskFn?: CreateTaskFn;
   private completeTaskFromCommitmentFn?: CompleteTaskFromCommitmentFn;
-  private hasOpenTaskReferenceFn?: HasOpenTaskReferenceFn;
+  private hasOpenTaskReferencesFn?: HasOpenTaskReferencesFn;
 
   constructor(
     private readonly storage: StorageAdapter,
@@ -336,12 +350,12 @@ export class CommitmentsService {
   }
 
   /**
-   * Set the open-task-reference checker that save() consults before
-   * auto-pruning resolved commitments. Without this injection, save()
-   * falls back to pure age-based pruning (current behavior).
+   * Set the batched open-task-reference checker that save() consults
+   * before auto-pruning resolved commitments. Without this injection,
+   * save() falls back to pure age-based pruning (current behavior).
    */
-  setHasOpenTaskReferenceFn(fn: HasOpenTaskReferenceFn): void {
-    this.hasOpenTaskReferenceFn = fn;
+  setHasOpenTaskReferencesFn(fn: HasOpenTaskReferencesFn): void {
+    this.hasOpenTaskReferencesFn = fn;
   }
 
   // -------------------------------------------------------------------------
@@ -363,24 +377,44 @@ export class CommitmentsService {
    * Write commitments to disk, applying pruning first.
    * ⚠️ Pruning uses `resolvedAt`, never `date`. Open items are never pruned.
    *
-   * F2: when `hasOpenTaskReferenceFn` is injected, commitments still
+   * F2: when `hasOpenTaskReferencesFn` is injected, commitments still
    * referenced by an OPEN task in week.md / tasks.md are NOT pruned,
    * preventing the dangling-`@from(commitment:xxx)` orphan class. Tasks
    * already marked complete (with stale refs) are prune-OK.
+   *
+   * FU2: a commitment older than `PRUNE_HARD_CEILING_DAYS` is pruned
+   * regardless of task references. Prevents unbounded commitments.json
+   * growth from sticky-open tasks that hold otherwise-stale commitments
+   * alive forever.
+   *
+   * FU3: prefix lookup runs ONCE per save() via the batched injection
+   * signature, not once per prune-candidate.
    */
   private async save(commitments: Commitment[]): Promise<void> {
-    const candidates = commitments.filter((c) => shouldPrune(c));
+    const ageCandidates = commitments.filter((c) => shouldPrune(c));
     let prunable: Set<string>;
-    if (this.hasOpenTaskReferenceFn && candidates.length > 0) {
-      const checks = await Promise.all(
-        candidates.map(async (c) => ({
-          id: c.id,
-          referenced: await this.hasOpenTaskReferenceFn!(c.id.slice(0, 8)),
-        })),
+    if (this.hasOpenTaskReferencesFn && ageCandidates.length > 0) {
+      // Hard-ceiling override: anything older than the ceiling always
+      // prunes regardless of task references.
+      const now = new Date();
+      const ceilingForced = new Set(
+        ageCandidates
+          .filter((c) => shouldPrune(c, now, PRUNE_HARD_CEILING_DAYS))
+          .map((c) => c.id),
       );
-      prunable = new Set(checks.filter((r) => !r.referenced).map((r) => r.id));
+      const checkable = ageCandidates.filter((c) => !ceilingForced.has(c.id));
+      const checkPrefixes = checkable.map((c) => c.id.slice(0, 8));
+      const referencedPrefixes = checkPrefixes.length > 0
+        ? await this.hasOpenTaskReferencesFn(checkPrefixes)
+        : new Set<string>();
+      prunable = new Set([
+        ...ceilingForced,
+        ...checkable
+          .filter((c) => !referencedPrefixes.has(c.id.slice(0, 8)))
+          .map((c) => c.id),
+      ]);
     } else {
-      prunable = new Set(candidates.map((c) => c.id));
+      prunable = new Set(ageCandidates.map((c) => c.id));
     }
     const pruned = commitments.filter((c) => !prunable.has(c.id));
     const file: CommitmentsFile = { commitments: pruned };

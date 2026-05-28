@@ -581,21 +581,32 @@ export class TaskService {
   }
 
   /**
-   * F2: returns true if any OPEN task references the given commitment
-   * prefix via `@from(commitment:<prefix>)`. Used by
-   * CommitmentsService.save() to refuse pruning commitments with live
-   * task references. Completed tasks with stale references are
-   * intentionally NOT counted — those references are historical and
-   * pruning the commitment leaves only a harmless dangling reference
-   * in a checked-off line.
+   * F2 + FU3: returns the subset of `commitmentIdPrefixes` that are
+   * referenced by at least one OPEN task via `@from(commitment:<prefix>)`.
+   * Used by CommitmentsService.save() to refuse pruning commitments
+   * with live task references. Completed tasks with stale references
+   * are intentionally NOT counted — those references are historical
+   * and pruning the commitment leaves only a harmless dangling
+   * reference in a checked-off line.
+   *
+   * Batched (FU3): reads both task files ONCE regardless of how many
+   * prefixes are queried. Caller (save()) consults this once per write
+   * rather than once per prune-candidate.
    */
-  async hasOpenTaskReferenceToCommitment(commitmentIdPrefix: string): Promise<boolean> {
+  async hasOpenTaskReferencesToCommitments(
+    commitmentIdPrefixes: string[],
+  ): Promise<Set<string>> {
+    if (commitmentIdPrefixes.length === 0) return new Set();
+    const lookup = new Set(commitmentIdPrefixes);
     const openTasks = await this.listTasks({ completed: false });
-    return openTasks.some(
-      (t) =>
-        t.metadata.from?.type === 'commitment' &&
-        t.metadata.from.id === commitmentIdPrefix,
-    );
+    const referenced = new Set<string>();
+    for (const t of openTasks) {
+      const from = t.metadata.from;
+      if (from?.type === 'commitment' && lookup.has(from.id)) {
+        referenced.add(from.id);
+      }
+    }
+    return referenced;
   }
 
   /**

@@ -15,6 +15,12 @@ import { jaccardSimilarity } from '../utils/similarity.js';
 // ---------------------------------------------------------------------------
 const COMMITMENTS_FILE = '.arete/commitments.json';
 const PRUNE_DAYS = 30;
+/**
+ * Hard ceiling — commitments older than this always prune regardless of
+ * task references. Prevents sticky-open `[ ]` task lines from holding
+ * stale commitments alive indefinitely. See FU2.
+ */
+const PRUNE_HARD_CEILING_DAYS = 90;
 // Action verbs that indicate specific, actionable commitments
 const ACTION_VERBS = [
     'send',
@@ -182,7 +188,7 @@ export class CommitmentsService {
     filePath;
     createTaskFn;
     completeTaskFromCommitmentFn;
-    hasOpenTaskReferenceFn;
+    hasOpenTaskReferencesFn;
     constructor(storage, workspaceRoot) {
         this.storage = storage;
         this.filePath = join(workspaceRoot, COMMITMENTS_FILE);
@@ -205,12 +211,12 @@ export class CommitmentsService {
         this.completeTaskFromCommitmentFn = fn;
     }
     /**
-     * Set the open-task-reference checker that save() consults before
-     * auto-pruning resolved commitments. Without this injection, save()
-     * falls back to pure age-based pruning (current behavior).
+     * Set the batched open-task-reference checker that save() consults
+     * before auto-pruning resolved commitments. Without this injection,
+     * save() falls back to pure age-based pruning (current behavior).
      */
-    setHasOpenTaskReferenceFn(fn) {
-        this.hasOpenTaskReferenceFn = fn;
+    setHasOpenTaskReferencesFn(fn) {
+        this.hasOpenTaskReferencesFn = fn;
     }
     // -------------------------------------------------------------------------
     // Private I/O
@@ -231,23 +237,43 @@ export class CommitmentsService {
      * Write commitments to disk, applying pruning first.
      * ⚠️ Pruning uses `resolvedAt`, never `date`. Open items are never pruned.
      *
-     * F2: when `hasOpenTaskReferenceFn` is injected, commitments still
+     * F2: when `hasOpenTaskReferencesFn` is injected, commitments still
      * referenced by an OPEN task in week.md / tasks.md are NOT pruned,
      * preventing the dangling-`@from(commitment:xxx)` orphan class. Tasks
      * already marked complete (with stale refs) are prune-OK.
+     *
+     * FU2: a commitment older than `PRUNE_HARD_CEILING_DAYS` is pruned
+     * regardless of task references. Prevents unbounded commitments.json
+     * growth from sticky-open tasks that hold otherwise-stale commitments
+     * alive forever.
+     *
+     * FU3: prefix lookup runs ONCE per save() via the batched injection
+     * signature, not once per prune-candidate.
      */
     async save(commitments) {
-        const candidates = commitments.filter((c) => shouldPrune(c));
+        const ageCandidates = commitments.filter((c) => shouldPrune(c));
         let prunable;
-        if (this.hasOpenTaskReferenceFn && candidates.length > 0) {
-            const checks = await Promise.all(candidates.map(async (c) => ({
-                id: c.id,
-                referenced: await this.hasOpenTaskReferenceFn(c.id.slice(0, 8)),
-            })));
-            prunable = new Set(checks.filter((r) => !r.referenced).map((r) => r.id));
+        if (this.hasOpenTaskReferencesFn && ageCandidates.length > 0) {
+            // Hard-ceiling override: anything older than the ceiling always
+            // prunes regardless of task references.
+            const now = new Date();
+            const ceilingForced = new Set(ageCandidates
+                .filter((c) => shouldPrune(c, now, PRUNE_HARD_CEILING_DAYS))
+                .map((c) => c.id));
+            const checkable = ageCandidates.filter((c) => !ceilingForced.has(c.id));
+            const checkPrefixes = checkable.map((c) => c.id.slice(0, 8));
+            const referencedPrefixes = checkPrefixes.length > 0
+                ? await this.hasOpenTaskReferencesFn(checkPrefixes)
+                : new Set();
+            prunable = new Set([
+                ...ceilingForced,
+                ...checkable
+                    .filter((c) => !referencedPrefixes.has(c.id.slice(0, 8)))
+                    .map((c) => c.id),
+            ]);
         }
         else {
-            prunable = new Set(candidates.map((c) => c.id));
+            prunable = new Set(ageCandidates.map((c) => c.id));
         }
         const pruned = commitments.filter((c) => !prunable.has(c.id));
         const file = { commitments: pruned };

@@ -91,19 +91,26 @@ export type CompleteTaskFromCommitmentFn = (commitmentIdPrefix: string) => Promi
     text: string;
 }[]>;
 /**
- * Function returning true if any OPEN task references the given commitment
- * via `@from(commitment:<prefix>)`. Used by save() to refuse pruning a
- * commitment that still has live task references. Completed tasks with
- * stale references are prune-OK and intentionally not counted here.
+ * Function returning the subset of commitment-id prefixes that are
+ * referenced by an OPEN task via `@from(commitment:<prefix>)`. Used by
+ * save() to refuse pruning commitments that still have live task
+ * references. Completed tasks with stale references are prune-OK and
+ * intentionally not counted here.
+ *
+ * Batched signature (FU3): one call per save() reads task files once,
+ * regardless of how many prune-candidates exist. Replaces the earlier
+ * per-prefix `HasOpenTaskReferenceFn` so a sync() processing K
+ * candidates doesn't multiply the file-read cost.
+ *
  * Injected by factory to avoid circular dep.
  */
-export type HasOpenTaskReferenceFn = (commitmentIdPrefix: string) => Promise<boolean>;
+export type HasOpenTaskReferencesFn = (commitmentIdPrefixes: string[]) => Promise<Set<string>>;
 export declare class CommitmentsService {
     private readonly storage;
     private readonly filePath;
     private createTaskFn?;
     private completeTaskFromCommitmentFn?;
-    private hasOpenTaskReferenceFn?;
+    private hasOpenTaskReferencesFn?;
     constructor(storage: StorageAdapter, workspaceRoot: string);
     /**
      * Set the task creation function. Called by factory after TaskService is created.
@@ -119,20 +126,28 @@ export declare class CommitmentsService {
      */
     setCompleteTaskFromCommitmentFn(fn: CompleteTaskFromCommitmentFn): void;
     /**
-     * Set the open-task-reference checker that save() consults before
-     * auto-pruning resolved commitments. Without this injection, save()
-     * falls back to pure age-based pruning (current behavior).
+     * Set the batched open-task-reference checker that save() consults
+     * before auto-pruning resolved commitments. Without this injection,
+     * save() falls back to pure age-based pruning (current behavior).
      */
-    setHasOpenTaskReferenceFn(fn: HasOpenTaskReferenceFn): void;
+    setHasOpenTaskReferencesFn(fn: HasOpenTaskReferencesFn): void;
     private load;
     /**
      * Write commitments to disk, applying pruning first.
      * ⚠️ Pruning uses `resolvedAt`, never `date`. Open items are never pruned.
      *
-     * F2: when `hasOpenTaskReferenceFn` is injected, commitments still
+     * F2: when `hasOpenTaskReferencesFn` is injected, commitments still
      * referenced by an OPEN task in week.md / tasks.md are NOT pruned,
      * preventing the dangling-`@from(commitment:xxx)` orphan class. Tasks
      * already marked complete (with stale refs) are prune-OK.
+     *
+     * FU2: a commitment older than `PRUNE_HARD_CEILING_DAYS` is pruned
+     * regardless of task references. Prevents unbounded commitments.json
+     * growth from sticky-open tasks that hold otherwise-stale commitments
+     * alive forever.
+     *
+     * FU3: prefix lookup runs ONCE per save() via the batched injection
+     * signature, not once per prune-candidate.
      */
     private save;
     /**

@@ -1811,7 +1811,7 @@ describe('CommitmentsService pruning — F2 task-reference safety', () => {
     const storage = createMockStorage(store);
     const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
 
-    svc.setHasOpenTaskReferenceFn(async (p) => p === prefix);
+    svc.setHasOpenTaskReferencesFn(async (prefixes) => new Set(prefixes.filter((p) => p === prefix)));
 
     // Trigger a write
     await svc.sync(new Map());
@@ -1836,8 +1836,8 @@ describe('CommitmentsService pruning — F2 task-reference safety', () => {
     const storage = createMockStorage(store);
     const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
 
-    // Injection present but always returns false (no live references).
-    svc.setHasOpenTaskReferenceFn(async () => false);
+    // Injection present but always returns empty set (no live references).
+    svc.setHasOpenTaskReferencesFn(async () => new Set());
 
     await svc.sync(new Map());
 
@@ -1860,44 +1860,252 @@ describe('CommitmentsService pruning — F2 task-reference safety', () => {
     const storage = createMockStorage(store);
     const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
 
-    // No setHasOpenTaskReferenceFn — preserves Phase 0 behavior.
+    // No setHasOpenTaskReferencesFn — preserves Phase 0 behavior.
     await svc.sync(new Map());
 
     const written = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
     assert.equal(written.commitments.length, 0, 'Default behavior: age-based prune still works');
   });
 
-  it('checks references only for prune-candidates (not all commitments)', async () => {
+  it('FU3: makes ONE batched call per save() regardless of candidate count', async () => {
     const oldId = '1'.repeat(64);
-    const recentId = '2'.repeat(64);
-    const openId = '3'.repeat(64);
-    const oldResolved = makeCommitment({
-      id: oldId,
-      status: 'resolved',
-      resolvedAt: daysAgo(45),
-    });
-    const recentResolved = makeCommitment({
-      id: recentId,
-      status: 'resolved',
-      resolvedAt: daysAgo(5),
-    });
-    const openCommitment = makeCommitment({ id: openId, status: 'open', resolvedAt: null });
-    const store = new Map([
-      [COMMITMENTS_PATH, makeFile([oldResolved, recentResolved, openCommitment])],
-    ]);
+    const olderId = '2'.repeat(64);
+    const oldestId = '3'.repeat(64);
+    const recentId = '4'.repeat(64);
+    const openId = '5'.repeat(64);
+    const commitments = [
+      makeCommitment({ id: oldId, status: 'resolved', resolvedAt: daysAgo(45) }),
+      makeCommitment({ id: olderId, status: 'resolved', resolvedAt: daysAgo(50) }),
+      makeCommitment({ id: oldestId, status: 'dropped', resolvedAt: daysAgo(60) }),
+      makeCommitment({ id: recentId, status: 'resolved', resolvedAt: daysAgo(5) }),
+      makeCommitment({ id: openId, status: 'open', resolvedAt: null }),
+    ];
+    const store = new Map([[COMMITMENTS_PATH, makeFile(commitments)]]);
     const storage = createMockStorage(store);
     const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
 
-    const checked: string[] = [];
-    svc.setHasOpenTaskReferenceFn(async (p) => {
-      checked.push(p);
-      return false;
+    const calls: string[][] = [];
+    svc.setHasOpenTaskReferencesFn(async (prefixes) => {
+      calls.push([...prefixes]);
+      return new Set();
     });
 
     await svc.sync(new Map());
 
-    // Only oldResolved is a prune-candidate; recent + open should NOT trigger
-    // the (potentially expensive) tasks-file scan.
-    assert.deepEqual(checked, [oldId.slice(0, 8)]);
+    assert.equal(calls.length, 1, 'Exactly one batched call per save()');
+    assert.deepEqual(
+      calls[0].sort(),
+      [oldId, olderId, oldestId].map((id) => id.slice(0, 8)).sort(),
+      'Batch contains all 3 age-prune candidates; not recent or open',
+    );
+  });
+
+  it('FU2: hard ceiling — commitment older than 90d ALWAYS prunes regardless of references', async () => {
+    const fullId = 'a'.repeat(64);
+    const prefix = fullId.slice(0, 8);
+    const ancient = makeCommitment({
+      id: fullId,
+      status: 'resolved',
+      resolvedAt: daysAgo(120), // well past hard ceiling
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([ancient])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    let consulted = false;
+    svc.setHasOpenTaskReferencesFn(async (prefixes) => {
+      consulted = true;
+      // Even if we claim a task references it, the hard ceiling overrides.
+      return new Set(prefixes);
+    });
+
+    await svc.sync(new Map());
+
+    const written = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(
+      written.commitments.length,
+      0,
+      'Hard ceiling (>90d) overrides open-task-reference protection',
+    );
+    assert.equal(
+      consulted,
+      false,
+      'Hard-ceiling-forced prunes should skip the task-ref check entirely',
+    );
+    // Suppress unused-var lint
+    void prefix;
+  });
+
+  it('FU2: ceiling-forced + ref-protected coexist in same save()', async () => {
+    const ceilingId = 'a'.repeat(64); // 120d old — force prune
+    const protectedId = 'b'.repeat(64); // 45d old — protected by open task
+    const orphanId = 'c'.repeat(64); // 45d old — no task ref, normal prune
+    const commitments = [
+      makeCommitment({ id: ceilingId, status: 'resolved', resolvedAt: daysAgo(120) }),
+      makeCommitment({ id: protectedId, status: 'resolved', resolvedAt: daysAgo(45) }),
+      makeCommitment({ id: orphanId, status: 'resolved', resolvedAt: daysAgo(45) }),
+    ];
+    const store = new Map([[COMMITMENTS_PATH, makeFile(commitments)]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    svc.setHasOpenTaskReferencesFn(async (prefixes) => {
+      // Only the "protected" commitment has an open task referencing it.
+      return new Set(prefixes.filter((p) => p === protectedId.slice(0, 8)));
+    });
+
+    await svc.sync(new Map());
+
+    const written = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(written.commitments.length, 1);
+    assert.equal(
+      written.commitments[0].id,
+      protectedId,
+      'Only the ref-protected commitment survives; ceiling-forced and orphan both pruned',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FU1: F1+F2 integration — both injections wired together over full lifecycle
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService + TaskService integration (FU1)', () => {
+  // Mirrors factory.ts wiring: builds both services with shared storage,
+  // wires forward (createTask) + back-prop (completeTaskFromCommitment) +
+  // task-ref check (hasOpenTaskReferences) injections. This is the
+  // load-bearing wiring — these tests guard against silent regressions
+  // where one service is refactored independently.
+  async function buildWiredServices() {
+    const { TaskService } = await import('../../src/services/tasks.js');
+    const paths = {
+      root: WORKSPACE_ROOT,
+      manifest: join(WORKSPACE_ROOT, 'arete.yaml'),
+      ideConfig: join(WORKSPACE_ROOT, '.cursor'),
+      rules: join(WORKSPACE_ROOT, '.cursor/rules'),
+      agentSkills: join(WORKSPACE_ROOT, '.agents/skills'),
+      tools: join(WORKSPACE_ROOT, '.cursor/tools'),
+      integrations: join(WORKSPACE_ROOT, '.arete/integrations'),
+      context: join(WORKSPACE_ROOT, 'context'),
+      memory: join(WORKSPACE_ROOT, '.arete/memory'),
+      now: join(WORKSPACE_ROOT, 'now'),
+      goals: join(WORKSPACE_ROOT, 'goals'),
+      projects: join(WORKSPACE_ROOT, 'projects'),
+      resources: join(WORKSPACE_ROOT, 'resources'),
+      people: join(WORKSPACE_ROOT, 'people'),
+      credentials: join(WORKSPACE_ROOT, '.credentials'),
+      templates: join(WORKSPACE_ROOT, 'templates'),
+    };
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const commitments = new CommitmentsService(storage, WORKSPACE_ROOT);
+    const tasks = new TaskService(storage, paths, commitments);
+    commitments.setCreateTaskFn(async (text, metadata) => {
+      const task = await tasks.addTask(text, 'inbox', metadata);
+      return { id: task.id, text: task.text };
+    });
+    commitments.setCompleteTaskFromCommitmentFn((prefix) =>
+      tasks.completeTaskByCommitmentId(prefix),
+    );
+    commitments.setHasOpenTaskReferencesFn((prefixes) =>
+      tasks.hasOpenTaskReferencesToCommitments(prefixes),
+    );
+    return { commitments, tasks, store, paths };
+  }
+
+  it('resolve() back-props to task [x] AND a later save can prune the now-orphaned commitment', async () => {
+    const { commitments, tasks, store, paths } = await buildWiredServices();
+    const weekFile = join(paths.now, 'week.md');
+
+    // 1. Create commitment — injection creates linked task.
+    const { commitment, task } = await commitments.create(
+      'Ship the deck to Anthony',
+      'anthony-avina',
+      'Anthony Avina',
+      'i_owe_them',
+    );
+    assert.ok(task, 'create() should produce a linked task for i_owe_them');
+
+    // Task should be present + open in week.md inbox.
+    const openTasksBefore = await tasks.listTasks({ completed: false });
+    assert.equal(openTasksBefore.length, 1);
+    assert.equal(openTasksBefore[0].metadata.from?.id, commitment.id.slice(0, 8));
+
+    // 2. Resolve commitment — F1 back-prop fires.
+    const resolved = await commitments.resolve(commitment.id);
+    assert.equal(resolved.status, 'resolved');
+
+    // Task should now be [x] in week.md.
+    const updatedFile = store.get(weekFile)!;
+    assert.match(updatedFile, /- \[x\] Ship the deck to Anthony/);
+    assert.match(updatedFile, /@completedAt\(/);
+
+    // 3. Commitment is still present (only resolvedAt was set, no time has passed).
+    const allAfterResolve = await commitments.listOpen();
+    assert.equal(allAfterResolve.length, 0, 'resolved is not "open"');
+
+    // 4. Now simulate the 30+ day age threshold by editing the stored JSON.
+    const raw = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    raw.commitments[0].resolvedAt = daysAgo(45);
+    store.set(COMMITMENTS_PATH, JSON.stringify(raw, null, 2));
+
+    // 5. Trigger another save (sync). Task is COMPLETED now, so F2 does NOT
+    //    block — commitment prunes cleanly. This is the load-bearing
+    //    F1+F2 interaction the unit tests don't exercise individually.
+    await commitments.sync(new Map());
+
+    const finalRaw = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(
+      finalRaw.commitments.length,
+      0,
+      'Aged-out commitment with only completed-task ref must prune normally',
+    );
+  });
+
+  it('open task keeps commitment alive at age threshold; hard ceiling eventually frees it', async () => {
+    const { commitments, store } = await buildWiredServices();
+
+    // Create + the linked task is auto-added and stays [ ] (never completed).
+    const { commitment } = await commitments.create(
+      'Sticky open task',
+      'sam-searcy',
+      'Sam Searcy',
+      'i_owe_them',
+    );
+
+    // Resolve commitment. F1 back-props → task becomes [x]. But we want
+    // to model the "sticky" case where the user never closes the task,
+    // so manually mark commitment resolved + REOPEN the task.
+    await commitments.resolve(commitment.id);
+    // Re-open the linked task by hand-editing the file.
+    const weekFile = [...store.keys()].find((p) => p.endsWith('/week.md'))!;
+    const reopened = store.get(weekFile)!.replace(/- \[x\]/, '- [ ]').replace(/ @completedAt\([^)]+\)/, '');
+    store.set(weekFile, reopened);
+
+    // Age the commitment to 45d (past PRUNE_DAYS, before ceiling).
+    let raw = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    raw.commitments[0].resolvedAt = daysAgo(45);
+    store.set(COMMITMENTS_PATH, JSON.stringify(raw, null, 2));
+
+    // sync → F2 protects the commitment because task is now open again.
+    await commitments.sync(new Map());
+    raw = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(
+      raw.commitments.length,
+      1,
+      'Open task ref protects commitment from age-based prune',
+    );
+
+    // Now age to 120d (past hard ceiling). FU2 forces prune regardless.
+    raw.commitments[0].resolvedAt = daysAgo(120);
+    store.set(COMMITMENTS_PATH, JSON.stringify(raw, null, 2));
+
+    await commitments.sync(new Map());
+    raw = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(
+      raw.commitments.length,
+      0,
+      'Hard ceiling (>90d) eventually frees ref-protected commitments — prevents unbounded growth',
+    );
   });
 });

@@ -1772,11 +1772,11 @@ describe('TaskService.completeTaskByCommitmentId (F1)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// F2: hasOpenTaskReferenceToCommitment — prune-safety check
+// F2 + FU3: hasOpenTaskReferencesToCommitments — batched prune-safety
 // ---------------------------------------------------------------------------
 
-describe('TaskService.hasOpenTaskReferenceToCommitment (F2)', () => {
-  it('returns true when an open task references the commitment', async () => {
+describe('TaskService.hasOpenTaskReferencesToCommitments (F2 + FU3)', () => {
+  it('returns prefix in result set when an open task references it', async () => {
     const weekContent = `# Week
 ## Inbox
 - [ ] Pending @from(commitment:11112222)
@@ -1785,10 +1785,11 @@ describe('TaskService.hasOpenTaskReferenceToCommitment (F2)', () => {
     const storage = createMockStorage(store);
     const service = new TaskService(storage, makePaths());
 
-    assert.equal(await service.hasOpenTaskReferenceToCommitment('11112222'), true);
+    const result = await service.hasOpenTaskReferencesToCommitments(['11112222']);
+    assert.deepEqual([...result], ['11112222']);
   });
 
-  it('returns false when only a COMPLETED task references the commitment', async () => {
+  it('omits prefix when only a COMPLETED task references it', async () => {
     const weekContent = `# Week
 ## Inbox
 - [x] Done @from(commitment:33334444) @completedAt(2026-01-01)
@@ -1797,31 +1798,71 @@ describe('TaskService.hasOpenTaskReferenceToCommitment (F2)', () => {
     const storage = createMockStorage(store);
     const service = new TaskService(storage, makePaths());
 
+    const result = await service.hasOpenTaskReferencesToCommitments(['33334444']);
     assert.equal(
-      await service.hasOpenTaskReferenceToCommitment('33334444'),
-      false,
+      result.size,
+      0,
       'Completed tasks with stale @from references must NOT block prune',
     );
   });
 
-  it('returns false when no task references the commitment', async () => {
+  it('returns empty set when no queried prefix is referenced', async () => {
     const store = makeWeekFile('# Week\n## Inbox\n- [ ] Unrelated\n');
     const storage = createMockStorage(store);
     const service = new TaskService(storage, makePaths());
 
-    assert.equal(await service.hasOpenTaskReferenceToCommitment('55556666'), false);
+    const result = await service.hasOpenTaskReferencesToCommitments(['55556666']);
+    assert.equal(result.size, 0);
   });
 
-  it('checks across both week.md and tasks.md', async () => {
-    const weekContent = '# Week\n## Inbox\n- [ ] Unrelated\n';
+  it('checks across both week.md and tasks.md in a single call', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] In week @from(commitment:aaaaaaaa)
+`;
     const tasksContent = `# Tasks
 ## Anytime
-- [ ] Living long @from(commitment:77778888)
+- [ ] In tasks @from(commitment:bbbbbbbb)
 `;
     const store = makeBothFiles(weekContent, tasksContent);
     const storage = createMockStorage(store);
     const service = new TaskService(storage, makePaths());
 
-    assert.equal(await service.hasOpenTaskReferenceToCommitment('77778888'), true);
+    const result = await service.hasOpenTaskReferencesToCommitments([
+      'aaaaaaaa',
+      'bbbbbbbb',
+      'cccccccc',
+    ]);
+    assert.deepEqual([...result].sort(), ['aaaaaaaa', 'bbbbbbbb']);
+  });
+
+  it('returns empty set when given empty input (no file reads needed)', async () => {
+    // Use storage that throws if read — proves no file IO happens.
+    let reads = 0;
+    const storage: StorageAdapter = {
+      async read() {
+        reads++;
+        return null;
+      },
+      async write() {},
+      async exists() {
+        return false;
+      },
+      async delete() {},
+      async list() {
+        return [];
+      },
+      async listSubdirectories() {
+        return [];
+      },
+      async mkdir() {},
+      async getModified() {
+        return null;
+      },
+    };
+    const service = new TaskService(storage, makePaths());
+    const result = await service.hasOpenTaskReferencesToCommitments([]);
+    assert.equal(result.size, 0);
+    assert.equal(reads, 0, 'Empty input must short-circuit before reading task files');
   });
 });
