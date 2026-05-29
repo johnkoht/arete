@@ -322,5 +322,32 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
       const content = readFileSync(patternsPath, 'utf8');
       assert.match(content, /two-engage/i);
     });
+
+    // Phase 7a AC1 — PATTERNS.md gains a "gather-only composition"
+    // sub-mode section, parallel to the four chef-orchestrator patterns.
+    // Loose regex (not exact phrasing) per the post-Phase-3.5-followup
+    // test conventions; brittle exact phrasing breaks on small wording
+    // tweaks.
+    it('Phase 7a AC1 — documents the gather-only composition sub-mode', () => {
+      const patternsPath = join(SKILLS_DIR, 'PATTERNS.md');
+      const content = readFileSync(patternsPath, 'utf8');
+      // The new section header.
+      assert.match(
+        content,
+        /gather-only composition/i,
+        'PATTERNS.md missing "gather-only composition" section',
+      );
+      // The explicit best-effort prose contract limitation.
+      assert.match(
+        content,
+        /best-effort prose contract/i,
+        'PATTERNS.md gather-only section missing "best-effort prose contract" limitation framing',
+      );
+      // Loop shape conventions — source/counterparty/timestamp/text/evidence.
+      assert.match(content, /counterparty/i);
+      assert.match(content, /evidence_pointer/i);
+      // Invocation marker.
+      assert.match(content, /\[gather-only\]/);
+    });
   });
 });

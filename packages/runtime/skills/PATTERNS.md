@@ -1248,3 +1248,212 @@ What's your call?                                            [Pattern 1: engage 
 
 This is what "chef-orchestrator" looks like in practice: the agent has done the work, applied judgment, surfaced reasoning, and asked for one decision. The user reviews exceptions and proposals, not a flat firehose.
 
+---
+
+## gather-only composition
+
+**Purpose**: Let an orchestrating chef-pattern skill (e.g., a unified
+daily-winddown that composes slack-digest + email-triage + meeting +
+calendar outputs into one curated view) invoke a sub-skill in a
+"gather-only" sub-mode. The sub-skill runs its gather + judge steps
+and returns structured output WITHOUT proceeding to the engage step
+or writing user-facing artifacts. The orchestrator collects gather-only
+output from one or more sub-skills, composes the cross-source view, and
+engages the user **once** at the end (per Pattern 1).
+
+**Used by**: chef-pattern skills that another orchestrator will
+reasonably compose. Phase 7a documents the pattern for `slack-digest`
+and `email-triage`; Phase 8's unified daily-winddown reconciler is the
+named consumer. Other chef skills may adopt gather-only mode as
+orchestrator needs surface.
+
+### When to offer gather-only mode
+
+Offer gather-only mode when:
+
+- The skill's gather + judge steps produce structured intelligence
+  ("loops" — open threads, decisions, commitments) that an orchestrator
+  could reasonably compose with other sources.
+- The skill's engagement step is independently useful (so the standalone
+  invocation path still ships value), but its outputs would be more
+  useful composed than presented in isolation as a separate engagement.
+- The user's experience improves when the orchestrator engages **once**
+  with the cross-source view rather than running the sub-skill
+  standalone and engaging separately.
+
+Do **not** offer gather-only mode when:
+
+- The skill is a pure judgment/synthesis pass (no structured output
+  another skill could consume).
+- The skill's engagement step is the deliverable (e.g., `meeting-prep`
+  produces a prep brief for the user, not loops for another skill).
+
+### Invocation convention
+
+Gather-only mode is an **agent-level instruction string**, NOT a CLI
+flag. Chef-pattern skills are SKILL.md prose, not CLI commands —
+invocation happens via the orchestrator's prompt to the sub-agent.
+
+The canonical invocation marker is `[gather-only]` at the top of the
+invocation prompt. The orchestrator includes a sentence like:
+
+> "Run the slack-digest skill in `[gather-only]` mode. Return the
+> structured loop output described in slack-digest SKILL.md's
+> 'Gather-only mode' section. Do NOT engage the user, write
+> `resources/notes/`, or propose actions — those run only when invoked
+> standalone."
+
+The sub-agent reads the SKILL.md gather-only mode section to learn
+which steps to skip.
+
+### JSON output shape conventions
+
+A gather-only skill returns an array of "loops" — observable
+intelligence units that the orchestrator can reconcile and stage.
+The canonical shape is:
+
+```json
+{
+  "skill": "slack-digest",
+  "mode": "gather-only",
+  "loops": [
+    {
+      "source": "slack",
+      "source_ref": "channel-id/thread-ts",
+      "counterparty": "anthony-avina",
+      "timestamp": "2026-05-27T14:32:00Z",
+      "text": "Anthony asked if the API spec is ready — second ping this week.",
+      "evidence_pointer": "slack://team/C0123ABC/p1716822720000",
+      "kind": "open-thread",
+      "confidence": 0.82
+    }
+  ]
+}
+```
+
+Required per-loop fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `source` | string | The skill / channel the loop came from (`slack`, `email`, `calendar`, `meeting`). |
+| `source_ref` | string | Stable reference to the underlying primitive (channel id, thread id, message id). |
+| `counterparty` | string \| null | Person slug if resolved; null if unresolved. |
+| `timestamp` | ISO 8601 | When the loop's underlying signal happened. |
+| `text` | string | One-sentence description of the loop, in the skill's own words. |
+| `evidence_pointer` | string | A URI-like pointer the orchestrator can surface to the user as "see source". |
+| `kind` | string | Skill-specific category (`open-thread`, `commitment`, `decision`, `incoming-ask`, etc.). |
+
+Optional fields the orchestrator may use:
+
+- `confidence` — 0.0-1.0 score from the sub-skill's `significance_analyst`.
+- `area` — area slug if the loop maps to a known area.
+- `topics` — topic slugs (biased toward active list).
+- `dedup_key` — a stable key the orchestrator can use to dedup across sources.
+
+### How orchestrators consume
+
+1. Invoke sub-skill with `[gather-only]` marker.
+2. Parse returned JSON (permissive parser — ignore unknown fields,
+   error only on missing required fields).
+3. Validate the shape: is the response JSON? Does it match the loop
+   shape? If a sub-skill returned a curated view in chat instead of
+   structured output, log a contract violation and continue with
+   whatever structured signal can be salvaged.
+4. Merge loops from multiple sources by `counterparty` + `dedup_key`
+   (or `text` similarity if no key).
+5. Compose into the orchestrator's curated view per Pattern 1
+   (`do-all-work-then-engage`). Use Pattern 2 reason labels referencing
+   the sub-skill source (`— slack thread, 3 days idle`).
+6. Engage user **once** with the composed view.
+
+### Contract (skill author's responsibility)
+
+A skill in gather-only mode SHOULD NOT:
+
+- Write to `resources/notes/`, `.arete/memory/`, or any user-facing
+  artifact location.
+- Propose actions in the curated chat view (no `## Proposed actions`
+  section — the orchestrator composes its own).
+- Engage the user (no curated view in chat — the orchestrator engages,
+  not the sub-skill).
+- Run `arete commitments create/resolve`, `arete topic refresh`, or
+  any write-CLI verb.
+
+A skill in gather-only mode SHOULD:
+
+- Run its gather steps (CLI/MCP pulls, search queries).
+- Run its judge steps (`significance_analyst`, dedup-against-existing).
+- Return structured loop JSON to the orchestrator.
+- Be permissive about partial state — if a primitive fails, return
+  loops from the primitives that succeeded plus a `partial: true` flag.
+
+### Explicit limitation — best-effort prose contract
+
+This pattern is **enforced only by the sub-agent following its
+SKILL.md instructions**. There is no code-level gate. A sub-agent that
+violates the contract (writes `resources/notes/`, engages user instead
+of returning JSON, runs write-CLI verbs) is not blocked by the harness.
+
+The chef pattern fundamentally relies on agents following prose
+contracts (Pattern 1 `do-all-work-then-engage` has the same shape —
+the harness doesn't enforce "no engagement between gather and engage";
+the agent does). Adding code enforcement only for gather-only mode
+would be a mismatched layer.
+
+**Implication for orchestrators**: validate sub-skill output
+structurally (is the response JSON? does it match the loop shape?).
+Surface a warning if the sub-skill engaged the user or returned
+non-JSON. Side-effects (e.g., disk writes during gather-only) are
+not detectable from the orchestrator and are accepted as residual
+risk. Orchestrators MUST NOT depend on the contract for correctness —
+treat sub-skill output as advisory, validate before staging, and
+gracefully degrade when structure is wrong.
+
+### Calendar pull semantics (for orchestrator consumers)
+
+The `arete pull calendar` CLI is not a chef skill (it's a CLI
+primitive, not a SKILL.md), but Phase 8 reconciler consumes it the
+same way it consumes gather-only output from slack-digest /
+email-triage. For reconciler consumers:
+
+- `arete pull calendar --today --json` returns all events on the
+  user's calendar today, regardless of organizer. Events organized by
+  others where the user is an attendee ARE returned (the Google
+  Calendar `events.list` endpoint defaults include all visible events).
+- `arete pull calendar --json` (no `--today`) returns events from now
+  through the next 7 days. Phase 7a added the `--days N` flag to
+  parameterize the forward window for reconciler use; default remains
+  7 days.
+- Declined events ARE included (Google Calendar API does not filter
+  declined by default). If the reconciler wants to exclude declined,
+  it must filter by `attendee.responseStatus === 'declined'` itself —
+  the JSON output does not include `responseStatus` today; this is a
+  known gap (see Phase 7a build-report AC6).
+- Each event includes `organizer.self` (boolean) so the reconciler
+  can distinguish user-organized from invited events without
+  additional context.
+
+For reconciler skip rules: "calendar event matching {attendees:
+X+Y, status: scheduled, start: today-or-future} exists" is computable
+from the existing `arete pull calendar --days N --json` output. No
+additional CLI work needed beyond the `--days` honoring shipped in
+Phase 7a.
+
+### Content (per-skill)
+
+Each skill that supports gather-only mode adds a `## Gather-only mode`
+section to its SKILL.md specifying:
+
+- The invocation marker (per the canonical convention above).
+- Which steps run in gather-only mode and which DON'T (especially:
+  no write-back to `resources/notes/`, no engagement, no proposed
+  actions).
+- The JSON output shape this skill emits (an array of loops; example
+  block included so the orchestrator can pin against drift).
+- The contract: which side-effects the skill MUST skip in gather-only
+  mode.
+
+**See also**: `do-all-work-then-engage` (Pattern 1) — the standalone
+invocation path. Gather-only mode is an alternate entry point that
+returns structured output instead of engaging.
+
