@@ -337,11 +337,16 @@ Actual vs. plan estimate:
 | `--days N` flag honoring (AC6) | (not separately estimated) | +12 src |
 | Tests (all ACs) | ~+200 code | +611 (areas.test.ts) + +176 (area-parser.test.ts) + +143 (entity.test.ts) + +219 (people.test.ts) + +84 (pull.test.ts) + +90 (chef-orchestrator-skills.test.ts) = ~+1300 test code |
 
-**Net (code, src files only)**: ~+450 LOC (vs. +205 plan estimate).
-**Net (markdown)**: ~+670 LOC (vs. +170 plan estimate).
-**Net (tests)**: ~+1300 LOC.
+**Net (code, src files only, excl tests + dist)**: **~+606 LOC** (vs. +205 plan estimate — **3x overrun**).
+**Net (markdown)**: **~+1079 LOC** (vs. +170 plan estimate — **6.3x overrun**).
+**Net (tests)**: ~+1210 LOC.
 
-The 2x overrun on src and markdown is dominated by:
+(Correction post eng-lead build review: the original numbers in this report
+under-counted both axes. The 3x src and 6.3x markdown overruns are
+documented honestly here. Substitution argument below explains why this
+remains acceptable given the substrate-for-Phase-8 framing.)
+
+The overrun on src and markdown is dominated by:
 - PATTERNS.md gather-only section being thorough (~236 vs. ~70 plan
   est.) — includes explicit limitation paragraph, calendar semantics
   preview, full per-loop field spec.
