@@ -271,6 +271,14 @@ export type AreaFrontmatter = {
     attendees?: string[];
     frequency?: string;
   }>;
+  /**
+   * Optional Jira epic watchlist for this area (Phase 7a AC4).
+   * Strings — typically Jira ticket keys (e.g., "PLAT-11014"). Free-form;
+   * no validation today (no Jira MCP wired). Phase 8 reconciler reads
+   * the watchlist to prompt user for current state per epic.
+   * Missing or empty = no epics tracked for this area.
+   */
+  jira_epics?: string[];
 };
 
 /**
@@ -327,6 +335,12 @@ export type AreaContext = {
   status: string;
   /** Recurring meetings associated with this area */
   recurringMeetings: RecurringMeeting[];
+  /**
+   * Jira epic watchlist for this area (Phase 7a AC4).
+   * Defaults to empty array when frontmatter `jira_epics:` is missing.
+   * Malformed entries (non-strings) are dropped at parse time.
+   */
+  jiraEpics: string[];
   /** Path to the area file */
   filePath: string;
   /** Parsed markdown sections */
