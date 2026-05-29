@@ -12,6 +12,67 @@ declare const PEOPLE_CATEGORIES: PersonCategory[];
  * Generate a URL-safe slug from a name (e.g. "Jane Doe" -> "jane-doe").
  */
 export declare function slugifyPersonName(name: string): string;
+/**
+ * Channel-style fields recognized by Phase 7a AC5 convention. Only
+ * populated fields are returned; missing fields are simply absent
+ * from the returned object (so `Object.keys(channels).length` is the
+ * "populated count" for audit purposes).
+ *
+ * Schema convention: see `dev/conventions/person-frontmatter.md`.
+ */
+export type PersonChannels = {
+    email?: string;
+    alt_emails?: string[];
+    slack_user_id?: string;
+    slack_handle?: string;
+    phone?: string;
+};
+/**
+ * Extract populated channel-style fields from a person file's
+ * frontmatter. Tolerant: missing fields are simply absent from the
+ * returned object; malformed entries (wrong type) are dropped.
+ *
+ * Returns null only when the file doesn't exist or has no frontmatter
+ * (matching the readPersonFile null contract).
+ */
+export declare function readPersonChannels(storage: StorageAdapter, filePath: string): Promise<PersonChannels | null>;
+/**
+ * Phase 7a AC5c — audit result for channel-field population across
+ * the workspace. Surfaces what's populated so a reconciler (Phase 8)
+ * can degrade gracefully when channel fields are missing.
+ */
+export type ChannelsAuditEntry = {
+    slug: string;
+    category: PersonCategory;
+    populated: string[];
+    missing: string[];
+};
+export type ChannelsAuditResult = {
+    total: number;
+    with_email: number;
+    with_alt_emails: number;
+    with_slack_user_id: number;
+    with_slack_handle: number;
+    with_phone: number;
+    /** People that have NO channel fields populated (not even email). */
+    no_channels: number;
+    /**
+     * Per-person gap detail — only people missing at least one channel
+     * field. Sorted alphabetically by slug for stable output.
+     */
+    gaps: ChannelsAuditEntry[];
+};
+declare const CHANNEL_FIELD_NAMES: readonly ["email", "alt_emails", "slack_user_id", "slack_handle", "phone"];
+/**
+ * Compute the channels-audit result given a per-person channels map.
+ * Pure function — easy to unit-test without filesystem.
+ */
+export declare function computeChannelsAudit(perPerson: Array<{
+    slug: string;
+    category: PersonCategory;
+    channels: PersonChannels;
+}>): ChannelsAuditResult;
+export { CHANNEL_FIELD_NAMES };
 import { CommitmentsService } from './commitments.js';
 import type { LLMCallFn } from './person-signals.js';
 export interface ListPeopleOptions {
@@ -75,6 +136,19 @@ export declare class EntityService {
     showPerson(slugOrEmail: string, workspacePaths: WorkspacePaths | null): Promise<Person | null>;
     getPersonBySlug(workspacePaths: WorkspacePaths | null, category: PersonCategory, slug: string): Promise<Person | null>;
     getPersonByEmail(workspacePaths: WorkspacePaths | null, email: string): Promise<Person | null>;
+    /**
+     * Phase 7a AC5b — read channel-style fields for one person by slug.
+     * Only populated fields are returned. Returns null if person file
+     * not found or has no frontmatter.
+     */
+    getPersonChannels(workspacePaths: WorkspacePaths | null, category: PersonCategory, slug: string): Promise<PersonChannels | null>;
+    /**
+     * Phase 7a AC5c — workspace-wide audit of channel-field population.
+     * Walks all `people/{internal,users,customers}/*.md`, counts which
+     * channel fields are populated per person, and returns aggregate
+     * health + per-person gap detail.
+     */
+    auditPeopleChannels(workspacePaths: WorkspacePaths | null): Promise<ChannelsAuditResult>;
     loadPeopleIntelligencePolicy(workspacePaths: WorkspacePaths | null): Promise<PeopleIntelligencePolicy>;
     private mergePeopleIntelligencePolicy;
     savePeopleIntelligenceSnapshot(workspacePaths: WorkspacePaths | null, digest: PeopleIntelligenceDigest): Promise<void>;

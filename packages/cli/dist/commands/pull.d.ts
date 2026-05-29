@@ -24,6 +24,12 @@ export declare function pullNotion(services: Awaited<ReturnType<typeof import('@
 export declare function pullCalendarHelper(services: Awaited<ReturnType<typeof import('@arete/core').createServices>>, workspaceRoot: string, opts: {
     today: boolean;
     json: boolean;
+    /**
+     * Forward-window in days for non-`--today` invocations. Default 7.
+     * Phase 7a AC6 — Phase 8's reconciler uses 30 to match future-intent
+     * commitments against scheduled events.
+     */
+    days?: number;
 }, deps?: PullCalendarDeps): Promise<void>;
 export declare function pullGmailHelper(services: Awaited<ReturnType<typeof import('@arete/core').createServices>>, workspaceRoot: string, opts: {
     days: number;

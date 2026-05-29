@@ -363,6 +363,132 @@ async function readPersonFile(storage, category, slug, filePath) {
         category: resolvedCategory,
     };
 }
+/**
+ * Extract populated channel-style fields from a person file's
+ * frontmatter. Tolerant: missing fields are simply absent from the
+ * returned object; malformed entries (wrong type) are dropped.
+ *
+ * Returns null only when the file doesn't exist or has no frontmatter
+ * (matching the readPersonFile null contract).
+ */
+export async function readPersonChannels(storage, filePath) {
+    const exists = await storage.exists(filePath);
+    if (!exists)
+        return null;
+    const content = await storage.read(filePath);
+    if (content == null)
+        return null;
+    const parsed = parseFrontmatterPeople(content);
+    if (!parsed)
+        return null;
+    const { frontmatter } = parsed;
+    const channels = {};
+    if (typeof frontmatter.email === 'string' && frontmatter.email.trim()) {
+        channels.email = frontmatter.email.trim();
+    }
+    if (Array.isArray(frontmatter.alt_emails)) {
+        const filtered = frontmatter.alt_emails.filter((e) => typeof e === 'string' && e.trim().length > 0);
+        if (filtered.length > 0)
+            channels.alt_emails = filtered;
+    }
+    if (typeof frontmatter.slack_user_id === 'string' &&
+        frontmatter.slack_user_id.trim()) {
+        channels.slack_user_id = frontmatter.slack_user_id.trim();
+    }
+    if (typeof frontmatter.slack_handle === 'string' &&
+        frontmatter.slack_handle.trim()) {
+        channels.slack_handle = frontmatter.slack_handle.trim();
+    }
+    if (frontmatter.phone != null) {
+        const phone = String(frontmatter.phone).trim();
+        if (phone.length > 0)
+            channels.phone = phone;
+    }
+    return channels;
+}
+const CHANNEL_FIELD_NAMES = [
+    'email',
+    'alt_emails',
+    'slack_user_id',
+    'slack_handle',
+    'phone',
+];
+/**
+ * Compute the channels-audit result given a per-person channels map.
+ * Pure function — easy to unit-test without filesystem.
+ */
+export function computeChannelsAudit(perPerson) {
+    let withEmail = 0;
+    let withAltEmails = 0;
+    let withSlackUserId = 0;
+    let withSlackHandle = 0;
+    let withPhone = 0;
+    let noChannels = 0;
+    const gaps = [];
+    for (const entry of perPerson) {
+        const populated = [];
+        const missing = [];
+        if (entry.channels.email) {
+            populated.push('email');
+            withEmail++;
+        }
+        else {
+            missing.push('email');
+        }
+        if (entry.channels.alt_emails && entry.channels.alt_emails.length > 0) {
+            populated.push('alt_emails');
+            withAltEmails++;
+        }
+        else {
+            missing.push('alt_emails');
+        }
+        if (entry.channels.slack_user_id) {
+            populated.push('slack_user_id');
+            withSlackUserId++;
+        }
+        else {
+            missing.push('slack_user_id');
+        }
+        if (entry.channels.slack_handle) {
+            populated.push('slack_handle');
+            withSlackHandle++;
+        }
+        else {
+            missing.push('slack_handle');
+        }
+        if (entry.channels.phone) {
+            populated.push('phone');
+            withPhone++;
+        }
+        else {
+            missing.push('phone');
+        }
+        if (populated.length === 0)
+            noChannels++;
+        if (missing.length > 0) {
+            gaps.push({
+                slug: entry.slug,
+                category: entry.category,
+                populated,
+                missing,
+            });
+        }
+    }
+    gaps.sort((a, b) => a.slug.localeCompare(b.slug));
+    return {
+        total: perPerson.length,
+        with_email: withEmail,
+        with_alt_emails: withAltEmails,
+        with_slack_user_id: withSlackUserId,
+        with_slack_handle: withSlackHandle,
+        with_phone: withPhone,
+        no_channels: noChannels,
+        gaps,
+    };
+}
+// Export the channel field-name list for callers that need the
+// canonical ordering.
+export { CHANNEL_FIELD_NAMES };
 async function listPersonFilesInCategory(storage, peopleDir, category) {
     const dir = join(peopleDir, category);
     const exists = await storage.exists(dir);
@@ -1203,6 +1329,52 @@ export class EntityService {
             }
         }
         return null;
+    }
+    /**
+     * Phase 7a AC5b — read channel-style fields for one person by slug.
+     * Only populated fields are returned. Returns null if person file
+     * not found or has no frontmatter.
+     */
+    async getPersonChannels(workspacePaths, category, slug) {
+        if (!workspacePaths?.people)
+            return null;
+        const filePath = join(workspacePaths.people, category, `${slug}.md`);
+        return readPersonChannels(this.storage, filePath);
+    }
+    /**
+     * Phase 7a AC5c — workspace-wide audit of channel-field population.
+     * Walks all `people/{internal,users,customers}/*.md`, counts which
+     * channel fields are populated per person, and returns aggregate
+     * health + per-person gap detail.
+     */
+    async auditPeopleChannels(workspacePaths) {
+        const empty = {
+            total: 0,
+            with_email: 0,
+            with_alt_emails: 0,
+            with_slack_user_id: 0,
+            with_slack_handle: 0,
+            with_phone: 0,
+            no_channels: 0,
+            gaps: [],
+        };
+        if (!workspacePaths?.people)
+            return empty;
+        const exists = await this.storage.exists(workspacePaths.people);
+        if (!exists)
+            return empty;
+        const perPerson = [];
+        for (const category of PEOPLE_CATEGORIES) {
+            const slugs = await listPersonFilesInCategory(this.storage, workspacePaths.people, category);
+            for (const slug of slugs) {
+                const filePath = join(workspacePaths.people, category, `${slug}.md`);
+                const channels = await readPersonChannels(this.storage, filePath);
+                if (channels !== null) {
+                    perPerson.push({ slug, category, channels });
+                }
+            }
+        }
+        return computeChannelsAudit(perPerson);
     }
     async loadPeopleIntelligencePolicy(workspacePaths) {
         if (!workspacePaths)
