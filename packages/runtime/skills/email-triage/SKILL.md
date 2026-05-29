@@ -230,6 +230,127 @@ arete events log winddown --event email-triage-fate --json
 deferral disagreement; email-triage participates by emitting fates
 for "should not have surfaced this" feedback.)
 
+## Gather-only mode
+
+This skill supports the **gather-only composition** sub-mode
+documented in `PATTERNS.md` (§ "gather-only composition"). An
+orchestrating chef skill (Phase 8's unified daily-winddown reconciler
+is the named consumer) invokes email-triage in gather-only mode,
+collects structured loop output, composes with other sources
+(slack-digest, calendar, meeting), and engages the user **once**.
+
+### Invocation contract (per PATTERNS.md AC1 anchor)
+
+The orchestrator includes the `[gather-only]` marker at the top of its
+invocation prompt to this skill, plus a sentence like:
+
+> "Run the email-triage skill in `[gather-only]` mode. Return the
+> structured loop output described in email-triage SKILL.md's
+> 'Gather-only mode' section. Do NOT engage the user, write to
+> `now/archive/email-triage/`, run `arete commitments create`,
+> propose actions, or send Slack DMs — those run only when
+> email-triage is invoked standalone."
+
+The sub-agent reads this section to learn which steps to skip. This
+is a **best-effort prose contract** (per PATTERNS.md § gather-only
+composition, "Explicit limitation" subsection) — no harness gate
+enforces it.
+
+### Which steps run in gather-only mode
+
+| Step | Standalone | Gather-only |
+|---|---|---|
+| 0 — Read APPEND | yes | yes |
+| 1 — Gather (1a–1d): pull gmail, read week, read commitments, read context | yes | yes |
+| 2 — Apply judgment (sender resolve, score, dedup) | yes | yes |
+| 3 — Compose curated view | yes | **skipped** — return JSON to orchestrator instead |
+| 4 — Persist to `now/archive/email-triage/` + engage user once | yes | **skipped** — no persist, no engage |
+| 5 — Execute approved actions + log fates | yes | **skipped** |
+
+The skill in gather-only mode MUST NOT:
+- Write to `now/archive/email-triage/` (no persistence — orchestrator
+  owns persistence for the composed view).
+- Run `arete commitments create / resolve`.
+- Send Slack DMs or otherwise propose actions to the user in chat.
+- Engage the user in chat.
+- Log per-skill fate events (the orchestrator logs its own
+  composed-view fates).
+
+### JSON output shape
+
+Return a JSON object matching the canonical gather-only loop shape:
+
+```json
+{
+  "skill": "email-triage",
+  "mode": "gather-only",
+  "loops": [
+    {
+      "source": "email",
+      "source_ref": "gmail-thread-id-1789AB",
+      "counterparty": "lindsay-gray",
+      "timestamp": "2026-05-27T11:04:00Z",
+      "text": "Lindsay asked to confirm Wed Glance 2.0 review by EOD.",
+      "evidence_pointer": "https://mail.google.com/mail/u/0/#inbox/1789AB",
+      "kind": "incoming-ask",
+      "confidence": 0.88,
+      "area": "glance-communications",
+      "dedup_key": "glance-2.0-review-wed"
+    },
+    {
+      "source": "email",
+      "source_ref": "gmail-thread-id-1899CD",
+      "counterparty": null,
+      "timestamp": "2026-05-27T15:22:00Z",
+      "text": "Unknown sender flagged vendor onboarding pain — relevant to vendor work.",
+      "evidence_pointer": "https://mail.google.com/mail/u/0/#inbox/1899CD",
+      "kind": "uncertain",
+      "confidence": 0.55
+    }
+  ],
+  "auto_filtered_count": 12,
+  "partial": false
+}
+```
+
+**Per-loop fields** (per PATTERNS.md § gather-only composition):
+- Required: `source` (always `"email"`), `source_ref` (Gmail thread
+  id), `counterparty` (slug or `null` if sender unresolved),
+  `timestamp`, `text`, `evidence_pointer`, `kind`.
+- Optional: `confidence`, `area`, `topics`, `dedup_key`.
+
+**`kind` taxonomy for email-triage**:
+- `incoming-ask` — a sender asked you something (deadline /
+  question / decision request).
+- `incoming-fyi` — informational from a high-importance contact;
+  worth orchestrator review.
+- `decision` — a decision was made or announced (e.g., approval).
+- `commitment-outgoing` — you committed to reply / act in-thread.
+- `dedup-candidate` — thread topic matches an existing commitment or
+  active priority (orchestrator decides whether to surface).
+- `uncertain` — sender unknown or action ambiguous; orchestrator
+  routes to its Uncertain tier.
+
+**Top-level fields**:
+- `skill: "email-triage"`, `mode: "gather-only"` — identifiers.
+- `loops: []` — possibly empty.
+- `auto_filtered_count: N` — count of threads auto-filtered as
+  newsletters / automated / already-replied. The orchestrator may
+  surface as a single count line.
+- `partial: boolean` — `true` if `arete pull gmail` failed mid-run.
+  Orchestrator may surface a `(partial gmail pull)` note.
+
+### Side-effects allowed in gather-only mode
+
+These are read-only and do not violate the contract:
+
+- `arete skill resolve` (Step 0 read).
+- `arete pull gmail --days 1 --json` (read; produces no workspace
+  artifacts — Gmail is the durable store).
+- `arete search` (read).
+- `arete commitments list` (read).
+- `arete people show` (read).
+
 ## Action verbs this skill may propose
 
 | Verb | Mode | When |
