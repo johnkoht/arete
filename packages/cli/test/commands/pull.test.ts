@@ -416,6 +416,72 @@ describe('arete pull — calendar helper', () => {
     assert.equal(event.attendees[0].email, 'alice@example.com');
   });
 
+  // Phase 7a AC6 — --days N parameterizes the forward window for
+  // pullCalendarHelper. Previously the helper hardcoded 7. Phase 8's
+  // reconciler needs --days 30 to match future-intent commitments
+  // against scheduled events.
+  it('Phase 7a AC6 — --days N forwards to getUpcomingEvents(N)', async () => {
+    const services = createCalendarMockServices();
+    let daysSeen: number | undefined;
+
+    const provider: CalendarProvider = {
+      name: 'test-provider',
+      isAvailable: async () => true,
+      getTodayEvents: async () => sampleEvents,
+      getUpcomingEvents: async (days: number) => {
+        daysSeen = days;
+        return sampleEvents;
+      },
+    };
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    await captureConsole(async () => {
+      await pullCalendarHelper(
+        services,
+        '/workspace',
+        { today: false, json: true, days: 30 },
+        deps,
+      );
+    });
+
+    assert.equal(daysSeen, 30, 'pullCalendarHelper should forward --days to getUpcomingEvents');
+  });
+
+  it('Phase 7a AC6 — pullCalendarHelper defaults to 7 days when days omitted', async () => {
+    const services = createCalendarMockServices();
+    let daysSeen: number | undefined;
+
+    const provider: CalendarProvider = {
+      name: 'test-provider',
+      isAvailable: async () => true,
+      getTodayEvents: async () => sampleEvents,
+      getUpcomingEvents: async (days: number) => {
+        daysSeen = days;
+        return sampleEvents;
+      },
+    };
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    await captureConsole(async () => {
+      await pullCalendarHelper(
+        services,
+        '/workspace',
+        { today: false, json: true },
+        deps,
+      );
+    });
+
+    assert.equal(daysSeen, 7, 'default forward-window should be 7 days');
+  });
+
   it('--today flag uses getTodayEvents', async () => {
     const services = createCalendarMockServices();
     let todayEventsCalled = false;
