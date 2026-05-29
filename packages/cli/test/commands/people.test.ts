@@ -488,6 +488,84 @@ slack_user_id: UELI456
     assert.match(stdout, /UELI456/);
   });
 
+  // -------------------------------------------------------------------
+  // Phase 7a AC5c — `arete people audit-channels` subcommand
+  // -------------------------------------------------------------------
+
+  it('audit-channels --json on empty workspace returns zero counts', () => {
+    const stdout = runCli(['people', 'audit-channels', '--json'], {
+      cwd: tmpDir,
+    });
+    const result = JSON.parse(stdout);
+    assert.equal(result.success, true);
+    assert.equal(result.audit.total, 0);
+    assert.equal(result.audit.with_email, 0);
+    assert.equal(result.audit.no_channels, 0);
+    assert.deepEqual(result.audit.gaps, []);
+  });
+
+  it('audit-channels --json returns aggregate counts + gaps', () => {
+    const internalDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(internalDir, { recursive: true });
+    writeFileSync(
+      join(internalDir, 'alice.md'),
+      `---
+name: Alice
+category: internal
+email: alice@reserv.com
+slack_user_id: UAAA
+---
+
+# Alice
+`,
+      'utf8',
+    );
+    writeFileSync(
+      join(internalDir, 'bob.md'),
+      `---
+name: Bob
+category: internal
+email: bob@reserv.com
+---
+
+# Bob
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(['people', 'audit-channels', '--json'], {
+      cwd: tmpDir,
+    });
+    const result = JSON.parse(stdout);
+
+    assert.equal(result.audit.total, 2);
+    assert.equal(result.audit.with_email, 2);
+    assert.equal(result.audit.with_slack_user_id, 1);
+    assert.equal(result.audit.no_channels, 0);
+    assert.equal(result.audit.gaps.length, 2);
+  });
+
+  it('audit-channels human-readable surfaces totals and gap nudge', () => {
+    const internalDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(internalDir, { recursive: true });
+    writeFileSync(
+      join(internalDir, 'alice.md'),
+      `---
+name: Alice
+category: internal
+email: alice@reserv.com
+---
+
+# Alice
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(['people', 'audit-channels'], { cwd: tmpDir });
+    assert.match(stdout, /channels-audit/i);
+    assert.match(stdout, /alice@reserv|with_email|with email/i);
+  });
+
   it('refresh JSON output includes new extraction count fields', () => {
     const personDir = join(tmpDir, 'people', 'internal');
     mkdirSync(personDir, { recursive: true });

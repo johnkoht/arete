@@ -514,6 +514,96 @@ export async function readPersonChannels(
   return channels;
 }
 
+/**
+ * Phase 7a AC5c — audit result for channel-field population across
+ * the workspace. Surfaces what's populated so a reconciler (Phase 8)
+ * can degrade gracefully when channel fields are missing.
+ */
+export type ChannelsAuditEntry = {
+  slug: string;
+  category: PersonCategory;
+  populated: string[];
+  missing: string[];
+};
+
+export type ChannelsAuditResult = {
+  total: number;
+  with_email: number;
+  with_alt_emails: number;
+  with_slack_user_id: number;
+  with_slack_handle: number;
+  with_phone: number;
+  /** People that have NO channel fields populated (not even email). */
+  no_channels: number;
+  /**
+   * Per-person gap detail — only people missing at least one channel
+   * field. Sorted alphabetically by slug for stable output.
+   */
+  gaps: ChannelsAuditEntry[];
+};
+
+const CHANNEL_FIELD_NAMES = [
+  'email',
+  'alt_emails',
+  'slack_user_id',
+  'slack_handle',
+  'phone',
+] as const;
+
+/**
+ * Compute the channels-audit result given a per-person channels map.
+ * Pure function — easy to unit-test without filesystem.
+ */
+export function computeChannelsAudit(
+  perPerson: Array<{ slug: string; category: PersonCategory; channels: PersonChannels }>,
+): ChannelsAuditResult {
+  let withEmail = 0;
+  let withAltEmails = 0;
+  let withSlackUserId = 0;
+  let withSlackHandle = 0;
+  let withPhone = 0;
+  let noChannels = 0;
+  const gaps: ChannelsAuditEntry[] = [];
+
+  for (const entry of perPerson) {
+    const populated: string[] = [];
+    const missing: string[] = [];
+
+    if (entry.channels.email) { populated.push('email'); withEmail++; } else { missing.push('email'); }
+    if (entry.channels.alt_emails && entry.channels.alt_emails.length > 0) { populated.push('alt_emails'); withAltEmails++; } else { missing.push('alt_emails'); }
+    if (entry.channels.slack_user_id) { populated.push('slack_user_id'); withSlackUserId++; } else { missing.push('slack_user_id'); }
+    if (entry.channels.slack_handle) { populated.push('slack_handle'); withSlackHandle++; } else { missing.push('slack_handle'); }
+    if (entry.channels.phone) { populated.push('phone'); withPhone++; } else { missing.push('phone'); }
+
+    if (populated.length === 0) noChannels++;
+    if (missing.length > 0) {
+      gaps.push({
+        slug: entry.slug,
+        category: entry.category,
+        populated,
+        missing,
+      });
+    }
+  }
+
+  gaps.sort((a, b) => a.slug.localeCompare(b.slug));
+
+  return {
+    total: perPerson.length,
+    with_email: withEmail,
+    with_alt_emails: withAltEmails,
+    with_slack_user_id: withSlackUserId,
+    with_slack_handle: withSlackHandle,
+    with_phone: withPhone,
+    no_channels: noChannels,
+    gaps,
+  };
+}
+
+// Export the channel field-name list for callers that need the
+// canonical ordering.
+export { CHANNEL_FIELD_NAMES };
+
 async function listPersonFilesInCategory(
   storage: StorageAdapter,
   peopleDir: string,
@@ -1559,6 +1649,53 @@ export class EntityService {
     if (!workspacePaths?.people) return null;
     const filePath = join(workspacePaths.people, category, `${slug}.md`);
     return readPersonChannels(this.storage, filePath);
+  }
+
+  /**
+   * Phase 7a AC5c — workspace-wide audit of channel-field population.
+   * Walks all `people/{internal,users,customers}/*.md`, counts which
+   * channel fields are populated per person, and returns aggregate
+   * health + per-person gap detail.
+   */
+  async auditPeopleChannels(
+    workspacePaths: WorkspacePaths | null,
+  ): Promise<ChannelsAuditResult> {
+    const empty: ChannelsAuditResult = {
+      total: 0,
+      with_email: 0,
+      with_alt_emails: 0,
+      with_slack_user_id: 0,
+      with_slack_handle: 0,
+      with_phone: 0,
+      no_channels: 0,
+      gaps: [],
+    };
+    if (!workspacePaths?.people) return empty;
+    const exists = await this.storage.exists(workspacePaths.people);
+    if (!exists) return empty;
+
+    const perPerson: Array<{
+      slug: string;
+      category: PersonCategory;
+      channels: PersonChannels;
+    }> = [];
+
+    for (const category of PEOPLE_CATEGORIES) {
+      const slugs = await listPersonFilesInCategory(
+        this.storage,
+        workspacePaths.people,
+        category,
+      );
+      for (const slug of slugs) {
+        const filePath = join(workspacePaths.people, category, `${slug}.md`);
+        const channels = await readPersonChannels(this.storage, filePath);
+        if (channels !== null) {
+          perPerson.push({ slug, category, channels });
+        }
+      }
+    }
+
+    return computeChannelsAudit(perPerson);
   }
 
   async loadPeopleIntelligencePolicy(

@@ -212,6 +212,77 @@ export function registerPeopleCommands(program: Command): void {
       },
     );
 
+  // Phase 7a AC5c — workspace-wide channel-population audit.
+  // Walks people/{internal,users,customers}/*.md, counts populated
+  // channel fields, returns aggregate health + per-person gap detail.
+  peopleCmd
+    .command('audit-channels')
+    .description(
+      'Audit channel-field population across all people (Phase 7a AC5c). ' +
+      'Surfaces what is populated workspace-wide so reconciler degraded-coverage cases are visible.',
+    )
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(
+            JSON.stringify({ success: false, error: 'Not in an Areté workspace' }),
+          );
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const paths = services.workspace.getPaths(root);
+      const audit = await services.entity.auditPeopleChannels(paths);
+
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, audit }, null, 2));
+        return;
+      }
+
+      header('People — channels-audit');
+      if (audit.total === 0) {
+        info('No people files yet.');
+        return;
+      }
+      listItem('Total people', String(audit.total));
+      listItem('with_email', String(audit.with_email));
+      listItem('with_alt_emails', String(audit.with_alt_emails));
+      listItem('with_slack_user_id', String(audit.with_slack_user_id));
+      listItem('with_slack_handle', String(audit.with_slack_handle));
+      listItem('with_phone', String(audit.with_phone));
+      listItem('no_channels (none populated)', String(audit.no_channels));
+      console.log('');
+
+      const missingSlack = audit.total - audit.with_slack_user_id;
+      if (missingSlack > 0) {
+        const pct = Math.round((audit.with_slack_user_id / audit.total) * 100);
+        console.log(
+          `  ${missingSlack} of ${audit.total} people missing slack_user_id; reconciler match-rate for slack→person is ~${pct}%.`,
+        );
+        console.log('  Backfill is user-maintained — see dev/conventions/person-frontmatter.md.');
+      }
+      console.log('');
+
+      // Show top gaps (up to 10) so the user can quickly identify
+      // who to backfill first.
+      if (audit.gaps.length > 0) {
+        section('Per-person gaps (top 10)');
+        for (const gap of audit.gaps.slice(0, 10)) {
+          const missingStr = gap.missing.join(', ');
+          console.log(`  ${gap.slug} (${gap.category}) — missing: ${missingStr}`);
+        }
+        if (audit.gaps.length > 10) {
+          console.log(`  …and ${audit.gaps.length - 10} more (use --json for full list).`);
+        }
+        console.log('');
+      }
+    });
+
   peopleCmd
     .command('index')
     .description('Regenerate people/index.md')
