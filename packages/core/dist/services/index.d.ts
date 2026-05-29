@@ -16,6 +16,8 @@ export type { ForkSkillOptions, ForkSkillResult, DiffSkillResult, MergeSkillOpti
 export { IntegrationService } from './integrations.js';
 export { listTools, getTool } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
+export { readPersonChannels, computeChannelsAudit, CHANNEL_FIELD_NAMES, } from './entity.js';
+export type { PersonChannels, ChannelsAuditEntry, ChannelsAuditResult, } from './entity.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
 export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, CreateCommitmentOptions, CreateCommitmentResult, CreateTaskFn, } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';

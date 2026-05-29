@@ -50,7 +50,15 @@ export function registerPullCommand(program) {
         }
         const days = parseInt(opts.days ?? String(DEFAULT_DAYS), 10);
         if (integration === 'calendar') {
-            await pullCalendarHelper(services, root, { today: opts.today ?? false, json: opts.json ?? false });
+            // Phase 7a AC6 — honor --days N for calendar's forward window
+            // (default 7). Phase 8's reconciler uses --days 30 to detect
+            // future events matching open commitments. Previously --days
+            // was parsed but only consumed by fathom/krisp/gmail/drive.
+            await pullCalendarHelper(services, root, {
+                today: opts.today ?? false,
+                json: opts.json ?? false,
+                days,
+            });
             if (!opts.json)
                 showInboxTip(root);
             return;
@@ -300,6 +308,7 @@ export async function pullCalendarHelper(services, workspaceRoot, opts, deps = {
     getCalendarProviderFn: getCalendarProvider,
 }) {
     const { today, json } = opts;
+    const days = opts.days ?? DEFAULT_DAYS;
     const config = await deps.loadConfigFn(services.storage, workspaceRoot);
     const provider = await deps.getCalendarProviderFn(config, services.storage, workspaceRoot);
     if (!provider) {
@@ -347,7 +356,7 @@ export async function pullCalendarHelper(services, workspaceRoot, opts, deps = {
     }
     const events = today
         ? await provider.getTodayEvents()
-        : await provider.getUpcomingEvents(7);
+        : await provider.getUpcomingEvents(days);
     const paths = services.workspace.getPaths(workspaceRoot);
     const enrichedEvents = [];
     // Cache agenda files — list once before the loop instead of N times for N events
@@ -431,7 +440,7 @@ export async function pullCalendarHelper(services, workspaceRoot, opts, deps = {
         return;
     }
     console.log('');
-    console.log(`📅 Calendar Events (${today ? 'Today' : 'Next 7 days'})`);
+    console.log(`📅 Calendar Events (${today ? 'Today' : `Next ${days} days`})`);
     console.log('');
     for (const event of enrichedEvents) {
         const dateStr = event.startTime.toISOString().split('T')[0];

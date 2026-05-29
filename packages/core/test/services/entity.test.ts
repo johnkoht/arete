@@ -276,3 +276,308 @@ describe('EntityService.findMentions — conversation sourceType', () => {
     assert.ok(types.has('conversation'), 'Expected conversation mention');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 7a AC5 — channel fields convention (read + audit)
+// ---------------------------------------------------------------------------
+
+import {
+  readPersonChannels,
+  computeChannelsAudit,
+} from '../../src/services/entity.js';
+import type { PersonCategory } from '../../src/models/index.js';
+
+/**
+ * Writes a person file with a fully-specified frontmatter string —
+ * needed for channel tests because the default writePersonFile helper
+ * uses JSON.stringify which doesn't produce YAML arrays cleanly.
+ */
+function writePersonFileRaw(
+  root: string,
+  category: string,
+  slug: string,
+  frontmatterYaml: string,
+): void {
+  const dir = join(root, 'people', category);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${slug}.md`),
+    `---\n${frontmatterYaml}\n---\n\n# ${slug}\n`,
+    'utf8',
+  );
+}
+
+describe('Phase 7a AC5b — readPersonChannels', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-channels-'));
+    storage = new FileStorageAdapter();
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns all populated channel fields', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'alice',
+      `name: Alice
+category: internal
+email: alice@reserv.com
+alt_emails:
+  - alice@oldcompany.com
+slack_user_id: U01ABC123
+slack_handle: alice
+phone: "+1-555-0100"`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'alice.md'),
+    );
+
+    assert.ok(channels);
+    assert.equal(channels.email, 'alice@reserv.com');
+    assert.deepEqual(channels.alt_emails, ['alice@oldcompany.com']);
+    assert.equal(channels.slack_user_id, 'U01ABC123');
+    assert.equal(channels.slack_handle, 'alice');
+    assert.equal(channels.phone, '+1-555-0100');
+  });
+
+  it('returns only email when only email populated (typical arete-reserv case)', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'bob',
+      `name: Bob
+category: internal
+email: bob@reserv.com`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'bob.md'),
+    );
+
+    assert.ok(channels);
+    assert.deepEqual(channels, { email: 'bob@reserv.com' });
+  });
+
+  it('returns empty object when no channel fields populated', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'no-channels',
+      `name: No Channels
+category: internal
+role: PM`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'no-channels.md'),
+    );
+
+    assert.ok(channels);
+    assert.deepEqual(channels, {});
+  });
+
+  it('returns null when file does not exist', async () => {
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'missing.md'),
+    );
+    assert.equal(channels, null);
+  });
+
+  it('drops malformed entries (non-string slack_user_id, empty strings)', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'mixed',
+      `name: Mixed
+category: internal
+email: ""
+slack_user_id: U01XYZ
+slack_handle: "   "
+alt_emails:
+  - alice@example.com
+  - 12345
+  - ""`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'mixed.md'),
+    );
+
+    assert.ok(channels);
+    // Empty email dropped.
+    assert.equal(channels.email, undefined);
+    // Valid slack_user_id kept.
+    assert.equal(channels.slack_user_id, 'U01XYZ');
+    // Whitespace-only slack_handle dropped.
+    assert.equal(channels.slack_handle, undefined);
+    // alt_emails: only the valid email kept.
+    assert.deepEqual(channels.alt_emails, ['alice@example.com']);
+  });
+
+  it('coerces phone to string and trims', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'phone-only',
+      `name: Phone Only
+category: internal
+phone: "  +1-555-9999  "`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'phone-only.md'),
+    );
+
+    assert.ok(channels);
+    assert.equal(channels.phone, '+1-555-9999');
+  });
+});
+
+describe('Phase 7a AC5c — computeChannelsAudit', () => {
+  it('returns zeroes on empty input', () => {
+    const result = computeChannelsAudit([]);
+    assert.deepEqual(result, {
+      total: 0,
+      with_email: 0,
+      with_alt_emails: 0,
+      with_slack_user_id: 0,
+      with_slack_handle: 0,
+      with_phone: 0,
+      no_channels: 0,
+      gaps: [],
+    });
+  });
+
+  it('counts populated fields and surfaces per-person gaps', () => {
+    const result = computeChannelsAudit([
+      {
+        slug: 'alice',
+        category: 'internal' as PersonCategory,
+        channels: {
+          email: 'a@x.com',
+          slack_user_id: 'UAAA',
+          slack_handle: 'alice',
+        },
+      },
+      {
+        slug: 'bob',
+        category: 'internal' as PersonCategory,
+        channels: { email: 'b@x.com' },
+      },
+      {
+        slug: 'carla',
+        category: 'customers' as PersonCategory,
+        channels: {},
+      },
+    ]);
+
+    assert.equal(result.total, 3);
+    assert.equal(result.with_email, 2);
+    assert.equal(result.with_slack_user_id, 1);
+    assert.equal(result.with_slack_handle, 1);
+    assert.equal(result.with_alt_emails, 0);
+    assert.equal(result.with_phone, 0);
+    assert.equal(result.no_channels, 1); // Carla has nothing.
+
+    // Gaps are sorted by slug.
+    assert.equal(result.gaps[0].slug, 'alice');
+    assert.equal(result.gaps[1].slug, 'bob');
+    assert.equal(result.gaps[2].slug, 'carla');
+
+    // Alice has email + slack_user_id + slack_handle populated;
+    // missing alt_emails + phone.
+    assert.ok(result.gaps[0].populated.includes('email'));
+    assert.ok(result.gaps[0].populated.includes('slack_user_id'));
+    assert.ok(result.gaps[0].populated.includes('slack_handle'));
+    assert.ok(result.gaps[0].missing.includes('alt_emails'));
+    assert.ok(result.gaps[0].missing.includes('phone'));
+
+    // Carla has nothing populated.
+    assert.deepEqual(result.gaps[2].populated, []);
+    assert.equal(result.gaps[2].missing.length, 5);
+  });
+});
+
+describe('Phase 7a AC5c — EntityService.auditPeopleChannels', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'audit-channels-'));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns empty audit on missing people dir', async () => {
+    const storage = new FileStorageAdapter();
+    const service = new EntityService(storage, null as never, null);
+    const result = await service.auditPeopleChannels(paths);
+    assert.equal(result.total, 0);
+    assert.equal(result.no_channels, 0);
+  });
+
+  it('walks all three categories and returns aggregate health', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'alice',
+      `name: Alice
+category: internal
+email: alice@x.com
+slack_user_id: UAAA`,
+    );
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'bob',
+      `name: Bob
+category: internal
+email: bob@x.com`,
+    );
+    writePersonFileRaw(
+      tmpDir,
+      'customers',
+      'carla',
+      `name: Carla
+category: customers
+email: carla@cust.com`,
+    );
+    writePersonFileRaw(
+      tmpDir,
+      'users',
+      'dan',
+      `name: Dan
+category: users`,
+    );
+
+    const storage = new FileStorageAdapter();
+    const service = new EntityService(storage, null as never, null);
+    const result = await service.auditPeopleChannels(paths);
+
+    assert.equal(result.total, 4);
+    assert.equal(result.with_email, 3);
+    assert.equal(result.with_slack_user_id, 1);
+    assert.equal(result.no_channels, 1); // dan
+    assert.equal(result.gaps.length, 4); // all 4 have at least one missing field
+
+    const dan = result.gaps.find((g) => g.slug === 'dan');
+    assert.ok(dan);
+    assert.deepEqual(dan.populated, []);
+  });
+});

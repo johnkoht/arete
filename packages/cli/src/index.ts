@@ -22,6 +22,7 @@ import {
   registerBriefCommand,
 } from './commands/intelligence.js';
 import { registerPeopleCommands } from './commands/people.js';
+import { registerAreasCommands } from './commands/areas.js';
 import { registerTopicCommands } from './commands/topic.js';
 import { registerSkillCommands } from './commands/skill.js';
 import { registerToolCommands } from './commands/tool.js';
@@ -97,6 +98,10 @@ ${chalk.bold('People')}
   people intelligence digest       Batch people classification suggestions
   people memory refresh            Refresh person memory highlights
 
+${chalk.bold('Areas')}
+  areas list [--json]              List areas with summary fields
+  areas epics [--active] [--slug]  List Jira epic watchlists per area
+
 ${chalk.bold('Inbox')}
   inbox add --title <t> --body <b>   Add text to inbox
   inbox add --url <url>              Fetch URL and add to inbox
@@ -153,6 +158,7 @@ registerMemoryCommand(program);
 registerResolveCommand(program);
 registerBriefCommand(program);
 registerPeopleCommands(program);
+registerAreasCommands(program);
 registerTopicCommands(program);
 registerSkillCommands(program);
 registerToolCommands(program);

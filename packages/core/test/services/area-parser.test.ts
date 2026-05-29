@@ -480,6 +480,159 @@ Test.
       assert.equal(context.name, 'no-name'); // Falls back to slug
     });
   });
+
+  // Phase 7a AC4 — jira_epics frontmatter parsing. Optional field;
+  // missing defaults to empty array; malformed entries are dropped.
+  describe('Phase 7a AC4 — jira_epics frontmatter', () => {
+    it('parses jira_epics list when present', async () => {
+      const fixture = createTestWorkspace(tmpDir);
+      fixture.writeFile(
+        'areas/with-epics.md',
+        `---
+area: With Epics
+status: active
+recurring_meetings: []
+jira_epics:
+  - PLAT-11014
+  - PLAT-10025
+  - INGEST-2031
+---
+
+# With Epics
+
+## Focus
+Active.
+`
+      );
+
+      const context = await parser.getAreaContext('with-epics');
+
+      assert.ok(context);
+      assert.deepEqual(context.jiraEpics, [
+        'PLAT-11014',
+        'PLAT-10025',
+        'INGEST-2031',
+      ]);
+    });
+
+    it('defaults jira_epics to empty array when field missing', async () => {
+      // The GLANCE_AREA fixture has no jira_epics field.
+      const context = await parser.getAreaContext('glance-communications');
+
+      assert.ok(context);
+      assert.deepEqual(context.jiraEpics, []);
+    });
+
+    it('defaults jira_epics to empty array on null/false', async () => {
+      const fixture = createTestWorkspace(tmpDir);
+      fixture.writeFile(
+        'areas/explicit-null.md',
+        `---
+area: Explicit Null
+status: active
+recurring_meetings: []
+jira_epics: null
+---
+
+# Explicit Null
+
+## Focus
+Test.
+`
+      );
+
+      const context = await parser.getAreaContext('explicit-null');
+
+      assert.ok(context);
+      assert.deepEqual(context.jiraEpics, []);
+    });
+
+    it('drops malformed jira_epics entries (non-strings) but keeps valid ones', async () => {
+      const fixture = createTestWorkspace(tmpDir);
+      fixture.writeFile(
+        'areas/mixed-types.md',
+        `---
+area: Mixed Types
+status: active
+recurring_meetings: []
+jira_epics:
+  - PLAT-11014
+  - 12345
+  -
+  - "PLAT-10025"
+  - ""
+  - "   "
+---
+
+# Mixed Types
+
+## Focus
+Test.
+`
+      );
+
+      const context = await parser.getAreaContext('mixed-types');
+
+      assert.ok(context);
+      // Only non-empty strings should remain.
+      assert.deepEqual(context.jiraEpics, ['PLAT-11014', 'PLAT-10025']);
+    });
+
+    it('handles jira_epics as empty array', async () => {
+      const fixture = createTestWorkspace(tmpDir);
+      fixture.writeFile(
+        'areas/empty-epics.md',
+        `---
+area: Empty Epics
+status: active
+recurring_meetings: []
+jira_epics: []
+---
+
+# Empty Epics
+
+## Focus
+Test.
+`
+      );
+
+      const context = await parser.getAreaContext('empty-epics');
+
+      assert.ok(context);
+      assert.deepEqual(context.jiraEpics, []);
+    });
+
+    it('jiraEpics survives YAML quoting variations', async () => {
+      const fixture = createTestWorkspace(tmpDir);
+      fixture.writeFile(
+        'areas/quote-styles.md',
+        `---
+area: Quote Styles
+status: active
+recurring_meetings: []
+jira_epics:
+  - 'PLAT-11014'
+  - "PLAT-10025"
+  - PLAT-9001
+---
+
+# Quote Styles
+
+## Focus
+Test.
+`
+      );
+
+      const context = await parser.getAreaContext('quote-styles');
+
+      assert.ok(context);
+      assert.deepEqual(context.jiraEpics, [
+        'PLAT-11014',
+        'PLAT-10025',
+        'PLAT-9001',
+      ]);
+    });
+  });
 });
 
 describe('suggestAreaForMeeting', () => {
