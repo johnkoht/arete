@@ -7,8 +7,10 @@ import {
   loadConfig,
   refreshQmdIndex,
   extractPersonMemorySection,
+  readPersonChannels,
   PEOPLE_CATEGORIES,
   type PersonCategory,
+  type PersonChannels,
   type QmdRefreshResult,
 } from '@arete/core';
 import type { Command } from 'commander';
@@ -83,11 +85,12 @@ export function registerPeopleCommands(program: Command): void {
     .description('Show a person by slug or email')
     .option('--category <name>', 'Category when looking up by slug')
     .option('--memory', 'Include auto-generated memory highlights section')
+    .option('--channels', 'Include populated channel fields (email, slack_user_id, etc.)')
     .option('--json', 'Output as JSON')
     .action(
       async (
         slugOrEmail: string,
-        opts: { category?: string; memory?: boolean; json?: boolean },
+        opts: { category?: string; memory?: boolean; channels?: boolean; json?: boolean },
       ) => {
         const services = await createServices(process.cwd());
         const root = await services.workspace.findRoot();
@@ -146,8 +149,25 @@ export function registerPeopleCommands(program: Command): void {
           memoryHighlights = personContent ? extractPersonMemorySection(personContent) : null;
         }
 
+        // Phase 7a AC5b — --channels surfaces populated channel fields
+        // (only populated fields are returned per convention).
+        let channels: PersonChannels | null = null;
+        if (opts.channels) {
+          const personPath = join(paths.people, person.category, `${person.slug}.md`);
+          channels = await readPersonChannels(services.storage, personPath);
+        }
+
         if (opts.json) {
-          console.log(JSON.stringify({ success: true, person, memoryHighlights }, null, 2));
+          const out: Record<string, unknown> = {
+            success: true,
+            person,
+            memoryHighlights,
+          };
+          if (opts.channels) {
+            // Surface as a dedicated "channels" object even if empty.
+            out.channels = channels ?? {};
+          }
+          console.log(JSON.stringify(out, null, 2));
           return;
         }
 
@@ -169,6 +189,22 @@ export function registerPeopleCommands(program: Command): void {
             info('No auto memory highlights found for this person yet.');
             console.log('');
           }
+        }
+
+        if (opts.channels) {
+          section('Channels');
+          if (channels && Object.keys(channels).length > 0) {
+            if (channels.email) listItem('email', channels.email);
+            if (channels.alt_emails && channels.alt_emails.length > 0) {
+              listItem('alt_emails', channels.alt_emails.join(', '));
+            }
+            if (channels.slack_user_id) listItem('slack_user_id', channels.slack_user_id);
+            if (channels.slack_handle) listItem('slack_handle', channels.slack_handle);
+            if (channels.phone) listItem('phone', channels.phone);
+          } else {
+            info('No channel fields populated for this person.');
+          }
+          console.log('');
         }
 
         listItem('File', formatPath(`people/${person.category}/${person.slug}.md`));

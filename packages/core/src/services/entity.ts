@@ -445,6 +445,75 @@ async function readPersonFile(
   };
 }
 
+/**
+ * Channel-style fields recognized by Phase 7a AC5 convention. Only
+ * populated fields are returned; missing fields are simply absent
+ * from the returned object (so `Object.keys(channels).length` is the
+ * "populated count" for audit purposes).
+ *
+ * Schema convention: see `dev/conventions/person-frontmatter.md`.
+ */
+export type PersonChannels = {
+  email?: string;
+  alt_emails?: string[];
+  slack_user_id?: string;
+  slack_handle?: string;
+  phone?: string;
+};
+
+/**
+ * Extract populated channel-style fields from a person file's
+ * frontmatter. Tolerant: missing fields are simply absent from the
+ * returned object; malformed entries (wrong type) are dropped.
+ *
+ * Returns null only when the file doesn't exist or has no frontmatter
+ * (matching the readPersonFile null contract).
+ */
+export async function readPersonChannels(
+  storage: StorageAdapter,
+  filePath: string,
+): Promise<PersonChannels | null> {
+  const exists = await storage.exists(filePath);
+  if (!exists) return null;
+
+  const content = await storage.read(filePath);
+  if (content == null) return null;
+
+  const parsed = parseFrontmatterPeople(content);
+  if (!parsed) return null;
+
+  const { frontmatter } = parsed;
+  const channels: PersonChannels = {};
+
+  if (typeof frontmatter.email === 'string' && frontmatter.email.trim()) {
+    channels.email = frontmatter.email.trim();
+  }
+  if (Array.isArray(frontmatter.alt_emails)) {
+    const filtered = frontmatter.alt_emails.filter(
+      (e): e is string => typeof e === 'string' && e.trim().length > 0,
+    );
+    if (filtered.length > 0) channels.alt_emails = filtered;
+  }
+  if (
+    typeof frontmatter.slack_user_id === 'string' &&
+    frontmatter.slack_user_id.trim()
+  ) {
+    channels.slack_user_id = frontmatter.slack_user_id.trim();
+  }
+  if (
+    typeof frontmatter.slack_handle === 'string' &&
+    frontmatter.slack_handle.trim()
+  ) {
+    channels.slack_handle = frontmatter.slack_handle.trim();
+  }
+  if (frontmatter.phone != null) {
+    const phone = String(frontmatter.phone).trim();
+    if (phone.length > 0) channels.phone = phone;
+  }
+
+  return channels;
+}
+
 async function listPersonFilesInCategory(
   storage: StorageAdapter,
   peopleDir: string,
@@ -1475,6 +1544,21 @@ export class EntityService {
       }
     }
     return null;
+  }
+
+  /**
+   * Phase 7a AC5b — read channel-style fields for one person by slug.
+   * Only populated fields are returned. Returns null if person file
+   * not found or has no frontmatter.
+   */
+  async getPersonChannels(
+    workspacePaths: WorkspacePaths | null,
+    category: PersonCategory,
+    slug: string,
+  ): Promise<PersonChannels | null> {
+    if (!workspacePaths?.people) return null;
+    const filePath = join(workspacePaths.people, category, `${slug}.md`);
+    return readPersonChannels(this.storage, filePath);
   }
 
   async loadPeopleIntelligencePolicy(

@@ -347,6 +347,147 @@ email: "jane@example.com"
     assert.ok(stdout.includes('Would update'));
   });
 
+  // -------------------------------------------------------------------
+  // Phase 7a AC5b — `arete people show --channels` flag
+  // -------------------------------------------------------------------
+
+  it('show --channels --json returns all populated channel fields', () => {
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'alice.md'),
+      `---
+name: Alice
+category: internal
+email: alice@reserv.com
+alt_emails:
+  - alice@old.com
+slack_user_id: U01ABC
+slack_handle: alice
+phone: "+1-555-0100"
+---
+
+# Alice
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(
+      ['people', 'show', 'alice', '--channels', '--json'],
+      { cwd: tmpDir },
+    );
+    const result = JSON.parse(stdout);
+
+    assert.equal(result.success, true);
+    assert.ok(result.channels);
+    assert.equal(result.channels.email, 'alice@reserv.com');
+    assert.deepEqual(result.channels.alt_emails, ['alice@old.com']);
+    assert.equal(result.channels.slack_user_id, 'U01ABC');
+    assert.equal(result.channels.slack_handle, 'alice');
+    assert.equal(result.channels.phone, '+1-555-0100');
+  });
+
+  it('show --channels --json returns only email when only email populated', () => {
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'bob.md'),
+      `---
+name: Bob
+category: internal
+email: bob@reserv.com
+---
+
+# Bob
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(
+      ['people', 'show', 'bob', '--channels', '--json'],
+      { cwd: tmpDir },
+    );
+    const result = JSON.parse(stdout);
+
+    assert.deepEqual(result.channels, { email: 'bob@reserv.com' });
+  });
+
+  it('show --channels --json returns empty {} when no channels populated', () => {
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'cat.md'),
+      `---
+name: Cat
+category: internal
+role: PM
+---
+
+# Cat
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(
+      ['people', 'show', 'cat', '--channels', '--json'],
+      { cwd: tmpDir },
+    );
+    const result = JSON.parse(stdout);
+
+    assert.deepEqual(result.channels, {});
+  });
+
+  it('show without --channels has unchanged default JSON shape (no channels field)', () => {
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'dan.md'),
+      `---
+name: Dan
+category: internal
+email: dan@reserv.com
+slack_user_id: UDAN123
+---
+
+# Dan
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(['people', 'show', 'dan', '--json'], { cwd: tmpDir });
+    const result = JSON.parse(stdout);
+
+    assert.equal(result.success, true);
+    assert.ok(result.person);
+    // No --channels → no channels field in output.
+    assert.equal('channels' in result, false);
+  });
+
+  it('show --channels human-readable prints a Channels section', () => {
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'eli.md'),
+      `---
+name: Eli
+category: internal
+email: eli@reserv.com
+slack_user_id: UELI456
+---
+
+# Eli
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(['people', 'show', 'eli', '--channels'], {
+      cwd: tmpDir,
+    });
+    assert.match(stdout, /Channels/);
+    assert.match(stdout, /eli@reserv\.com/);
+    assert.match(stdout, /UELI456/);
+  });
+
   it('refresh JSON output includes new extraction count fields', () => {
     const personDir = join(tmpDir, 'people', 'internal');
     mkdirSync(personDir, { recursive: true });

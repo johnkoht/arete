@@ -276,3 +276,169 @@ describe('EntityService.findMentions — conversation sourceType', () => {
     assert.ok(types.has('conversation'), 'Expected conversation mention');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 7a AC5b — channel fields convention (reader)
+// ---------------------------------------------------------------------------
+
+import { readPersonChannels } from '../../src/services/entity.js';
+
+/**
+ * Writes a person file with a fully-specified frontmatter string —
+ * needed for channel tests because the default writePersonFile helper
+ * uses JSON.stringify which doesn't produce YAML arrays cleanly.
+ */
+function writePersonFileRaw(
+  root: string,
+  category: string,
+  slug: string,
+  frontmatterYaml: string,
+): void {
+  const dir = join(root, 'people', category);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${slug}.md`),
+    `---\n${frontmatterYaml}\n---\n\n# ${slug}\n`,
+    'utf8',
+  );
+}
+
+describe('Phase 7a AC5b — readPersonChannels', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-channels-'));
+    storage = new FileStorageAdapter();
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns all populated channel fields', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'alice',
+      `name: Alice
+category: internal
+email: alice@reserv.com
+alt_emails:
+  - alice@oldcompany.com
+slack_user_id: U01ABC123
+slack_handle: alice
+phone: "+1-555-0100"`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'alice.md'),
+    );
+
+    assert.ok(channels);
+    assert.equal(channels.email, 'alice@reserv.com');
+    assert.deepEqual(channels.alt_emails, ['alice@oldcompany.com']);
+    assert.equal(channels.slack_user_id, 'U01ABC123');
+    assert.equal(channels.slack_handle, 'alice');
+    assert.equal(channels.phone, '+1-555-0100');
+  });
+
+  it('returns only email when only email populated (typical arete-reserv case)', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'bob',
+      `name: Bob
+category: internal
+email: bob@reserv.com`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'bob.md'),
+    );
+
+    assert.ok(channels);
+    assert.deepEqual(channels, { email: 'bob@reserv.com' });
+  });
+
+  it('returns empty object when no channel fields populated', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'no-channels',
+      `name: No Channels
+category: internal
+role: PM`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'no-channels.md'),
+    );
+
+    assert.ok(channels);
+    assert.deepEqual(channels, {});
+  });
+
+  it('returns null when file does not exist', async () => {
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'missing.md'),
+    );
+    assert.equal(channels, null);
+  });
+
+  it('drops malformed entries (non-string slack_user_id, empty strings)', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'mixed',
+      `name: Mixed
+category: internal
+email: ""
+slack_user_id: U01XYZ
+slack_handle: "   "
+alt_emails:
+  - alice@example.com
+  - 12345
+  - ""`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'mixed.md'),
+    );
+
+    assert.ok(channels);
+    // Empty email dropped.
+    assert.equal(channels.email, undefined);
+    // Valid slack_user_id kept.
+    assert.equal(channels.slack_user_id, 'U01XYZ');
+    // Whitespace-only slack_handle dropped.
+    assert.equal(channels.slack_handle, undefined);
+    // alt_emails: only the valid email kept.
+    assert.deepEqual(channels.alt_emails, ['alice@example.com']);
+  });
+
+  it('coerces phone to string and trims', async () => {
+    writePersonFileRaw(
+      tmpDir,
+      'internal',
+      'phone-only',
+      `name: Phone Only
+category: internal
+phone: "  +1-555-9999  "`,
+    );
+
+    const channels = await readPersonChannels(
+      storage,
+      join(tmpDir, 'people', 'internal', 'phone-only.md'),
+    );
+
+    assert.ok(channels);
+    assert.equal(channels.phone, '+1-555-9999');
+  });
+});
+

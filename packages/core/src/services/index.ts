@@ -51,6 +51,9 @@ export { IntegrationService } from './integrations.js';
 // (Skill discovery is the parallel concern; see services/skills.ts.)
 export { listTools, getTool } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
+// Phase 7a AC5b — person channels reader for --channels flag.
+export { readPersonChannels } from './entity.js';
+export type { PersonChannels } from './entity.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
 export type {
   PriorityLevel,
