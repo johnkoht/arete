@@ -350,4 +350,36 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
       assert.match(content, /\[gather-only\]/);
     });
   });
+
+  // Phase 7a AC2 — slack-digest SKILL.md gains a "Gather-only mode"
+  // section that cites the PATTERNS.md "gather-only composition" anchor.
+  // Loose regex per the post-Phase-3.5-followup conventions.
+  describe('Phase 7a AC2 — slack-digest gather-only mode', () => {
+    it('slack-digest SKILL.md cites the gather-only composition PATTERNS.md anchor', () => {
+      const content = readFileSync(
+        join(SKILLS_DIR, 'slack-digest', 'SKILL.md'),
+        'utf8',
+      );
+      // The skill-level section header.
+      assert.match(
+        content,
+        /## Gather-only mode/i,
+        'slack-digest SKILL.md missing "Gather-only mode" section',
+      );
+      // Reference to PATTERNS.md gather-only composition anchor (loose).
+      assert.match(
+        content,
+        /gather-only composition/i,
+        'slack-digest SKILL.md missing reference to PATTERNS.md gather-only composition anchor',
+      );
+      // Invocation marker convention.
+      assert.match(content, /\[gather-only\]/);
+      // JSON output shape — at least the canonical fields.
+      assert.match(content, /counterparty/);
+      assert.match(content, /evidence_pointer/);
+      // Explicit skip list — must mention resources/notes (the
+      // failure mode pre-mortem R2 calls out).
+      assert.match(content, /resources\/notes/);
+    });
+  });
 });

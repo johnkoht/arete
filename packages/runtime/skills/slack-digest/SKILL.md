@@ -590,6 +590,143 @@ Slack Digest — YYYY-MM-DD:
 
 User extends or restricts via `.arete/skills-local/slack-digest.md`.
 
+## Gather-only mode
+
+This skill supports the **gather-only composition** sub-mode
+documented in `PATTERNS.md` (§ "gather-only composition"). An
+orchestrating chef skill (Phase 8's unified daily-winddown
+reconciler is the named consumer) invokes slack-digest in gather-only
+mode, collects structured loop output, composes with other sources
+(email-triage, calendar, meeting), and engages the user **once**.
+
+### Invocation contract (per PATTERNS.md AC1 anchor)
+
+The orchestrator includes the `[gather-only]` marker at the top of its
+invocation prompt to this skill, plus a sentence like:
+
+> "Run the slack-digest skill in `[gather-only]` mode. Return the
+> structured loop output described in slack-digest SKILL.md's
+> 'Gather-only mode' section. Do NOT engage the user, write
+> `resources/notes/`, run `arete commitments create/resolve`, or
+> propose actions — those run only when slack-digest is invoked
+> standalone."
+
+The sub-agent reads this section to learn which steps to skip. This
+is a **best-effort prose contract** (per PATTERNS.md § gather-only
+composition, "Explicit limitation" subsection) — no harness gate
+enforces it.
+
+### Which steps run in gather-only mode
+
+| Step | Standalone | Gather-only |
+|---|---|---|
+| 0 — Read APPEND + log start | yes | yes |
+| 1 — Pull & Organize (1a–1e) | yes | yes |
+| 2a — Assemble Context Bundle | yes | yes |
+| 2b — Extract Intelligence (significance_analyst) | yes | yes |
+| 2c — Slack-thread heuristic eval (events log) | yes | yes (best-effort; if it fails, continue) |
+| 2d — Area Association | yes | yes |
+| 3 — Reconcile Against Existing Work | yes | **partial** — read state for dedup (3a + dedup checks); do NOT propose updates or write |
+| 4 — Compose curated view | yes | **skipped** — return JSON to orchestrator instead |
+| 4.5 — Persist curated view to `now/archive/slack-digest/` | yes | **skipped** — no persist file (the orchestrator persists its own composed view) |
+| 4 (engage) — Engage user once | yes | **skipped** — orchestrator engages |
+| 5a — Apply approved changes (memory, commitments, week.md) | yes | **skipped** |
+| 5b — Save digest at `resources/notes/YYYY-MM-DD-slack-digest.md` | yes | **skipped** |
+| 5c — Integrate Topics & Re-index | yes | **skipped** |
+| 5d — Handle Unresolved Participants | yes | **skipped** (orchestrator handles via composed view) |
+| 5e — Report | yes | **skipped** |
+
+The skill in gather-only mode MUST NOT:
+- Write to `resources/notes/` (no digest file written).
+- Write to `.arete/memory/items/` (no decisions/learnings persisted).
+- Write to `now/archive/slack-digest/` (no persistence — orchestrator
+  owns persistence for the composed view).
+- Run `arete commitments create / resolve` or `arete topic refresh`.
+- Edit `now/week.md`.
+- Send Slack DMs or otherwise propose actions to the user in chat.
+- Engage the user.
+
+### JSON output shape
+
+Return a JSON object matching the canonical gather-only loop shape:
+
+```json
+{
+  "skill": "slack-digest",
+  "mode": "gather-only",
+  "loops": [
+    {
+      "source": "slack",
+      "source_ref": "C0123ABC/1716822720.000200",
+      "counterparty": "anthony-avina",
+      "timestamp": "2026-05-27T14:32:00Z",
+      "text": "Anthony asked if the API spec is ready — second ping this week.",
+      "evidence_pointer": "slack://team/C0123ABC/p1716822720000200",
+      "kind": "incoming-ask",
+      "confidence": 0.82,
+      "area": "glance-communications",
+      "topics": ["api-spec-rollout"]
+    },
+    {
+      "source": "slack",
+      "source_ref": "D04XYZ/1716830000.000100",
+      "counterparty": "lindsay-gray",
+      "timestamp": "2026-05-27T16:13:20Z",
+      "text": "Lindsay confirmed the templates are ready for partner review.",
+      "evidence_pointer": "slack://team/D04XYZ/p1716830000000100",
+      "kind": "decision",
+      "confidence": 0.91,
+      "dedup_key": "templates-ready-glance"
+    }
+  ],
+  "unresolved_participants": [
+    { "slack_name": "Casey", "channels": ["C0567XYZ"] }
+  ],
+  "partial": false
+}
+```
+
+**Per-loop fields** (per PATTERNS.md § gather-only composition):
+- Required: `source` (always `"slack"`), `source_ref`,
+  `counterparty` (slug or `null` if unresolved), `timestamp`, `text`,
+  `evidence_pointer`, `kind`.
+- Optional: `confidence`, `area`, `topics`, `dedup_key`.
+
+**`kind` taxonomy for slack-digest**:
+- `incoming-ask` — someone asked you something (most common).
+- `outgoing-ask` — you asked someone something.
+- `commitment-incoming` — someone promised you something.
+- `commitment-outgoing` — you promised someone something.
+- `decision` — a decision was made or confirmed.
+- `learning` — an insight or market signal.
+- `dedup-candidate` — extracted item matches existing commitment /
+  decision / topic (orchestrator decides whether to surface).
+- `unresolved-thread` — high-signal thread with no clear ask /
+  decision but worth orchestrator review (e.g., 10+ message thread
+  on an active topic).
+
+**Top-level fields**:
+- `skill: "slack-digest"`, `mode: "gather-only"` — identifiers.
+- `loops: []` — possibly empty; gather-only with no signal is valid.
+- `unresolved_participants: []` — surfaces to orchestrator; the
+  orchestrator decides whether to flag for the user in its composed
+  view.
+- `partial: boolean` — `true` if any Phase 1 / 2 primitive failed
+  (e.g., Slack search returned an error mid-pagination). Orchestrator
+  may surface a `(partial slack pull)` note.
+
+### Side-effects allowed in gather-only mode
+
+These are read-only or telemetry-only and do not violate the contract:
+
+- `arete skill resolve` (Step 0 read).
+- `arete search` (read).
+- `arete commitments list` (read).
+- `arete people show` (read).
+- `arete topic list --active --slugs` (read).
+- `arete events log slack-thread` (telemetry; best-effort — if it
+  fails, the gather-only output still ships).
+
 ## Integration with Daily Winddown
 
 When called from `daily-winddown`, this skill runs as **Phase 3g** —
@@ -597,6 +734,11 @@ after meeting processing is complete. The reconciliation step (Phase
 3) reads the current state of commitments/decisions/learnings/week —
 so meeting outputs naturally dedup. Only genuinely new items from
 Slack surface for approval.
+
+**Phase 8 note**: Phase 8's unified daily-winddown reconciler invokes
+this skill in gather-only mode (see § "Gather-only mode" above and
+PATTERNS.md § "gather-only composition"). Until Phase 8 ships, the
+gather-only section is dormant — standalone invocation is unaffected.
 
 ## Integration with Weekly Winddown
 
