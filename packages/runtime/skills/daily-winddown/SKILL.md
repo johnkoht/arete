@@ -228,12 +228,20 @@ no topic page in the workspace has ≥1 `sources_integrated` entry.
 suggestion, not an operational must-do. The user can `skip` without
 penalty; the chef re-surfaces on a future run if the staleness persists.
 
-### Step 1 — Gather (all primitives, parallelize where independent)
+### Step 1 — Cross-skill gather (parallel where independent)
+
+**Phase 8 redesigns this step.** The chef now gathers from multiple
+cross-skill sources in parallel — slack, email, meetings, calendar,
+commitments, week.md, areas/epics, and channel-coverage audit — and
+feeds them into the **Step 2 Reconcile** pass (added in the AC2
+commit) before staging anything for the user.
 
 **Run in parallel (no engagement gates between).** The chef-orchestrator
-pattern's speed win comes from *actually* running 1a–1f as concurrent
+pattern's speed win comes from *actually* running 1a–1q as concurrent
 tool calls in a single agent turn. Sequential reads here defeat the
 purpose. If the harness supports parallel tool calls, use them.
+
+#### 1a–1i — Local gather (existing primitives)
 
 ```bash
 # 1a. Pull recordings from configured integrations
@@ -289,6 +297,175 @@ arete meeting extract <file> --context /tmp/<slug>-context.json --stage --reconc
 arete commitments list --json
 # (areas/ files already read in 1c)
 ```
+
+#### 1j — Snapshot now/archive mtimes (gather-only contract check, per AC1 / C5)
+
+Before invoking any sub-skill in gather-only mode, snapshot the file
+mtimes under `now/archive/<sub-skill>/` for the three gather-only
+consumers (slack-digest, email-triage, process-meetings). This lets
+the chef detect a contract violation — per PATTERNS.md § "gather-only
+composition", a skill in gather-only mode MUST NOT write to its own
+`now/archive/<skill>/` persistence path; the orchestrator owns
+persistence for the composed view.
+
+```bash
+# Capture ls -la output (or equivalent stat snapshot). Any plausible
+# format that lets the post-gather check distinguish "new file" from
+# "pre-existing file" is fine.
+ls -la now/archive/slack-digest/    2>/dev/null > /tmp/winddown-mtime-pre-slack.txt
+ls -la now/archive/email-triage/    2>/dev/null > /tmp/winddown-mtime-pre-email.txt
+ls -la now/archive/process-meetings/ 2>/dev/null > /tmp/winddown-mtime-pre-process.txt
+```
+
+This is **best-effort detection** (per Phase 8 plan AC1 / pre-mortem
+R3). A sub-skill that writes to a different path (e.g., `resources/notes/`
+in slack-digest's case) won't be caught by this snapshot. Soak is the
+real fix layer. Any detected mismatch in 1q below surfaces in the
+final `## Notes` section.
+
+#### 1k — slack-digest in gather-only mode
+
+Invoke the slack-digest skill in `[gather-only]` mode (per PATTERNS.md
+§ "gather-only composition" → "Invocation convention"). Include the
+canonical instruction sentence:
+
+> "Run the slack-digest skill in `[gather-only]` mode. Return the
+> structured loop output described in slack-digest SKILL.md's
+> 'Gather-only mode' section. Do NOT engage the user, write to
+> `resources/notes/` or `now/archive/slack-digest/`, run `arete
+> commitments create/resolve`, or propose actions — those run only
+> when slack-digest is invoked standalone."
+
+Collect the returned JSON `{skill, mode, loops[], unresolved_participants[], partial}`.
+If the response is non-JSON or missing `loops[]`, note as a contract
+violation (surface in 1q / `## Notes`) and continue with whatever
+structured signal is salvageable.
+
+#### 1l — email-triage in gather-only mode
+
+Same shape as 1k. Include the canonical instruction sentence:
+
+> "Run the email-triage skill in `[gather-only]` mode. Return the
+> structured loop output described in email-triage SKILL.md's
+> 'Gather-only mode' section. Do NOT engage the user, write to
+> `now/archive/email-triage/`, run `arete commitments create/resolve`,
+> or propose actions — those run only when email-triage is invoked
+> standalone."
+
+Collect the returned JSON. Same fallback on contract violation.
+
+#### 1m — process-meetings in gather-only mode (today's action items as intent loops)
+
+Invoke process-meetings in `[gather-only]` mode to surface today's
+extracted meeting action items as **intent loops** the reconciler can
+match against slack / email / calendar fulfillment evidence. Even
+though process-meetings doesn't (yet) ship a formal `## Gather-only
+mode` section, the orchestrator passes the canonical `[gather-only]`
+marker per PATTERNS.md § "gather-only composition" and asks for loops
+in the canonical shape:
+
+> "Run the process-meetings skill in `[gather-only]` mode. For each
+> today's meeting in resources/meetings/$(date +%Y-%m-%d)-*.md, return
+> action items as intent loops: `{source: "meeting", source_ref:
+> <meeting-slug>, counterparty: <person-slug>, timestamp: <meeting
+> time>, text: <action item text>, evidence_pointer: meeting://<slug>,
+> kind: "intent"}`. Do NOT engage the user, write to
+> `now/archive/process-meetings/`, run `arete meeting approve`, or
+> propose actions — those run only when process-meetings is invoked
+> standalone."
+
+If process-meetings is unable to respect gather-only mode (no formal
+section), the chef may fall back to parsing the staged items from 1h's
+`arete meeting extract --stage` output directly — same loop shape,
+same downstream reconciler treatment. Note the fallback in `## Notes`.
+
+#### 1n — Calendar pull (forward + backward windows, per D9)
+
+```bash
+# Forward window — next 30 days of events (per spec D9, Phase 7a AC6
+# adds --days N support).
+arete pull calendar --days 30 --json > /tmp/winddown-cal-forward.json
+
+# Backward window — recent-past events for Rule 3 "action moot, event
+# passed" detection. Use --date for today (catches today's earlier
+# meetings + the start-time check covers the "passed" rule), and
+# repeat for yesterday if needed. The --date flag (per PATTERNS.md
+# enrich_meeting_attendees § Step 2) returns the full day's events.
+arete pull calendar --date $(date +%Y-%m-%d) --json > /tmp/winddown-cal-today.json
+arete pull calendar --date $(date -v-1d +%Y-%m-%d) --json > /tmp/winddown-cal-yesterday.json 2>/dev/null
+```
+
+**Workaround note** (per Phase 8 plan AC1): a true negative-day
+window (`--days -1`) is not supported by `arete pull calendar` today;
+the backward window is approximated via per-day `--date` pulls for
+today + yesterday. This is sufficient for Rule 3 since the rule only
+needs to recognize "the named meeting passed (start < now)" — events
+≥2 days in the past are unlikely to be referenced by today's meeting
+action items. If a meeting action references an older event, the
+heuristic gracefully falls through to Uncertain.
+
+#### 1o — Commitments + areas/epics watchlist + week.md
+
+```bash
+# Open commitments (re-run idempotency check uses this; see AC4)
+arete commitments list --json > /tmp/winddown-commitments.json
+
+# Active areas with jira_epics watchlist (Phase 7a AC4)
+arete areas epics --active --json > /tmp/winddown-epics.json
+
+# now/week.md already read in 1c above; re-use that content.
+```
+
+The epics output is **display-only** in Phase 8 — Jira MCP is not
+wired yet, so the chef surfaces "Active epics: PLAT-11014,
+PLAT-10025, ..." as context but does NOT pull Jira state. See the
+parking-lot item in the Phase 8 plan.
+
+#### 1p — Channel-coverage audit (per AC5 nudge)
+
+```bash
+arete people audit-channels --json > /tmp/winddown-audit.json
+# Output shape: {success: true, audit: {total, with_email,
+#   with_slack_user_id, with_slack_handle, with_phone,
+#   with_alt_emails, no_channels}}
+```
+
+Compute `slack_coverage = audit.with_slack_user_id / audit.total`. The
+channel-backfill nudge wiring lands in the AC5 commit; for now Step 1
+collects the audit signal so downstream steps can use it.
+
+#### 1q — Mtime-snapshot post-check (gather-only contract violation surface)
+
+After 1k–1m complete, re-snapshot the same paths from 1j and diff.
+Any new file under `now/archive/slack-digest/`, `now/archive/email-triage/`,
+or `now/archive/process-meetings/` whose mtime is later than the 1j
+snapshot indicates a gather-only contract violation (the sub-skill
+wrote a file in gather-only mode). Surface each violation as a line
+in the final `## Notes` section of the curated view:
+
+```
+## Notes
+- slack-digest gather-only contract violation detected: new file
+  now/archive/slack-digest/slack-digest-2026-05-30.md (write occurred
+  during gather-only invocation; expected no disk write). Soak should
+  surface if recurring.
+```
+
+```bash
+ls -la now/archive/slack-digest/    2>/dev/null > /tmp/winddown-mtime-post-slack.txt
+ls -la now/archive/email-triage/    2>/dev/null > /tmp/winddown-mtime-post-email.txt
+ls -la now/archive/process-meetings/ 2>/dev/null > /tmp/winddown-mtime-post-process.txt
+diff /tmp/winddown-mtime-pre-slack.txt    /tmp/winddown-mtime-post-slack.txt    || true
+diff /tmp/winddown-mtime-pre-email.txt    /tmp/winddown-mtime-post-email.txt    || true
+diff /tmp/winddown-mtime-pre-process.txt  /tmp/winddown-mtime-post-process.txt  || true
+```
+
+**Best-effort caveat** (per AC1 / pre-mortem R3): the file may
+already exist with the same mtime if it's a winddown re-run on the
+same day. Only NEW files post-1j or mtimes strictly LATER than the
+pre-snapshot count as violations. Detection is advisory, not a hard
+gate — the soak window is where recurring violations get flagged for
+sub-skill tightening.
 
 ### Step 2 — Read APPEND + apply judgment
 

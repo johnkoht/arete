@@ -414,4 +414,139 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
       assert.match(content, /now\/archive\/email-triage/);
     });
   });
+
+  // Phase 8 — daily-winddown becomes the cross-skill chef-orchestrator.
+  // These tests guard against prose drift in the Step 1 cross-skill
+  // gather, the Step 2 reconciler, the Closed-today narrative section,
+  // the proposed-collapse engagement surface, the channel-backfill
+  // nudge, and the D8 "always full" framing. Loose regex per the
+  // post-Phase-3.5-followup conventions; D7 means there's no end-to-end
+  // reconciler test — soak is the validation layer, prose-regex guards
+  // against drift.
+  describe('Phase 8 — daily-winddown cross-skill chef-orchestrator', () => {
+    const dwContent = readFileSync(
+      join(SKILLS_DIR, 'daily-winddown', 'SKILL.md'),
+      'utf8',
+    );
+
+    describe('AC1 — cross-skill gather (Step 1)', () => {
+      it('Step 1 header reflects the cross-skill gather rewrite', () => {
+        assert.match(
+          dwContent,
+          /### Step 1 — Cross-skill gather/i,
+          'AC1: Step 1 should be renamed "Cross-skill gather"',
+        );
+      });
+
+      it('invokes slack-digest in [gather-only] mode (Pattern 5)', () => {
+        // Pattern 5 invocation marker + skill reference.
+        assert.match(
+          dwContent,
+          /slack-digest skill in `?\[gather-only\]`?/i,
+          'AC1: missing slack-digest [gather-only] invocation',
+        );
+      });
+
+      it('invokes email-triage in [gather-only] mode (Pattern 5)', () => {
+        assert.match(
+          dwContent,
+          /email-triage skill in `?\[gather-only\]`?/i,
+          'AC1: missing email-triage [gather-only] invocation',
+        );
+      });
+
+      it('invokes process-meetings in [gather-only] mode for intent loops', () => {
+        assert.match(
+          dwContent,
+          /process-meetings skill in `?\[gather-only\]`?/i,
+          'AC1: missing process-meetings [gather-only] invocation',
+        );
+      });
+
+      it('pulls forward calendar via arete pull calendar --days 30 --json', () => {
+        assert.match(
+          dwContent,
+          /arete pull calendar --days 30 --json/,
+          'AC1: missing forward-30d calendar pull',
+        );
+      });
+
+      it('pulls backward calendar window (today + yesterday workaround)', () => {
+        // The plan accepts the per-day --date workaround since --days -1
+        // is not supported. Just check we reference some backward pull.
+        assert.match(
+          dwContent,
+          /arete pull calendar --date/,
+          'AC1: missing backward calendar pull (per-day --date workaround)',
+        );
+      });
+
+      it('pulls open commitments via arete commitments list --json', () => {
+        assert.match(
+          dwContent,
+          /arete commitments list --json/,
+          'AC1: missing commitments pull',
+        );
+      });
+
+      it('pulls active areas/epics watchlist via arete areas epics --active --json', () => {
+        assert.match(
+          dwContent,
+          /arete areas epics --active --json/,
+          'AC1: missing areas epics watchlist pull',
+        );
+      });
+
+      it('reads now/week.md as part of cross-skill gather', () => {
+        assert.match(
+          dwContent,
+          /now\/week\.md/,
+          'AC1: missing now/week.md read',
+        );
+      });
+
+      it('pulls channel-coverage audit via arete people audit-channels --json (AC5)', () => {
+        assert.match(
+          dwContent,
+          /arete people audit-channels --json/,
+          'AC1/AC5: missing audit-channels pull',
+        );
+      });
+
+      it('documents the parallel-where-independent gather pattern', () => {
+        assert.match(
+          dwContent,
+          /parallel where independent/i,
+          'AC1: missing "parallel where independent" framing',
+        );
+      });
+
+      it('C5 — mtime-snapshot contract-violation check on now/archive/<skill>/', () => {
+        // The pre-snapshot.
+        assert.match(
+          dwContent,
+          /Snapshot now\/archive mtimes|mtime.*snapshot|snapshot.*mtime/i,
+          'C5: missing mtime-snapshot framing',
+        );
+        // The contract-violation language — surfaces in ## Notes when
+        // a sub-skill writes during gather-only mode.
+        assert.match(
+          dwContent,
+          /gather-only contract violation/i,
+          'C5: missing "gather-only contract violation" detection language',
+        );
+        // Explicit reference to now/archive paths under inspection.
+        assert.match(
+          dwContent,
+          /now\/archive\/slack-digest/,
+          'C5: should snapshot now/archive/slack-digest/',
+        );
+        assert.match(
+          dwContent,
+          /now\/archive\/email-triage/,
+          'C5: should snapshot now/archive/email-triage/',
+        );
+      });
+    });
+  });
 });
