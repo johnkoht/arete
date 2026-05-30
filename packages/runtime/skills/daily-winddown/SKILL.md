@@ -192,7 +192,7 @@ appear in `topics:` that token-overlap the canonical (use `tokenizeSlug`-
 equivalent logic: split on `-`, filter `vs`/`and`/`or`, singularize
 trailing `s` on length-≥4 tokens unless `-ss` ending).
 
-Surface format (write into the `## Uncertain` block of Step 3's curated
+Surface format (write into the `## Uncertain` block of Step 4's curated
 view):
 
 ```markdown
@@ -467,13 +467,134 @@ pre-snapshot count as violations. Detection is advisory, not a hard
 gate — the soak window is where recurring violations get flagged for
 sub-skill tightening.
 
-### Step 2 — Read APPEND + apply judgment
+### Step 2 — Reconcile (before staging, judgment in-context)
+
+**New in Phase 8 (per AC2 / spec §3).** Before Step 3 applies
+defer/stage/Uncertain judgment, the chef reads the merged loop
+ledger from Step 1's cross-skill gather and applies the **three skip
+rules** below. The reconciler is **agent judgment in-context** (D7) —
+no new CLI primitive. Conservative collapse (D1): concrete evidence
+only; fuzzy matches drop to `## Uncertain — your call`. All collapses
+are **proposed**, never auto-executed (AC4).
+
+**Merge the ledger first.** Combine loops from 1k (slack), 1l (email),
+1m (meetings as intents), 1n (calendar events), 1o (commitments as
+intents). Order by timestamp. Each loop carries `{source, source_ref,
+counterparty, timestamp, text, evidence_pointer, kind}` per PATTERNS.md
+§ "gather-only composition" → "JSON output shape conventions".
+
+**Re-run idempotency check (R7)** — BEFORE applying any rule, read
+`arete commitments list --json` (from 1o). For any commitment with
+`resolvedAt > today_start` (00:00:00 of the local day), **skip
+proposing collapse for it** — it was already resolved earlier today
+on a prior winddown run. Add a one-line note in `## Notes` if any
+such commitments were skipped ("N commitments already resolved earlier
+today — skipped from re-proposal").
+
+#### Rule 3 — Action moot, event passed (cheapest; runs first)
+
+For each prep action ("prepare X for meeting Y", "review X before
+call Z", "find suitable staging claim for live walkthrough"): if the
+named meeting/event has already passed (event timestamp < now), mark
+as **moot** and propose collapse.
+
+- **Concrete only**: needs explicit meeting/event reference in the
+  intent text. No fuzzy timestamp inference.
+- **Evidence**: the calendar event itself (from 1n today's pull) with
+  its passed start time.
+- **Cheapest rule**; runs first as a pre-filter before Rules 1 + 2.
+
+This rule catches spec anchor `ai_003` ("Find a suitable staging
+claim for live walkthrough" — Runyon walkthrough event already
+passed).
+
+#### Rule 1 — Intent → fulfilling action elsewhere
+
+For each open commitment (from 1o) AND each intent loop from today's
+meetings (from 1m), scan the slack + email loop ledger (from 1k + 1l)
+for a fulfilling action authored by the user matching the same
+counterparty + topic + timestamp ≥ intent.
+
+- **Match heuristic**:
+  - **Counterparty resolution** preferred via `arete people show
+    --channels` cache (slug-level resolve).
+  - **Topic overlap** ≥ 50% Jaccard on normalized tokens (lowercased,
+    stopwords removed, singularized).
+  - **Timestamp ordering**: fulfilling action timestamp ≥ intent
+    timestamp.
+- **Concrete evidence** (real slack message OR sent email OR calendar
+  invite created): propose collapse to `## Closed today (proposed)`
+  with full trace.
+- **Fuzzy** (partial counterparty match, weak topic overlap, OR
+  graceful-degradation name-string fallback per below): surface in
+  `## Uncertain — your call` with the candidate fulfillment, NOT in
+  Closed today.
+
+**Graceful degradation (per AC5 / pre-mortem R5)** — when counterparty
+resolution falls back to **name-string heuristic** (the person's
+`slack_user_id` is not populated, so the chef matches by display
+name): confidence drops to "low" automatically and the match goes to
+`## Uncertain` regardless of topic confidence. The user sees a line
+like: "Lindsay agreed Wed via Slack (name-match only; populate
+`slack_user_id` for high-confidence)." This is the realistic
+**ships-degraded** state per AC1 review C1 — `slack_user_id` is 0%
+populated in arete-reserv at ship.
+
+This rule catches spec anchor `ai_002` ("Confirm with Lindsay the
+pre-read package was sent to Runyon" — fulfilled via slack DM), but
+**degraded to Uncertain** until backfill progresses.
+
+#### Rule 2 — Intent → already-scheduled event
+
+For each open "meet with X" / "talk to X" / "set up call with X"
+intent (from open commitments 1o or today's meeting actions 1m): scan
+the forward calendar (next 30 days, from 1n) for events with matching
+attendees.
+
+- **Match attendees regardless of `organizer.self`** (per spec anchor
+  `ai_004` + Phase 7a AC6 finding: `arete pull calendar` returns
+  invited events with `organizer.self: boolean`; reconciler treats
+  invited events as fulfillment whether organized by the user or
+  someone else).
+- **Attendee resolution chain** (per pre-mortem R4): slug → email →
+  name string, in that order. Without `slack_user_id` AND with only
+  12% email coverage, this is also graceful-degradation territory;
+  name-only matches drop to Uncertain.
+- **Concrete event exists** with matching attendees: propose collapse
+  to `## Closed today (proposed)` — the event IS the fulfillment.
+- **Recurring-event guard (R6)**: recurring events with **generic
+  titles** (e.g., "X / John 1:1" weekly standing) drop to `##
+  Uncertain`, NOT auto-propose. Reason: the calendar event title is
+  too weak to confirm the specific intent topic. The intent "set up
+  call with X about Y" should NOT be auto-collapsed by a standing 1:1
+  even if X is the attendee. Heuristic for "generic": event has
+  `recurring: true` (or `recurrence:` rule present) AND title is
+  one of {"X 1:1", "X / John 1:1", "John / X", "weekly", "sync",
+  "standup", "check-in"}. When ambiguous, default to Uncertain.
+
+This rule catches spec anchor `ai_004` ("Meet with Nick + Anthony to
+review prototype" — Friday calendar invite already exists, organized
+by someone else).
+
+#### Conservative collapse summary (D1)
+
+All three rules MUST cite a concrete piece of evidence — a real
+message, sent email, calendar event, or passed timestamp. Fuzzy
+matches → `## Uncertain` tier, **never silently collapsed**. Per AC4
+(below), all proposed collapses surface for user approval — the
+reconciler never executes the collapse itself.
+
+### Step 3 — Read APPEND + apply judgment
 
 **Read the APPEND file** for per-skill context (already loaded in Step 0).
 
-**Apply judgment** using gathered output + APPEND + wiki context. For
-each potential surface item (staged action, decision, learning,
-agenda carryover, inbox item), decide:
+**Apply judgment** using gathered output (Step 1 cross-skill ledger
+minus Step 2 reconciler-collapsed candidates) + APPEND + wiki context.
+Items that landed in `## Closed today (proposed)` from Step 2 are NOT
+re-considered here — they're already surfaced for user approval. For
+each remaining potential surface item (staged action, decision,
+learning, agenda carryover, inbox item, slack open-thread, email
+incoming-ask), decide:
 
 - **Stage** — surface in the primary view. Reason: e.g., open
   commitment >7d, matches week focus, customer-touching.
@@ -494,7 +615,7 @@ to check.
 **Conflict-with-priorities** — items contradicting week.md priorities
 (or APPEND active initiatives) get a flag in their reason label.
 
-### Step 3 — Compose the curated view
+### Step 4 — Compose the curated view
 
 Build the single message to the user. **No engagement before this.**
 
@@ -614,10 +735,10 @@ What's your call?
 - Never auto-execute. User responds with action numbers to run / edit
   / skip.
 
-### Step 4 — Persist the curated view + engage user once
+### Step 5 — Persist the curated view + engage user once
 
 **Persist the curated view to disk BEFORE engaging the user.** Write
-the full Step-3 output verbatim to `now/archive/daily-winddown/winddown-YYYY-MM-DD.md`. This
+the full Step-4 output verbatim to `now/archive/daily-winddown/winddown-YYYY-MM-DD.md`. This
 is the audit trail: reason labels, Uncertain tier, action proposals,
 sidecar references. Without this, the curated view exists only in
 the chat buffer and is lost when the conversation scrolls. AC10/AC11
@@ -626,7 +747,7 @@ soak evaluation depends on it.
 ```bash
 mkdir -p now/archive/daily-winddown
 cat > "now/archive/daily-winddown/winddown-$(date +%Y-%m-%d).md" <<'EOF'
-{full Step-3 curated view, including all sections}
+{full Step-4 curated view, including all sections}
 EOF
 ```
 
@@ -647,7 +768,7 @@ Acceptable user responses:
   `arete meeting approve` per source meeting
 - Free-form pushback / questions → engage normally
 
-### Step 5 — Execute approved actions + commit approved items
+### Step 6 — Execute approved actions + commit approved items
 
 After user approval (and only after):
 
@@ -671,7 +792,7 @@ arete people memory refresh
 arete index
 ```
 
-### Step 6 — Log winddown end
+### Step 7 — Log winddown end
 
 ```bash
 arete events log winddown --event end

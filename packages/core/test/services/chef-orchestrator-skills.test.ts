@@ -548,5 +548,94 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         );
       });
     });
+
+    describe('AC2 — three-rule reconciler (Step 2)', () => {
+      it('Step 2 is the reconcile-before-staging step', () => {
+        assert.match(
+          dwContent,
+          /### Step 2 — Reconcile/i,
+          'AC2: Step 2 should be "Reconcile" (before staging)',
+        );
+      });
+
+      it('Rule 1 — Intent → fulfilling action elsewhere', () => {
+        assert.match(
+          dwContent,
+          /Rule 1.*Intent.*fulfilling action/i,
+          'AC2: missing Rule 1 framing',
+        );
+      });
+
+      it('Rule 2 — Intent → already-scheduled event', () => {
+        assert.match(
+          dwContent,
+          /Rule 2.*Intent.*already-scheduled event/i,
+          'AC2: missing Rule 2 framing',
+        );
+      });
+
+      it('Rule 3 — Action moot, event passed (cheapest, runs first)', () => {
+        assert.match(
+          dwContent,
+          /Rule 3.*Action moot.*event passed/i,
+          'AC2: missing Rule 3 framing',
+        );
+      });
+
+      it('conservative collapse — concrete evidence only (D1)', () => {
+        assert.match(
+          dwContent,
+          /[Cc]onservative collapse/,
+          'AC2: missing "conservative collapse" framing (D1)',
+        );
+        assert.match(
+          dwContent,
+          /concrete evidence/i,
+          'AC2: missing "concrete evidence" requirement',
+        );
+      });
+
+      it('fuzzy matches → Uncertain tier (never silently collapsed)', () => {
+        assert.match(
+          dwContent,
+          /never silently collapsed/i,
+          'AC2: missing "never silently collapsed" guard',
+        );
+      });
+
+      it('Rule 2 matches regardless of organizer.self (anchor ai_004)', () => {
+        assert.match(
+          dwContent,
+          /regardless of `?organizer\.self`?/i,
+          'AC2: Rule 2 must match regardless of `organizer.self` (anchor ai_004)',
+        );
+      });
+
+      it('Rule 2 recurring-1:1 guard (R6) drops to Uncertain', () => {
+        assert.match(
+          dwContent,
+          /[Rr]ecurring.*event guard|[Rr]ecurring.*1:1|[Rr]ecurring events with.*generic titles/,
+          'AC2: missing recurring-event guard (R6)',
+        );
+      });
+
+      it('graceful degradation — name-string fallback → Uncertain regardless of topic confidence', () => {
+        assert.match(
+          dwContent,
+          /[Gg]raceful degradation/,
+          'AC2: missing graceful-degradation framing',
+        );
+        assert.match(
+          dwContent,
+          /name-string|name-match|name string/i,
+          'AC2: missing name-string fallback language',
+        );
+        assert.match(
+          dwContent,
+          /slack_user_id/,
+          'AC2: graceful degradation should reference slack_user_id population gap',
+        );
+      });
+    });
   });
 });
