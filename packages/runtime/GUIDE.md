@@ -740,7 +740,6 @@ arete search "user onboarding"                    # Search everywhere
 arete search "pricing" --scope memory             # Search decisions/learnings only
 arete search "API" --timeline --days 30           # Recent timeline of API discussions
 arete search "jane" --person jane-doe             # Results about Jane
-arete search "roadmap" --answer                   # AI synthesis of roadmap context
 ```
 
 See [CLI Reference > Search](#search) for all flags and options.
@@ -941,7 +940,6 @@ arete search "query" --scope people               # Search only people profiles
 arete search "query" --timeline                   # Show results chronologically with themes
 arete search "query" --timeline --days 30         # Limit timeline to last 30 days
 arete search "query" --person "jane"              # Filter results by person
-arete search "query" --answer                     # AI synthesis of results (requires AI config)
 arete search "query" --limit 10                   # Limit number of results (default: 15)
 arete search "query" --json                       # Output as JSON
 ```
@@ -954,7 +952,6 @@ arete search "query" --json                       # Output as JSON
 | `--timeline` | Show results chronologically with recurring themes |
 | `--days <n>` | With `--timeline`, limit to last N days |
 | `--person <name>` | Filter results by person (name or slug) |
-| `--answer` | Synthesize AI-powered answer from results (requires AI configuration) |
 | `--limit <n>` | Maximum results to return (default: 15) |
 | `--json` | Output in JSON format |
 
@@ -972,9 +969,6 @@ arete search "API" --timeline --days 30
 
 # Find everything related to a person
 arete search "roadmap" --person jane-doe
-
-# Get an AI-synthesized answer
-arete search "what did we decide about auth?" --answer
 
 # Combine flags
 arete search "Q1 goals" --scope context --json
@@ -999,7 +993,6 @@ arete route "query" [--json]          # Route to skill/tool with model suggestio
 ### Daily Intelligence
 
 ```bash
-arete daily                           # Morning brief: calendar, commitments, projects, decisions, patterns
 arete momentum                        # Commitment momentum (hot/stale/critical) + relationship health
 arete view [--port N]                 # Open web dashboard in browser (launches backend server)
 ```

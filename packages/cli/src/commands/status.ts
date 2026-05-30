@@ -422,9 +422,6 @@ export function registerStatusCommand(program: Command): void {
       console.log('');
 
       // Recommendations
-      if (areaMemoryStale > 0) {
-        console.log(chalk.yellow(`  Run \`arete memory refresh\` to update ${areaMemoryStale} stale area memory file(s).`));
-      }
       if (topicMemoryStale > 0 || topicMemoryStub > 0 || topicMemoryOrphan > 0) {
         const bits: string[] = [];
         if (topicMemoryStale > 0) bits.push(`${topicMemoryStale} stale`);
@@ -432,7 +429,6 @@ export function registerStatusCommand(program: Command): void {
         if (topicMemoryOrphan > 0) bits.push(`${topicMemoryOrphan} orphan`);
         console.log(chalk.yellow(`  Topic memory: ${bits.join(', ')}. Run \`arete topic lint\` to see details.`));
       }
-      console.log(chalk.dim('  Run `arete daily` for your morning brief.'));
       console.log(chalk.dim('  Run `arete momentum` for commitment and relationship momentum.'));
       console.log('');
     });

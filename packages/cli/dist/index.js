@@ -29,7 +29,6 @@ import { registerAvailabilityCommands } from './commands/availability.js';
 import { registerCalendarCommands } from './commands/calendar.js';
 import { registerCommitmentsCommand } from './commands/commitments.js';
 import { registerViewCommand } from './commands/view.js';
-import { registerDailyCommand } from './commands/daily.js';
 import { registerMomentumCommand } from './commands/momentum.js';
 import { registerCredentialsCommand } from './commands/credentials.js';
 import { registerConfigCommand } from './commands/config.js';
@@ -59,8 +58,6 @@ ${chalk.bold('Intelligence')}
   search "query"                   Search across workspace (semantic)
   search "query" --scope <scope>   Limit to scope (memory|meetings|context|projects|people)
   search "query" --timeline        Show temporal view with themes
-  search "query" --answer          AI synthesis of results
-  daily                            Morning intelligence brief
   momentum [--person <slug>]       Commitment and relationship momentum
   context --for "query"            ${chalk.dim('[DEPRECATED]')} Use: search "query"
   context --inventory              Show freshness dashboard & coverage gaps
@@ -155,7 +152,6 @@ registerAvailabilityCommands(program);
 registerCalendarCommands(program);
 registerCommitmentsCommand(program);
 registerViewCommand(program);
-registerDailyCommand(program);
 registerMomentumCommand(program);
 registerCredentialsCommand(program);
 registerConfigCommand(program);
