@@ -654,7 +654,7 @@ Big week for visibility and AI configuration.
 
 The backend runs locally and the dashboard opens in your default browser. All your data stays on your machine.
 
-**Morning intelligence brief.** Run `arete daily` each morning to see what's on your plate: today's calendar, overdue commitments, active projects, recent decisions, and cross-person signal patterns. It's a quick way to orient before diving into work.
+**Morning intelligence brief.** Run `arete daily` each morning to see what's on your plate: today's calendar, overdue commitments, active projects, recent decisions, and cross-person signal patterns. It's a quick way to orient before diving into work. _**Removed in Phase 7b** (2026-05-29) — use the `/daily-plan` skill for morning planning or `arete status` / `arete brief` for the equivalent shell-side surface._
 
 **Momentum tracking.** `arete momentum` shows you commitment momentum (what's hot, stale, or critical) and relationship momentum (who you're actively meeting with vs. relationships that have gone quiet). Useful for weekly reviews and ensuring nothing slips through the cracks.
 
