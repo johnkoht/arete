@@ -192,7 +192,7 @@ appear in `topics:` that token-overlap the canonical (use `tokenizeSlug`-
 equivalent logic: split on `-`, filter `vs`/`and`/`or`, singularize
 trailing `s` on length-≥4 tokens unless `-ss` ending).
 
-Surface format (write into the `## Uncertain` block of Step 3's curated
+Surface format (write into the `## Uncertain` block of Step 4's curated
 view):
 
 ```markdown
@@ -228,12 +228,25 @@ no topic page in the workspace has ≥1 `sources_integrated` entry.
 suggestion, not an operational must-do. The user can `skip` without
 penalty; the chef re-surfaces on a future run if the staleness persists.
 
-### Step 1 — Gather (all primitives, parallelize where independent)
+### Step 1 — Cross-skill gather (parallel where independent)
+
+**Phase 8 redesigns this step.** The chef now gathers from multiple
+cross-skill sources in parallel — slack, email, meetings, calendar,
+commitments, week.md, areas/epics, and channel-coverage audit — and
+feeds them into the **Step 2 Reconcile** pass before staging anything
+for the user. The Phase 8 plan calls this "always full" mode (D8): no
+light/full toggle; the user runs winddown when they have time and
+prefers completeness over speed. AC10 informal target is ≤30 min
+median over the 14-day soak; AC11 hard stop is 45 min on any single
+day → revert. Phase 8 explicitly accepts the AC10 ceiling raise in
+exchange for fewer hand-skipped items per winddown.
 
 **Run in parallel (no engagement gates between).** The chef-orchestrator
-pattern's speed win comes from *actually* running 1a–1f as concurrent
+pattern's speed win comes from *actually* running 1a–1q as concurrent
 tool calls in a single agent turn. Sequential reads here defeat the
 purpose. If the harness supports parallel tool calls, use them.
+
+#### 1a–1i — Local gather (existing primitives)
 
 ```bash
 # 1a. Pull recordings from configured integrations
@@ -290,13 +303,305 @@ arete commitments list --json
 # (areas/ files already read in 1c)
 ```
 
-### Step 2 — Read APPEND + apply judgment
+#### 1j — Snapshot now/archive mtimes (gather-only contract check, per AC1 / C5)
+
+Before invoking any sub-skill in gather-only mode, snapshot the file
+mtimes under `now/archive/<sub-skill>/` for the three gather-only
+consumers (slack-digest, email-triage, process-meetings). This lets
+the chef detect a contract violation — per PATTERNS.md § "gather-only
+composition", a skill in gather-only mode MUST NOT write to its own
+`now/archive/<skill>/` persistence path; the orchestrator owns
+persistence for the composed view.
+
+```bash
+# Capture ls -la output (or equivalent stat snapshot). Any plausible
+# format that lets the post-gather check distinguish "new file" from
+# "pre-existing file" is fine.
+ls -la now/archive/slack-digest/    2>/dev/null > /tmp/winddown-mtime-pre-slack.txt
+ls -la now/archive/email-triage/    2>/dev/null > /tmp/winddown-mtime-pre-email.txt
+ls -la now/archive/process-meetings/ 2>/dev/null > /tmp/winddown-mtime-pre-process.txt
+```
+
+This is **best-effort detection** (per Phase 8 plan AC1 / pre-mortem
+R3). A sub-skill that writes to a different path (e.g., `resources/notes/`
+in slack-digest's case) won't be caught by this snapshot. Soak is the
+real fix layer. Any detected mismatch in 1q below surfaces in the
+final `## Notes` section.
+
+#### 1k — slack-digest in gather-only mode
+
+Invoke the slack-digest skill in `[gather-only]` mode (per PATTERNS.md
+§ "gather-only composition" → "Invocation convention"). Include the
+canonical instruction sentence:
+
+> "Run the slack-digest skill in `[gather-only]` mode. Return the
+> structured loop output described in slack-digest SKILL.md's
+> 'Gather-only mode' section. Do NOT engage the user, write to
+> `resources/notes/` or `now/archive/slack-digest/`, run `arete
+> commitments create/resolve`, or propose actions — those run only
+> when slack-digest is invoked standalone."
+
+Collect the returned JSON `{skill, mode, loops[], unresolved_participants[], partial}`.
+If the response is non-JSON or missing `loops[]`, note as a contract
+violation (surface in 1q / `## Notes`) and continue with whatever
+structured signal is salvageable.
+
+#### 1l — email-triage in gather-only mode
+
+Same shape as 1k. Include the canonical instruction sentence:
+
+> "Run the email-triage skill in `[gather-only]` mode. Return the
+> structured loop output described in email-triage SKILL.md's
+> 'Gather-only mode' section. Do NOT engage the user, write to
+> `now/archive/email-triage/`, run `arete commitments create/resolve`,
+> or propose actions — those run only when email-triage is invoked
+> standalone."
+
+Collect the returned JSON. Same fallback on contract violation.
+
+#### 1m — process-meetings in gather-only mode (today's action items as intent loops)
+
+Invoke process-meetings in `[gather-only]` mode to surface today's
+extracted meeting action items as **intent loops** the reconciler can
+match against slack / email / calendar fulfillment evidence. Even
+though process-meetings doesn't (yet) ship a formal `## Gather-only
+mode` section, the orchestrator passes the canonical `[gather-only]`
+marker per PATTERNS.md § "gather-only composition" and asks for loops
+in the canonical shape:
+
+> "Run the process-meetings skill in `[gather-only]` mode. For each
+> today's meeting in resources/meetings/$(date +%Y-%m-%d)-*.md, return
+> action items as intent loops: `{source: "meeting", source_ref:
+> <meeting-slug>, counterparty: <person-slug>, timestamp: <meeting
+> time>, text: <action item text>, evidence_pointer: meeting://<slug>,
+> kind: "intent"}`. Do NOT engage the user, write to
+> `now/archive/process-meetings/`, run `arete meeting approve`, or
+> propose actions — those run only when process-meetings is invoked
+> standalone."
+
+If process-meetings is unable to respect gather-only mode (no formal
+section), the chef may fall back to parsing the staged items from 1h's
+`arete meeting extract --stage` output directly — same loop shape,
+same downstream reconciler treatment. Note the fallback in `## Notes`.
+
+#### 1n — Calendar pull (forward + backward windows, per D9)
+
+```bash
+# Forward window — next 30 days of events (per spec D9, Phase 7a AC6
+# adds --days N support).
+arete pull calendar --days 30 --json > /tmp/winddown-cal-forward.json
+
+# Backward window — recent-past events for Rule 3 "action moot, event
+# passed" detection. Use --date for today (catches today's earlier
+# meetings + the start-time check covers the "passed" rule), and
+# repeat for yesterday if needed. The --date flag (per PATTERNS.md
+# enrich_meeting_attendees § Step 2) returns the full day's events.
+arete pull calendar --date $(date +%Y-%m-%d) --json > /tmp/winddown-cal-today.json
+arete pull calendar --date $(date -v-1d +%Y-%m-%d) --json > /tmp/winddown-cal-yesterday.json 2>/dev/null
+```
+
+**Workaround note** (per Phase 8 plan AC1): a true negative-day
+window (`--days -1`) is not supported by `arete pull calendar` today;
+the backward window is approximated via per-day `--date` pulls for
+today + yesterday. This is sufficient for Rule 3 since the rule only
+needs to recognize "the named meeting passed (start < now)" — events
+≥2 days in the past are unlikely to be referenced by today's meeting
+action items. If a meeting action references an older event, the
+heuristic gracefully falls through to Uncertain.
+
+#### 1o — Commitments + areas/epics watchlist + week.md
+
+```bash
+# Open commitments (re-run idempotency check uses this; see AC4)
+arete commitments list --json > /tmp/winddown-commitments.json
+
+# Active areas with jira_epics watchlist (Phase 7a AC4)
+arete areas epics --active --json > /tmp/winddown-epics.json
+
+# now/week.md already read in 1c above; re-use that content.
+```
+
+The epics output is **display-only** in Phase 8 — Jira MCP is not
+wired yet, so the chef surfaces "Active epics: PLAT-11014,
+PLAT-10025, ..." as context but does NOT pull Jira state. See the
+parking-lot item in the Phase 8 plan.
+
+#### 1p — Channel-coverage audit (per AC5 nudge)
+
+```bash
+arete people audit-channels --json > /tmp/winddown-audit.json
+# Output shape: {success: true, audit: {total, with_email,
+#   with_slack_user_id, with_slack_handle, with_phone,
+#   with_alt_emails, no_channels}}
+```
+
+Compute `slack_coverage = audit.with_slack_user_id / audit.total`. If
+`< 0.5`, the channel-backfill nudge fires (see Step 4 output template
+§ `## Notes` and / or top-of-`## Closed today`). See AC5 in Phase 8
+plan and pre-mortem R5 for the framing — Rule 1 is degraded at ship
+until backfill progresses.
+
+#### 1q — Mtime-snapshot post-check (gather-only contract violation surface)
+
+After 1k–1m complete, re-snapshot the same paths from 1j and diff.
+Any new file under `now/archive/slack-digest/`, `now/archive/email-triage/`,
+or `now/archive/process-meetings/` whose mtime is later than the 1j
+snapshot indicates a gather-only contract violation (the sub-skill
+wrote a file in gather-only mode). Surface each violation as a line
+in the final `## Notes` section of the curated view:
+
+```
+## Notes
+- slack-digest gather-only contract violation detected: new file
+  now/archive/slack-digest/slack-digest-2026-05-30.md (write occurred
+  during gather-only invocation; expected no disk write). Soak should
+  surface if recurring.
+```
+
+```bash
+ls -la now/archive/slack-digest/    2>/dev/null > /tmp/winddown-mtime-post-slack.txt
+ls -la now/archive/email-triage/    2>/dev/null > /tmp/winddown-mtime-post-email.txt
+ls -la now/archive/process-meetings/ 2>/dev/null > /tmp/winddown-mtime-post-process.txt
+diff /tmp/winddown-mtime-pre-slack.txt    /tmp/winddown-mtime-post-slack.txt    || true
+diff /tmp/winddown-mtime-pre-email.txt    /tmp/winddown-mtime-post-email.txt    || true
+diff /tmp/winddown-mtime-pre-process.txt  /tmp/winddown-mtime-post-process.txt  || true
+```
+
+**Best-effort caveat** (per AC1 / pre-mortem R3): the file may
+already exist with the same mtime if it's a winddown re-run on the
+same day. Only NEW files post-1j or mtimes strictly LATER than the
+pre-snapshot count as violations. Detection is advisory, not a hard
+gate — the soak window is where recurring violations get flagged for
+sub-skill tightening.
+
+### Step 2 — Reconcile (before staging, judgment in-context)
+
+**New in Phase 8 (per AC2 / spec §3).** Before Step 3 applies
+defer/stage/Uncertain judgment, the chef reads the merged loop
+ledger from Step 1's cross-skill gather and applies the **three skip
+rules** below. The reconciler is **agent judgment in-context** (D7) —
+no new CLI primitive. Conservative collapse (D1): concrete evidence
+only; fuzzy matches drop to `## Uncertain — your call`. All collapses
+are **proposed**, never auto-executed (AC4).
+
+**Merge the ledger first.** Combine loops from 1k (slack), 1l (email),
+1m (meetings as intents), 1n (calendar events), 1o (commitments as
+intents). Order by timestamp. Each loop carries `{source, source_ref,
+counterparty, timestamp, text, evidence_pointer, kind}` per PATTERNS.md
+§ "gather-only composition" → "JSON output shape conventions".
+
+**Re-run idempotency check (R7)** — BEFORE applying any rule, read
+`arete commitments list --json` (from 1o). For any commitment with
+`resolvedAt > today_start` (00:00:00 of the local day), **skip
+proposing collapse for it** — it was already resolved earlier today
+on a prior winddown run. Add a one-line note in `## Notes` if any
+such commitments were skipped ("N commitments already resolved earlier
+today — skipped from re-proposal").
+
+#### Rule 3 — Action moot, event passed (cheapest; runs first)
+
+For each prep action ("prepare X for meeting Y", "review X before
+call Z", "find suitable staging claim for live walkthrough"): if the
+named meeting/event has already passed (event timestamp < now), mark
+as **moot** and propose collapse.
+
+- **Concrete only**: needs explicit meeting/event reference in the
+  intent text. No fuzzy timestamp inference.
+- **Evidence**: the calendar event itself (from 1n today's pull) with
+  its passed start time.
+- **Cheapest rule**; runs first as a pre-filter before Rules 1 + 2.
+
+This rule catches spec anchor `ai_003` ("Find a suitable staging
+claim for live walkthrough" — Runyon walkthrough event already
+passed).
+
+#### Rule 1 — Intent → fulfilling action elsewhere
+
+For each open commitment (from 1o) AND each intent loop from today's
+meetings (from 1m), scan the slack + email loop ledger (from 1k + 1l)
+for a fulfilling action authored by the user matching the same
+counterparty + topic + timestamp ≥ intent.
+
+- **Match heuristic**:
+  - **Counterparty resolution** preferred via `arete people show
+    --channels` cache (slug-level resolve).
+  - **Topic overlap** ≥ 50% Jaccard on normalized tokens (lowercased,
+    stopwords removed, singularized).
+  - **Timestamp ordering**: fulfilling action timestamp ≥ intent
+    timestamp.
+- **Concrete evidence** (real slack message OR sent email OR calendar
+  invite created): propose collapse to `## Closed today (proposed)`
+  with full trace.
+- **Fuzzy** (partial counterparty match, weak topic overlap, OR
+  graceful-degradation name-string fallback per below): surface in
+  `## Uncertain — your call` with the candidate fulfillment, NOT in
+  Closed today.
+
+**Graceful degradation (per AC5 / pre-mortem R5)** — when counterparty
+resolution falls back to **name-string heuristic** (the person's
+`slack_user_id` is not populated, so the chef matches by display
+name): confidence drops to "low" automatically and the match goes to
+`## Uncertain` regardless of topic confidence. The user sees a line
+like: "Lindsay agreed Wed via Slack (name-match only; populate
+`slack_user_id` for high-confidence)." This is the realistic
+**ships-degraded** state per AC1 review C1 — `slack_user_id` is 0%
+populated in arete-reserv at ship.
+
+This rule catches spec anchor `ai_002` ("Confirm with Lindsay the
+pre-read package was sent to Runyon" — fulfilled via slack DM), but
+**degraded to Uncertain** until backfill progresses.
+
+#### Rule 2 — Intent → already-scheduled event
+
+For each open "meet with X" / "talk to X" / "set up call with X"
+intent (from open commitments 1o or today's meeting actions 1m): scan
+the forward calendar (next 30 days, from 1n) for events with matching
+attendees.
+
+- **Match attendees regardless of `organizer.self`** (per spec anchor
+  `ai_004` + Phase 7a AC6 finding: `arete pull calendar` returns
+  invited events with `organizer.self: boolean`; reconciler treats
+  invited events as fulfillment whether organized by the user or
+  someone else).
+- **Attendee resolution chain** (per pre-mortem R4): slug → email →
+  name string, in that order. Without `slack_user_id` AND with only
+  12% email coverage, this is also graceful-degradation territory;
+  name-only matches drop to Uncertain.
+- **Concrete event exists** with matching attendees: propose collapse
+  to `## Closed today (proposed)` — the event IS the fulfillment.
+- **Recurring-event guard (R6)**: recurring events with **generic
+  titles** (e.g., "X / John 1:1" weekly standing) drop to `##
+  Uncertain`, NOT auto-propose. Reason: the calendar event title is
+  too weak to confirm the specific intent topic. The intent "set up
+  call with X about Y" should NOT be auto-collapsed by a standing 1:1
+  even if X is the attendee. Heuristic for "generic": event has
+  `recurring: true` (or `recurrence:` rule present) AND title is
+  one of {"X 1:1", "X / John 1:1", "John / X", "weekly", "sync",
+  "standup", "check-in"}. When ambiguous, default to Uncertain.
+
+This rule catches spec anchor `ai_004` ("Meet with Nick + Anthony to
+review prototype" — Friday calendar invite already exists, organized
+by someone else).
+
+#### Conservative collapse summary (D1)
+
+All three rules MUST cite a concrete piece of evidence — a real
+message, sent email, calendar event, or passed timestamp. Fuzzy
+matches → `## Uncertain` tier, **never silently collapsed**. Per AC4
+(below), all proposed collapses surface for user approval — the
+reconciler never executes the collapse itself.
+
+### Step 3 — Read APPEND + apply judgment
 
 **Read the APPEND file** for per-skill context (already loaded in Step 0).
 
-**Apply judgment** using gathered output + APPEND + wiki context. For
-each potential surface item (staged action, decision, learning,
-agenda carryover, inbox item), decide:
+**Apply judgment** using gathered output (Step 1 cross-skill ledger
+minus Step 2 reconciler-collapsed candidates) + APPEND + wiki context.
+Items that landed in `## Closed today (proposed)` from Step 2 are NOT
+re-considered here — they're already surfaced for user approval. For
+each remaining potential surface item (staged action, decision,
+learning, agenda carryover, inbox item, slack open-thread, email
+incoming-ask), decide:
 
 - **Stage** — surface in the primary view. Reason: e.g., open
   commitment >7d, matches week focus, customer-touching.
@@ -317,7 +622,7 @@ to check.
 **Conflict-with-priorities** — items contradicting week.md priorities
 (or APPEND active initiatives) get a flag in their reason label.
 
-### Step 3 — Compose the curated view
+### Step 4 — Compose the curated view
 
 Build the single message to the user. **No engagement before this.**
 
@@ -329,10 +634,46 @@ Build the single message to the user. **No engagement before this.**
 {Brief 1-2 sentence summary: meetings processed, recordings pulled,
 inbox count, headline themes if any.}
 
+## Closed today (proposed)
+
+{From Step 2 Reconcile, all Rule 1/2/3 matches surface here as
+PROPOSED collapses. Per AC4 (revised post review-1) — NO auto-collapse;
+ALL collapses await user approval. Each line traces source →
+fulfillment with an evidence pointer (slack URI, email message-id,
+calendar event id, or meeting file path).}
+
+3 intents the reconciler thinks are fulfilled. Approve to commit the
+collapse; reject to keep in your queue.
+
+[CT1] Open commitment `abc12345` 'Confirm with Lindsay X' appears
+      fulfilled by Slack DM to @lindsay-gray at 11:42a today.
+      Evidence: slack:D0AGP5S4S4U/p1748... (intent timestamp 9:30a
+      < message 11:42a)
+      Action if approved: arete commitments_resolve abc12345
+        --reason "Auto-detected: Slack DM fulfillment"
+
+[CT2] Meeting action 'Set up call with Nick & Anthony to review
+      prototype' (from 2026-05-30-john-nate-pre-runyon-checkin.md)
+      appears fulfilled — calendar invite already exists for Fri 5/31
+      2p (organized by Nate; John attending).
+      Evidence: calendar:abc123def
+      Action if approved: skip staging this item (no commitment
+      created)
+
+[CT3] Meeting action 'Find suitable staging claim for live
+      walkthrough' is moot — the Runyon walkthrough event passed at
+      1:00p today.
+      Evidence: calendar:def456ghi (start=2026-05-30T13:00)
+      Action if approved: skip staging this item
+
+N items kept in `## Uncertain — your call` (low-confidence match;
+channel backfill would lift these).
+
 ## Stage for approval
 
 {High-confidence items the user should approve. Each item: type +
-text + reason label.}
+text + reason label. Items that landed in `## Closed today (proposed)`
+above are NOT also staged here — the proposed collapse IS the surface.}
 
 - [ ] Send API spec to Anthony — open commitment to Anthony, 9d old
 - Decision: Adopt Sonnet for reconciliation tier — matches week focus #2 (cost gate)
@@ -340,10 +681,13 @@ text + reason label.}
 
 ## Uncertain — your call
 
-{Items the agent isn't sure about. Brief yes/no proposal each.}
+{Items the agent isn't sure about. Brief yes/no proposal each. Includes
+graceful-degradation Rule 1 candidates (name-match-only fulfillment
+evidence — channel backfill would lift these to Closed today).}
 
 - [ ] Glance metrics ping to Lindsay — possibly resolved by today's standup. Stage or skip?
 - [ ] Email follow-up to Sara — matches dismissal pattern but customer-touching. Stage or skip?
+- [ ] Lindsay agreed Wed via Slack (name-match only; populate `slack_user_id` for high-confidence). Collapse or keep?
 
 ## Pruning candidates
 
@@ -437,10 +781,45 @@ What's your call?
 - Never auto-execute. User responds with action numbers to run / edit
   / skip.
 
-### Step 4 — Persist the curated view + engage user once
+**Closed-today rendering rules** (Phase 8 AC3 + AC4):
+- **Trace each proposed collapse** to a concrete source → fulfillment
+  pair. Required content: intent text, fulfillment source + counterparty
+  + timestamp, evidence pointer (slack URI, email message-id, calendar
+  event id, or meeting file path).
+- **ID prefix `CT<n>`** for each proposed collapse line (parallel to
+  numbered actions `[1] [2] [3]`). User approves by typing `CT1, CT3`
+  (or `all`).
+- **Show the action-if-approved** inline so the user knows what the
+  collapse commits to (e.g., `arete commitments_resolve <id>`, or "skip
+  staging this item").
+- **Uncertain-count footer** — list count of items kept in
+  `## Uncertain` because the match was low-confidence (e.g., name-string
+  fallback per graceful-degradation). This is the backfill-gap
+  visibility prompt (per AC3 / Phase 8 plan): "N items kept in Uncertain
+  (name-match only; channel backfill would lift these)."
+- **Audit-channels nudge** (per AC5) — if `slack_coverage < 0.5` from
+  Step 1p, surface a one-line nudge **inline at top of `## Closed today
+  (proposed)`** OR at top of `## Notes`:
+  `Reconciler match-rate degraded: <with_slack_user_id> of <total> people
+   have slack_user_id populated. Phase 7a 'arete people audit-channels'
+   shows the gap. Backfill via Slack MCP would lift reconciler accuracy.`
+  **Cap**: once per winddown. Skippable.
+- **Re-run idempotency (R7)** — for any commitment in `arete commitments
+  list --json` with `resolvedAt > today_start`, SKIP proposing collapse
+  for it. It was already resolved earlier today on a prior winddown
+  run. Add a one-line note in `## Notes` ("N commitments already
+  resolved earlier today — skipped from re-proposal") so the user knows
+  the idempotency check fired.
+- **NEVER auto-collapse.** All collapses are PROPOSED. User must
+  approve. The original Phase 8 plan distinguished "auto-collapse for
+  staged-only items" from "proposed for committed items"; review-1 C3
+  killed that distinction — uniform-proposed is safer and simpler. Per
+  AC4 the entire `## Closed today` surface is for user approval.
+
+### Step 5 — Persist the curated view + engage user once
 
 **Persist the curated view to disk BEFORE engaging the user.** Write
-the full Step-3 output verbatim to `now/archive/daily-winddown/winddown-YYYY-MM-DD.md`. This
+the full Step-4 output verbatim to `now/archive/daily-winddown/winddown-YYYY-MM-DD.md`. This
 is the audit trail: reason labels, Uncertain tier, action proposals,
 sidecar references. Without this, the curated view exists only in
 the chat buffer and is lost when the conversation scrolls. AC10/AC11
@@ -449,7 +828,7 @@ soak evaluation depends on it.
 ```bash
 mkdir -p now/archive/daily-winddown
 cat > "now/archive/daily-winddown/winddown-$(date +%Y-%m-%d).md" <<'EOF'
-{full Step-3 curated view, including all sections}
+{full Step-4 curated view, including all sections}
 EOF
 ```
 
@@ -463,14 +842,25 @@ response received.
 
 Acceptable user responses:
 - `1, 3` → execute actions 1 and 3
+- `CT1, CT3` → approve those proposed collapses (Closed today); leave
+  others in queue. Approve to commit each collapse via the action-if-
+  approved line shown alongside the CT entry.
+- `all` → execute all executable actions AND approve all Closed today
+  proposed collapses; confirm draft-only.
+  **Caution during Phase 8 soak window (first 14 winddowns)**: prefer
+  approving specific CT IDs (`CT1, CT3`) over blanket `all` so each
+  reconciler-proposed collapse gets a moment of human review. The
+  reconciler is conservative-by-design but new; `all`-muscle-memory
+  on Closed-today proposals defeats the safety net. Once you have
+  high confidence in the reconciler's match quality (typically after
+  a week of soak with zero false positives), `all` becomes safer.
 - `1 with target=@jamie` → edit and execute action 1
 - `skip 2` → drop action 2
-- `all` → execute all executable actions; confirm draft-only
 - `approve all staged` → commit all `## Stage for approval` items via
   `arete meeting approve` per source meeting
 - Free-form pushback / questions → engage normally
 
-### Step 5 — Execute approved actions + commit approved items
+### Step 6 — Execute approved actions + commit approved items
 
 After user approval (and only after):
 
@@ -494,7 +884,7 @@ arete people memory refresh
 arete index
 ```
 
-### Step 6 — Log winddown end
+### Step 7 — Log winddown end
 
 ```bash
 arete events log winddown --event end

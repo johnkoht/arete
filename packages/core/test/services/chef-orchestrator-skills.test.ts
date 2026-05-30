@@ -414,4 +414,370 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
       assert.match(content, /now\/archive\/email-triage/);
     });
   });
+
+  // Phase 8 — daily-winddown becomes the cross-skill chef-orchestrator.
+  // These tests guard against prose drift in the Step 1 cross-skill
+  // gather, the Step 2 reconciler, the Closed-today narrative section,
+  // the proposed-collapse engagement surface, the channel-backfill
+  // nudge, and the D8 "always full" framing. Loose regex per the
+  // post-Phase-3.5-followup conventions; D7 means there's no end-to-end
+  // reconciler test — soak is the validation layer, prose-regex guards
+  // against drift.
+  describe('Phase 8 — daily-winddown cross-skill chef-orchestrator', () => {
+    const dwContent = readFileSync(
+      join(SKILLS_DIR, 'daily-winddown', 'SKILL.md'),
+      'utf8',
+    );
+
+    describe('AC1 — cross-skill gather (Step 1)', () => {
+      it('Step 1 header reflects the cross-skill gather rewrite', () => {
+        assert.match(
+          dwContent,
+          /### Step 1 — Cross-skill gather/i,
+          'AC1: Step 1 should be renamed "Cross-skill gather"',
+        );
+      });
+
+      it('invokes slack-digest in [gather-only] mode (Pattern 5)', () => {
+        // Pattern 5 invocation marker + skill reference.
+        assert.match(
+          dwContent,
+          /slack-digest skill in `?\[gather-only\]`?/i,
+          'AC1: missing slack-digest [gather-only] invocation',
+        );
+      });
+
+      it('invokes email-triage in [gather-only] mode (Pattern 5)', () => {
+        assert.match(
+          dwContent,
+          /email-triage skill in `?\[gather-only\]`?/i,
+          'AC1: missing email-triage [gather-only] invocation',
+        );
+      });
+
+      it('invokes process-meetings in [gather-only] mode for intent loops', () => {
+        assert.match(
+          dwContent,
+          /process-meetings skill in `?\[gather-only\]`?/i,
+          'AC1: missing process-meetings [gather-only] invocation',
+        );
+      });
+
+      it('pulls forward calendar via arete pull calendar --days 30 --json', () => {
+        assert.match(
+          dwContent,
+          /arete pull calendar --days 30 --json/,
+          'AC1: missing forward-30d calendar pull',
+        );
+      });
+
+      it('pulls backward calendar window (today + yesterday workaround)', () => {
+        // The plan accepts the per-day --date workaround since --days -1
+        // is not supported. Just check we reference some backward pull.
+        assert.match(
+          dwContent,
+          /arete pull calendar --date/,
+          'AC1: missing backward calendar pull (per-day --date workaround)',
+        );
+      });
+
+      it('pulls open commitments via arete commitments list --json', () => {
+        assert.match(
+          dwContent,
+          /arete commitments list --json/,
+          'AC1: missing commitments pull',
+        );
+      });
+
+      it('pulls active areas/epics watchlist via arete areas epics --active --json', () => {
+        assert.match(
+          dwContent,
+          /arete areas epics --active --json/,
+          'AC1: missing areas epics watchlist pull',
+        );
+      });
+
+      it('reads now/week.md as part of cross-skill gather', () => {
+        assert.match(
+          dwContent,
+          /now\/week\.md/,
+          'AC1: missing now/week.md read',
+        );
+      });
+
+      it('pulls channel-coverage audit via arete people audit-channels --json (AC5)', () => {
+        assert.match(
+          dwContent,
+          /arete people audit-channels --json/,
+          'AC1/AC5: missing audit-channels pull',
+        );
+      });
+
+      it('documents the parallel-where-independent gather pattern', () => {
+        assert.match(
+          dwContent,
+          /parallel where independent/i,
+          'AC1: missing "parallel where independent" framing',
+        );
+      });
+
+      it('C5 — mtime-snapshot contract-violation check on now/archive/<skill>/', () => {
+        // The pre-snapshot.
+        assert.match(
+          dwContent,
+          /Snapshot now\/archive mtimes|mtime.*snapshot|snapshot.*mtime/i,
+          'C5: missing mtime-snapshot framing',
+        );
+        // The contract-violation language — surfaces in ## Notes when
+        // a sub-skill writes during gather-only mode.
+        assert.match(
+          dwContent,
+          /gather-only contract violation/i,
+          'C5: missing "gather-only contract violation" detection language',
+        );
+        // Explicit reference to now/archive paths under inspection.
+        assert.match(
+          dwContent,
+          /now\/archive\/slack-digest/,
+          'C5: should snapshot now/archive/slack-digest/',
+        );
+        assert.match(
+          dwContent,
+          /now\/archive\/email-triage/,
+          'C5: should snapshot now/archive/email-triage/',
+        );
+      });
+    });
+
+    describe('AC2 — three-rule reconciler (Step 2)', () => {
+      it('Step 2 is the reconcile-before-staging step', () => {
+        assert.match(
+          dwContent,
+          /### Step 2 — Reconcile/i,
+          'AC2: Step 2 should be "Reconcile" (before staging)',
+        );
+      });
+
+      it('Rule 1 — Intent → fulfilling action elsewhere', () => {
+        assert.match(
+          dwContent,
+          /Rule 1.*Intent.*fulfilling action/i,
+          'AC2: missing Rule 1 framing',
+        );
+      });
+
+      it('Rule 2 — Intent → already-scheduled event', () => {
+        assert.match(
+          dwContent,
+          /Rule 2.*Intent.*already-scheduled event/i,
+          'AC2: missing Rule 2 framing',
+        );
+      });
+
+      it('Rule 3 — Action moot, event passed (cheapest, runs first)', () => {
+        assert.match(
+          dwContent,
+          /Rule 3.*Action moot.*event passed/i,
+          'AC2: missing Rule 3 framing',
+        );
+      });
+
+      it('conservative collapse — concrete evidence only (D1)', () => {
+        assert.match(
+          dwContent,
+          /[Cc]onservative collapse/,
+          'AC2: missing "conservative collapse" framing (D1)',
+        );
+        assert.match(
+          dwContent,
+          /concrete evidence/i,
+          'AC2: missing "concrete evidence" requirement',
+        );
+      });
+
+      it('fuzzy matches → Uncertain tier (never silently collapsed)', () => {
+        assert.match(
+          dwContent,
+          /never silently collapsed/i,
+          'AC2: missing "never silently collapsed" guard',
+        );
+      });
+
+      it('Rule 2 matches regardless of organizer.self (anchor ai_004)', () => {
+        assert.match(
+          dwContent,
+          /regardless of `?organizer\.self`?/i,
+          'AC2: Rule 2 must match regardless of `organizer.self` (anchor ai_004)',
+        );
+      });
+
+      it('Rule 2 recurring-1:1 guard (R6) drops to Uncertain', () => {
+        assert.match(
+          dwContent,
+          /[Rr]ecurring.*event guard|[Rr]ecurring.*1:1|[Rr]ecurring events with.*generic titles/,
+          'AC2: missing recurring-event guard (R6)',
+        );
+      });
+
+      it('graceful degradation — name-string fallback → Uncertain regardless of topic confidence', () => {
+        assert.match(
+          dwContent,
+          /[Gg]raceful degradation/,
+          'AC2: missing graceful-degradation framing',
+        );
+        assert.match(
+          dwContent,
+          /name-string|name-match|name string/i,
+          'AC2: missing name-string fallback language',
+        );
+        assert.match(
+          dwContent,
+          /slack_user_id/,
+          'AC2: graceful degradation should reference slack_user_id population gap',
+        );
+      });
+    });
+
+    describe('AC3 — Closed today narrative section', () => {
+      it('output template contains ## Closed today (proposed) section', () => {
+        assert.match(
+          dwContent,
+          /## Closed today \(proposed\)/,
+          'AC3: missing "## Closed today (proposed)" section in template',
+        );
+      });
+
+      it('each proposed collapse traces evidence pointer (source → fulfillment)', () => {
+        assert.match(
+          dwContent,
+          /Evidence:|evidence pointer|evidence_pointer/i,
+          'AC3: missing evidence-pointer language in Closed today rendering',
+        );
+      });
+
+      it('shows low-confidence Uncertain count separately (backfill-gap visibility)', () => {
+        assert.match(
+          dwContent,
+          /kept in.*Uncertain|Uncertain.*count|low-confidence.*Uncertain/i,
+          'AC3: missing Uncertain-count footer for backfill-gap visibility',
+        );
+      });
+    });
+
+    describe('AC4 — proposed-collapse engagement + re-run idempotency (revised post review-1)', () => {
+      it('engagement framing is "Approve to commit" (proposed, not auto)', () => {
+        assert.match(
+          dwContent,
+          /Approve to commit/i,
+          'AC4: missing "Approve to commit" framing',
+        );
+      });
+
+      it('CT<n> ID prefix for proposed collapses (user approves CT1, CT3)', () => {
+        assert.match(
+          dwContent,
+          /CT1, CT3|`CT<n>`|CT\d/,
+          'AC4: missing CT<n> proposed-collapse ID convention',
+        );
+      });
+
+      it('re-run idempotency — skip proposals for commitments resolvedAt > today_start', () => {
+        // Either "resolvedAt > today_start" or equivalent phrasing.
+        assert.match(
+          dwContent,
+          /resolvedAt > today_start|already resolved earlier today|resolved earlier today/i,
+          'AC4 / R7: missing re-run idempotency check (resolvedAt > today_start)',
+        );
+      });
+
+      it('NO "auto-collapse" framing (review-1 C3 killed dual-behavior)', () => {
+        // The phrase "auto-collapse" must NOT appear as an active design
+        // choice. It's OK if the prose explicitly says "NEVER
+        // auto-collapse" or "should NOT be auto-collapsed" (which we
+        // want), but the active-voice "we auto-collapse staged-only
+        // items" framing from the original plan must be gone.
+        //
+        // Use \b... search occurrences across the full file and check
+        // each one is within ~120 chars of a negation token.
+        const re = /auto-collapse/gi;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(dwContent)) !== null) {
+          const idx = m.index;
+          const window = dwContent.slice(
+            Math.max(0, idx - 120),
+            idx + 120,
+          );
+          // Negation tokens: NEVER, never, NOT (any case), not, no,
+          // NO, killed, GONE; OR a structural marker that the prose is
+          // describing the killed design (e.g., "original plan",
+          // "review-1 C3").
+          assert.match(
+            window,
+            /NEVER|never|\bNOT\b|\bnot\b|\bno\b|\bNO\b|killed|GONE|original plan|review-1 C3/,
+            `AC4 / C3: "${m[0]}" must appear only in negation context; found window: "${window}"`,
+          );
+        }
+      });
+    });
+
+    describe('AC5 — channel-backfill nudge in winddown', () => {
+      it('audit-channels invocation present (already covered in AC1 but assert again here)', () => {
+        assert.match(
+          dwContent,
+          /arete people audit-channels --json/,
+          'AC5: missing audit-channels invocation',
+        );
+      });
+
+      it('nudge condition < 0.5 slack coverage', () => {
+        assert.match(
+          dwContent,
+          /< 0\.5|slack_coverage.*0\.5|less than half/i,
+          'AC5: missing < 0.5 slack-coverage nudge condition',
+        );
+      });
+
+      it('nudge framing references slack_user_id backfill', () => {
+        assert.match(
+          dwContent,
+          /Backfill via Slack MCP|backfill.*slack_user_id|slack_user_id.*backfill/i,
+          'AC5: missing slack_user_id backfill framing',
+        );
+      });
+
+      it('nudge cap: once per winddown', () => {
+        assert.match(
+          dwContent,
+          /[Cc]ap.*once per winddown|once per winddown/,
+          'AC5: missing "once per winddown" cap',
+        );
+      });
+    });
+
+    describe('AC6 — D8 "always full" + AC10/AC11 framing', () => {
+      it('D8 always-full framing — no light/full toggle', () => {
+        assert.match(
+          dwContent,
+          /always full/i,
+          'AC6 / D8: missing "always full" framing',
+        );
+      });
+
+      it('AC10 ≤30m informal target referenced', () => {
+        assert.match(
+          dwContent,
+          /AC10.*30|30 min.*median|≤30 min|<= ?30 min|<= ?30m|≤ ?30m/i,
+          'AC6: missing AC10 ≤30m informal target',
+        );
+      });
+
+      it('AC11 45m hard stop referenced', () => {
+        assert.match(
+          dwContent,
+          /AC11.*45|45 min.*hard stop|> ?45 min.*revert|45m.*hard stop|> ?45m|45 min on any single/i,
+          'AC6: missing AC11 >45m hard stop',
+        );
+      });
+    });
+  });
 });
