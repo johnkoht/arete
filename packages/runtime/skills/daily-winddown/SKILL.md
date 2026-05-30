@@ -846,7 +846,14 @@ Acceptable user responses:
   others in queue. Approve to commit each collapse via the action-if-
   approved line shown alongside the CT entry.
 - `all` → execute all executable actions AND approve all Closed today
-  proposed collapses; confirm draft-only
+  proposed collapses; confirm draft-only.
+  **Caution during Phase 8 soak window (first 14 winddowns)**: prefer
+  approving specific CT IDs (`CT1, CT3`) over blanket `all` so each
+  reconciler-proposed collapse gets a moment of human review. The
+  reconciler is conservative-by-design but new; `all`-muscle-memory
+  on Closed-today proposals defeats the safety net. Once you have
+  high confidence in the reconciler's match quality (typically after
+  a week of soak with zero false positives), `all` becomes safer.
 - `1 with target=@jamie` → edit and execute action 1
 - `skip 2` → drop action 2
 - `approve all staged` → commit all `## Stage for approval` items via
