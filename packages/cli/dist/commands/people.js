@@ -220,7 +220,15 @@ export function registerPeopleCommands(program) {
         if (missingSlack > 0) {
             const pct = Math.round((audit.with_slack_user_id / audit.total) * 100);
             console.log(`  ${missingSlack} of ${audit.total} people missing slack_user_id; reconciler match-rate for slack→person is ~${pct}%.`);
-            console.log('  Backfill is user-maintained — see dev/conventions/person-frontmatter.md.');
+            console.log('');
+            console.log('  Backfill is user-maintained. Recognized channel fields in person frontmatter:');
+            console.log('    email:           # primary email');
+            console.log('    alt_emails: []   # alternate/historical emails');
+            console.log('    slack_user_id:   # canonical Slack ID (e.g. U01ABC123) — survives @-handle changes');
+            console.log('    slack_handle:    # @-mention name (e.g. alice) — mutable');
+            console.log('    phone:           # E.164 format preferred');
+            console.log('');
+            console.log('  All fields optional; missing fields just mean that channel-match rule does not apply.');
         }
         console.log('');
         // Show top gaps (up to 10) so the user can quickly identify
