@@ -51,7 +51,7 @@ export { generateMeetingManifest } from './meeting-manifest.js';
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 // Area memory (L3 computed summaries)
-export { AreaMemoryService, isAreaMemoryStale, buildSynthesisPrompt } from './area-memory.js';
+export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
 // Hygiene (workspace entropy scanning and cleanup)
 export { HygieneService } from './hygiene.js';
 // Task management

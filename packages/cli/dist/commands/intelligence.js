@@ -380,17 +380,12 @@ export function registerMemoryCommand(program) {
             process.exit(1);
         }
         const paths = services.workspace.getPaths(root);
-        // 1. Refresh area memory (with synthesis if AI configured)
-        const callLLM = services.ai.isConfigured()
-            ? async (prompt) => {
-                const result = await services.ai.call('synthesis', prompt);
-                return result.text;
-            }
-            : undefined;
+        // 1. Refresh area memory (mechanical-only after Phase 7b — LLM
+        //    synthesis paths removed; use `arete topic refresh --all` for
+        //    topic-page LLM synthesis).
         const areaResult = await services.areaMemory.refreshAllAreaMemory(paths, {
             areaSlug: opts.area,
             dryRun: opts.dryRun,
-            callLLM,
         });
         // 2. Refresh person memory (unless targeting a specific area)
         let personResult;
@@ -399,32 +394,6 @@ export function registerMemoryCommand(program) {
                 dryRun: opts.dryRun,
                 commitments: services.commitments,
             });
-        }
-        // 2b. Refresh topic pages (Step 6 wiring — `arete memory refresh` now
-        // transparently refreshes topics when AI is configured, same pattern
-        // as cross-area synthesis). Gated on callLLM presence AND non-area
-        // scope (area-scoped refresh is a targeted operation, not a bulk
-        // memory sweep). Graceful fallback on error: topics stay as-is.
-        let topicResult;
-        if (!opts.area && !opts.dryRun && callLLM !== undefined) {
-            try {
-                topicResult = await services.topicMemory.refreshAllFromSources(paths, {
-                    today: new Date().toISOString().slice(0, 10),
-                    callLLM,
-                    workspaceRoot: root,
-                    lockLabel: 'memory refresh',
-                });
-            }
-            catch (err) {
-                // SeedLockHeldError surfaces here if seed or another refresh is
-                // running — friendly message rather than a stack trace.
-                if (err instanceof Error && err.name === 'SeedLockHeldError') {
-                    warn(`Topic refresh skipped: ${err.message}`);
-                }
-                else {
-                    warn(`Topic refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
-                }
-            }
         }
         // 2c. Regenerate CLAUDE.md with Active Topics boot-context
         // (Step 9 — agent boot context). Only when AI is configured AND
@@ -505,9 +474,7 @@ export function registerMemoryCommand(program) {
                 success: true,
                 dryRun: Boolean(opts.dryRun),
                 areas: areaResult,
-                synthesis: areaResult.synthesis ?? null,
                 people: personResult ?? null,
-                topics: topicResult ?? null,
                 bootContext: claudeMdRegen !== undefined
                     ? { claudeMd: claudeMdRegen['CLAUDE.md'] ?? 'skipped' }
                     : null,
@@ -534,22 +501,6 @@ export function registerMemoryCommand(program) {
         }
         listItem('Areas scanned', String(areaResult.scannedAreas));
         listItem('Areas skipped', String(areaResult.skipped));
-        // Synthesis status
-        if (areaResult.synthesis) {
-            const s = areaResult.synthesis;
-            if (s.updated) {
-                success('Cross-area synthesis: updated');
-            }
-            else if (s.reason?.startsWith('error:')) {
-                warn(`Cross-area synthesis: failed (${s.reason})`);
-            }
-            else if (s.reason === 'no AI configured') {
-                info('Cross-area synthesis: skipped (no AI configured)');
-            }
-            else if (s.reason) {
-                info(`Cross-area synthesis: skipped (${s.reason})`);
-            }
-        }
         // Person results
         if (personResult) {
             console.log('');
@@ -561,19 +512,6 @@ export function registerMemoryCommand(program) {
             }
             listItem('People scanned', String(personResult.scannedPeople));
             listItem('Meetings scanned', String(personResult.scannedMeetings));
-        }
-        // Topic results
-        if (topicResult !== undefined) {
-            console.log('');
-            if (topicResult.totalIntegrated > 0) {
-                success(`Integrated ${topicResult.totalIntegrated} source(s) into ${topicResult.topics.length} topic page(s).`);
-            }
-            else {
-                info('Topics: no new sources to integrate.');
-            }
-            if (topicResult.totalFallback > 0) {
-                warn(`Topic refresh: ${topicResult.totalFallback} fallback(s) (LLM errors — re-run when AI stable)`);
-            }
         }
         // CLAUDE.md regen status — distinguish updated vs unchanged so
         // users know whether git status will reflect a change.
