@@ -753,5 +753,31 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         );
       });
     });
+
+    describe('AC6 — D8 "always full" + AC10/AC11 framing', () => {
+      it('D8 always-full framing — no light/full toggle', () => {
+        assert.match(
+          dwContent,
+          /always full/i,
+          'AC6 / D8: missing "always full" framing',
+        );
+      });
+
+      it('AC10 ≤30m informal target referenced', () => {
+        assert.match(
+          dwContent,
+          /AC10.*30|30 min.*median|≤30 min|<= ?30 min|<= ?30m|≤ ?30m/i,
+          'AC6: missing AC10 ≤30m informal target',
+        );
+      });
+
+      it('AC11 45m hard stop referenced', () => {
+        assert.match(
+          dwContent,
+          /AC11.*45|45 min.*hard stop|> ?45 min.*revert|45m.*hard stop|> ?45m|45 min on any single/i,
+          'AC6: missing AC11 >45m hard stop',
+        );
+      });
+    });
   });
 });

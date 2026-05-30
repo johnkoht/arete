@@ -233,8 +233,13 @@ penalty; the chef re-surfaces on a future run if the staleness persists.
 **Phase 8 redesigns this step.** The chef now gathers from multiple
 cross-skill sources in parallel — slack, email, meetings, calendar,
 commitments, week.md, areas/epics, and channel-coverage audit — and
-feeds them into the **Step 2 Reconcile** pass (added in the AC2
-commit) before staging anything for the user.
+feeds them into the **Step 2 Reconcile** pass before staging anything
+for the user. The Phase 8 plan calls this "always full" mode (D8): no
+light/full toggle; the user runs winddown when they have time and
+prefers completeness over speed. AC10 informal target is ≤30 min
+median over the 14-day soak; AC11 hard stop is 45 min on any single
+day → revert. Phase 8 explicitly accepts the AC10 ceiling raise in
+exchange for fewer hand-skipped items per winddown.
 
 **Run in parallel (no engagement gates between).** The chef-orchestrator
 pattern's speed win comes from *actually* running 1a–1q as concurrent
