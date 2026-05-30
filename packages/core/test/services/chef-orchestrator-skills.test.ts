@@ -719,5 +719,39 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         }
       });
     });
+
+    describe('AC5 — channel-backfill nudge in winddown', () => {
+      it('audit-channels invocation present (already covered in AC1 but assert again here)', () => {
+        assert.match(
+          dwContent,
+          /arete people audit-channels --json/,
+          'AC5: missing audit-channels invocation',
+        );
+      });
+
+      it('nudge condition < 0.5 slack coverage', () => {
+        assert.match(
+          dwContent,
+          /< 0\.5|slack_coverage.*0\.5|less than half/i,
+          'AC5: missing < 0.5 slack-coverage nudge condition',
+        );
+      });
+
+      it('nudge framing references slack_user_id backfill', () => {
+        assert.match(
+          dwContent,
+          /Backfill via Slack MCP|backfill.*slack_user_id|slack_user_id.*backfill/i,
+          'AC5: missing slack_user_id backfill framing',
+        );
+      });
+
+      it('nudge cap: once per winddown', () => {
+        assert.match(
+          dwContent,
+          /[Cc]ap.*once per winddown|once per winddown/,
+          'AC5: missing "once per winddown" cap',
+        );
+      });
+    });
   });
 });

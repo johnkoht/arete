@@ -430,9 +430,11 @@ arete people audit-channels --json > /tmp/winddown-audit.json
 #   with_alt_emails, no_channels}}
 ```
 
-Compute `slack_coverage = audit.with_slack_user_id / audit.total`. The
-channel-backfill nudge wiring lands in the AC5 commit; for now Step 1
-collects the audit signal so downstream steps can use it.
+Compute `slack_coverage = audit.with_slack_user_id / audit.total`. If
+`< 0.5`, the channel-backfill nudge fires (see Step 4 output template
+§ `## Notes` and / or top-of-`## Closed today`). See AC5 in Phase 8
+plan and pre-mortem R5 for the framing — Rule 1 is degraded at ship
+until backfill progresses.
 
 #### 1q — Mtime-snapshot post-check (gather-only contract violation surface)
 
@@ -790,6 +792,13 @@ What's your call?
   fallback per graceful-degradation). This is the backfill-gap
   visibility prompt (per AC3 / Phase 8 plan): "N items kept in Uncertain
   (name-match only; channel backfill would lift these)."
+- **Audit-channels nudge** (per AC5) — if `slack_coverage < 0.5` from
+  Step 1p, surface a one-line nudge **inline at top of `## Closed today
+  (proposed)`** OR at top of `## Notes`:
+  `Reconciler match-rate degraded: <with_slack_user_id> of <total> people
+   have slack_user_id populated. Phase 7a 'arete people audit-channels'
+   shows the gap. Backfill via Slack MCP would lift reconciler accuracy.`
+  **Cap**: once per winddown. Skippable.
 - **Re-run idempotency (R7)** — for any commitment in `arete commitments
   list --json` with `resolvedAt > today_start`, SKIP proposing collapse
   for it. It was already resolved earlier today on a prior winddown
