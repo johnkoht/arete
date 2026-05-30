@@ -993,7 +993,6 @@ arete route "query" [--json]          # Route to skill/tool with model suggestio
 ### Daily Intelligence
 
 ```bash
-arete daily                           # Morning brief: calendar, commitments, projects, decisions, patterns
 arete momentum                        # Commitment momentum (hot/stale/critical) + relationship health
 arete view [--port N]                 # Open web dashboard in browser (launches backend server)
 ```

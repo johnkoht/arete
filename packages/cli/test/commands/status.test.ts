@@ -163,11 +163,11 @@ Meeting content.
       assert.equal(result.projects.active, 1, 'Should count active project');
     });
 
-    it('output includes recommendation to run arete daily', () => {
+    it('output no longer recommends `arete daily` (removed in Phase 7b)', () => {
       const stdout = runCli(['status'], { cwd: tmpDir2 });
       assert.ok(
-        stdout.includes('arete daily') || stdout.includes('daily'),
-        `Expected mention of 'arete daily' in output: ${stdout}`,
+        !stdout.includes('arete daily'),
+        `Did not expect 'arete daily' in status output: ${stdout}`,
       );
     });
   });

@@ -432,7 +432,6 @@ export function registerStatusCommand(program: Command): void {
         if (topicMemoryOrphan > 0) bits.push(`${topicMemoryOrphan} orphan`);
         console.log(chalk.yellow(`  Topic memory: ${bits.join(', ')}. Run \`arete topic lint\` to see details.`));
       }
-      console.log(chalk.dim('  Run `arete daily` for your morning brief.'));
       console.log(chalk.dim('  Run `arete momentum` for commitment and relationship momentum.'));
       console.log('');
     });
