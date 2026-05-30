@@ -627,10 +627,46 @@ Build the single message to the user. **No engagement before this.**
 {Brief 1-2 sentence summary: meetings processed, recordings pulled,
 inbox count, headline themes if any.}
 
+## Closed today (proposed)
+
+{From Step 2 Reconcile, all Rule 1/2/3 matches surface here as
+PROPOSED collapses. Per AC4 (revised post review-1) — NO auto-collapse;
+ALL collapses await user approval. Each line traces source →
+fulfillment with an evidence pointer (slack URI, email message-id,
+calendar event id, or meeting file path).}
+
+3 intents the reconciler thinks are fulfilled. Approve to commit the
+collapse; reject to keep in your queue.
+
+[CT1] Open commitment `abc12345` 'Confirm with Lindsay X' appears
+      fulfilled by Slack DM to @lindsay-gray at 11:42a today.
+      Evidence: slack:D0AGP5S4S4U/p1748... (intent timestamp 9:30a
+      < message 11:42a)
+      Action if approved: arete commitments_resolve abc12345
+        --reason "Auto-detected: Slack DM fulfillment"
+
+[CT2] Meeting action 'Set up call with Nick & Anthony to review
+      prototype' (from 2026-05-30-john-nate-pre-runyon-checkin.md)
+      appears fulfilled — calendar invite already exists for Fri 5/31
+      2p (organized by Nate; John attending).
+      Evidence: calendar:abc123def
+      Action if approved: skip staging this item (no commitment
+      created)
+
+[CT3] Meeting action 'Find suitable staging claim for live
+      walkthrough' is moot — the Runyon walkthrough event passed at
+      1:00p today.
+      Evidence: calendar:def456ghi (start=2026-05-30T13:00)
+      Action if approved: skip staging this item
+
+N items kept in `## Uncertain — your call` (low-confidence match;
+channel backfill would lift these).
+
 ## Stage for approval
 
 {High-confidence items the user should approve. Each item: type +
-text + reason label.}
+text + reason label. Items that landed in `## Closed today (proposed)`
+above are NOT also staged here — the proposed collapse IS the surface.}
 
 - [ ] Send API spec to Anthony — open commitment to Anthony, 9d old
 - Decision: Adopt Sonnet for reconciliation tier — matches week focus #2 (cost gate)
@@ -638,10 +674,13 @@ text + reason label.}
 
 ## Uncertain — your call
 
-{Items the agent isn't sure about. Brief yes/no proposal each.}
+{Items the agent isn't sure about. Brief yes/no proposal each. Includes
+graceful-degradation Rule 1 candidates (name-match-only fulfillment
+evidence — channel backfill would lift these to Closed today).}
 
 - [ ] Glance metrics ping to Lindsay — possibly resolved by today's standup. Stage or skip?
 - [ ] Email follow-up to Sara — matches dismissal pattern but customer-touching. Stage or skip?
+- [ ] Lindsay agreed Wed via Slack (name-match only; populate `slack_user_id` for high-confidence). Collapse or keep?
 
 ## Pruning candidates
 

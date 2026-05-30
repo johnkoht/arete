@@ -637,5 +637,31 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         );
       });
     });
+
+    describe('AC3 — Closed today narrative section', () => {
+      it('output template contains ## Closed today (proposed) section', () => {
+        assert.match(
+          dwContent,
+          /## Closed today \(proposed\)/,
+          'AC3: missing "## Closed today (proposed)" section in template',
+        );
+      });
+
+      it('each proposed collapse traces evidence pointer (source → fulfillment)', () => {
+        assert.match(
+          dwContent,
+          /Evidence:|evidence pointer|evidence_pointer/i,
+          'AC3: missing evidence-pointer language in Closed today rendering',
+        );
+      });
+
+      it('shows low-confidence Uncertain count separately (backfill-gap visibility)', () => {
+        assert.match(
+          dwContent,
+          /kept in.*Uncertain|Uncertain.*count|low-confidence.*Uncertain/i,
+          'AC3: missing Uncertain-count footer for backfill-gap visibility',
+        );
+      });
+    });
   });
 });
