@@ -663,5 +663,61 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         );
       });
     });
+
+    describe('AC4 — proposed-collapse engagement + re-run idempotency (revised post review-1)', () => {
+      it('engagement framing is "Approve to commit" (proposed, not auto)', () => {
+        assert.match(
+          dwContent,
+          /Approve to commit/i,
+          'AC4: missing "Approve to commit" framing',
+        );
+      });
+
+      it('CT<n> ID prefix for proposed collapses (user approves CT1, CT3)', () => {
+        assert.match(
+          dwContent,
+          /CT1, CT3|`CT<n>`|CT\d/,
+          'AC4: missing CT<n> proposed-collapse ID convention',
+        );
+      });
+
+      it('re-run idempotency — skip proposals for commitments resolvedAt > today_start', () => {
+        // Either "resolvedAt > today_start" or equivalent phrasing.
+        assert.match(
+          dwContent,
+          /resolvedAt > today_start|already resolved earlier today|resolved earlier today/i,
+          'AC4 / R7: missing re-run idempotency check (resolvedAt > today_start)',
+        );
+      });
+
+      it('NO "auto-collapse" framing (review-1 C3 killed dual-behavior)', () => {
+        // The phrase "auto-collapse" must NOT appear as an active design
+        // choice. It's OK if the prose explicitly says "NEVER
+        // auto-collapse" or "should NOT be auto-collapsed" (which we
+        // want), but the active-voice "we auto-collapse staged-only
+        // items" framing from the original plan must be gone.
+        //
+        // Use \b... search occurrences across the full file and check
+        // each one is within ~120 chars of a negation token.
+        const re = /auto-collapse/gi;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(dwContent)) !== null) {
+          const idx = m.index;
+          const window = dwContent.slice(
+            Math.max(0, idx - 120),
+            idx + 120,
+          );
+          // Negation tokens: NEVER, never, NOT (any case), not, no,
+          // NO, killed, GONE; OR a structural marker that the prose is
+          // describing the killed design (e.g., "original plan",
+          // "review-1 C3").
+          assert.match(
+            window,
+            /NEVER|never|\bNOT\b|\bnot\b|\bno\b|\bNO\b|killed|GONE|original plan|review-1 C3/,
+            `AC4 / C3: "${m[0]}" must appear only in negation context; found window: "${window}"`,
+          );
+        }
+      });
+    });
   });
 });

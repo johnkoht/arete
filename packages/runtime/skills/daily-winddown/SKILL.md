@@ -774,6 +774,34 @@ What's your call?
 - Never auto-execute. User responds with action numbers to run / edit
   / skip.
 
+**Closed-today rendering rules** (Phase 8 AC3 + AC4):
+- **Trace each proposed collapse** to a concrete source → fulfillment
+  pair. Required content: intent text, fulfillment source + counterparty
+  + timestamp, evidence pointer (slack URI, email message-id, calendar
+  event id, or meeting file path).
+- **ID prefix `CT<n>`** for each proposed collapse line (parallel to
+  numbered actions `[1] [2] [3]`). User approves by typing `CT1, CT3`
+  (or `all`).
+- **Show the action-if-approved** inline so the user knows what the
+  collapse commits to (e.g., `arete commitments_resolve <id>`, or "skip
+  staging this item").
+- **Uncertain-count footer** — list count of items kept in
+  `## Uncertain` because the match was low-confidence (e.g., name-string
+  fallback per graceful-degradation). This is the backfill-gap
+  visibility prompt (per AC3 / Phase 8 plan): "N items kept in Uncertain
+  (name-match only; channel backfill would lift these)."
+- **Re-run idempotency (R7)** — for any commitment in `arete commitments
+  list --json` with `resolvedAt > today_start`, SKIP proposing collapse
+  for it. It was already resolved earlier today on a prior winddown
+  run. Add a one-line note in `## Notes` ("N commitments already
+  resolved earlier today — skipped from re-proposal") so the user knows
+  the idempotency check fired.
+- **NEVER auto-collapse.** All collapses are PROPOSED. User must
+  approve. The original Phase 8 plan distinguished "auto-collapse for
+  staged-only items" from "proposed for committed items"; review-1 C3
+  killed that distinction — uniform-proposed is safer and simpler. Per
+  AC4 the entire `## Closed today` surface is for user approval.
+
 ### Step 5 — Persist the curated view + engage user once
 
 **Persist the curated view to disk BEFORE engaging the user.** Write
@@ -800,9 +828,13 @@ response received.
 
 Acceptable user responses:
 - `1, 3` → execute actions 1 and 3
+- `CT1, CT3` → approve those proposed collapses (Closed today); leave
+  others in queue. Approve to commit each collapse via the action-if-
+  approved line shown alongside the CT entry.
+- `all` → execute all executable actions AND approve all Closed today
+  proposed collapses; confirm draft-only
 - `1 with target=@jamie` → edit and execute action 1
 - `skip 2` → drop action 2
-- `all` → execute all executable actions; confirm draft-only
 - `approve all staged` → commit all `## Stage for approval` items via
   `arete meeting approve` per source meeting
 - Free-form pushback / questions → engage normally
