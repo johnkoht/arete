@@ -484,6 +484,86 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
     });
   });
 
+  // Phase 8-followup-5 (Item A) — slack-digest gather-only mode WRITES
+  // `resources/notes/<date>-slack-digest.md` (durable wiki source) but
+  // MUST NOT write `now/archive/slack-digest/` (orchestrator owns the
+  // composed view). This carve-out was the wrong call in the original
+  // Phase 7a contract; the wiki was never seeing today's slack signal
+  // on days where the user only ran `/daily-winddown`.
+  describe('Phase 8-followup-5 Item A — slack-digest gather-only durable-write carve-out', () => {
+    const sdContent = readFileSync(
+      join(SKILLS_DIR, 'slack-digest', 'SKILL.md'),
+      'utf8',
+    );
+
+    it('gather-only mode WRITES resources/notes/ digest file (durable wiki source)', () => {
+      // The run/skip table for Step 5b must indicate "yes" (or
+      // equivalent) for gather-only mode, AND the prose must explain
+      // that the digest is the wiki source consumed by topic refresh.
+      assert.match(
+        sdContent,
+        /durable wiki[- ]source/i,
+        'slack-digest should call resources/notes/ digest "durable wiki source"',
+      );
+      assert.match(
+        sdContent,
+        /MUST still write/i,
+        'slack-digest should explicitly list what MUST still write in gather-only mode',
+      );
+      assert.match(
+        sdContent,
+        /arete topic refresh/,
+        'slack-digest should reference topic-refresh consumer of the durable digest',
+      );
+    });
+
+    it('gather-only mode MUST NOT write now/archive/slack-digest/ (orchestrator owns composed view)', () => {
+      // The MUST NOT list must call out now/archive/slack-digest/
+      // explicitly. Note resources/notes/ should NOT appear in the
+      // MUST NOT block — the durable carve-out lifted it out.
+      assert.match(
+        sdContent,
+        /MUST NOT[\s\S]{0,400}now\/archive\/slack-digest/,
+        'slack-digest MUST NOT list should still block now/archive/slack-digest/ in gather-only mode',
+      );
+    });
+
+    it('orchestrator invocation prompt clarifies the resources/notes carve-out', () => {
+      const dwContent = readFileSync(
+        join(SKILLS_DIR, 'daily-winddown', 'SKILL.md'),
+        'utf8',
+      );
+      // The 1k invocation must not say "Do NOT [...] write to resources/notes/"
+      // (that was the bug); it must instead explicitly preserve the
+      // resources/notes write as expected behavior.
+      const slackInvocation = dwContent.match(
+        /Run the slack-digest skill[\s\S]{0,1200}/,
+      );
+      assert.ok(slackInvocation, 'daily-winddown 1k invocation prompt missing');
+      // The corrected prompt mentions the digest file is still written.
+      assert.match(
+        slackInvocation![0],
+        /resources\/notes[\s\S]{0,200}(IS still written|wiki source|durable)/i,
+        'daily-winddown 1k invocation should clarify resources/notes/ IS still written in gather-only mode',
+      );
+    });
+
+    it('1j/1q mtime-snapshot prose explains the resources/notes scope exclusion', () => {
+      const dwContent = readFileSync(
+        join(SKILLS_DIR, 'daily-winddown', 'SKILL.md'),
+        'utf8',
+      );
+      // The Step 1j prose must mention resources/notes/ as
+      // intentionally OUT of mtime-scope (the snapshot covers
+      // `now/archive/<sub-skill>/` only).
+      assert.match(
+        dwContent,
+        /resources\/notes[\s\S]{0,300}(expected|carve-out|intentionally|NOT in scope)/i,
+        '1j mtime-snapshot prose should explain resources/notes/ is intentionally out of scope',
+      );
+    });
+  });
+
   // Phase 8 — daily-winddown becomes the cross-skill chef-orchestrator.
   // These tests guard against prose drift in the Step 1 cross-skill
   // gather, the Step 2 reconciler, the Closed-today narrative section,

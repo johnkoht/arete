@@ -267,6 +267,27 @@ is a **best-effort prose contract** (per PATTERNS.md § gather-only
 composition, "Explicit limitation" subsection) — no harness gate
 enforces it.
 
+**Frontmatter writes are separate from gather-only persistence**:
+`arete meeting apply` (commit-staged-to-approved) is run by the
+ORCHESTRATOR in its own Step 6 after user approval (see daily-winddown
+SKILL.md), not by this skill in gather-only mode. The orchestrator
+runs `arete meeting extract <file> --stage --reconcile` in its Step 1h
+to stage items into meeting frontmatter BEFORE invoking
+process-meetings in gather-only mode (Step 1m). So `--stage` writes
+DO occur in the gather sequence, but they originate from the
+orchestrator's CLI invocation, not from a write inside this skill's
+gather-only path. This skill in gather-only mode must NOT call
+`arete meeting apply` or `arete meeting approve` itself. See
+`dev/conventions/commitments-json-shape.md` for the broader pattern.
+
+**No durable wiki-source equivalent**: unlike slack-digest (which
+writes `resources/notes/<date>-slack-digest.md`), process-meetings
+has no durable artifact analogous to a wiki source — meeting files
+themselves at `resources/meetings/` are the durable artifact, and
+they're already on disk before the orchestrator invokes this skill.
+The orchestrator's mtime-snapshot check on `now/archive/process-meetings/`
+covers this skill's only persistence path.
+
 ### Which steps run in gather-only mode
 
 | Step | Standalone | Gather-only |

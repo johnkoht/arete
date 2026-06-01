@@ -606,15 +606,32 @@ invocation prompt to this skill, plus a sentence like:
 
 > "Run the slack-digest skill in `[gather-only]` mode. Return the
 > structured loop output described in slack-digest SKILL.md's
-> 'Gather-only mode' section. Do NOT engage the user, write
-> `resources/notes/`, run `arete commitments create/resolve`, or
-> propose actions — those run only when slack-digest is invoked
-> standalone."
+> 'Gather-only mode' section. Do NOT engage the user, write to
+> `now/archive/slack-digest/`, run `arete commitments create/resolve`,
+> or propose actions — those run only when slack-digest is invoked
+> standalone. The `resources/notes/<date>-slack-digest.md` digest file
+> IS still written in gather-only mode — it is the durable wiki source
+> consumed by `arete topic refresh` for topic-page integration, and is
+> a separate artifact from the orchestrator's chef-curated composed
+> view (which goes to `now/archive/daily-winddown/winddown-<date>.md`)."
 
 The sub-agent reads this section to learn which steps to skip. This
 is a **best-effort prose contract** (per PATTERNS.md § gather-only
 composition, "Explicit limitation" subsection) — no harness gate
 enforces it.
+
+**Why slack-digest carves out `resources/notes/`**: the digest file is
+the wiki-source artifact (`type: slack-digest` frontmatter, `topics:`
+array, conversation summaries). `arete topic refresh` discovers it via
+`discoverTopicSources` and integrates today's slack signal into topic
+pages at `memory/topics/`. If gather-only mode skipped this write, the
+wiki would never see slack signal on days where the user only runs
+`/daily-winddown` (Phase 8 chef). The chef-curated review at
+`now/archive/slack-digest/<date>.md` is a DIFFERENT artifact — the
+orchestrator's composed view owns that path, so slack-digest in
+gather-only mode MUST NOT write there. See `dev/conventions/
+commitments-json-shape.md` for the parallel pattern with commitments
+(durable JSON vs. composed view).
 
 ### Which steps run in gather-only mode
 
@@ -628,23 +645,34 @@ enforces it.
 | 2d — Area Association | yes | yes |
 | 3 — Reconcile Against Existing Work | yes | **partial** — read state for dedup (3a + dedup checks); do NOT propose updates or write |
 | 4 — Compose curated view | yes | **skipped** — return JSON to orchestrator instead |
-| 4.5 — Persist curated view to `now/archive/slack-digest/` | yes | **skipped** — no persist file (the orchestrator persists its own composed view) |
+| 4.5 — Persist curated view to `now/archive/slack-digest/` | yes | **skipped** — orchestrator persists the composed view at `now/archive/daily-winddown/`; this skill MUST NOT write `now/archive/slack-digest/` in gather-only mode |
 | 4 (engage) — Engage user once | yes | **skipped** — orchestrator engages |
 | 5a — Apply approved changes (memory, commitments, week.md) | yes | **skipped** |
-| 5b — Save digest at `resources/notes/YYYY-MM-DD-slack-digest.md` | yes | **skipped** |
-| 5c — Integrate Topics & Re-index | yes | **skipped** |
+| 5b — Save digest at `resources/notes/YYYY-MM-DD-slack-digest.md` | yes | **yes** — durable wiki-source artifact; consumed by `arete topic refresh` for topic-page integration. Without this, days where the user only runs `/daily-winddown` never feed slack signal into `memory/topics/`. |
+| 5c — Integrate Topics & Re-index | yes | **yes** — `arete topic refresh` runs to integrate the digest into topic pages; `arete index` re-runs. Best-effort: catch `seed_lock_held` and continue per Step 5c's existing contract. |
 | 5d — Handle Unresolved Participants | yes | **skipped** (orchestrator handles via composed view) |
 | 5e — Report | yes | **skipped** |
 
 The skill in gather-only mode MUST NOT:
-- Write to `resources/notes/` (no digest file written).
-- Write to `.arete/memory/items/` (no decisions/learnings persisted).
-- Write to `now/archive/slack-digest/` (no persistence — orchestrator
-  owns persistence for the composed view).
-- Run `arete commitments create / resolve` or `arete topic refresh`.
+- Write to `.arete/memory/items/` (no decisions/learnings persisted —
+  orchestrator stages those via its composed-view approval path).
+- Write to `now/archive/slack-digest/` (no chef-curated review file —
+  orchestrator owns the unified curated view at
+  `now/archive/daily-winddown/winddown-<date>.md`).
+- Run `arete commitments create / resolve`.
 - Edit `now/week.md`.
 - Send Slack DMs or otherwise propose actions to the user in chat.
 - Engage the user.
+
+The skill in gather-only mode **MUST still write** (these are durable
+wiki-source artifacts, separate from the orchestrator's composed view):
+- `resources/notes/YYYY-MM-DD-slack-digest.md` — Step 5b digest file.
+  The orchestrator's mtime-snapshot contract check (daily-winddown
+  Step 1j/1q) is scoped to `now/archive/<skill>/`, NOT
+  `resources/notes/`, so this write does not surface as a contract
+  violation.
+- `arete topic refresh` from Step 5c (integrates the digest into topic
+  pages) and `arete index` (Step 5c).
 
 ### JSON output shape
 

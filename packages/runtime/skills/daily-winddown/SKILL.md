@@ -323,10 +323,16 @@ ls -la now/archive/process-meetings/ 2>/dev/null > /tmp/winddown-mtime-pre-proce
 ```
 
 This is **best-effort detection** (per Phase 8 plan AC1 / pre-mortem
-R3). A sub-skill that writes to a different path (e.g., `resources/notes/`
-in slack-digest's case) won't be caught by this snapshot. Soak is the
-real fix layer. Any detected mismatch in 1q below surfaces in the
-final `## Notes` section.
+R3). The snapshot covers `now/archive/<sub-skill>/` only — paths
+outside that tree (e.g., slack-digest's `resources/notes/<date>-slack-
+digest.md` durable wiki-source artifact) are intentionally NOT in
+scope. That write IS expected in gather-only mode for slack-digest;
+see the slack-digest "Gather-only mode" section for the carve-out
+rationale (the digest file is the wiki source consumed by `arete topic
+refresh`, distinct from the chef-curated composed view this skill
+persists). Soak is the real fix layer for any other path mismatches.
+Any detected mismatch in 1q below surfaces in the final `## Notes`
+section.
 
 #### 1k — slack-digest in gather-only mode
 
@@ -337,9 +343,12 @@ canonical instruction sentence:
 > "Run the slack-digest skill in `[gather-only]` mode. Return the
 > structured loop output described in slack-digest SKILL.md's
 > 'Gather-only mode' section. Do NOT engage the user, write to
-> `resources/notes/` or `now/archive/slack-digest/`, run `arete
-> commitments create/resolve`, or propose actions — those run only
-> when slack-digest is invoked standalone."
+> `now/archive/slack-digest/`, run `arete commitments create/resolve`,
+> or propose actions — those run only when slack-digest is invoked
+> standalone. The `resources/notes/<date>-slack-digest.md` digest file
+> IS still written (durable wiki source consumed by `arete topic
+> refresh`); that is a separate artifact from the orchestrator's
+> composed view."
 
 Collect the returned JSON `{skill, mode, loops[], unresolved_participants[], partial}`.
 If the response is non-JSON or missing `loops[]`, note as a contract

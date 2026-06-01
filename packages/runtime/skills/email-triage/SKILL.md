@@ -256,6 +256,17 @@ is a **best-effort prose contract** (per PATTERNS.md § gather-only
 composition, "Explicit limitation" subsection) — no harness gate
 enforces it.
 
+**No durable wiki-source equivalent**: unlike slack-digest (which
+writes `resources/notes/<date>-slack-digest.md` as a wiki source
+consumed by `arete topic refresh`), email-triage has no durable
+artifact. Gmail itself is the durable backing store; the curated view
+at `now/archive/email-triage/` is the only file this skill produces,
+and that file IS owned by the orchestrator in gather-only mode (so
+this skill MUST NOT write it). The "skip persistence" rule has no
+carve-out for email-triage. See `dev/conventions/
+commitments-json-shape.md` for the broader pattern of distinguishing
+durable wiki sources from composed-view persistence.
+
 ### Which steps run in gather-only mode
 
 | Step | Standalone | Gather-only |
