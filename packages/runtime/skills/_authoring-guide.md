@@ -54,14 +54,12 @@ Use when your skill needs comprehensive context — this searches everything and
 
 Run `arete brief --for "<describe the user's task>" --json`
 
-This combines context injection, memory retrieval, and entity resolution into a single briefing organized by product primitive. Present the briefing to the user:
+This combines context injection, memory retrieval, and entity resolution into a single raw briefing organized by product primitive. The output is raw context — your skill (running as an agent) applies judgment about what's relevant.
 
-"Here's what I found in your workspace. Here's what might be missing."
-
-Use the briefing to inform the rest of this workflow — reference specific decisions, context files, and people mentioned in the results.
+Use the briefing to inform the rest of this workflow — reference specific decisions, context files, and people mentioned in the results. Filter to what your skill needs; ignore sections that aren't relevant to its purpose.
 ```
 
-**What it returns**: Context files, memory items (decisions/learnings), resolved entities (people, projects), relationship data, and gap analysis — all in one response.
+**What it returns**: Raw context files, memory items (decisions/learnings), resolved entities (people, projects), relationship data, and gap analysis — all in one JSON response. **No LLM synthesis is performed**: the agent consuming the briefing applies its own judgment.
 
 ---
 
@@ -180,7 +178,7 @@ requires_briefing: true      # If true, agent MUST run arete brief before starti
 
 | Field | Purpose | Effect |
 |-------|---------|--------|
-| `requires_briefing: true` | Tells the agent to run `arete brief` before starting your skill | Agent gathers comprehensive context automatically |
+| `requires_briefing: true` | Triggers the generated slash command to emit `arete brief --for "$ARGUMENTS"` before the skill workflow | Agent gathers raw assembled context (not synthesized) and applies judgment |
 | `intelligence:` | Declares which services your skill uses | Documents capabilities; used by integration hooks |
 | `primitives:` | Product primitives your skill works with | Helps context injection find the right files |
 | `work_type:` | Type of PM work | Affects routing priority and model tier suggestion |
@@ -188,7 +186,7 @@ requires_briefing: true      # If true, agent MUST run arete brief before starti
 
 > **Note**: The `intelligence:` list declares which services the skill *can use*, but does **not** auto-execute them. If you want memory searched, you must add explicit steps in your workflow (see "Adding Memory Search to Your Skill" below). Similarly, `requires_briefing: true` is a convention the agent should honor — it's not runtime-enforced.
 
-**Tip**: Set `requires_briefing: true` if your skill benefits from workspace context but you don't want to write custom context-gathering steps. The agent will automatically run `arete brief` and present the results before starting your workflow.
+**Tip**: Set `requires_briefing: true` if your skill benefits from workspace context but you don't want to write custom context-gathering steps. The agent will automatically run `arete brief` (raw context assembly — no LLM synthesis) and use the results to inform your workflow.
 
 ---
 

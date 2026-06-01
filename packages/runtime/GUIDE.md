@@ -799,7 +799,7 @@ Returns matching person files, meeting references, project mentions.
 
 **Command**: `arete brief --for "query"`
 
-**Purpose**: Combine all services into a comprehensive briefing with context files, memory search results, resolved entities, entity relationships, and temporal signals (recency of topic discussions).
+**Purpose**: Combine all services into a comprehensive raw briefing with context files, memory search results, resolved entities, entity relationships, and temporal signals (recency of topic discussions). The output is raw assembled context — downstream consumers (skills, agents) apply judgment. No LLM synthesis is performed.
 
 **Example**:
 ```bash

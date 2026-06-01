@@ -28,6 +28,8 @@ Provide a rigorous quality gate for plans, PRDs, or completed work. Validates ac
 
 ## Workflow
 
+> **On briefing input**: when `requires_briefing` runs `arete brief --for "..."` ahead of this skill, the result is raw assembled context (memory hits, entity relationships, gap analysis, recent activity) — not a synthesis. For a review, anchor judgment in the plan/PRD/completed work itself. Use the briefing sparingly: only pull from it when it directly answers a checklist concern (e.g., "is the problem well-defined" might benefit from related memory). Memory hits, entity relationships, and gaps exist for other consumers (planning, prep) — for review-plan they are usually noise. Don't make the briefing the lens; the artifact under review is the lens.
+
 ### 1. Assess Complexity
 
 Determine **Quick Review** or **Full Review**:
