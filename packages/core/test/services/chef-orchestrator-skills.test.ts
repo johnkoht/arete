@@ -283,6 +283,75 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
     });
   });
 
+  describe('Phase 8-followup-3 — planning-chain prerequisite checks', () => {
+    it('week-plan SKILL.md checks for prior weekly-winddown', () => {
+      const content = readFileSync(
+        join(SKILLS_DIR, 'week-plan', 'SKILL.md'),
+        'utf8',
+      );
+      // The skill must reference the prerequisite check step + the
+      // weekly-winddown archive path + the skip option.
+      assert.match(
+        content,
+        /now\/archive\/weekly-winddown\/weekly-winddown-/,
+        'week-plan missing weekly-winddown archive path in prerequisite check',
+      );
+      assert.match(
+        content,
+        /Prerequisite check|prerequisite check/i,
+        'week-plan missing "Prerequisite check" header',
+      );
+      // Skip option must be visible.
+      assert.match(
+        content,
+        /\bskip\b/i,
+        'week-plan prerequisite check missing skip option',
+      );
+      // Best-effort framing (never block).
+      assert.match(
+        content,
+        /best-effort|Best-effort|never block/i,
+        'week-plan missing best-effort/never-block framing',
+      );
+    });
+
+    it('daily-plan SKILL.md checks for week-plan + prior-day daily-winddown', () => {
+      const content = readFileSync(
+        join(SKILLS_DIR, 'daily-plan', 'SKILL.md'),
+        'utf8',
+      );
+      // Two prerequisite paths must appear:
+      assert.match(
+        content,
+        /now\/archive\/week-plan\/week-plan-/,
+        'daily-plan missing week-plan archive path in prerequisite check 2a',
+      );
+      assert.match(
+        content,
+        /now\/archive\/daily-winddown\/winddown-/,
+        'daily-plan missing daily-winddown archive path in prerequisite check 2b',
+      );
+      // Skip option must be visible.
+      assert.match(
+        content,
+        /\bskip\b/i,
+        'daily-plan prerequisite checks missing skip option',
+      );
+      // Best-effort / never-block framing.
+      assert.match(
+        content,
+        /Best-effort|never block/i,
+        'daily-plan missing best-effort/never-block framing',
+      );
+      // Monday-weekend handling.
+      assert.match(
+        content,
+        /Monday|weekend|Friday/i,
+        'daily-plan missing weekend/Monday-fallback handling for prior-day check',
+      );
+    });
+  });
+
   describe('PATTERNS.md', () => {
     it('contains all four chef-orchestrator pattern definitions', () => {
       const patternsPath = join(SKILLS_DIR, 'PATTERNS.md');

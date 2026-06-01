@@ -82,6 +82,48 @@ cat .arete/skills-local/week-plan.md 2>/dev/null || echo "(no APPEND file)"
 This message can be a single line at the start of Engage 1; not a
 separate engagement.
 
+### Step 0.5 — Prerequisite check: weekly-winddown ran for this week
+
+**Phase 8-followup-3 — planning-chain hygiene.** Before gathering for
+the plan, check whether `/weekly-winddown` ran recently. A solid week
+plan depends on a fresh weekly retrospective; without it, the plan
+inherits stale context.
+
+```bash
+# Most recent weekly-winddown file (sorted by mtime; the filename
+# carries the date the winddown was run).
+recent_ww=$(ls -t now/archive/weekly-winddown/weekly-winddown-*.md 2>/dev/null | head -n 1)
+```
+
+**Detection logic** (agent applies):
+- If no file exists at all → strong nudge (winddown never run)
+- If file exists but its dated filename (`weekly-winddown-YYYY-MM-DD.md`)
+  is **>8 days old** → nudge (likely no winddown for the most recent
+  completed ISO week)
+- If file dated within last 8 days → silent skip (winddown ran recently)
+
+The 8-day window handles Mon-Sun planning robustly: it catches the
+Fri/Sat/Sun of the most recent completed ISO week regardless of which
+day this skill is invoked.
+
+**Nudge format** (surface this BEFORE Engage 1, as a one-line prompt):
+
+> Looks like `/weekly-winddown` didn't run for the most recent ISO
+> week. A weekly retrospective sharpens the plan with what shipped,
+> what slipped, and what to carry forward.
+>
+> - Run `/weekly-winddown` first (recommended), then come back with
+>   `/week-plan`
+> - Or type `skip` and I'll plan without a fresh winddown
+
+The user types `skip` to proceed, or runs `/weekly-winddown` in the
+SAME terminal/session (no need to exit) and re-invokes `/week-plan`.
+The agent context persists across the chain.
+
+**Best-effort**: if the file-check fails (e.g., `now/archive/weekly-winddown/`
+doesn't exist yet because winddown was never run), surface the nudge
+and continue if user `skip`s. Never block the skill on this check.
+
 ### Step 1 — Gather (parallelize)
 
 **Run in parallel** (one agent turn, concurrent tool calls):
