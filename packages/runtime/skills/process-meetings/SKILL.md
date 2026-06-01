@@ -240,6 +240,144 @@ When called standalone (`/process-meetings` directly):
 - This skill owns the engagement at Step 4.
 - Sidecar is `now/archive/process-meetings/deferred-batch-{date}.md`.
 
+## Gather-only mode
+
+This skill supports the **gather-only composition** sub-mode
+documented in `PATTERNS.md` (§ "gather-only composition"). An
+orchestrating chef skill (Phase 8's unified daily-winddown
+reconciler is the named consumer) invokes process-meetings in
+gather-only mode, collects structured loop output, composes with
+other sources (slack-digest, email-triage, calendar), and engages
+the user **once**.
+
+### Invocation contract (per PATTERNS.md AC1 anchor)
+
+The orchestrator includes the `[gather-only]` marker at the top of
+its invocation prompt to this skill, plus a sentence like:
+
+> "Run the process-meetings skill in `[gather-only]` mode. Return
+> the structured loop output described in process-meetings
+> SKILL.md's 'Gather-only mode' section. Do NOT engage the user,
+> stage items to meeting frontmatter, write `now/archive/`, run
+> `arete meeting apply`, or propose actions — those run only when
+> process-meetings is invoked standalone."
+
+The sub-agent reads this section to learn which steps to skip. This
+is a **best-effort prose contract** (per PATTERNS.md § gather-only
+composition, "Explicit limitation" subsection) — no harness gate
+enforces it.
+
+### Which steps run in gather-only mode
+
+| Step | Standalone | Gather-only |
+|---|---|---|
+| 0 — Read APPEND + log start | yes | yes |
+| 1 — Pull recordings / list today's meetings | yes | yes |
+| 2 — Extract intelligence (per-meeting) | yes | yes |
+| 3 — Curated review (compose Stage / Uncertain / Defer) | yes | **skipped** — return JSON to orchestrator |
+| 3.5 — Persist curated view to `now/archive/process-meetings/` | yes | **skipped** — no persist |
+| 4 — Engage user once | yes | **skipped** — orchestrator engages |
+| 5a — `arete meeting apply` per approved meeting | yes | **skipped** |
+| 5b — Update commitments / week.md | yes | **skipped** |
+| 5c — Refresh person/area memory | yes | **skipped** |
+| 5d — Re-index | yes | **skipped** |
+
+The skill in gather-only mode MUST NOT:
+- Run `arete meeting apply` (no frontmatter staging).
+- Write to `now/archive/process-meetings/`.
+- Write to `.arete/memory/items/` (no decisions/learnings persisted).
+- Run `arete commitments create / resolve` or `arete topic refresh`.
+- Edit `now/week.md`.
+- Engage the user.
+
+### JSON output shape
+
+Return a JSON object matching the canonical gather-only loop shape:
+
+```json
+{
+  "skill": "process-meetings",
+  "mode": "gather-only",
+  "loops": [
+    {
+      "source": "meeting",
+      "source_ref": "resources/meetings/2026-05-30-john-nate-pre-runyon-checkin.md#ai_002",
+      "counterparty": "lindsay-gray",
+      "timestamp": "2026-05-30T15:30:00Z",
+      "text": "Confirm with Lindsay the pre-read package was sent to Runyon",
+      "evidence_pointer": "meeting:resources/meetings/2026-05-30-john-nate-pre-runyon-checkin.md",
+      "kind": "commitment-outgoing",
+      "confidence": 0.88,
+      "area": "glance-2-mvp",
+      "meeting_importance": "normal"
+    },
+    {
+      "source": "meeting",
+      "source_ref": "resources/meetings/2026-05-30-john-nate-pre-runyon-checkin.md#de_001",
+      "counterparty": null,
+      "timestamp": "2026-05-30T15:30:00Z",
+      "text": "V3 prototype will use the workspace + intelligent notepad pattern",
+      "evidence_pointer": "meeting:resources/meetings/2026-05-30-john-nate-pre-runyon-checkin.md",
+      "kind": "decision",
+      "confidence": 0.92,
+      "area": "glance-2-mvp"
+    }
+  ],
+  "unknown_attendees": [],
+  "partial": false
+}
+```
+
+**Per-loop fields** (per PATTERNS.md § gather-only composition):
+- Required: `source` (always `"meeting"`), `source_ref` (meeting file
+  path + extracted-item ID), `counterparty` (slug or `null`),
+  `timestamp` (meeting start time), `text` (verbatim extracted item),
+  `evidence_pointer` (workspace-relative meeting path), `kind`.
+- Optional: `confidence`, `area`, `topics`, `meeting_importance`,
+  `dedup_key`.
+
+**`kind` taxonomy for process-meetings** (mirrors slack-digest where
+applicable; adds meeting-specific types):
+- `commitment-outgoing` — user (John) promised someone something.
+- `commitment-incoming` — someone promised user something.
+- `incoming-ask` — someone asked user something.
+- `outgoing-ask` — user asked someone something.
+- `decision` — a decision was made or confirmed in the meeting.
+- `learning` — an insight or observation from the meeting.
+- `prep-intent` — meeting-extracted "prepare X for upcoming event"
+  intent; Phase 8 Rule 3 (action moot, event passed) consumer.
+- `dedup-candidate` — extracted item matches existing commitment /
+  decision / topic (orchestrator decides whether to surface).
+
+**Top-level fields**:
+- `skill: "process-meetings"`, `mode: "gather-only"` — identifiers.
+- `loops: []` — possibly empty; gather-only with no meetings today
+  is valid.
+- `unknown_attendees: []` — attendees that failed entity resolution
+  (Step 2's entity-resolution gap). Orchestrator surfaces if
+  nontrivial.
+- `partial: boolean` — `true` if any per-meeting extraction failed.
+  Orchestrator may surface a `(partial meeting pull)` note.
+
+### Side-effects allowed in gather-only mode
+
+These are read-only or telemetry-only and do not violate the contract:
+
+- `arete pull krisp|fathom` (read; surfacing meeting files).
+- `arete meeting context <file>` (read; assembling extraction context).
+- `arete meeting extract <file>` WITHOUT `--stage` (read-only extraction
+  returning JSON; does NOT write frontmatter).
+- `arete commitments list` (read; for dedup_key candidate detection).
+- `arete people show <slug>` (read; entity resolution).
+- `arete topic list --active --slugs` (read).
+
+**Fallback if this section is missing or sub-agent cannot follow**:
+the orchestrator (Phase 8 daily-winddown) parses today's staged items
+from meeting frontmatter via `arete meeting extract <file> --staged`
+or similar read-only path. This fallback is documented in Phase 8's
+daily-winddown SKILL.md (Step 1m) and is the safety net if gather-only
+mode is not fully wired here.
+
 ## Action verbs this skill may propose
 
 | Verb | Mode | When |

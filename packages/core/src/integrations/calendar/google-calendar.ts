@@ -380,9 +380,21 @@ function getTodayRange(): { timeMin: string; timeMax: string } {
 }
 
 function getUpcomingRange(days: number): { timeMin: string; timeMax: string } {
+  // Negative days = backward window (events in past N days).
+  // Positive days = forward window (events in next N days).
+  // Phase 8 reconciler's Rule 3 (action moot, event passed) consumes
+  // negative days to detect recently-passed events that fulfill prep
+  // intents. Phase 8-followup-1 added the negative branch; previously
+  // forward-only.
   const now = new Date();
   const end = new Date(now);
   end.setDate(end.getDate() + days);
+  if (days < 0) {
+    return {
+      timeMin: end.toISOString(),
+      timeMax: now.toISOString(),
+    };
+  }
   return {
     timeMin: now.toISOString(),
     timeMax: end.toISOString(),

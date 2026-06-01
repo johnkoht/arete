@@ -471,13 +471,15 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         );
       });
 
-      it('pulls backward calendar window (today + yesterday workaround)', () => {
-        // The plan accepts the per-day --date workaround since --days -1
-        // is not supported. Just check we reference some backward pull.
+      it('pulls backward calendar window via arete pull calendar --days -N', () => {
+        // Phase 8-followup-1 (item 2) added negative-integer support to
+        // --days in `arete pull calendar`. SKILL.md now uses
+        // `arete pull calendar --days -1 --json` for the backward window
+        // instead of the original per-day --date workaround.
         assert.match(
           dwContent,
-          /arete pull calendar --date/,
-          'AC1: missing backward calendar pull (per-day --date workaround)',
+          /arete pull calendar --days -\d+/,
+          'AC1: missing backward calendar pull (--days negative-integer; phase-8-followup-1 item 2)',
         );
       });
 
@@ -697,8 +699,12 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         // want), but the active-voice "we auto-collapse staged-only
         // items" framing from the original plan must be gone.
         //
-        // Use \b... search occurrences across the full file and check
-        // each one is within ~120 chars of a negation token.
+        // Phase 8-followup-1 (item 3) tightened this regex per the
+        // build-review's C5 concern: the original matched bare "no" /
+        // "not" within 120 chars of an "auto-collapse" occurrence,
+        // which trivially passes for normal English prose. New rule:
+        // require EXPLICIT negation/structural markers, not generic
+        // English negation words.
         const re = /auto-collapse/gi;
         let m: RegExpExecArray | null;
         while ((m = re.exec(dwContent)) !== null) {
@@ -707,14 +713,15 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
             Math.max(0, idx - 120),
             idx + 120,
           );
-          // Negation tokens: NEVER, never, NOT (any case), not, no,
-          // NO, killed, GONE; OR a structural marker that the prose is
-          // describing the killed design (e.g., "original plan",
-          // "review-1 C3").
+          // Explicit negation / structural markers ONLY:
+          // - NEVER, MUST NOT, should NOT, did NOT
+          // - "not auto-collapse" / "no auto-collapse" (directly framing the verb)
+          // - killed, GONE, removed, dropped
+          // - structural markers: "original plan", "review-1 C3"
           assert.match(
             window,
-            /NEVER|never|\bNOT\b|\bnot\b|\bno\b|\bNO\b|killed|GONE|original plan|review-1 C3/,
-            `AC4 / C3: "${m[0]}" must appear only in negation context; found window: "${window}"`,
+            /NEVER|MUST NOT|should NOT|did NOT|[Nn][Oo][Tt]? auto-collapse|killed|GONE|removed|dropped|original plan|review-1 [Cc]3/,
+            `AC4 / C3: "${m[0]}" must appear only in EXPLICIT negation context (per followup-1 item 3); found window: "${window}"`,
           );
         }
       });

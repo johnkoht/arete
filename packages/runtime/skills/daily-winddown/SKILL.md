@@ -392,22 +392,16 @@ same downstream reconciler treatment. Note the fallback in `## Notes`.
 arete pull calendar --days 30 --json > /tmp/winddown-cal-forward.json
 
 # Backward window — recent-past events for Rule 3 "action moot, event
-# passed" detection. Use --date for today (catches today's earlier
-# meetings + the start-time check covers the "passed" rule), and
-# repeat for yesterday if needed. The --date flag (per PATTERNS.md
-# enrich_meeting_attendees § Step 2) returns the full day's events.
-arete pull calendar --date $(date +%Y-%m-%d) --json > /tmp/winddown-cal-today.json
-arete pull calendar --date $(date -v-1d +%Y-%m-%d) --json > /tmp/winddown-cal-yesterday.json 2>/dev/null
+# passed" detection. Phase 8-followup-1 added negative-integer support
+# to --days; previously this required per-day --date workaround.
+arete pull calendar --days -1 --json > /tmp/winddown-cal-recent.json
 ```
 
-**Workaround note** (per Phase 8 plan AC1): a true negative-day
-window (`--days -1`) is not supported by `arete pull calendar` today;
-the backward window is approximated via per-day `--date` pulls for
-today + yesterday. This is sufficient for Rule 3 since the rule only
-needs to recognize "the named meeting passed (start < now)" — events
-≥2 days in the past are unlikely to be referenced by today's meeting
-action items. If a meeting action references an older event, the
-heuristic gracefully falls through to Uncertain.
+Both windows return the same `CalendarEvent[]` shape with
+`organizer.self: boolean` (per Phase 7a AC6 finding). The reconciler
+treats invited events as fulfillment candidates (Rule 2) regardless
+of who organized them, and uses backward-window `startTime < now`
+for Rule 3 detection.
 
 #### 1o — Commitments + areas/epics watchlist + week.md
 
