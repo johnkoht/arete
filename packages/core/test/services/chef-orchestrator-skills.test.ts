@@ -564,6 +564,80 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
     });
   });
 
+  // Phase 8-followup-5 (Item B) — importance taxonomy alignment.
+  // Canonical source of truth: packages/core/src/integrations/meetings.ts
+  //   export type Importance = 'skip' | 'light' | 'normal' | 'important';
+  // SKILL.md prose previously said `heavy | standard | light | skip`
+  // (no overlap with `normal | important`). The importance-gating
+  // logic could never fire as written. This test guards against
+  // recurrence: any chef SKILL.md that quotes specific importance
+  // values must use ONLY values from the canonical set.
+  describe('Phase 8-followup-5 Item B — importance taxonomy alignment with extractor', () => {
+    const CANONICAL_IMPORTANCE = ['skip', 'light', 'normal', 'important'];
+    const FORBIDDEN_IMPORTANCE = ['heavy', 'standard'];
+
+    const skillsToCheck = ['daily-winddown', 'weekly-winddown'] as const;
+
+    for (const slug of skillsToCheck) {
+      it(`${slug} SKILL.md uses canonical importance taxonomy (not heavy/standard)`, () => {
+        const content = readFileSync(
+          join(SKILLS_DIR, slug, 'SKILL.md'),
+          'utf8',
+        );
+        // Match `importance: <token>` patterns and confirm token ∈ canonical.
+        const importanceMatches = content.matchAll(
+          /`?importance:\s*([a-zA-Z]+)`?/g,
+        );
+        const found = new Set<string>();
+        for (const m of importanceMatches) {
+          found.add(m[1]);
+        }
+        for (const forbidden of FORBIDDEN_IMPORTANCE) {
+          assert.ok(
+            !found.has(forbidden),
+            `${slug}: forbidden importance value "${forbidden}" appears in \`importance: ${forbidden}\`. Canonical taxonomy is ${CANONICAL_IMPORTANCE.join(' | ')}.`,
+          );
+        }
+        // Free-text references to "heavy meetings" / "standard meetings"
+        // would also be wrong. Check word-bounded usage in importance
+        // context.
+        assert.doesNotMatch(
+          content,
+          /\b(heavy|standard) meetings?\b/i,
+          `${slug}: "heavy meetings" / "standard meetings" prose contradicts canonical taxonomy`,
+        );
+        // At least one canonical value should appear, proving the
+        // taxonomy is referenced.
+        const anyCanonical = CANONICAL_IMPORTANCE.some(
+          (v) => content.includes(`importance: ${v}`),
+        );
+        assert.ok(
+          anyCanonical,
+          `${slug}: SKILL.md should reference canonical importance values (importance: skip|light|normal|important)`,
+        );
+      });
+    }
+
+    it('canonical taxonomy in source matches what SKILL.md prose expects', () => {
+      // Direct read of the source-of-truth file; regression guard if
+      // someone tightens the type alias and forgets to update prose.
+      const importancePath = join(
+        REPO_ROOT,
+        'packages',
+        'core',
+        'src',
+        'integrations',
+        'meetings.ts',
+      );
+      const src = readFileSync(importancePath, 'utf8');
+      assert.match(
+        src,
+        /export type Importance =\s*'skip'\s*\|\s*'light'\s*\|\s*'normal'\s*\|\s*'important'/,
+        'Importance type drifted — SKILL.md prose assertions also need updating',
+      );
+    });
+  });
+
   // Phase 8 — daily-winddown becomes the cross-skill chef-orchestrator.
   // These tests guard against prose drift in the Step 1 cross-skill
   // gather, the Step 2 reconciler, the Closed-today narrative section,

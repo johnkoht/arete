@@ -614,9 +614,12 @@ incoming-ask), decide:
   decision, dismissal pattern, below confidence 0.6.
 
 **Importance gating** — read each meeting's `frontmatter.importance`
-field directly. `importance: light` items default to defer unless
-they touch the user's stated priorities (from APPEND file or
-week.md). `importance: heavy` items default to stage.
+field directly. The canonical taxonomy emitted by the extractor (see
+`packages/core/src/integrations/meetings.ts` → `type Importance`) is
+`'skip' | 'light' | 'normal' | 'important'`. `importance: light` items
+default to defer unless they touch the user's stated priorities (from
+APPEND file or week.md). `importance: important` items default to
+stage.
 
 **Dedup against state** — items already in `now/week.md` or open
 commitments shouldn't re-stage. Use `arete commitments list` output
@@ -926,10 +929,12 @@ uses these skill-specific reasons:
 
 `meeting.frontmatter.importance` is read directly when deciding
 whether to surface meeting-derived items in winddown. No schema layer
-needed — the chef reads frontmatter inline.
+needed — the chef reads frontmatter inline. The canonical taxonomy is
+`'skip' | 'light' | 'normal' | 'important'` (see
+`packages/core/src/integrations/meetings.ts` → `type Importance`).
 
-- `importance: heavy` → stage by default
-- `importance: standard` → stage if it ties to week priorities or
+- `importance: important` → stage by default
+- `importance: normal` → stage if it ties to week priorities or
   open commitments; otherwise defer
 - `importance: light` → defer unless customer-touching or in APPEND
   active initiatives

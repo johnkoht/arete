@@ -136,9 +136,12 @@ The weekly judgment is broader than daily:
   open. Pruning candidates.
 
 **Importance gating**: same as daily-winddown — read
-`meeting.frontmatter.importance` directly. Heavy meetings get
-higher-weight contribution to themes; light meetings rarely surface
-unless customer-touching.
+`meeting.frontmatter.importance` directly. Canonical taxonomy is
+`'skip' | 'light' | 'normal' | 'important'` (see
+`packages/core/src/integrations/meetings.ts` → `type Importance`).
+`importance: important` meetings get higher-weight contribution to
+themes; `importance: light` meetings rarely surface unless
+customer-touching.
 
 **Conflict-with-priorities**: this week's actual focus vs. the
 priorities written into last week's plan. Mismatches surface in the
