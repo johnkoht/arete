@@ -822,11 +822,12 @@ export function registerResolveCommand(program: Command): void {
 export function registerBriefCommand(program: Command): void {
   program
     .command('brief')
-    .description('Assemble and synthesize a briefing on a topic')
+    .description('Assemble raw context for a topic; downstream consumers apply judgment')
     .requiredOption('--for <query>', 'Task or topic description')
     .option('--skill <name>', 'Skill name for the briefing')
     .option('--primitives <list>', 'Comma-separated primitives')
-    .option('--raw', 'Skip AI synthesis and show raw aggregated context')
+    // --raw is retained as a hidden no-op for backward compat; raw is now the only mode.
+    .option('--raw', 'Deprecated: raw is now the only mode (flag accepted, no-op)', false)
     .option('--json', 'Output as JSON')
     .action(async (opts: { for?: string; skill?: string; primitives?: string; raw?: boolean; json?: boolean }) => {
       const task = opts.for;
@@ -840,9 +841,13 @@ export function registerBriefCommand(program: Command): void {
           );
         } else {
           error('Missing --for option');
-          info('Usage: arete brief --for "topic" [--raw]');
+          info('Usage: arete brief --for "topic"');
         }
         process.exit(1);
+      }
+
+      if (opts.raw) {
+        process.stderr.write('(--raw is now the only mode; flag accepted for backward compat)\n');
       }
 
       const services = await createServices(process.cwd());
@@ -865,27 +870,6 @@ export function registerBriefCommand(program: Command): void {
         primitives,
       });
 
-      // Determine whether to use AI synthesis
-      const aiConfigured = services.ai.isConfigured();
-      const useAI = aiConfigured && !opts.raw;
-
-      let synthesisText: string | undefined;
-      let synthesized = false;
-      let truncated = false;
-
-      if (useAI) {
-        const result = await services.intelligence.synthesizeBriefing(
-          briefing,
-          task,
-          services.ai,
-        );
-        if (result) {
-          synthesisText = result.synthesis;
-          synthesized = true;
-          truncated = result.truncated;
-        }
-      }
-
       if (opts.json) {
         console.log(
           JSON.stringify(
@@ -899,9 +883,6 @@ export function registerBriefCommand(program: Command): void {
               memoryResults: briefing.memory.total,
               entities: briefing.entities.length,
               gaps: briefing.context.gaps.length,
-              synthesized,
-              truncated,
-              synthesis: synthesisText ?? null,
               raw: briefing.markdown,
             },
             null,
@@ -911,27 +892,6 @@ export function registerBriefCommand(program: Command): void {
         return;
       }
 
-      // Display output
-      if (synthesized && synthesisText) {
-        // AI-synthesized briefing
-        header(`Briefing: ${task}`);
-        console.log('');
-        console.log(synthesisText);
-        if (truncated) {
-          console.log('');
-          info('Context was truncated before AI synthesis. Use --raw for full context.');
-        }
-      } else {
-        // Raw mode or fallback
-        if (!opts.raw && !aiConfigured) {
-          info('AI synthesis not available. Configure AI with `arete credentials set anthropic` for enhanced briefings.');
-          console.log('');
-        } else if (!opts.raw && aiConfigured) {
-          // AI was configured but synthesis failed
-          warn('AI synthesis failed. Showing raw context.');
-          console.log('');
-        }
-        console.log(briefing.markdown);
-      }
+      console.log(briefing.markdown);
     });
 }
