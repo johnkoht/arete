@@ -879,7 +879,7 @@ export function registerMeetingCommands(program) {
             // extraction) so the formatter emits `## Core` + `## Could include`
             // when the LLM populates them. Falls back to `## Summary` when absent
             // (formatter handles the precedence — see meeting-processing.ts:625).
-            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include);
+            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include, extractionResult.validationWarnings);
             if (!dryRun) {
                 // Clone frontmatter before mutating (pre-mortem mitigation: caching/mutation)
                 const fm = { ...frontmatter };
@@ -1090,7 +1090,15 @@ export function registerMeetingCommands(program) {
             console.log('');
         }
         if (extractionResult.validationWarnings.length > 0) {
-            warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
+            const mirrorPairCount = extractionResult.validationWarnings.filter(w => w.reason.startsWith('mirror-pair duplicate')).length;
+            if (mirrorPairCount > 0) {
+                warn(`${extractionResult.validationWarnings.length} items rejected during validation ` +
+                    `(${mirrorPairCount} mirror-pair duplicate${mirrorPairCount === 1 ? '' : 's'} dropped — ` +
+                    `see "## Parser-dropped (mirror-pair duplicates)" section in the meeting file)`);
+            }
+            else {
+                warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
+            }
         }
     });
     // Approve subcommand - commit staged items to memory

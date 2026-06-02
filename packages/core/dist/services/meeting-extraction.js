@@ -96,6 +96,18 @@ export const THOROUGH_LIMITS = {
 };
 /** Jaccard threshold for near-duplicate detection. */
 const JACCARD_DEDUP_THRESHOLD = 0.8;
+/**
+ * Jaccard threshold for mirror-pair detection (Phase 8 followup-6).
+ *
+ * Tighter than the general dedup threshold because mirror-pair pathology is
+ * "identical or near-identical" (the LLM is emitting the SAME compound sentence
+ * split into two opposite-direction rows — observed Jaccard ≥0.95 in the
+ * structural-failure case). 0.90 is the post-review-1 revision (was 0.85);
+ * tighter threshold = fewer false-positives on legitimate bilateral pairs at
+ * minimal catch-rate cost. If AC5 eval reveals <100% catch at 0.90, ratchet
+ * down with logged rationale.
+ */
+export const MIRROR_PAIR_JACCARD_THRESHOLD = 0.9;
 /** Trivial action item patterns to filter (case-insensitive). */
 const TRIVIAL_PATTERNS = [
     /^schedule a meeting/i,
@@ -191,6 +203,141 @@ function deduplicateItems(items, threshold = JACCARD_DEDUP_THRESHOLD) {
         }
     }
     return { kept, filtered };
+}
+/**
+ * Detect and drop mirror-pair duplicate action items (Phase 8 followup-6).
+ *
+ * A "mirror pair" is the LLM emitting TWO `action_items[]` entries from a
+ * single compound transcript sentence — one `i_owe_them` and one
+ * `they_owe_me`, identical or near-identical `description`, different
+ * `owner_slug`. The extraction prompt now has Pattern 4 to prevent this
+ * upstream (AC1), but this deterministic post-LLM pass catches anything that
+ * leaks through. See plan: phase-8-followup-6-direction-parser/plan.md.
+ *
+ * Pair detection criteria (ALL must hold):
+ *   1. `a.direction !== b.direction` (opposite directions),
+ *   2. `a.ownerSlug !== b.ownerSlug` (different owners — same-owner same-text
+ *      same-direction is handled by `deduplicateItems`),
+ *   3. `jaccardSimilarity(normalize(a.description), normalize(b.description))
+ *       >= MIRROR_PAIR_JACCARD_THRESHOLD` (0.90).
+ *
+ * Canonical selection (run in order — first match wins, per pre-mortem R5):
+ *   a. **Verbatim-actor heuristic.** If exactly one item's description begins
+ *      with the owner's slug-stem (e.g., "john-koht" → /^john\b/i), that item
+ *      is canonical. This aligns with Areté's verbatim-action prompt
+ *      convention ("<Owner> to ..." / "<Owner> will ..."). Most reliable
+ *      signal when both slugs are non-owner.
+ *   b. **Workspace-owner-match.** If exactly one of the two slugs equals the
+ *      workspace `ownerSlug`, keep that item — it represents the user's
+ *      direct commitment. (When the owner has direction `i_owe_them`, this
+ *      is the user's actionable commitment; when `they_owe_me`, it's still
+ *      the user's tracked expectation.)
+ *   c. **Arbitrary (keep `a`).** Ambiguous — neither verbatim-actor nor
+ *      owner-match can pick. Keep the first occurrence; both items get
+ *      logged to `validationWarnings` so the user can review.
+ *
+ * Every drop is logged to `validationWarnings[]` with
+ * `reason: 'mirror-pair duplicate (kept canonical)'` so the user sees what
+ * was suppressed in the chef-curated view (pre-mortem R1 mitigation).
+ *
+ * Pure function; no I/O. O(n^2) over `items` — fine for n ≤ ~20.
+ *
+ * @param items - Action items to dedup (typically post-validation, pre-`deduplicateItems`)
+ * @param ownerSlug - Workspace owner slug for owner-match heuristic (optional)
+ * @returns Kept items + dropped pair-mates with reasons
+ */
+export function dedupMirrorPairs(items, ownerSlug) {
+    const dropped = [];
+    const droppedIndices = new Set();
+    // Precompute normalized tokens
+    const normalized = items.map(i => normalizeForJaccard(i.description));
+    for (let i = 0; i < items.length; i++) {
+        if (droppedIndices.has(i))
+            continue;
+        for (let j = i + 1; j < items.length; j++) {
+            if (droppedIndices.has(j))
+                continue;
+            const a = items[i];
+            const b = items[j];
+            // Mirror pair gate: opposite direction + different owners
+            if (a.direction === b.direction)
+                continue;
+            if (a.ownerSlug === b.ownerSlug)
+                continue;
+            const similarity = jaccardSimilarity(normalized[i], normalized[j]);
+            if (similarity < MIRROR_PAIR_JACCARD_THRESHOLD)
+                continue;
+            // Pair detected — pick canonical.
+            const canonicalIdx = pickMirrorPairCanonical(a, b, i, j, ownerSlug);
+            const dropIdx = canonicalIdx === i ? j : i;
+            const droppedItem = items[dropIdx];
+            const canonicalItem = items[canonicalIdx];
+            droppedIndices.add(dropIdx);
+            dropped.push({
+                item: droppedItem,
+                reason: 'mirror-pair duplicate (kept canonical)',
+                canonicalDescription: canonicalItem.description,
+            });
+            // If we dropped `i`, break inner loop and move outer i forward;
+            // the `droppedIndices.has(i)` guard at the top of outer loop handles it.
+            if (dropIdx === i)
+                break;
+        }
+    }
+    const kept = items.filter((_, idx) => !droppedIndices.has(idx));
+    return { kept, dropped };
+}
+/**
+ * Pick the canonical item from a detected mirror pair.
+ * Order (post-review-1 revision per pre-mortem R5):
+ *   1. Verbatim-actor heuristic (description begins with owner's slug-stem),
+ *   2. Workspace-owner-match (one slug == ownerSlug),
+ *   3. Arbitrary (return first index — `aIdx`).
+ *
+ * Returns the index (one of `aIdx`/`bIdx`) of the canonical item.
+ */
+function pickMirrorPairCanonical(a, b, aIdx, bIdx, ownerSlug) {
+    // 1. Verbatim-actor: description begins with owner's slug-stem.
+    //    Stem = first segment of slug before any '-'. Match as a word boundary
+    //    at the START of the description (case-insensitive).
+    const aStartsWithOwner = descriptionStartsWithSlugStem(a.description, a.ownerSlug);
+    const bStartsWithOwner = descriptionStartsWithSlugStem(b.description, b.ownerSlug);
+    if (aStartsWithOwner && !bStartsWithOwner)
+        return aIdx;
+    if (bStartsWithOwner && !aStartsWithOwner)
+        return bIdx;
+    // 2. Workspace-owner-match: exactly one of the two slugs == ownerSlug.
+    if (ownerSlug) {
+        const aIsOwner = a.ownerSlug === ownerSlug;
+        const bIsOwner = b.ownerSlug === ownerSlug;
+        if (aIsOwner && !bIsOwner)
+            return aIdx;
+        if (bIsOwner && !aIsOwner)
+            return bIdx;
+    }
+    // 3. Arbitrary: keep first.
+    return aIdx;
+}
+/**
+ * Check whether `description` begins with the first-name stem of `slug`.
+ * Stem = portion of slug before the first '-'. Match is case-insensitive and
+ * anchored to a word boundary at the start.
+ *
+ * Example: slug="john-koht" → stem="john" → matches "John to reach out..."
+ */
+function descriptionStartsWithSlugStem(description, slug) {
+    if (!slug)
+        return false;
+    const stem = slug.split('-')[0];
+    if (!stem)
+        return false;
+    // Anchor at start; allow optional leading whitespace; require word boundary
+    // after the stem (so "john" doesn't match "johnson").
+    const re = new RegExp(`^\\s*${escapeRegExp(stem)}\\b`, 'i');
+    return re.test(description);
+}
+function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -766,7 +913,13 @@ Before emitting an action item, ask: "If I completed this, would that also compl
 
 **Pattern 3 — Same outcome, different verbs.** "Investigate X", "review X", "validate X", "test X" said by the same or related speakers about the same target are usually ONE item. Pick the strongest verb; don't emit multiple.
 
-After drafting your action_items list, re-read it: if two items would be completed by the same piece of work, merge them before returning.
+**Pattern 4 — Compound sentence with mirror direction (CRITICAL).** A single sentence naming TWO actors with one verb and one object is ONE action item, not two. Do NOT emit a "mirror pair" — two items with identical or near-identical \`description\` but opposite \`direction\` values and different \`owner_slug\` values. The direction is relative to the workspace owner: if the workspace owner is one of the actors, emit \`i_owe_them\` (owner owes the other party). If the workspace owner is neither actor (third-party observation), emit ONE item with the actor as \`owner_slug\` and pick \`they_owe_me\` only if the deliverable lands with the owner.
+  ✗ BAD: ai_001 "John to reach out to compliance" (direction: i_owe_them, owner: john-koht) + ai_002 "John to follow up with Anthony" (direction: they_owe_me, owner: anthony-avina) — these are the SAME sentence split into mirror items.
+  ✓ GOOD: ONE item: "John to reach out to compliance, then follow up with Anthony" (direction: i_owe_them, owner: john-koht).
+  ✗ BAD: ai_001 "Sara to send the data to Mark" (direction: i_owe_them, owner: sara-x) + ai_002 "Mark to receive the data from Sara" (direction: they_owe_me, owner: mark-y).
+  ✓ GOOD: ONE item: "Sara to send the data to Mark" (owner: sara-x, direction relative to workspace owner).
+
+After drafting your action_items list, re-read it: if two items would be completed by the same piece of work, merge them before returning. Specifically check for mirror pairs (Pattern 4) — opposite directions + near-identical text + different owners = one of them is wrong, drop it.
 
 ## What is NOT a decision (EXCLUDE these):
 ✗ "We discussed the product roadmap" — discussion summary, not a choice made
@@ -811,7 +964,7 @@ Rules:
 - Keep action item descriptions under 150 characters
 - Each action item MUST have a clear owner and specific deliverable
 - Include confidence (0-1) for EVERY action item
-- Direction is relative to workspace owner: "i_owe_them" = owner owes someone, "they_owe_me" = someone owes owner
+- Direction is relative to workspace owner: "i_owe_them" = owner owes someone, "they_owe_me" = someone owes owner. NEVER emit a mirror-direction pair (two items with near-identical text but opposite \`direction\` and different \`owner_slug\`) from a single source sentence — see Pattern 4.
 - Omit sections that have no content (return empty arrays, not null)
 - Be HIGHLY selective: extract only items you're confident about (≥0.5)
 - When in doubt, exclude rather than include garbage
@@ -876,8 +1029,11 @@ ${transcript}`;
  *
  * @param response - Raw LLM response text
  * @param limits - Optional category limits (defaults to CATEGORY_LIMITS for normal mode)
+ * @param ownerSlug - Optional workspace owner slug; used by the mirror-pair
+ *                    dedup pass (Phase 8 followup-6) to break ties between
+ *                    candidate canonical items.
  */
-export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMITS) {
+export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMITS, ownerSlug) {
     const emptyResult = {
         intelligence: {
             summary: '',
@@ -1139,10 +1295,23 @@ export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMIT
         }
     }
     // ---------------------------------------------------------------------------
-    // Post-processing filters (order: dedup → category limits)
+    // Post-processing filters (order: mirror-pair dedup → near-dup → category limits)
     // ---------------------------------------------------------------------------
+    // 0. Mirror-pair dedup (Phase 8 followup-6): drop "John to X" (i_owe_them,
+    //    owner=john) + "Anthony to receive X" (they_owe_me, owner=anthony) pairs
+    //    emitted from a single compound sentence. Runs BEFORE same-direction
+    //    dedup so the canonical-side selection logic sees the original pair.
+    const { kept: postMirrorPairs, dropped: mirrorPairsDropped } = dedupMirrorPairs(actionItems, ownerSlug);
+    for (const { item, reason, canonicalDescription } of mirrorPairsDropped) {
+        const droppedPreview = item.description.slice(0, 50) + (item.description.length > 50 ? '...' : '');
+        const canonicalPreview = canonicalDescription.slice(0, 50) + (canonicalDescription.length > 50 ? '...' : '');
+        validationWarnings.push({
+            item: droppedPreview,
+            reason: `${reason}: "${canonicalPreview}"`,
+        });
+    }
     // 1. Near-duplicate deduplication for action items (Jaccard > 0.8)
-    const { kept: dedupedActionItems, filtered: dedupedFiltered } = deduplicateItems(actionItems);
+    const { kept: dedupedActionItems, filtered: dedupedFiltered } = deduplicateItems(postMirrorPairs);
     for (const { item, reason } of dedupedFiltered) {
         validationWarnings.push({
             item: item.description.slice(0, 50) + (item.description.length > 50 ? '...' : ''),
@@ -1276,7 +1445,7 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
     }
     try {
         const response = await callLLM(prompt);
-        return parseMeetingExtractionResponse(response, limits);
+        return parseMeetingExtractionResponse(response, limits, options?.ownerSlug);
     }
     catch {
         // LLM call failed — return empty result rather than propagating
@@ -1363,6 +1532,23 @@ export function formatStagedSections(result) {
         });
         lines.push('');
     }
+    // Parser-dropped: mirror-pair duplicates (Phase 8 followup-6, AC for
+    // validationWarnings visibility per review-1 C3). Surface mirror-pair
+    // drops in the chef-curated meeting view so the user can review what
+    // was suppressed at curate-time — pre-mortem R1 mitigation (false-positive
+    // recovery requires the user actually seeing the drop). Empty section is
+    // omitted entirely (no warnings → no section).
+    const mirrorPairWarnings = result.validationWarnings.filter(w => w.reason.startsWith('mirror-pair duplicate'));
+    if (mirrorPairWarnings.length > 0) {
+        lines.push('## Parser-dropped (mirror-pair duplicates)');
+        lines.push('_The extractor dropped these items as mirror-pair duplicates of another action_' +
+            '_item from the same compound transcript sentence. Reinstate if a legitimate_' +
+            '_bilateral pair was dropped (Jaccard ≥ 0.90 + opposite direction + different owner)._');
+        mirrorPairWarnings.forEach(w => {
+            lines.push(`- ${w.item} — ${w.reason}`);
+        });
+        lines.push('');
+    }
     // Staged Decisions (only if non-empty)
     if (intelligence.decisions.length > 0) {
         lines.push('## Staged Decisions');
@@ -1392,6 +1578,7 @@ const STAGED_HEADERS = new Set([
     'Core',
     'Could include',
     'Staged Action Items',
+    'Parser-dropped (mirror-pair duplicates)',
     'Staged Decisions',
     'Staged Learnings',
 ]);

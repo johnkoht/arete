@@ -10,7 +10,7 @@
  *   - Auto-approval logic (high confidence → approved, dedup → approved)
  *   - Metadata maps for staged items (status, confidence, source, owner)
  */
-import type { MeetingExtractionResult, PriorItem } from './meeting-extraction.js';
+import type { MeetingExtractionResult, PriorItem, ValidationWarning } from './meeting-extraction.js';
 import type { Importance } from '../integrations/meetings.js';
 export type { ItemSource } from '../models/common.js';
 import type { ItemSource } from '../models/common.js';
@@ -183,9 +183,13 @@ export declare function clearApprovedSections(content: string): string;
  * @param summary - The meeting summary text (used as fallback when `core` absent)
  * @param core - Optional lead-prose from wiki-aware extraction
  * @param couldInclude - Accepted for API stability; no longer rendered on the meeting file
+ * @param validationWarnings - Optional. When provided, mirror-pair drop warnings
+ *                             (Phase 8 followup-6) render as a `## Parser-dropped`
+ *                             section so the user sees what was suppressed at
+ *                             curate-time (review-1 C3 visibility AC).
  * @returns Markdown string with lead + Staged sections
  */
-export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string, core?: string, couldInclude?: string[]): string;
+export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string, core?: string, couldInclude?: string[], validationWarnings?: ValidationWarning[]): string;
 /**
  * Calculate the speaking ratio for a meeting owner based on transcript speaker labels.
  *
