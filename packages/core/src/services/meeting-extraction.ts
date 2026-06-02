@@ -221,6 +221,19 @@ export type CategoryLimits = typeof CATEGORY_LIMITS;
 /** Jaccard threshold for near-duplicate detection. */
 const JACCARD_DEDUP_THRESHOLD = 0.8;
 
+/**
+ * Jaccard threshold for mirror-pair detection (Phase 8 followup-6).
+ *
+ * Tighter than the general dedup threshold because mirror-pair pathology is
+ * "identical or near-identical" (the LLM is emitting the SAME compound sentence
+ * split into two opposite-direction rows — observed Jaccard ≥0.95 in the
+ * structural-failure case). 0.90 is the post-review-1 revision (was 0.85);
+ * tighter threshold = fewer false-positives on legitimate bilateral pairs at
+ * minimal catch-rate cost. If AC5 eval reveals <100% catch at 0.90, ratchet
+ * down with logged rationale.
+ */
+export const MIRROR_PAIR_JACCARD_THRESHOLD = 0.9;
+
 /** Trivial action item patterns to filter (case-insensitive). */
 const TRIVIAL_PATTERNS = [
   /^schedule a meeting/i,
@@ -331,6 +344,152 @@ function deduplicateItems<T extends { description?: string; text?: string }>(
   }
 
   return { kept, filtered };
+}
+
+/**
+ * Detect and drop mirror-pair duplicate action items (Phase 8 followup-6).
+ *
+ * A "mirror pair" is the LLM emitting TWO `action_items[]` entries from a
+ * single compound transcript sentence — one `i_owe_them` and one
+ * `they_owe_me`, identical or near-identical `description`, different
+ * `owner_slug`. The extraction prompt now has Pattern 4 to prevent this
+ * upstream (AC1), but this deterministic post-LLM pass catches anything that
+ * leaks through. See plan: phase-8-followup-6-direction-parser/plan.md.
+ *
+ * Pair detection criteria (ALL must hold):
+ *   1. `a.direction !== b.direction` (opposite directions),
+ *   2. `a.ownerSlug !== b.ownerSlug` (different owners — same-owner same-text
+ *      same-direction is handled by `deduplicateItems`),
+ *   3. `jaccardSimilarity(normalize(a.description), normalize(b.description))
+ *       >= MIRROR_PAIR_JACCARD_THRESHOLD` (0.90).
+ *
+ * Canonical selection (run in order — first match wins, per pre-mortem R5):
+ *   a. **Verbatim-actor heuristic.** If exactly one item's description begins
+ *      with the owner's slug-stem (e.g., "john-koht" → /^john\b/i), that item
+ *      is canonical. This aligns with Areté's verbatim-action prompt
+ *      convention ("<Owner> to ..." / "<Owner> will ..."). Most reliable
+ *      signal when both slugs are non-owner.
+ *   b. **Workspace-owner-match.** If exactly one of the two slugs equals the
+ *      workspace `ownerSlug`, keep that item — it represents the user's
+ *      direct commitment. (When the owner has direction `i_owe_them`, this
+ *      is the user's actionable commitment; when `they_owe_me`, it's still
+ *      the user's tracked expectation.)
+ *   c. **Arbitrary (keep `a`).** Ambiguous — neither verbatim-actor nor
+ *      owner-match can pick. Keep the first occurrence; both items get
+ *      logged to `validationWarnings` so the user can review.
+ *
+ * Every drop is logged to `validationWarnings[]` with
+ * `reason: 'mirror-pair duplicate (kept canonical)'` so the user sees what
+ * was suppressed in the chef-curated view (pre-mortem R1 mitigation).
+ *
+ * Pure function; no I/O. O(n^2) over `items` — fine for n ≤ ~20.
+ *
+ * @param items - Action items to dedup (typically post-validation, pre-`deduplicateItems`)
+ * @param ownerSlug - Workspace owner slug for owner-match heuristic (optional)
+ * @returns Kept items + dropped pair-mates with reasons
+ */
+export function dedupMirrorPairs(
+  items: ActionItem[],
+  ownerSlug?: string,
+): { kept: ActionItem[]; dropped: Array<{ item: ActionItem; reason: string; canonicalDescription: string }> } {
+  const dropped: Array<{ item: ActionItem; reason: string; canonicalDescription: string }> = [];
+  const droppedIndices = new Set<number>();
+
+  // Precompute normalized tokens
+  const normalized = items.map(i => normalizeForJaccard(i.description));
+
+  for (let i = 0; i < items.length; i++) {
+    if (droppedIndices.has(i)) continue;
+    for (let j = i + 1; j < items.length; j++) {
+      if (droppedIndices.has(j)) continue;
+      const a = items[i];
+      const b = items[j];
+
+      // Mirror pair gate: opposite direction + different owners
+      if (a.direction === b.direction) continue;
+      if (a.ownerSlug === b.ownerSlug) continue;
+
+      const similarity = jaccardSimilarity(normalized[i], normalized[j]);
+      if (similarity < MIRROR_PAIR_JACCARD_THRESHOLD) continue;
+
+      // Pair detected — pick canonical.
+      const canonicalIdx = pickMirrorPairCanonical(a, b, i, j, ownerSlug);
+      const dropIdx = canonicalIdx === i ? j : i;
+      const droppedItem = items[dropIdx];
+      const canonicalItem = items[canonicalIdx];
+
+      droppedIndices.add(dropIdx);
+      dropped.push({
+        item: droppedItem,
+        reason: 'mirror-pair duplicate (kept canonical)',
+        canonicalDescription: canonicalItem.description,
+      });
+
+      // If we dropped `i`, break inner loop and move outer i forward;
+      // the `droppedIndices.has(i)` guard at the top of outer loop handles it.
+      if (dropIdx === i) break;
+    }
+  }
+
+  const kept = items.filter((_, idx) => !droppedIndices.has(idx));
+  return { kept, dropped };
+}
+
+/**
+ * Pick the canonical item from a detected mirror pair.
+ * Order (post-review-1 revision per pre-mortem R5):
+ *   1. Verbatim-actor heuristic (description begins with owner's slug-stem),
+ *   2. Workspace-owner-match (one slug == ownerSlug),
+ *   3. Arbitrary (return first index — `aIdx`).
+ *
+ * Returns the index (one of `aIdx`/`bIdx`) of the canonical item.
+ */
+function pickMirrorPairCanonical(
+  a: ActionItem,
+  b: ActionItem,
+  aIdx: number,
+  bIdx: number,
+  ownerSlug?: string,
+): number {
+  // 1. Verbatim-actor: description begins with owner's slug-stem.
+  //    Stem = first segment of slug before any '-'. Match as a word boundary
+  //    at the START of the description (case-insensitive).
+  const aStartsWithOwner = descriptionStartsWithSlugStem(a.description, a.ownerSlug);
+  const bStartsWithOwner = descriptionStartsWithSlugStem(b.description, b.ownerSlug);
+  if (aStartsWithOwner && !bStartsWithOwner) return aIdx;
+  if (bStartsWithOwner && !aStartsWithOwner) return bIdx;
+
+  // 2. Workspace-owner-match: exactly one of the two slugs == ownerSlug.
+  if (ownerSlug) {
+    const aIsOwner = a.ownerSlug === ownerSlug;
+    const bIsOwner = b.ownerSlug === ownerSlug;
+    if (aIsOwner && !bIsOwner) return aIdx;
+    if (bIsOwner && !aIsOwner) return bIdx;
+  }
+
+  // 3. Arbitrary: keep first.
+  return aIdx;
+}
+
+/**
+ * Check whether `description` begins with the first-name stem of `slug`.
+ * Stem = portion of slug before the first '-'. Match is case-insensitive and
+ * anchored to a word boundary at the start.
+ *
+ * Example: slug="john-koht" → stem="john" → matches "John to reach out..."
+ */
+function descriptionStartsWithSlugStem(description: string, slug: string): boolean {
+  if (!slug) return false;
+  const stem = slug.split('-')[0];
+  if (!stem) return false;
+  // Anchor at start; allow optional leading whitespace; require word boundary
+  // after the stem (so "john" doesn't match "johnson").
+  const re = new RegExp(`^\\s*${escapeRegExp(stem)}\\b`, 'i');
+  return re.test(description);
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ---------------------------------------------------------------------------
@@ -1122,10 +1281,14 @@ ${transcript}`;
  *
  * @param response - Raw LLM response text
  * @param limits - Optional category limits (defaults to CATEGORY_LIMITS for normal mode)
+ * @param ownerSlug - Optional workspace owner slug; used by the mirror-pair
+ *                    dedup pass (Phase 8 followup-6) to break ties between
+ *                    candidate canonical items.
  */
 export function parseMeetingExtractionResponse(
   response: string,
   limits: CategoryLimits = CATEGORY_LIMITS,
+  ownerSlug?: string,
 ): MeetingExtractionResult {
   const emptyResult: MeetingExtractionResult = {
     intelligence: {
@@ -1402,11 +1565,25 @@ export function parseMeetingExtractionResponse(
   }
 
   // ---------------------------------------------------------------------------
-  // Post-processing filters (order: dedup → category limits)
+  // Post-processing filters (order: mirror-pair dedup → near-dup → category limits)
   // ---------------------------------------------------------------------------
 
+  // 0. Mirror-pair dedup (Phase 8 followup-6): drop "John to X" (i_owe_them,
+  //    owner=john) + "Anthony to receive X" (they_owe_me, owner=anthony) pairs
+  //    emitted from a single compound sentence. Runs BEFORE same-direction
+  //    dedup so the canonical-side selection logic sees the original pair.
+  const { kept: postMirrorPairs, dropped: mirrorPairsDropped } = dedupMirrorPairs(actionItems, ownerSlug);
+  for (const { item, reason, canonicalDescription } of mirrorPairsDropped) {
+    const droppedPreview = item.description.slice(0, 50) + (item.description.length > 50 ? '...' : '');
+    const canonicalPreview = canonicalDescription.slice(0, 50) + (canonicalDescription.length > 50 ? '...' : '');
+    validationWarnings.push({
+      item: droppedPreview,
+      reason: `${reason}: "${canonicalPreview}"`,
+    });
+  }
+
   // 1. Near-duplicate deduplication for action items (Jaccard > 0.8)
-  const { kept: dedupedActionItems, filtered: dedupedFiltered } = deduplicateItems(actionItems);
+  const { kept: dedupedActionItems, filtered: dedupedFiltered } = deduplicateItems(postMirrorPairs);
   for (const { item, reason } of dedupedFiltered) {
     validationWarnings.push({
       item: item.description.slice(0, 50) + (item.description.length > 50 ? '...' : ''),
@@ -1598,7 +1775,7 @@ export async function extractMeetingIntelligence(
 
   try {
     const response = await callLLM(prompt);
-    return parseMeetingExtractionResponse(response, limits);
+    return parseMeetingExtractionResponse(response, limits, options?.ownerSlug);
   } catch {
     // LLM call failed — return empty result rather than propagating
     return {
