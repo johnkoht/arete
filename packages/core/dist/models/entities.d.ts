@@ -203,6 +203,18 @@ export type Commitment = {
     goalSlug?: string;
     /** Optional area association — domain scoping for commitment. Metadata only, NOT part of dedup hash. */
     area?: string;
+    /**
+     * Provenance marker for `area` (phase-8-followup-8 AC3).
+     *
+     * Set to `'backfill'` ONLY when the area was populated by
+     * `arete commitments backfill-area --apply`. Used by `--reset` to
+     * selectively clear backfill-set areas while leaving Path A (meeting
+     * approval) and Path B (extract-time) areas intact.
+     *
+     * Absent when area was set at creation time or by sync(); also absent
+     * when area itself is absent.
+     */
+    areaSetBy?: 'backfill';
 };
 /** Persisted commitments file structure */
 export type CommitmentsFile = {
