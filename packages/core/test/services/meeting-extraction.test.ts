@@ -20,6 +20,8 @@ import {
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   CATEGORY_LIMITS,
+  MIRROR_PAIR_JACCARD_THRESHOLD,
+  dedupMirrorPairs,
 } from '../../src/services/meeting-extraction.js';
 import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem, TopicWikiContext } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
@@ -906,6 +908,264 @@ describe('parseMeetingExtractionResponse - near-duplicate deduplication', () => 
     const result = parseMeetingExtractionResponse(response);
     assert.equal(result.intelligence.actionItems.length, 1);
     assert.equal(result.intelligence.actionItems[0].description, 'First version of the task');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mirror-pair dedup (Phase 8 followup-6)
+// ---------------------------------------------------------------------------
+
+describe('dedupMirrorPairs (Phase 8 followup-6) — false-negative tests (T1-T5)', () => {
+  it('threshold constant is 0.90 per review-1 C2 revision', () => {
+    assert.equal(MIRROR_PAIR_JACCARD_THRESHOLD, 0.9);
+  });
+
+  // T1: two action items with mirror direction, identical text, different
+  //     slugs (one is owner) → one survives, canonical = owner's i_owe_them,
+  //     the other recorded in `validationWarnings`.
+  it('T1: identical text + opposite directions + owner is one slug → owner side kept, other dropped + logged', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John Koht',
+          owner_slug: 'john-koht',
+          description: 'John to reach out to compliance about the audit',
+          direction: 'i_owe_them',
+          counterparty_slug: 'compliance',
+        },
+        {
+          owner: 'Anthony Avina',
+          owner_slug: 'anthony-avina',
+          description: 'John to reach out to compliance about the audit',
+          direction: 'they_owe_me',
+          counterparty_slug: 'john-koht',
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    assert.equal(result.intelligence.actionItems.length, 1, 'one mirror-pair member should be dropped');
+    // Verbatim-actor heuristic kicks in (description starts with "John") → owner side kept.
+    assert.equal(result.intelligence.actionItems[0].ownerSlug, 'john-koht');
+    assert.equal(result.intelligence.actionItems[0].direction, 'i_owe_them');
+    const mirrorWarning = result.validationWarnings.find(w => w.reason.includes('mirror-pair duplicate'));
+    assert.ok(mirrorWarning, 'should have a mirror-pair duplicate warning');
+    // Canonical description appended to reason for user visibility (C3 mitigation)
+    assert.ok(mirrorWarning?.reason.includes('John to reach out to compliance'), 'reason should reference canonical description');
+  });
+
+  // T2: two items, same text, SAME direction, different slugs → both survive
+  //     (not a mirror pair — that's genuine cross-person commitment, handled
+  //     by deduplicateItems if at all).
+  it('T2: same direction + different slugs → NOT a mirror pair, both survive (or filtered as same-direction near-dup, not mirror-pair)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'Sara', owner_slug: 'sara-x', description: 'Send the proposal to legal', direction: 'i_owe_them' },
+        { owner: 'Mark', owner_slug: 'mark-y', description: 'Send the proposal to legal', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    // No mirror-pair warning should fire (directions match).
+    const mirrorWarnings = result.validationWarnings.filter(w => w.reason.includes('mirror-pair duplicate'));
+    assert.equal(mirrorWarnings.length, 0, 'same-direction pair is not a mirror pair');
+  });
+
+  // T3: two items, opposite direction, but Jaccard 0.4 (genuinely different
+  //     asks) → both survive.
+  it('T3: opposite direction + low Jaccard → not a mirror pair, both survive', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to send the Q3 proposal to legal review', direction: 'i_owe_them' },
+        { owner: 'Anthony Avina', owner_slug: 'anthony-avina', description: 'Anthony to review the marketing budget memo', direction: 'they_owe_me' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    assert.equal(result.intelligence.actionItems.length, 2, 'both should survive — distinct asks');
+    const mirrorWarnings = result.validationWarnings.filter(w => w.reason.includes('mirror-pair duplicate'));
+    assert.equal(mirrorWarnings.length, 0);
+  });
+
+  // T4: two items, opposite direction, near-identical text, neither slug is
+  //     owner → falls into verbatim-actor branch first (description starts
+  //     with "Sara" → keep that one); fallback to arbitrary if both/neither
+  //     start with their owner stem.
+  it('T4: opposite direction + non-owner slugs + one description starts with that owner stem → verbatim-actor heuristic wins', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'Sara X', owner_slug: 'sara-x', description: 'Sara to send the data to Mark by Friday', direction: 'i_owe_them' },
+        { owner: 'Mark Y', owner_slug: 'mark-y', description: 'Sara to send the data to Mark by Friday', direction: 'they_owe_me' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    assert.equal(result.intelligence.actionItems.length, 1);
+    // Verbatim-actor: description starts with "Sara" → sara-x is canonical (matches slug-stem "sara").
+    assert.equal(result.intelligence.actionItems[0].ownerSlug, 'sara-x');
+  });
+
+  it('T4b: opposite direction + ambiguous (neither description starts with owner stem) + neither slug is owner → arbitrary keep first, log both', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'Sara X', owner_slug: 'sara-x', description: 'The data needs to be sent to legal by Friday', direction: 'i_owe_them' },
+        { owner: 'Mark Y', owner_slug: 'mark-y', description: 'The data needs to be sent to legal by Friday', direction: 'they_owe_me' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    assert.equal(result.intelligence.actionItems.length, 1, 'arbitrary branch still drops one');
+    // Arbitrary: first occurrence (sara-x) kept.
+    assert.equal(result.intelligence.actionItems[0].ownerSlug, 'sara-x');
+    const mirrorWarning = result.validationWarnings.find(w => w.reason.includes('mirror-pair duplicate'));
+    assert.ok(mirrorWarning, 'ambiguous drop should still be logged');
+  });
+
+  // T5: regression — single-item extraction unchanged (no mirror-pair logic
+  //     should fire on a one-item list).
+  it('T5: single-item extraction unchanged (regression)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to send the proposal', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    assert.equal(result.intelligence.actionItems.length, 1);
+    const mirrorWarnings = result.validationWarnings.filter(w => w.reason.includes('mirror-pair duplicate'));
+    assert.equal(mirrorWarnings.length, 0);
+  });
+
+  it('returns empty result on empty input', () => {
+    const { kept, dropped } = dedupMirrorPairs([]);
+    assert.equal(kept.length, 0);
+    assert.equal(dropped.length, 0);
+  });
+
+  it('three items where two are a mirror pair → only the pair-mate drops, third survives', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John', owner_slug: 'john-koht', description: 'John to reach out to compliance', direction: 'i_owe_them' },
+        { owner: 'Anthony', owner_slug: 'anthony-avina', description: 'John to reach out to compliance', direction: 'they_owe_me' },
+        { owner: 'Sara', owner_slug: 'sara-x', description: 'Sara to draft the launch brief', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    assert.equal(result.intelligence.actionItems.length, 2);
+    assert.ok(result.intelligence.actionItems.some(i => i.ownerSlug === 'john-koht'));
+    assert.ok(result.intelligence.actionItems.some(i => i.ownerSlug === 'sara-x'));
+  });
+
+  it('logged warning includes the kept canonical description for user visibility (C3 / R1 mitigation)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to reach out to compliance about the audit timeline', direction: 'i_owe_them' },
+        { owner: 'Anthony Avina', owner_slug: 'anthony-avina', description: 'John to reach out to compliance about the audit timeline', direction: 'they_owe_me' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    const warning = result.validationWarnings.find(w => w.reason.includes('mirror-pair duplicate'));
+    assert.ok(warning, 'should have a warning');
+    assert.ok(warning?.reason.includes('kept canonical'), 'reason should say "kept canonical"');
+    // The kept canonical description should appear in the warning text so the
+    // user can see at curate-time what was kept vs dropped (not buried in JSON).
+    assert.ok(warning?.reason.includes('John to reach out to compliance'), 'kept description should appear in reason');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mirror-pair dedup — contrast set (AC5b, per review-1 C1)
+//
+// Legitimate bilateral pairs with non-identical text. These represent the
+// "real meeting" failure mode pre-mortem R1 warns about: two genuine
+// commitments that happen to share structural words. The contrast set must
+// produce ZERO false-positive drops at threshold 0.90. If any of these get
+// dropped, the threshold is too loose or the heuristic is wrong.
+// ---------------------------------------------------------------------------
+
+describe('dedupMirrorPairs — contrast set (AC5b, false-positive fixtures)', () => {
+  // Fixture: 8 legitimate bilateral pairs. Each pair has opposite directions
+  // and may overlap in structural words ("the", "to", domain noun), but the
+  // verb / object differs. Threshold 0.90 should keep ALL 16 items.
+  const LEGITIMATE_BILATERAL_PAIRS: Array<{
+    name: string;
+    a: { owner: string; owner_slug: string; description: string; direction: string };
+    b: { owner: string; owner_slug: string; description: string; direction: string };
+  }> = [
+    {
+      name: 'proposal send vs review (different verbs)',
+      a: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to send the Q3 proposal to Anthony for review', direction: 'i_owe_them' },
+      b: { owner: 'Anthony Avina', owner_slug: 'anthony-avina', description: 'Anthony to review the Q3 proposal and return red-lines', direction: 'they_owe_me' },
+    },
+    {
+      name: 'docs handoff (different deliverable scope)',
+      a: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to draft the integration spec for the team', direction: 'i_owe_them' },
+      b: { owner: 'Sara X', owner_slug: 'sara-x', description: 'Sara to source the API examples needed for the integration spec', direction: 'they_owe_me' },
+    },
+    {
+      name: 'data exchange (send vs ingest, different concerns)',
+      a: { owner: 'Mark Y', owner_slug: 'mark-y', description: 'Mark to send the cleaned claims data file by EOD Friday', direction: 'they_owe_me' },
+      b: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to load the claims data into the QA environment after receipt', direction: 'i_owe_them' },
+    },
+    {
+      name: 'contract back-and-forth (issue vs sign)',
+      a: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to issue the redlined contract back to vendor', direction: 'i_owe_them' },
+      b: { owner: 'Vendor Z', owner_slug: 'vendor-z', description: 'Vendor to countersign the contract by Tuesday', direction: 'they_owe_me' },
+    },
+    {
+      name: 'meeting prep (book vs prepare agenda)',
+      a: { owner: 'Sara X', owner_slug: 'sara-x', description: 'Sara to book the conference room for the launch sync', direction: 'they_owe_me' },
+      b: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to prepare the agenda for the launch sync', direction: 'i_owe_them' },
+    },
+    {
+      name: 'integration approval (specify vs approve)',
+      a: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to write the technical requirements for the integration', direction: 'i_owe_them' },
+      b: { owner: 'Tim K', owner_slug: 'tim-k', description: 'Tim to formally approve the integration technical requirements doc', direction: 'they_owe_me' },
+    },
+    {
+      name: 'hiring loop (interview vs decision)',
+      a: { owner: 'Lindsay R', owner_slug: 'lindsay-r', description: 'Lindsay to run the second-round interview for the SRE candidate', direction: 'they_owe_me' },
+      b: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to make the final hiring decision for the SRE role', direction: 'i_owe_them' },
+    },
+    {
+      name: 'roadmap update (collect vs publish)',
+      a: { owner: 'Crystal G', owner_slug: 'crystal-g', description: 'Crystal to collect team inputs for the H2 roadmap deck', direction: 'they_owe_me' },
+      b: { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to publish the finalized H2 roadmap to the org', direction: 'i_owe_them' },
+    },
+  ];
+
+  for (const fixture of LEGITIMATE_BILATERAL_PAIRS) {
+    it(`contrast fixture "${fixture.name}" — both items survive (no false-positive drop)`, () => {
+      const response = JSON.stringify({ action_items: [fixture.a, fixture.b] });
+      const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+      const mirrorWarnings = result.validationWarnings.filter(w => w.reason.includes('mirror-pair duplicate'));
+      assert.equal(
+        mirrorWarnings.length,
+        0,
+        `LEGITIMATE bilateral pair "${fixture.name}" should NOT trigger mirror-pair dedup; ` +
+        `got: ${JSON.stringify(mirrorWarnings)}`,
+      );
+      // Both items kept (no near-dup either at threshold 0.8, by construction).
+      assert.equal(result.intelligence.actionItems.length, 2, `both items should survive for "${fixture.name}"`);
+    });
+  }
+
+  it('aggregate contrast-set result: ZERO false-positive drops across all fixtures', () => {
+    let totalFalsePositives = 0;
+    for (const fixture of LEGITIMATE_BILATERAL_PAIRS) {
+      const response = JSON.stringify({ action_items: [fixture.a, fixture.b] });
+      const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+      const dropped = result.validationWarnings.filter(w => w.reason.includes('mirror-pair duplicate')).length;
+      totalFalsePositives += dropped;
+    }
+    assert.equal(
+      totalFalsePositives,
+      0,
+      `Contrast set must produce 0 false-positive drops (got ${totalFalsePositives}). ` +
+      `If non-zero, raise MIRROR_PAIR_JACCARD_THRESHOLD or tune the heuristic.`,
+    );
   });
 });
 
