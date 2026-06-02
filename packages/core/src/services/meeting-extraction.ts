@@ -1003,7 +1003,13 @@ Before emitting an action item, ask: "If I completed this, would that also compl
 
 **Pattern 3 — Same outcome, different verbs.** "Investigate X", "review X", "validate X", "test X" said by the same or related speakers about the same target are usually ONE item. Pick the strongest verb; don't emit multiple.
 
-After drafting your action_items list, re-read it: if two items would be completed by the same piece of work, merge them before returning.
+**Pattern 4 — Compound sentence with mirror direction (CRITICAL).** A single sentence naming TWO actors with one verb and one object is ONE action item, not two. Do NOT emit a "mirror pair" — two items with identical or near-identical \`description\` but opposite \`direction\` values and different \`owner_slug\` values. The direction is relative to the workspace owner: if the workspace owner is one of the actors, emit \`i_owe_them\` (owner owes the other party). If the workspace owner is neither actor (third-party observation), emit ONE item with the actor as \`owner_slug\` and pick \`they_owe_me\` only if the deliverable lands with the owner.
+  ✗ BAD: ai_001 "John to reach out to compliance" (direction: i_owe_them, owner: john-koht) + ai_002 "John to follow up with Anthony" (direction: they_owe_me, owner: anthony-avina) — these are the SAME sentence split into mirror items.
+  ✓ GOOD: ONE item: "John to reach out to compliance, then follow up with Anthony" (direction: i_owe_them, owner: john-koht).
+  ✗ BAD: ai_001 "Sara to send the data to Mark" (direction: i_owe_them, owner: sara-x) + ai_002 "Mark to receive the data from Sara" (direction: they_owe_me, owner: mark-y).
+  ✓ GOOD: ONE item: "Sara to send the data to Mark" (owner: sara-x, direction relative to workspace owner).
+
+After drafting your action_items list, re-read it: if two items would be completed by the same piece of work, merge them before returning. Specifically check for mirror pairs (Pattern 4) — opposite directions + near-identical text + different owners = one of them is wrong, drop it.
 
 ## What is NOT a decision (EXCLUDE these):
 ✗ "We discussed the product roadmap" — discussion summary, not a choice made
@@ -1048,7 +1054,7 @@ Rules:
 - Keep action item descriptions under 150 characters
 - Each action item MUST have a clear owner and specific deliverable
 - Include confidence (0-1) for EVERY action item
-- Direction is relative to workspace owner: "i_owe_them" = owner owes someone, "they_owe_me" = someone owes owner
+- Direction is relative to workspace owner: "i_owe_them" = owner owes someone, "they_owe_me" = someone owes owner. NEVER emit a mirror-direction pair (two items with near-identical text but opposite \`direction\` and different \`owner_slug\`) from a single source sentence — see Pattern 4.
 - Omit sections that have no content (return empty arrays, not null)
 - Be HIGHLY selective: extract only items you're confident about (≥0.5)
 - When in doubt, exclude rather than include garbage
