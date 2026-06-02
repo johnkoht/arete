@@ -1541,9 +1541,9 @@ export function formatStagedSections(result) {
     const mirrorPairWarnings = result.validationWarnings.filter(w => w.reason.startsWith('mirror-pair duplicate'));
     if (mirrorPairWarnings.length > 0) {
         lines.push('## Parser-dropped (mirror-pair duplicates)');
-        lines.push('_The extractor dropped these items as mirror-pair duplicates of another action_' +
-            '_item from the same compound transcript sentence. Reinstate if a legitimate_' +
-            '_bilateral pair was dropped (Jaccard ≥ 0.90 + opposite direction + different owner)._');
+        lines.push('_The extractor dropped these items as mirror-pair duplicates of another action ' +
+            'item from the same compound transcript sentence. Reinstate if a legitimate ' +
+            'bilateral pair was dropped (Jaccard ≥ 0.90 + opposite direction + different owner)._');
         mirrorPairWarnings.forEach(w => {
             lines.push(`- ${w.item} — ${w.reason}`);
         });

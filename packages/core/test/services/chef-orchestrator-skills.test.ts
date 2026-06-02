@@ -950,12 +950,15 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
       });
 
       it('rule order is 3 → 4 → 1 → 2 (cheap-first) per F7-D3', () => {
-        // Order check: in the Step 2 prose, the rule numbers must
-        // appear in the sequence 3, 4, 1, 2 (cheap-first per F7-D3).
+        // Order check: in the Step 2 prose, the rule names must appear
+        // in the sequence Rule 3 → Rule 4 → Rule 1 → Rule 2 (cheap-first
+        // per F7-D3). Tightened per followup-7 build review-1 — the
+        // original /3.*4.*1.*2/s matched random digit sequences anywhere
+        // in the file (passed even if Rule 4 were deleted from Step 2).
         assert.match(
           dwContent,
-          /3.*4.*1.*2/s,
-          'followup-7 AC1: rule order should be 3 → 4 → 1 → 2 in Step 2',
+          /Rule 3.{0,400}Rule 4.{0,400}Rule 1.{0,400}Rule 2/s,
+          'followup-7 AC1: rule order should be Rule 3 → Rule 4 → Rule 1 → Rule 2 in Step 2 prose',
         );
       });
 
