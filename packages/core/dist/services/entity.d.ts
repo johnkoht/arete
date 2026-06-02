@@ -74,6 +74,7 @@ export declare function computeChannelsAudit(perPerson: Array<{
 }>): ChannelsAuditResult;
 export { CHANNEL_FIELD_NAMES };
 import { CommitmentsService } from './commitments.js';
+import type { AreaParserService } from './area-parser.js';
 import type { LLMCallFn } from './person-signals.js';
 export interface ListPeopleOptions {
     category?: PersonCategory;
@@ -118,7 +119,20 @@ export declare class EntityService {
     private storage;
     private searchProvider?;
     private directoryProvider?;
+    private areaParser?;
     constructor(storage: StorageAdapter, searchProvider?: SearchProvider | undefined, directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null);
+    /**
+     * Inject AreaParserService for area-inference fallback during refreshPersonMemory
+     * (phase-8-followup-8 AC2). Called by the service factory after both services exist.
+     *
+     * When set, refreshPersonMemory falls back to `suggestAreaForMeeting()` when a
+     * meeting has no `area:` in its frontmatter, applying the match at a 0.7
+     * confidence floor (recurring + area-name matches; rejects weak keyword overlap).
+     *
+     * Without this injection, area inference is silently skipped — Path B still
+     * propagates `area:` when the meeting has it in frontmatter, just no fallback.
+     */
+    setAreaParser(parser: AreaParserService): void;
     resolve(reference: string, type: EntityType, workspacePaths: WorkspacePaths): Promise<ResolvedEntity | null>;
     resolveAll(reference: string, type: EntityType, workspacePaths: WorkspacePaths, limit?: number): Promise<ResolvedEntity[]>;
     findMentions(entity: ResolvedEntity, workspacePaths: WorkspacePaths): Promise<EntityMention[]>;

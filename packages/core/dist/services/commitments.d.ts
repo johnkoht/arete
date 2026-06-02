@@ -42,6 +42,18 @@ export type CommitmentPriorityResult = {
  */
 export declare function computeCommitmentPriority(input: CommitmentPriorityInput): CommitmentPriorityResult;
 /**
+ * Content-normalized dedup hash: sha256(normalized text + personSlug + direction).
+ *
+ * Must produce the same hash as computeActionItemHash() in person-signals.ts —
+ * same algorithm, separate implementation to avoid circular deps.
+ *
+ * EXPORTED for the hash-invariance gate test (phase-8-followup-8 AC5/C2,
+ * pre-mortem R3): the test must call the real function directly to detect
+ * regressions where `area` (or other metadata) accidentally leaks into the
+ * hash inputs. Production code paths still go through sync()/create().
+ */
+export declare function computeCommitmentHash(text: string, personSlug: string, direction: CommitmentDirection): string;
+/**
  * Options for creating a commitment.
  */
 export type CreateCommitmentOptions = {
@@ -240,5 +252,43 @@ export declare class CommitmentsService {
      * Check if a commitment exists by hash prefix.
      */
     exists(hashPrefix: string): Promise<boolean>;
+    /**
+     * Backfill `area` on commitments missing it.
+     *
+     * For each commitment where `area` is absent, calls the caller-supplied
+     * resolver with the commitment's source filename. If the resolver returns
+     * an area slug, the commitment is updated with `area` AND a
+     * `areaSetBy: 'backfill'` provenance marker (so `resetBackfilledAreas`
+     * can selectively undo).
+     *
+     * Returns a preview/apply report. When `apply` is false (default), no
+     * writes occur — caller can inspect proposed changes safely.
+     *
+     * Hash invariance: area is metadata only and is NOT part of the dedup
+     * hash (see `computeCommitmentHash`). Commitment IDs are preserved.
+     */
+    backfillArea(resolveArea: (source: string) => Promise<string | null>, options?: {
+        apply?: boolean;
+    }): Promise<{
+        candidates: number;
+        matched: number;
+        proposals: Array<{
+            id: string;
+            source: string;
+            area: string;
+        }>;
+        applied: boolean;
+    }>;
+    /**
+     * Reset `area` to undefined for every commitment carrying the
+     * `areaSetBy: 'backfill'` provenance marker.
+     *
+     * Does NOT touch commitments where area was set at creation (Path A
+     * meeting approval, Path C `commitments create --area`) or by sync()
+     * (Path B extract-time AC1/AC2) — those lack the marker.
+     */
+    resetBackfilledAreas(): Promise<{
+        reset: number;
+    }>;
 }
 //# sourceMappingURL=commitments.d.ts.map

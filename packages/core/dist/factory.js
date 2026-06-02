@@ -88,6 +88,11 @@ export async function createServices(workspaceRoot, options) {
     // class. Batched: one file read per save() regardless of candidate
     // count.
     commitments.setHasOpenTaskReferencesFn((prefixes) => tasks.hasOpenTaskReferencesToCommitments(prefixes));
+    // phase-8-followup-8 AC2: inject AreaParserService for inference fallback
+    // during EntityService.refreshPersonMemory. When a meeting has no
+    // `area:` frontmatter, suggestAreaForMeeting() resolves an area at ≥0.7
+    // confidence and stamps it onto extracted action items / commitments.
+    entity.setAreaParser(areaParser);
     // AI service (depends on config)
     const ai = new AIService(config);
     // GWS detection (non-blocking — returns { installed: false } if binary missing)

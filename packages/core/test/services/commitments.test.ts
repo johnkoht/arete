@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
 import type { Commitment, CommitmentsFile, CommitmentDirection } from '../../src/models/index.js';
-import { CommitmentsService, computeCommitmentPriority } from '../../src/services/commitments.js';
+import { CommitmentsService, computeCommitmentPriority, computeCommitmentHash } from '../../src/services/commitments.js';
 import type { CommitmentPriorityInput } from '../../src/services/commitments.js';
 import type { PersonActionItem } from '../../src/services/person-signals.js';
 
@@ -95,6 +95,103 @@ function makeStorage(commitments: Commitment[] = []): StorageAdapter {
   }
   return createMockStorage(store);
 }
+
+// ---------------------------------------------------------------------------
+// Hash invariance GATE (phase-8-followup-8 AC5 / C2 / pre-mortem R3)
+//
+// EXPLICIT regression gate: `computeCommitmentHash(text, slug, dir)` must be
+// invariant under changes to the constructed Commitment's `area`. If a future
+// change folds `area` (or any commitment metadata) into the hash inputs, every
+// existing area-null commitment will get a new id on next sync — silently
+// duplicating commitments. R3 named this as the single highest-regret silent
+// regression in the pre-mortem; the gate exists to fail loudly first.
+//
+// Build-report.md MUST echo: hash invariance verified: "[name of this test]".
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService — hash invariance gate (AC5/C2, R3)', () => {
+  it('computeCommitmentHash(text, slug, dir) is invariant when constructed Commitment.area differs', () => {
+    // Same text + person + direction, but the surrounding Commitment carries
+    // different `area` values (and different `areaSetBy` provenance). Hash
+    // must be byte-identical across all three constructions.
+    const text = 'Send the customer the signed contract';
+    const personSlug = 'jane-doe';
+    const direction: CommitmentDirection = 'i_owe_them';
+
+    const hashCanonical = computeCommitmentHash(text, personSlug, direction);
+
+    // Build three commitments that differ ONLY in area / areaSetBy.
+    const cNoArea: Commitment = {
+      id: hashCanonical,
+      text,
+      direction,
+      personSlug,
+      personName: 'Jane Doe',
+      source: 'meeting.md',
+      date: '2026-05-27',
+      status: 'open',
+      resolvedAt: null,
+    };
+    const cWithFrontmatterArea: Commitment = {
+      ...cNoArea,
+      area: 'glance-communications',
+    };
+    const cBackfilledArea: Commitment = {
+      ...cNoArea,
+      area: 'unrelated-area',
+      areaSetBy: 'backfill',
+    };
+
+    // The hash itself MUST be invariant — it derives only from
+    // text/personSlug/direction, never from anything on the Commitment shape.
+    const reHash = (c: Commitment) => computeCommitmentHash(c.text, c.personSlug, c.direction);
+
+    assert.equal(reHash(cNoArea), hashCanonical, 'no-area construction must yield canonical hash');
+    assert.equal(
+      reHash(cWithFrontmatterArea),
+      hashCanonical,
+      'frontmatter area must not perturb hash',
+    );
+    assert.equal(
+      reHash(cBackfilledArea),
+      hashCanonical,
+      'backfill-stamped area must not perturb hash',
+    );
+
+    // Also assert hash format / determinism for completeness.
+    assert.equal(hashCanonical.length, 64, 'sha256 hex hash should be 64 chars');
+    assert.equal(
+      computeCommitmentHash(text, personSlug, direction),
+      hashCanonical,
+      'hash must be deterministic across calls',
+    );
+  });
+
+  it('computeCommitmentHash differs only when text, personSlug, or direction changes', () => {
+    const base = computeCommitmentHash('Send report', 'alice', 'i_owe_them');
+    assert.notEqual(
+      computeCommitmentHash('Different text', 'alice', 'i_owe_them'),
+      base,
+      'Different text must yield different hash',
+    );
+    assert.notEqual(
+      computeCommitmentHash('Send report', 'bob', 'i_owe_them'),
+      base,
+      'Different personSlug must yield different hash',
+    );
+    assert.notEqual(
+      computeCommitmentHash('Send report', 'alice', 'they_owe_me'),
+      base,
+      'Different direction must yield different hash',
+    );
+    // Whitespace normalization is part of the hash contract (text lowercased + trimmed + collapsed).
+    assert.equal(
+      computeCommitmentHash('Send report ', 'alice', 'i_owe_them'),
+      base,
+      'whitespace normalization is part of the hash contract',
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // listOpen()
@@ -1406,6 +1503,131 @@ describe('CommitmentsService.exists()', () => {
 
     const exists = await svc.exists(fullHash);
     assert.equal(exists, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// backfillArea() + resetBackfilledAreas() (phase-8-followup-8 AC3)
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService.backfillArea()', () => {
+  it('preview mode (apply=false) returns proposals without writing', async () => {
+    const c1 = makeCommitment({ id: 'a'.repeat(64), text: 'No area', source: 'mtg-a.md' });
+    const c2 = makeCommitment({ id: 'b'.repeat(64), text: 'Has area', source: 'mtg-b.md', area: 'existing' });
+    const store = new Map<string, string>([[COMMITMENTS_PATH, makeFile([c1, c2])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.backfillArea(
+      async (source) => (source === 'mtg-a.md' ? 'glance-communications' : null),
+    );
+
+    assert.equal(result.applied, false);
+    assert.equal(result.candidates, 1, 'only c1 lacks area');
+    assert.equal(result.matched, 1);
+    assert.equal(result.proposals[0].id, 'a'.repeat(64));
+    assert.equal(result.proposals[0].area, 'glance-communications');
+
+    // Verify file unchanged
+    const parsed = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].area, undefined, 'preview must NOT write');
+    assert.equal(parsed.commitments[0].areaSetBy, undefined);
+  });
+
+  it('apply mode writes area AND areaSetBy="backfill" provenance', async () => {
+    const c1 = makeCommitment({ id: 'a'.repeat(64), text: 'No area', source: 'mtg-a.md' });
+    const store = new Map<string, string>([[COMMITMENTS_PATH, makeFile([c1])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.backfillArea(
+      async () => 'glance-communications',
+      { apply: true },
+    );
+
+    assert.equal(result.applied, true);
+    assert.equal(result.matched, 1);
+
+    const parsed = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].area, 'glance-communications');
+    assert.equal(parsed.commitments[0].areaSetBy, 'backfill',
+      'every backfill write must stamp the provenance marker');
+    // Hash invariance: id is preserved.
+    assert.equal(parsed.commitments[0].id, 'a'.repeat(64),
+      'commitment id (= hash) must be preserved across backfill');
+  });
+
+  it('skips commitments with source="manual" or missing source', async () => {
+    const c1 = makeCommitment({ id: 'a'.repeat(64), text: 'manual', source: 'manual' });
+    const c2 = makeCommitment({ id: 'b'.repeat(64), text: 'no src', source: '' });
+    const store = new Map<string, string>([[COMMITMENTS_PATH, makeFile([c1, c2])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    let resolverCalls = 0;
+    const result = await svc.backfillArea(
+      async () => { resolverCalls++; return 'glance-communications'; },
+      { apply: true },
+    );
+
+    assert.equal(resolverCalls, 0, 'resolver must NOT be called for manual/empty source');
+    assert.equal(result.matched, 0);
+  });
+
+  it('null resolver result keeps area unset (no proposal recorded)', async () => {
+    const c1 = makeCommitment({ id: 'a'.repeat(64), text: 'No area', source: 'mtg-a.md' });
+    const store = new Map<string, string>([[COMMITMENTS_PATH, makeFile([c1])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.backfillArea(async () => null, { apply: true });
+
+    assert.equal(result.applied, false, 'no proposals → nothing applied');
+    assert.equal(result.matched, 0);
+  });
+});
+
+describe('CommitmentsService.resetBackfilledAreas()', () => {
+  it('clears area + areaSetBy ONLY on commitments with areaSetBy="backfill"', async () => {
+    const cBackfilled = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'backfilled',
+      area: 'glance-communications',
+    });
+    // Add provenance marker out-of-band (mimics post-backfill state)
+    const backfilledWithMarker = { ...cBackfilled, areaSetBy: 'backfill' as const };
+    const cPathA = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'path-a',
+      area: 'glance-communications',
+    });
+    const cNoArea = makeCommitment({ id: 'c'.repeat(64), text: 'no area' });
+
+    const store = new Map<string, string>([
+      [COMMITMENTS_PATH, makeFile([backfilledWithMarker, cPathA, cNoArea])],
+    ]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.resetBackfilledAreas();
+    assert.equal(result.reset, 1, 'only the marker-carrying commitment is reset');
+
+    const parsed = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    const a = parsed.commitments.find((c) => c.id === 'a'.repeat(64))!;
+    const b = parsed.commitments.find((c) => c.id === 'b'.repeat(64))!;
+    assert.equal(a.area, undefined, 'reset cleared backfill-stamped area');
+    assert.equal(a.areaSetBy, undefined, 'reset cleared provenance marker');
+    assert.equal(b.area, 'glance-communications', 'Path A area preserved');
+  });
+
+  it('no-op when no commitments carry the backfill marker', async () => {
+    const c = makeCommitment({ id: 'a'.repeat(64), text: 'path-a', area: 'glance-communications' });
+    const store = new Map<string, string>([[COMMITMENTS_PATH, makeFile([c])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.resetBackfilledAreas();
+    assert.equal(result.reset, 0);
   });
 });
 

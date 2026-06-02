@@ -238,6 +238,133 @@ export function registerCommitmentsCommand(program) {
     // ---------------------------------------------------------------------------
     // arete commitments resolve <id>
     // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // arete commitments backfill-area  (phase-8-followup-8 AC3)
+    // ---------------------------------------------------------------------------
+    commitmentsCmd
+        .command('backfill-area')
+        .description('Backfill `area` on commitments missing it by inferring from source meeting. Default is preview (dry-run); pass --apply to write.')
+        .option('--apply', 'Write changes (default: preview-only dry-run)')
+        .option('--reset', 'Clear `area` ONLY on commitments where areaSetBy="backfill" provenance marker is present; leaves Path A / Path B / manual areas intact')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+                info('Run "arete install" to create a workspace');
+            }
+            process.exit(1);
+        }
+        // --reset path: clear backfill-marked areas only.
+        if (opts.reset) {
+            const result = await services.commitments.resetBackfilledAreas();
+            if (opts.json) {
+                console.log(JSON.stringify({ success: true, reset: result.reset }));
+            }
+            else {
+                success(`Cleared area on ${result.reset} backfilled commitment(s).`);
+                if (result.reset === 0) {
+                    info('No commitments carried the backfill provenance marker. Nothing to reset.');
+                }
+            }
+            return;
+        }
+        // Default + --apply path: resolve area per source meeting, propose, optionally write.
+        const { join } = await import('node:path');
+        const { parse: parseYaml } = await import('yaml');
+        // Resolver closure — same precedence as AC2:
+        //   1. meeting frontmatter `area:` (explicit signal)
+        //   2. AreaParserService.suggestAreaForMeeting at ≥0.7 confidence
+        const meetingsDir = join(root, 'resources', 'meetings');
+        const resolveArea = async (source) => {
+            const meetingPath = join(meetingsDir, source);
+            const content = await services.storage.read(meetingPath);
+            if (!content)
+                return null;
+            // Parse YAML frontmatter
+            const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+            if (!fmMatch)
+                return null;
+            let frontmatter;
+            try {
+                frontmatter = parseYaml(fmMatch[1] ?? '');
+            }
+            catch {
+                return null;
+            }
+            const body = fmMatch[2] ?? '';
+            if (typeof frontmatter.area === 'string' && frontmatter.area.trim().length > 0) {
+                return frontmatter.area;
+            }
+            if (typeof frontmatter.title !== 'string')
+                return null;
+            try {
+                const match = await services.areaParser.suggestAreaForMeeting({
+                    title: String(frontmatter.title),
+                    summary: typeof frontmatter.summary === 'string' ? frontmatter.summary : undefined,
+                    transcript: body,
+                });
+                if (match && match.confidence >= 0.7)
+                    return match.areaSlug;
+            }
+            catch {
+                // Inference failure non-fatal.
+            }
+            return null;
+        };
+        let report;
+        try {
+            report = await services.commitments.backfillArea(resolveArea, { apply: Boolean(opts.apply) });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to run backfill';
+            if (opts.json)
+                console.log(JSON.stringify({ success: false, error: msg }));
+            else
+                error(msg);
+            process.exit(1);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                applied: report.applied,
+                candidates: report.candidates,
+                matched: report.matched,
+                proposals: report.proposals,
+            }, null, 2));
+            return;
+        }
+        const mode = report.applied ? 'APPLIED' : 'PREVIEW (dry-run)';
+        info(`Backfill: ${mode}`);
+        listItem('Candidates (area=null)', String(report.candidates));
+        listItem('Matched (proposed)', String(report.matched));
+        if (report.matched > 0) {
+            console.log('');
+            console.log(chalk.bold('Proposed updates:'));
+            for (const p of report.proposals) {
+                console.log(`  ${chalk.dim(p.id.slice(0, 8))}  ${chalk.cyan(p.area)}  ${chalk.dim('←')} ${p.source}`);
+            }
+            console.log('');
+            if (!report.applied) {
+                info('Re-run with --apply to write changes.');
+                info('Use `arete commitments backfill-area --reset` to undo backfill-set areas later.');
+            }
+            else {
+                success(`Applied area to ${report.matched} commitment(s); stamped areaSetBy: 'backfill' provenance.`);
+            }
+        }
+        else if (report.candidates === 0) {
+            info('No area-null commitments. Nothing to backfill.');
+        }
+        else {
+            info('No matches found at the 0.7 confidence threshold. Commitments unchanged.');
+        }
+    });
     commitmentsCmd
         .command('resolve <id>')
         .description('Resolve or drop a commitment by ID (8-char prefix or full 64-char hash)')

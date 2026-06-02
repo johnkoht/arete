@@ -882,4 +882,106 @@ date: "2020-01-01"
       assert.equal(items[0].stale, false);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Area propagation (phase-8-followup-8 AC1)
+  // ---------------------------------------------------------------------------
+
+  describe('area propagation (AC1)', () => {
+    it('populates area on each item when meetingArea is provided', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Item one (@john-smith → @sarah-chen)
+- [ ] Item two (@john-smith → @mike-jones)`;
+
+      const items = parseActionItemsFromMeeting(
+        content,
+        'john-smith',
+        'john-smith',
+        'meeting.md',
+        'glance-communications',
+      );
+
+      assert.equal(items.length, 2);
+      assert.equal(items[0].area, 'glance-communications');
+      assert.equal(items[1].area, 'glance-communications');
+    });
+
+    it('omits area when meetingArea is undefined (backward compat)', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Item one (@john-smith → @sarah-chen)`;
+
+      const items = parseActionItemsFromMeeting(
+        content,
+        'john-smith',
+        'john-smith',
+        'meeting.md',
+      );
+
+      assert.equal(items.length, 1);
+      assert.equal(items[0].area, undefined);
+    });
+
+    it('omits area when meetingArea is empty string (treated as falsy)', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Item one (@john-smith → @sarah-chen)`;
+
+      const items = parseActionItemsFromMeeting(
+        content,
+        'john-smith',
+        'john-smith',
+        'meeting.md',
+        '',
+      );
+
+      assert.equal(items.length, 1);
+      assert.equal(items[0].area, undefined);
+    });
+
+    it('does NOT include area in dedup hash (hash invariance contract)', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Send the report (@john-smith → @sarah-chen)`;
+
+      const withArea = parseActionItemsFromMeeting(
+        content,
+        'john-smith',
+        'john-smith',
+        'meeting.md',
+        'glance-communications',
+      );
+      const withoutArea = parseActionItemsFromMeeting(
+        content,
+        'john-smith',
+        'john-smith',
+        'meeting.md',
+      );
+
+      assert.equal(withArea.length, 1);
+      assert.equal(withoutArea.length, 1);
+      assert.equal(
+        withArea[0].hash,
+        withoutArea[0].hash,
+        'hash must be invariant to area — area is metadata only',
+      );
+    });
+  });
 });
