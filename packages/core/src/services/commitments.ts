@@ -187,12 +187,17 @@ export function computeCommitmentPriority(input: CommitmentPriorityInput): Commi
  *
  * Must produce the same hash as computeActionItemHash() in person-signals.ts —
  * same algorithm, separate implementation to avoid circular deps.
+ *
+ * EXPORTED for the hash-invariance gate test (phase-8-followup-8 AC5/C2,
+ * pre-mortem R3): the test must call the real function directly to detect
+ * regressions where `area` (or other metadata) accidentally leaks into the
+ * hash inputs. Production code paths still go through sync()/create().
  */
 // NOTE: The `personSlug` in the hash means the same commitment text creates
 // different hashes for "ours" vs "theirs" direction. Cross-person dedup in
 // EntityService.refreshPersonMemory() suppresses owner self-reminder copies
 // when a bilateral entry already exists under the counterparty's slug.
-function computeCommitmentHash(
+export function computeCommitmentHash(
   text: string,
   personSlug: string,
   direction: CommitmentDirection,
@@ -734,5 +739,82 @@ export class CommitmentsService {
   async exists(hashPrefix: string): Promise<boolean> {
     const all = await this.load();
     return all.some((c) => c.id === hashPrefix || c.id.startsWith(hashPrefix));
+  }
+
+  // -------------------------------------------------------------------------
+  // Backfill (phase-8-followup-8 AC3)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Backfill `area` on commitments missing it.
+   *
+   * For each commitment where `area` is absent, calls the caller-supplied
+   * resolver with the commitment's source filename. If the resolver returns
+   * an area slug, the commitment is updated with `area` AND a
+   * `areaSetBy: 'backfill'` provenance marker (so `resetBackfilledAreas`
+   * can selectively undo).
+   *
+   * Returns a preview/apply report. When `apply` is false (default), no
+   * writes occur — caller can inspect proposed changes safely.
+   *
+   * Hash invariance: area is metadata only and is NOT part of the dedup
+   * hash (see `computeCommitmentHash`). Commitment IDs are preserved.
+   */
+  async backfillArea(
+    resolveArea: (source: string) => Promise<string | null>,
+    options: { apply?: boolean } = {},
+  ): Promise<{
+    candidates: number;
+    matched: number;
+    proposals: Array<{ id: string; source: string; area: string }>;
+    applied: boolean;
+  }> {
+    const all = await this.load();
+    const candidates = all.filter((c) => !c.area);
+
+    const proposals: Array<{ id: string; source: string; area: string }> = [];
+    const updatedById = new Map<string, Commitment>();
+    for (const c of candidates) {
+      if (!c.source || c.source === 'manual') continue;
+      const area = await resolveArea(c.source);
+      if (!area) continue;
+      proposals.push({ id: c.id, source: c.source, area });
+      updatedById.set(c.id, { ...c, area, areaSetBy: 'backfill' });
+    }
+
+    if (options.apply && updatedById.size > 0) {
+      const next = all.map((c) => updatedById.get(c.id) ?? c);
+      await this.save(next);
+    }
+
+    return {
+      candidates: candidates.length,
+      matched: proposals.length,
+      proposals,
+      applied: Boolean(options.apply && updatedById.size > 0),
+    };
+  }
+
+  /**
+   * Reset `area` to undefined for every commitment carrying the
+   * `areaSetBy: 'backfill'` provenance marker.
+   *
+   * Does NOT touch commitments where area was set at creation (Path A
+   * meeting approval, Path C `commitments create --area`) or by sync()
+   * (Path B extract-time AC1/AC2) — those lack the marker.
+   */
+  async resetBackfilledAreas(): Promise<{ reset: number }> {
+    const all = await this.load();
+    let reset = 0;
+    const next = all.map((c) => {
+      if (c.areaSetBy === 'backfill') {
+        reset += 1;
+        const { area: _area, areaSetBy: _by, ...rest } = c;
+        return rest as Commitment;
+      }
+      return c;
+    });
+    if (reset > 0) await this.save(next);
+    return { reset };
   }
 }
