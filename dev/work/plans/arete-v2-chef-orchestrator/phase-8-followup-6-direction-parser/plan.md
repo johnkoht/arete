@@ -2,10 +2,18 @@
 title: "Phase 8 followup-6 — direction-parser mirror-pair fix"
 slug: phase-8-followup-6-direction-parser
 created: "2026-05-27"
+revised: "2026-06-01 — post review-1"
 parent: arete-v2-chef-orchestrator
 owner: meta-orchestrator (Claude)
-status: draft
+status: revised-post-review-1
 ---
+
+## Revisions from review-1 (eng-lead, 2026-06-01)
+
+- **C1 [HIGH]**: AC5 eval is one-sided (false-negative only). Added **AC5b**: contrast set of 5-10 historical meetings with hand-labeled legitimate bilateral pairs (or synthetic test fixtures). Re-extract; confirm ZERO false-positive drops. Without this, eval cannot detect R1 (false-positive on legitimate bilateral).
+- **C2 [MED]**: Jaccard threshold raised from 0.85 to **0.90**. Mirror-pair text pathology is "identical or near-identical" (likely ≥0.95 in structural-failure case); tighter threshold = fewer false-positives on legitimate bilateral pairs at minimal catch-rate cost. If AC5 catches <100% at 0.90, ratchet down with logged rationale.
+- **C3 [MED]**: Added explicit AC: confirm `validationWarnings[]` entries with `reason: 'mirror-pair duplicate'` render VISIBLY in chef-curated meeting view (not buried in JSON). R1 mitigation depends on user seeing the drops; verify the surface.
+- **C4 [MINOR]**: Step 4 ordering fixed — verbatim-actor heuristic runs FIRST, owner-match second, arbitrary third (per pre-mortem R5 mitigation). Plan body now matches pre-mortem.
 
 # Phase 8 followup-6 — direction-parser mirror-pair fix
 

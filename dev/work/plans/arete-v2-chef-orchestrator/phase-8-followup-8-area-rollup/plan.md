@@ -2,10 +2,17 @@
 title: "Phase 8 followup-8 — area-rollup gap (commitment-level area propagation)"
 slug: phase-8-followup-8-area-rollup
 created: "2026-05-27"
+revised: "2026-06-01 — post review-1"
 parent: arete-v2-chef-orchestrator
 owner: meta-orchestrator (Claude)
-status: proposed
+status: revised-post-review-1
 ---
+
+## Revisions from review-1 (eng-lead, 2026-06-01)
+
+- **C1 [HIGH]**: WRONG area-parser method. Plan invoked `AreaParserService.getAreaForMeeting(title)` — that's recurring-meeting title match only (returns 1.0 or null). The richer inference logic (area-name-in-title + keyword overlap with focus, producing 0.7-0.8 confidence) lives in **`suggestAreaForMeeting({title, summary, transcript})`** at `area-parser.ts:392`. AC2 now uses `suggestAreaForMeeting` with the 0.7 confidence threshold preserved. Summary/transcript threadable from meeting body for richer matching. **Without this fix, inference fallback recovers ~0 of 24 area-orphan meetings vs the plan's intended material match rate.**
+- **C2 [MED]**: Hash-invariance test elevated to explicit GATE in AC5: "`commitments.test.ts` MUST include test asserting `computeCommitmentHash(text, slug, dir)` is invariant when constructed Commitment.area differs. Build-report.md must echo 'hash invariance verified: [test name]'." Pre-mortem R3's #1 silent-regression risk now named in AC5 explicitly.
+- **C3 [LOW]**: CLI flag surface clarified for AC3: default = preview (dry-run), `--apply` = write changes, `--reset` = clear `area` field on commitments where `areaSetBy: 'backfill'` provenance marker is present (NOT areas set by Path A or correctly-at-creation). Backfill stamps the provenance marker on every write to enable selective reset.
 
 # Phase 8 followup-8 — area-rollup gap
 

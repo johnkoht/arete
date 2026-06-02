@@ -2,11 +2,18 @@
 title: "Phase 8 followup-7 — Reconciler dedup against open commitments (Rule 4)"
 slug: phase-8-followup-7-reconciler-dedup
 created: "2026-06-01"
+revised: "2026-06-01 — post review-1"
 parent: arete-v2-chef-orchestrator
 owner: meta-orchestrator (Claude)
-status: draft
+status: revised-post-review-1
 input_signal: project-agent feedback after first Phase 8 winddown on 2026-06-01 (cadence item re-created as near-duplicate of already-open commitment)
 ---
+
+## Revisions from review-1 (eng-lead, 2026-06-01)
+
+- **C1 [HIGH]**: Recurring-item guard added to Rule 4 at ship (parallel to Rule 2's R6 guard). New AC1 Concrete-match bullet: "**Recurring-item guard**: if matched open commitment is < 5 days old AND text appears in a recurring meeting's action items (loop's `source_meeting.recurring: true`), drop to `## Uncertain` regardless of Jaccard." Neutralizes the soak-window R3 failure (John's weekly 1:1 cadence items getting silently collapsed). Predictable damage prevented day-1.
+- **C2 [MED]**: Direction-guard mirror-pair handling fixed. New AC1 bullet: "If two open commitments exist for the same counterparty + ≥0.9 text overlap + opposite directions (mirror-pair signature), exclude BOTH from Rule 4 candidate set and surface as `## Uncertain` flagging parser-bug suspect." Prevents Rule 4 from hiding parser-bug mirror pairs via silent collapse.
+- **C3 [LOW]**: Cross-rule join with Rule 1 specified in AC1: "If the matched commitment ID also appears as a Rule 1 fulfillment candidate in the same loop ledger, prefer the Rule 1 CT line (resolve commitment + cite fulfillment) over the Rule 4 CT line (skip-stage)." AC4 regex assertion added: `/Rule 1.*precedence|prefer.*Rule 1/i`.
 
 # Phase 8 followup-7 — Reconciler dedup against open commitments
 
