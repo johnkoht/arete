@@ -481,11 +481,17 @@ sub-skill tightening.
 
 **New in Phase 8 (per AC2 / spec §3).** Before Step 3 applies
 defer/stage/Uncertain judgment, the chef reads the merged loop
-ledger from Step 1's cross-skill gather and applies the **three skip
-rules** below. The reconciler is **agent judgment in-context** (D7) —
-no new CLI primitive. Conservative collapse (D1): concrete evidence
-only; fuzzy matches drop to `## Uncertain — your call`. All collapses
-are **proposed**, never auto-executed (AC4).
+ledger from Step 1's cross-skill gather and applies the **four skip
+rules** below (Rule 4 added in Phase 8 followup-7 — intent
+→ already-tracked open commitment). The reconciler is **agent
+judgment in-context** (D7) — no new CLI primitive. Conservative
+collapse (D1): concrete evidence only; fuzzy matches drop to
+`## Uncertain — your call`. All collapses are **proposed**, never
+auto-executed (AC4).
+
+**Rule order** (cheap-first): Rule 3 (moot, no fetch needed) →
+**Rule 4** (open-commitment dedup, local-only) → Rule 1 (slack/
+email fulfillment scan) → Rule 2 (forward-calendar attendee scan).
 
 **Merge the ledger first.** Combine loops from 1k (slack), 1l (email),
 1m (meetings as intents), 1n (calendar events), 1o (commitments as
@@ -517,6 +523,95 @@ as **moot** and propose collapse.
 This rule catches spec anchor `ai_003` ("Find a suitable staging
 claim for live walkthrough" — Runyon walkthrough event already
 passed).
+
+#### Rule 4 — Intent → already-tracked open commitment
+
+**New in Phase 8 followup-7.** For each staged-item candidate
+emitted by `process-meetings` gather-only (Step 1m loops with
+`kind: "commitment-outgoing" | "commitment-incoming" |
+"incoming-ask" | "outgoing-ask"`) AND each open commitment from
+`arete commitments list --json` (Step 1o output): check whether
+the fresh capture is already represented by tracked state. If yes,
+propose collapse **before** stage composition. This is the cheapest
+rule after Rule 3 (no slack / email / calendar fetch — the
+commitments list is already in cache from Step 1o), so it runs
+**second** in the pipeline.
+
+**Rule ordering**: Rule 3 → **Rule 4** → Rule 1 → Rule 2. Rule 4 is
+local-only and cheaper than Rules 1+2 (which scan slack/email/
+calendar); it runs as an early pre-filter after Rule 3's moot-check.
+
+- **Counterparty resolution** preferred via `arete people show
+  --channels` slug match. If counterparty slug matches OR loop has
+  no counterparty (fall-through), proceed to text compare.
+- **Text overlap** ≥ **0.7 Jaccard** on normalized tokens
+  (lowercased, non-alphanumeric stripped, split on whitespace).
+  Threshold ships **stricter** than `CommitmentsService.reconcile()`'s
+  `JACCARD_THRESHOLD = 0.6` because Rule 4 acts pre-stage —
+  over-collapse silently drops a fresh capture, while under-collapse
+  leaks one re-stage (visible at approve time). Conservative-collapse
+  principle (D1) favors the stricter threshold for pre-stage gates.
+  Uses the same normalize-then-Jaccard logic as
+  `CommitmentsService.reconcile()` — see `commitments.ts:233-239` for
+  the `normalize()` helper and `utils/similarity.js` for
+  `jaccardSimilarity()`. Doc-pointer for traceability; if Rule 4 is
+  ever hardened into a CLI verb, the agent + the code share one
+  similarity definition.
+- **Direction guard** (required match): open commitment direction
+  (`i_owe_them` / `they_owe_me`) MUST match the loop kind direction
+  (`commitment-outgoing` / `commitment-incoming` respectively). A
+  fresh `outgoing-ask` MUST NOT collapse against an open
+  `they_owe_me` of the same text — they are different commitments
+  with the same words.
+- **Mirror-pair signature exclusion** (per followup-7 review-1 C2):
+  if two open commitments exist for the **same counterparty +
+  ≥0.9 text overlap + opposite directions** (the parser-bug
+  mirror-pair signature), exclude **BOTH** from the Rule 4 candidate
+  set and surface them to `## Uncertain — your call` with a
+  `parser-bug-suspect` flag. Rule 4 must NOT mask a parser-bug
+  mirror-pair via silent collapse — the user needs to see both sides
+  to triage the bug.
+- **Recurring-item guard** (per followup-7 review-1 C1): if the
+  matched open commitment is **< 5 days old** AND the loop's
+  source meeting has `source_meeting.recurring: true` (cadence
+  meeting — weekly 1:1, standing sync, etc.), drop to
+  `## Uncertain — your call` regardless of Jaccard. Rationale:
+  recurring meetings legitimately re-emit the same-text action
+  weekly ("send Anthony the weekly status"); a still-open commitment
+  from last week's instance is a DIFFERENT obligation than this
+  week's fresh capture. Auto-collapsing would silently lapse last
+  week's commitment when the user resolves this week's. Pre-mortem
+  R3 mitigation; neutralizes the most-likely production failure mode
+  for John's weekly-1:1 workflow at ship.
+- **Rule 1 precedence** (per followup-7 review-1 C3): if the
+  matched commitment ID **also** appears as a Rule 1 fulfillment
+  candidate in the same loop ledger (i.e., Rule 1 found a slack /
+  email message authored by the user fulfilling that same
+  commitment today), **prefer the Rule 1 CT line** (resolve
+  commitment + cite the slack/email fulfillment) over the Rule 4
+  CT line (skip-stage). Rationale: Rule 1's evidence is richer (a
+  real fulfillment trace), and the user wants ONE collapse
+  surface, not two competing ones. The cross-rule join is bounded —
+  Rule 4's match output carries the commitment ID; Rule 1 already
+  scans for fulfilling actions against open commitments.
+- **Concrete match** (≥0.7 Jaccard + counterparty match + direction
+  match, NOT in mirror-pair signature, NOT in recurring-item guard,
+  NOT preferred by Rule 1): propose collapse to
+  `## Closed today (proposed)` with the action `skip staging this
+  item (already tracked as commitment <ID>)`. NO new commitment
+  created. NO staged item surfaced separately.
+- **Fuzzy match** (0.5 ≤ Jaccard < 0.7, OR counterparty
+  name-string-only fallback, OR direction-ambiguous): surface to
+  `## Uncertain — your call` as "Possibly same as open commitment
+  <ID> '<text>' — collapse or stage fresh?"
+- **Below 0.5**: no match; proceed to Rules 1+2 (existing) and then
+  the normal stage pipeline.
+
+This rule closes the leak observed on the 2026-06-01 winddown: a
+cadence-style meeting action was staged + surfaced even though an
+already-open commitment with ≥0.7 Jaccard overlap was tracked.
+Soak window: first 7 winddowns hand-verify Rule 4 proposed
+collapses against the named commitment to confirm semantic match.
 
 #### Rule 1 — Intent → fulfilling action elsewhere
 
