@@ -20,17 +20,23 @@
  * reuses the inbox shape. Section ordering is canonical and load-bearing
  * for renderer idempotency.
  */
+import type { Importance } from '../integrations/meetings.js';
 export type SourceType = 'meeting' | 'inbox' | 'slack';
 /**
  * Frontmatter shape for source summaries. `source_type` discriminates;
  * fields beyond the common core are optional and shape-specific.
+ *
+ * `importance` aligns with the canonical extractor taxonomy in
+ * `packages/core/src/integrations/meetings.ts` — `'skip' | 'light' |
+ * 'normal' | 'important'`. The chef orchestrator gates on `importance:
+ * important`; writers MUST pass values through verbatim, not coerce.
  */
 export interface SourceSummaryFrontmatter {
     source_path: string;
     source_type: SourceType;
     date: string;
     area?: string;
-    importance?: 'skip' | 'light' | 'standard' | 'heavy';
+    importance?: Importance;
     topics?: string[];
     participants?: string[];
     extraction_version?: string;

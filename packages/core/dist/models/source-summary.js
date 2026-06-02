@@ -180,8 +180,8 @@ export function parseSourceSummary(content) {
         fm.area = fmRec.area;
     if (fmRec.importance === 'skip' ||
         fmRec.importance === 'light' ||
-        fmRec.importance === 'standard' ||
-        fmRec.importance === 'heavy') {
+        fmRec.importance === 'normal' ||
+        fmRec.importance === 'important') {
         fm.importance = fmRec.importance;
     }
     if (Array.isArray(fmRec.topics)) {

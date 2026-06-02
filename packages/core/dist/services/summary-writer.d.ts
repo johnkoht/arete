@@ -24,6 +24,7 @@
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { MeetingSummary, MeetingSummarySections, InboxSummarySections } from '../models/source-summary.js';
 import type { LLMCallFn } from '../integrations/conversations/extract.js';
+import type { Importance } from '../integrations/meetings.js';
 /**
  * Schema version stamped into summary frontmatter. Bump when the section
  * shape or prompt changes meaningfully so a future backfill can be
@@ -38,7 +39,11 @@ export interface MeetingSummaryInput {
     /** Body of the meeting file (transcript + notes). */
     sourceBody: string;
     area?: string;
-    importance?: 'skip' | 'light' | 'standard' | 'heavy';
+    /**
+     * Canonical taxonomy: see `packages/core/src/integrations/meetings.ts`.
+     * Chef orchestrator gates on `importance: important`.
+     */
+    importance?: Importance;
     topics?: string[];
     participants?: string[];
     /**

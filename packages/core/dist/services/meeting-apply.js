@@ -193,11 +193,16 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
                 const wsRel = absPath.startsWith(workspaceRoot)
                     ? absPath.slice(workspaceRoot.length).replace(/^[/\\]+/, '')
                     : absPath;
+                // Canonical taxonomy lives in `packages/core/src/integrations/meetings.ts`
+                // (`Importance = 'skip' | 'light' | 'normal' | 'important'`). The
+                // chef orchestrator gates on `importance: important`; coercing
+                // 'normal'/'important' to undefined here silently defeats the gate
+                // (phase-8-followup-5 amendment).
                 const importanceRaw = data['importance'];
                 const importance = importanceRaw === 'skip' ||
                     importanceRaw === 'light' ||
-                    importanceRaw === 'standard' ||
-                    importanceRaw === 'heavy'
+                    importanceRaw === 'normal' ||
+                    importanceRaw === 'important'
                     ? importanceRaw
                     : undefined;
                 const areaRaw = data['area'];
