@@ -649,6 +649,7 @@ import {
   capActionItems,
 } from './person-signals.js';
 import { parseActionItemsFromMeeting } from './meeting-parser.js';
+import type { AreaParserService } from './area-parser.js';
 import type {
   LLMCallFn,
   PersonStance,
@@ -807,6 +808,7 @@ function buildRationale(
 
 export class EntityService {
   private directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null;
+  private areaParser?: AreaParserService;
 
   constructor(
     private storage: StorageAdapter,
@@ -814,6 +816,21 @@ export class EntityService {
     directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null,
   ) {
     this.directoryProvider = directoryProvider;
+  }
+
+  /**
+   * Inject AreaParserService for area-inference fallback during refreshPersonMemory
+   * (phase-8-followup-8 AC2). Called by the service factory after both services exist.
+   *
+   * When set, refreshPersonMemory falls back to `suggestAreaForMeeting()` when a
+   * meeting has no `area:` in its frontmatter, applying the match at a 0.7
+   * confidence floor (recurring + area-name matches; rejects weak keyword overlap).
+   *
+   * Without this injection, area inference is silently skipped — Path B still
+   * propagates `area:` when the meeting has it in frontmatter, just no fallback.
+   */
+  setAreaParser(parser: AreaParserService): void {
+    this.areaParser = parser;
   }
 
   async resolve(
@@ -1244,6 +1261,13 @@ export class EntityService {
     // came from storage.list() (absolute) or SearchProvider (possibly relative).
     const meetingContentCache = new Map<string, string | null>();
 
+    // Area inference cache (phase-8-followup-8 AC2) — keyed by normalized
+    // absolute meeting path. Stores the resolved area slug for the meeting,
+    // or `null` when no area is set in frontmatter AND inference returned no
+    // ≥0.7 confidence match. Prevents repeated AreaParserService.listAreas()
+    // calls when the same meeting is scanned for multiple people.
+    const meetingAreaCache = new Map<string, string | null>();
+
     // Pre-compute per-person meeting file candidates (SearchProvider pre-filter).
     // CRITICAL invariant: if SearchProvider returns 0 results for a person,
     // fall back to the full meetingFiles list — never skip scanning entirely.
@@ -1351,11 +1375,45 @@ export class EntityService {
         // If section exists → use parseActionItemsFromMeeting()
         // If section missing → returns empty array (preserves existing commitments via sync path)
         //
-        // Area propagation (phase-8-followup-8 AC1): read `area` from meeting frontmatter
-        // and thread it into each parsed action item so commitments.sync() picks it up.
-        const meetingArea = typeof parsed?.frontmatter.area === 'string'
-          ? parsed.frontmatter.area
-          : undefined;
+        // Area resolution (phase-8-followup-8 AC1 + AC2):
+        //   1. Read `area` from meeting frontmatter (preferred — explicit user/Path-A signal)
+        //   2. If absent AND AreaParserService is injected, fall back to inference via
+        //      suggestAreaForMeeting({title, summary, transcript}) at ≥0.7 confidence.
+        //   3. If neither resolves, area stays undefined (item created without area; current behavior).
+        //
+        // Per-meeting cache prevents repeated inference calls when multiple people are
+        // scanned against the same meeting.
+        let meetingArea: string | undefined;
+        if (meetingAreaCache.has(normalizedPath)) {
+          meetingArea = meetingAreaCache.get(normalizedPath) ?? undefined;
+        } else {
+          const fmArea = typeof parsed?.frontmatter.area === 'string'
+            ? parsed.frontmatter.area
+            : undefined;
+          if (fmArea) {
+            meetingArea = fmArea;
+          } else if (this.areaParser && parsed?.frontmatter.title) {
+            // C1 fix: use suggestAreaForMeeting (rich inference) instead of
+            // getAreaForMeeting (recurring-title-only). Pass summary + transcript
+            // for keyword overlap; truncation is handled inside suggestAreaForMeeting.
+            const title = String(parsed.frontmatter.title);
+            const summary = typeof parsed.frontmatter.summary === 'string'
+              ? parsed.frontmatter.summary
+              : undefined;
+            // Use the meeting body (sans frontmatter) as transcript proxy.
+            // suggestAreaForMeeting truncates to TRANSCRIPT_MAX_CHARS internally.
+            const transcript = parsed?.body;
+            try {
+              const match = await this.areaParser.suggestAreaForMeeting({ title, summary, transcript });
+              if (match && match.confidence >= 0.7) {
+                meetingArea = match.areaSlug;
+              }
+            } catch {
+              // Inference failure is non-fatal — silently fall back to undefined.
+            }
+          }
+          meetingAreaCache.set(normalizedPath, meetingArea ?? null);
+        }
         const actionItems = ownerSlug
           ? parseActionItemsFromMeeting(content, person.slug, ownerSlug, source, meetingArea)
           : [];

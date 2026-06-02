@@ -9,6 +9,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import { EntityService } from '../../src/services/entity.js';
+import { AreaParserService } from '../../src/services/area-parser.js';
+import { CommitmentsService } from '../../src/services/commitments.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 import type { LLMCallFn } from '../../src/services/person-signals.js';
 
@@ -608,5 +610,160 @@ attendee_ids:
     // "I'll send Jane Doe" → owner is actor, jane mentioned → they_owe_me (from jane's perspective)
     // "Jane Doe to review" → jane is actor → i_owe_them (from jane's perspective)
     assert.equal(result.actionItemsExtracted, 2, 'Should infer direction from text');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Area propagation + inference (phase-8-followup-8 AC1 + AC2)
+// ---------------------------------------------------------------------------
+
+function writeArea(root: string, slug: string, name: string, body: string): void {
+  const dir = join(root, 'areas');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${slug}.md`),
+    `---\nname: "${name}"\nslug: "${slug}"\n---\n\n${body}\n`,
+    'utf8',
+  );
+}
+
+describe('refreshPersonMemory — area propagation (AC1 + AC2)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let service: EntityService;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-memory-area-'));
+    paths = makePaths(tmpDir);
+    service = new EntityService(new FileStorageAdapter());
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('AC1: propagates area from meeting frontmatter into commitments via sync', async () => {
+    writeProfile(tmpDir, 'John Owner');
+    writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
+    writeMeeting(tmpDir, RECENT_MEETING_FILENAME, `---
+title: "Customer Sync"
+date: "${RECENT_DATE}"
+area: "glance-communications"
+attendee_ids:
+  - jane-doe
+---
+
+## Action Items
+
+- [ ] Jane Doe to send signed contract (@jane-doe → @john-owner)
+`);
+
+    const commitments = new CommitmentsService(new FileStorageAdapter(), tmpDir);
+    await service.refreshPersonMemory(paths, { commitments });
+
+    const allCommitments = await commitments.listOpen();
+    assert.ok(allCommitments.length >= 1, 'Should have created at least one commitment');
+    const fromMeeting = allCommitments.find((c) => c.source === RECENT_MEETING_FILENAME);
+    assert.ok(fromMeeting, 'Commitment from this meeting should exist');
+    assert.equal(fromMeeting!.area, 'glance-communications',
+      'AC1: area must be propagated from meeting frontmatter into commitment');
+  });
+
+  it('AC2: falls back to suggestAreaForMeeting when frontmatter has no area (recurring match)', async () => {
+    writeProfile(tmpDir, 'John Owner');
+    writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
+    // Area with a recurring meeting title that matches
+    writeArea(tmpDir, 'glance-communications', 'Glance Communications', `## Focus\n\nCustomer communications work.\n\n## Recurring Meetings\n\n- Glance Customer Sync (weekly)\n`);
+    // Need to also set recurring_meetings in frontmatter for AreaParserService
+    writeFileSync(
+      join(tmpDir, 'areas', 'glance-communications.md'),
+      `---\nname: "Glance Communications"\nslug: "glance-communications"\nrecurring_meetings:\n  - title: "Glance Customer Sync"\n    attendees: ["jane-doe"]\n    frequency: "weekly"\n---\n\n## Focus\n\nCustomer communications work.\n`,
+      'utf8',
+    );
+
+    writeMeeting(tmpDir, RECENT_MEETING_FILENAME, `---
+title: "Glance Customer Sync"
+date: "${RECENT_DATE}"
+attendee_ids:
+  - jane-doe
+---
+
+## Action Items
+
+- [ ] Jane Doe to send signed contract (@jane-doe → @john-owner)
+`);
+
+    const areaParser = new AreaParserService(new FileStorageAdapter(), tmpDir);
+    service.setAreaParser(areaParser);
+
+    const commitments = new CommitmentsService(new FileStorageAdapter(), tmpDir);
+    await service.refreshPersonMemory(paths, { commitments });
+
+    const allCommitments = await commitments.listOpen();
+    const fromMeeting = allCommitments.find((c) => c.source === RECENT_MEETING_FILENAME);
+    assert.ok(fromMeeting, 'Commitment from this meeting should exist');
+    assert.equal(fromMeeting!.area, 'glance-communications',
+      'AC2: area must be inferred via suggestAreaForMeeting when frontmatter is empty');
+  });
+
+  it('AC2: skips inference (area stays undefined) when no AreaParserService is injected', async () => {
+    writeProfile(tmpDir, 'John Owner');
+    writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
+    writeMeeting(tmpDir, RECENT_MEETING_FILENAME, `---
+title: "Glance Customer Sync"
+date: "${RECENT_DATE}"
+attendee_ids:
+  - jane-doe
+---
+
+## Action Items
+
+- [ ] Jane Doe to send signed contract (@jane-doe → @john-owner)
+`);
+
+    // NO setAreaParser call — service stays in current behavior (no inference)
+    const commitments = new CommitmentsService(new FileStorageAdapter(), tmpDir);
+    await service.refreshPersonMemory(paths, { commitments });
+
+    const allCommitments = await commitments.listOpen();
+    const fromMeeting = allCommitments.find((c) => c.source === RECENT_MEETING_FILENAME);
+    assert.ok(fromMeeting, 'Commitment should still be created without area');
+    assert.equal(fromMeeting!.area, undefined, 'Area should remain unset without AreaParserService');
+  });
+
+  it('AC2: rejects low-confidence inference matches (<0.7 threshold)', async () => {
+    writeProfile(tmpDir, 'John Owner');
+    writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
+    // Area with no recurring match, no name match — only weak keyword overlap (<0.7)
+    mkdirSync(join(tmpDir, 'areas'), { recursive: true });
+    writeFileSync(
+      join(tmpDir, 'areas', 'unrelated-area.md'),
+      `---\nname: "Unrelated Area"\nslug: "unrelated-area"\n---\n\n## Focus\n\nDatabase performance tuning, query optimization, indexing strategies.\n`,
+      'utf8',
+    );
+
+    writeMeeting(tmpDir, RECENT_MEETING_FILENAME, `---
+title: "Random Meeting"
+date: "${RECENT_DATE}"
+attendee_ids:
+  - jane-doe
+---
+
+## Action Items
+
+- [ ] Jane Doe to send signed contract (@jane-doe → @john-owner)
+`);
+
+    const areaParser = new AreaParserService(new FileStorageAdapter(), tmpDir);
+    service.setAreaParser(areaParser);
+
+    const commitments = new CommitmentsService(new FileStorageAdapter(), tmpDir);
+    await service.refreshPersonMemory(paths, { commitments });
+
+    const allCommitments = await commitments.listOpen();
+    const fromMeeting = allCommitments.find((c) => c.source === RECENT_MEETING_FILENAME);
+    assert.ok(fromMeeting, 'Commitment should be created');
+    assert.equal(fromMeeting!.area, undefined,
+      'Low-confidence matches (<0.7) must NOT populate area');
   });
 });
