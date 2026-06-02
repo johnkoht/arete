@@ -16,7 +16,7 @@ function meetingFixture(overrides: Partial<MeetingSummary> = {}): MeetingSummary
       source_type: 'meeting',
       date: '2026-04-22',
       area: 'glance-communications',
-      importance: 'standard',
+      importance: 'normal',
       topics: ['cover-whale-templates', 'rollout'],
       participants: ['Anthony Avina', 'Carla Rice'],
       extraction_version: '1',
@@ -212,6 +212,64 @@ describe('source-summary model', () => {
         Object.prototype.hasOwnProperty.call(parsed!.sections, 'Random Header'),
         false,
       );
+    });
+
+    // phase-8-followup-5 Item B amendment — guard the parser predicate
+    // against the OLD `'standard' | 'heavy'` taxonomy. The chef
+    // orchestrator gates on `importance: important`; the parser MUST
+    // pass canonical values through, not drop them.
+    it('passes canonical importance values through (skip/light/normal/important)', () => {
+      for (const value of ['skip', 'light', 'normal', 'important'] as const) {
+        const md = [
+          '---',
+          'source_path: resources/meetings/2026-04-22-foo.md',
+          'source_type: meeting',
+          'date: 2026-04-22',
+          `importance: ${value}`,
+          '---',
+          '',
+          '# t',
+          '',
+          '## What happened',
+          '',
+          'body',
+          '',
+        ].join('\n');
+        const parsed = parseSourceSummary(md);
+        assert.notEqual(parsed, null, `should parse importance: ${value}`);
+        assert.equal(
+          parsed!.frontmatter.importance,
+          value,
+          `importance: ${value} must round-trip; old taxonomy 'standard'/'heavy' silently dropped 'normal'/'important'`,
+        );
+      }
+    });
+
+    it('drops legacy importance values (standard/heavy) — not in canonical taxonomy', () => {
+      // Defensive: if an old summary file happens to carry the legacy
+      // value, the parser must not type-launder it into the canonical
+      // type. Dropping to undefined is the safe move; the writer will
+      // re-derive on next refresh.
+      for (const value of ['standard', 'heavy'] as const) {
+        const md = [
+          '---',
+          'source_path: resources/meetings/2026-04-22-foo.md',
+          'source_type: meeting',
+          'date: 2026-04-22',
+          `importance: ${value}`,
+          '---',
+          '',
+          '# t',
+          '',
+          '## What happened',
+          '',
+          'body',
+          '',
+        ].join('\n');
+        const parsed = parseSourceSummary(md);
+        assert.notEqual(parsed, null);
+        assert.equal(parsed!.frontmatter.importance, undefined);
+      }
     });
 
     it('ignores ## headers inside fenced code blocks', () => {

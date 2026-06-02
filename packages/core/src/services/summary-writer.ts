@@ -41,6 +41,7 @@ import {
   INBOX_SECTION_NAMES,
 } from '../models/source-summary.js';
 import type { LLMCallFn } from '../integrations/conversations/extract.js';
+import type { Importance } from '../integrations/meetings.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -67,7 +68,11 @@ export interface MeetingSummaryInput {
   /** Body of the meeting file (transcript + notes). */
   sourceBody: string;
   area?: string;
-  importance?: 'skip' | 'light' | 'standard' | 'heavy';
+  /**
+   * Canonical taxonomy: see `packages/core/src/integrations/meetings.ts`.
+   * Chef orchestrator gates on `importance: important`.
+   */
+  importance?: Importance;
   topics?: string[];
   participants?: string[];
   /**

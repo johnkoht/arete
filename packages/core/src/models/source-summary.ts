@@ -22,6 +22,7 @@
  */
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import type { Importance } from '../integrations/meetings.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,13 +33,18 @@ export type SourceType = 'meeting' | 'inbox' | 'slack';
 /**
  * Frontmatter shape for source summaries. `source_type` discriminates;
  * fields beyond the common core are optional and shape-specific.
+ *
+ * `importance` aligns with the canonical extractor taxonomy in
+ * `packages/core/src/integrations/meetings.ts` — `'skip' | 'light' |
+ * 'normal' | 'important'`. The chef orchestrator gates on `importance:
+ * important`; writers MUST pass values through verbatim, not coerce.
  */
 export interface SourceSummaryFrontmatter {
   source_path: string;            // workspace-relative path to the primary source file
   source_type: SourceType;
   date: string;                   // YYYY-MM-DD
   area?: string;
-  importance?: 'skip' | 'light' | 'standard' | 'heavy';
+  importance?: Importance;
   topics?: string[];              // slug list
   participants?: string[];        // free-form names (meeting attendees, slack participants)
   extraction_version?: string;    // semver-ish marker so a future schema bump can trigger re-summary
@@ -231,8 +237,8 @@ export function parseSourceSummary(content: string): SourceSummary | null {
   if (
     fmRec.importance === 'skip' ||
     fmRec.importance === 'light' ||
-    fmRec.importance === 'standard' ||
-    fmRec.importance === 'heavy'
+    fmRec.importance === 'normal' ||
+    fmRec.importance === 'important'
   ) {
     fm.importance = fmRec.importance;
   }

@@ -893,6 +893,47 @@ Hello world.
       assert.deepEqual(result.orgsRefreshed, []);
     });
 
+    // phase-8-followup-5 Item B amendment — taxonomy alignment.
+    //
+    // Pre-fix bug: meeting-apply's predicate gated on 'standard'/'heavy'
+    // (the wrong taxonomy), so meetings written with the canonical
+    // 'important' (set by `inferMeetingImportance`) had their importance
+    // coerced to `undefined` and dropped from the source-summary
+    // frontmatter. This defeated the chef orchestrator's prose gate
+    // ("only act on `importance: important`"), because the field was
+    // never written.
+    it('propagates canonical importance from meeting frontmatter to written summary', async () => {
+      for (const value of ['light', 'normal', 'important'] as const) {
+        writeMeetingFile(tmpDir, `2026-04-22-${value}.md`, {
+          title: `${value} meeting`,
+          date: '2026-04-22',
+          status: 'synced',
+          importance: value,
+        }, '# Meeting\n\n## Transcript\nSpeaker: Hello.\n');
+
+        const meetingPath = join(tmpDir, 'resources', 'meetings', `2026-04-22-${value}.md`);
+
+        const callLLM = async (prompt: string) => {
+          if (prompt.includes('summarizing a meeting')) return VALID_SUMMARY_RESPONSE;
+          return '{}';
+        };
+
+        const result = await applyMeetingIntelligence(
+          meetingPath,
+          sampleIntelligence,
+          { storage, workspaceRoot: tmpDir, callLLM },
+        );
+
+        assert.equal(result.summaryWritten, true, `summary should be written for importance: ${value}`);
+        const summaryContent = readFileSync(result.summaryPath!, 'utf8');
+        assert.match(
+          summaryContent,
+          new RegExp(`^importance:\\s+${value}\\s*$`, 'm'),
+          `summary frontmatter must carry importance: ${value} verbatim (pre-fix dropped 'normal'/'important' to undefined)`,
+        );
+      }
+    });
+
     it('idempotent: second apply with same body does not re-call LLM', async () => {
       writeMeetingFile(tmpDir, '2026-04-22-test.md', {
         title: 'Test Meeting',
