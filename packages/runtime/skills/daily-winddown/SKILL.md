@@ -767,6 +767,13 @@ collapse; reject to keep in your queue.
       Evidence: calendar:def456ghi (start=2026-05-30T13:00)
       Action if approved: skip staging this item
 
+[CT4] Meeting action 'Send Anthony the API spec' appears to already
+      be tracked as open commitment `9f3b1c8e` ('Send API spec to
+      Anthony', direction=i_owe_them, 9d old). Text Jaccard 0.82,
+      counterparty match (Rule 4).
+      Evidence: arete:commitments/9f3b1c8e
+      Action if approved: skip staging this item (already tracked)
+
 N items kept in `## Uncertain — your call` (low-confidence match;
 channel backfill would lift these).
 
