@@ -907,6 +907,109 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
       });
     });
 
+    describe('AC4 — Rule 4 dedup against open commitments (Phase 8 followup-7)', () => {
+      it('Rule 4 — Intent → already-tracked open commitment present in Step 2', () => {
+        assert.match(
+          dwContent,
+          /Rule 4.*Intent.*already-tracked.*commitment/i,
+          'followup-7 AC1: missing Rule 4 framing in Step 2 reconciler',
+        );
+      });
+
+      it('Rule 4 cites 0.7 Jaccard threshold (stricter than reconcile()\'s 0.6)', () => {
+        assert.match(
+          dwContent,
+          /0\.7\s+Jaccard|Jaccard.*0\.7/,
+          'followup-7 AC1: Rule 4 must cite 0.7 Jaccard threshold literal',
+        );
+      });
+
+      it('Rule 4 uses arete:commitments/<id> evidence pointer scheme', () => {
+        assert.match(
+          dwContent,
+          /arete:commitments\//,
+          'followup-7 AC3: missing arete:commitments/ evidence pointer scheme',
+        );
+      });
+
+      it('Rule 4 direction guard present (prevents mirror-pair false-collapse)', () => {
+        assert.match(
+          dwContent,
+          /[Dd]irection guard|direction.*match/i,
+          'followup-7 AC1: missing direction guard for Rule 4',
+        );
+      });
+
+      it('Step 2 contains four "### Rule " sub-sections (was three before followup-7)', () => {
+        const ruleHeaderMatches = dwContent.match(/#### Rule /g) ?? [];
+        assert.equal(
+          ruleHeaderMatches.length,
+          4,
+          `followup-7 AC1: expected 4 #### Rule sub-sections, got ${ruleHeaderMatches.length}`,
+        );
+      });
+
+      it('rule order is 3 → 4 → 1 → 2 (cheap-first) per F7-D3', () => {
+        // Order check: in the Step 2 prose, the rule numbers must
+        // appear in the sequence 3, 4, 1, 2 (cheap-first per F7-D3).
+        assert.match(
+          dwContent,
+          /3.*4.*1.*2/s,
+          'followup-7 AC1: rule order should be 3 → 4 → 1 → 2 in Step 2',
+        );
+      });
+
+      it('C1 — recurring-item guard for cadence false-positives (pre-mortem R3)', () => {
+        assert.match(
+          dwContent,
+          /[Rr]ecurring-item guard|recurring meeting|source_meeting\.recurring/,
+          'followup-7 C1: missing recurring-item guard (R3 mitigation)',
+        );
+        assert.match(
+          dwContent,
+          /5 days|< 5 days|less than 5 days/i,
+          'followup-7 C1: recurring guard should reference 5-day age threshold',
+        );
+      });
+
+      it('C2 — mirror-pair signature exclusion (parser-bug-suspect flag)', () => {
+        assert.match(
+          dwContent,
+          /[Mm]irror-pair signature|mirror-pair.*signature|parser-bug.{0,20}suspect/,
+          'followup-7 C2: missing mirror-pair signature exclusion language',
+        );
+        assert.match(
+          dwContent,
+          /0\.9|≥0\.9|opposite direction/i,
+          'followup-7 C2: mirror-pair signature should reference ≥0.9 overlap + opposite directions',
+        );
+      });
+
+      it('C3 — Rule 1 precedence over Rule 4 when same commitment is a fulfillment candidate', () => {
+        assert.match(
+          dwContent,
+          /Rule 1.*precedence|prefer.*Rule 1/i,
+          'followup-7 C3: missing Rule 1 precedence over Rule 4 cross-rule join',
+        );
+      });
+
+      it('Rule 4 prose includes doc-pointer to commitments.ts:233-239', () => {
+        assert.match(
+          dwContent,
+          /commitments\.ts:233-239|commitments\.ts.*233/,
+          'followup-7 AC2: missing doc-pointer to commitments.ts:233-239 for shared Jaccard logic',
+        );
+      });
+
+      it('Step 4 output template includes CT4 example for Rule 4 collapse', () => {
+        assert.match(
+          dwContent,
+          /\[CT4\]/,
+          'followup-7 AC3: missing CT4 example line in Closed today output template',
+        );
+      });
+    });
+
     describe('AC3 — Closed today narrative section', () => {
       it('output template contains ## Closed today (proposed) section', () => {
         assert.match(
