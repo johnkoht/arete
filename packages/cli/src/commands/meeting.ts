@@ -1064,6 +1064,7 @@ export function registerMeetingCommands(program: Command): void {
           extractionResult.intelligence.summary,
           extractionResult.intelligence.core,
           extractionResult.intelligence.could_include,
+          extractionResult.validationWarnings,
         );
 
         if (!dryRun) {
@@ -1298,7 +1299,18 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       if (extractionResult.validationWarnings.length > 0) {
-        warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
+        const mirrorPairCount = extractionResult.validationWarnings.filter(
+          w => w.reason.startsWith('mirror-pair duplicate'),
+        ).length;
+        if (mirrorPairCount > 0) {
+          warn(
+            `${extractionResult.validationWarnings.length} items rejected during validation ` +
+            `(${mirrorPairCount} mirror-pair duplicate${mirrorPairCount === 1 ? '' : 's'} dropped — ` +
+            `see "## Parser-dropped (mirror-pair duplicates)" section in the meeting file)`,
+          );
+        } else {
+          warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
+        }
       }
     });
 

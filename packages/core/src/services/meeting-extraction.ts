@@ -1868,6 +1868,28 @@ export function formatStagedSections(result: MeetingExtractionResult): string {
     lines.push('');
   }
 
+  // Parser-dropped: mirror-pair duplicates (Phase 8 followup-6, AC for
+  // validationWarnings visibility per review-1 C3). Surface mirror-pair
+  // drops in the chef-curated meeting view so the user can review what
+  // was suppressed at curate-time — pre-mortem R1 mitigation (false-positive
+  // recovery requires the user actually seeing the drop). Empty section is
+  // omitted entirely (no warnings → no section).
+  const mirrorPairWarnings = result.validationWarnings.filter(
+    w => w.reason.startsWith('mirror-pair duplicate'),
+  );
+  if (mirrorPairWarnings.length > 0) {
+    lines.push('## Parser-dropped (mirror-pair duplicates)');
+    lines.push(
+      '_The extractor dropped these items as mirror-pair duplicates of another action_' +
+      '_item from the same compound transcript sentence. Reinstate if a legitimate_' +
+      '_bilateral pair was dropped (Jaccard ≥ 0.90 + opposite direction + different owner)._',
+    );
+    mirrorPairWarnings.forEach(w => {
+      lines.push(`- ${w.item} — ${w.reason}`);
+    });
+    lines.push('');
+  }
+
   // Staged Decisions (only if non-empty)
   if (intelligence.decisions.length > 0) {
     lines.push('## Staged Decisions');
@@ -1900,6 +1922,7 @@ const STAGED_HEADERS = new Set([
   'Core',
   'Could include',
   'Staged Action Items',
+  'Parser-dropped (mirror-pair duplicates)',
   'Staged Decisions',
   'Staged Learnings',
 ]);

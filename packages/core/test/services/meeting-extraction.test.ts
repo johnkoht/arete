@@ -1152,6 +1152,45 @@ describe('dedupMirrorPairs — contrast set (AC5b, false-positive fixtures)', ()
     });
   }
 
+  it('mirror-pair drops render as ## Parser-dropped section in formatStagedSections (C3 visibility AC)', () => {
+    const response = JSON.stringify({
+      summary: 'Test meeting',
+      action_items: [
+        { owner: 'John Koht', owner_slug: 'john-koht', description: 'John to reach out to compliance about the audit', direction: 'i_owe_them' },
+        { owner: 'Anthony Avina', owner_slug: 'anthony-avina', description: 'John to reach out to compliance about the audit', direction: 'they_owe_me' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    const rendered = formatStagedSections(result);
+
+    assert.ok(
+      rendered.includes('## Parser-dropped (mirror-pair duplicates)'),
+      `formatStagedSections output should include the Parser-dropped section header. Got:\n${rendered}`,
+    );
+    assert.ok(
+      rendered.includes('mirror-pair duplicate'),
+      'rendered output should reference the mirror-pair duplicate reason',
+    );
+    assert.ok(
+      rendered.includes('John to reach out to compliance'),
+      'rendered output should reference the dropped item description (visible to user at curate-time)',
+    );
+  });
+
+  it('no mirror-pair warnings → no ## Parser-dropped section (clean empty case)', () => {
+    const response = JSON.stringify({
+      summary: 'Test meeting',
+      action_items: [
+        { owner: 'John', owner_slug: 'john-koht', description: 'John to send the proposal', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, 'john-koht');
+    const rendered = formatStagedSections(result);
+    assert.ok(!rendered.includes('## Parser-dropped'), 'no Parser-dropped section when no mirror-pair warnings');
+  });
+
   it('aggregate contrast-set result: ZERO false-positive drops across all fixtures', () => {
     let totalFalsePositives = 0;
     for (const fixture of LEGITIMATE_BILATERAL_PAIRS) {

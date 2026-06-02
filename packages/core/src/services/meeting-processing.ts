@@ -12,7 +12,7 @@
  */
 
 import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
-import type { MeetingExtractionResult, ActionItem, PriorItem } from './meeting-extraction.js';
+import type { MeetingExtractionResult, ActionItem, PriorItem, ValidationWarning } from './meeting-extraction.js';
 import type { Importance } from '../integrations/meetings.js';
 
 // ---------------------------------------------------------------------------
@@ -679,6 +679,10 @@ export function clearApprovedSections(content: string): string {
  * @param summary - The meeting summary text (used as fallback when `core` absent)
  * @param core - Optional lead-prose from wiki-aware extraction
  * @param couldInclude - Accepted for API stability; no longer rendered on the meeting file
+ * @param validationWarnings - Optional. When provided, mirror-pair drop warnings
+ *                             (Phase 8 followup-6) render as a `## Parser-dropped`
+ *                             section so the user sees what was suppressed at
+ *                             curate-time (review-1 C3 visibility AC).
  * @returns Markdown string with lead + Staged sections
  */
 export function formatFilteredStagedSections(
@@ -687,6 +691,7 @@ export function formatFilteredStagedSections(
   core?: string,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   couldInclude?: string[],
+  validationWarnings?: ValidationWarning[],
 ): string {
   const lines: string[] = [];
 
@@ -711,6 +716,26 @@ export function formatFilteredStagedSections(
     lines.push('## Staged Action Items');
     for (const item of actionItems) {
       lines.push(`- ${item.id}: ${item.text}`);
+    }
+    lines.push('');
+  }
+
+  // Parser-dropped: mirror-pair duplicates (Phase 8 followup-6, AC for
+  // validationWarnings visibility per review-1 C3). Mirror to the
+  // formatStagedSections counterpart so the same surface appears in
+  // `--stage` mode as in plain extraction. Empty → no section.
+  const mirrorPairWarnings = (validationWarnings ?? []).filter(
+    w => w.reason.startsWith('mirror-pair duplicate'),
+  );
+  if (mirrorPairWarnings.length > 0) {
+    lines.push('## Parser-dropped (mirror-pair duplicates)');
+    lines.push(
+      '_The extractor dropped these items as mirror-pair duplicates of another action_' +
+      '_item from the same compound transcript sentence. Reinstate if a legitimate_' +
+      '_bilateral pair was dropped (Jaccard ≥ 0.90 + opposite direction + different owner)._',
+    );
+    for (const w of mirrorPairWarnings) {
+      lines.push(`- ${w.item} — ${w.reason}`);
     }
     lines.push('');
   }

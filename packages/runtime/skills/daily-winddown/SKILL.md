@@ -764,11 +764,20 @@ What's your call?
   task" or "Carry to next week") does not need an action — those are
   user-judgment items.
 
-**Batch-resolution rules** (parser-bug mirror-pairs — stopgap until Phase 5):
+**Batch-resolution rules** (parser-bug mirror-pairs — extraction-side fix shipped
+in Phase 8 followup-6; this block remains as defense-in-depth for any
+pre-existing or escaped pairs):
 - The direction-parser bug emits mirror-pair commitments (e.g.,
   `personSlug=john-koht direction=i_owe_them` paired with the real
   counterparty commitment) — typically from compound sentences in
   transcripts. These are zero-judgment cleanup.
+- **As of Phase 8 followup-6**, the source-side fix (`dedupMirrorPairs` in
+  `meeting-extraction.ts`) drops mirror pairs at extract time using a
+  Jaccard ≥ 0.90 + opposite-direction + different-owner gate, with the
+  canonical description logged to `validationWarnings[]`. The rules below
+  apply only to (a) commitments already created BEFORE the fix shipped,
+  and (b) the rare LLM emission that escapes both the prompt-side Pattern
+  4 block and the deterministic dedup pass.
 - **Do not enumerate each pair** in `## Pruning candidates`. Surface
   as a single line referencing the batch action:
   `N parser-bug mirror-pair duplicates — see action [X]`
