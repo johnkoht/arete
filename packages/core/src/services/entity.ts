@@ -1350,8 +1350,14 @@ export class EntityService {
         // Action item extraction: parse structured ## Action Items section.
         // If section exists → use parseActionItemsFromMeeting()
         // If section missing → returns empty array (preserves existing commitments via sync path)
+        //
+        // Area propagation (phase-8-followup-8 AC1): read `area` from meeting frontmatter
+        // and thread it into each parsed action item so commitments.sync() picks it up.
+        const meetingArea = typeof parsed?.frontmatter.area === 'string'
+          ? parsed.frontmatter.area
+          : undefined;
         const actionItems = ownerSlug
-          ? parseActionItemsFromMeeting(content, person.slug, ownerSlug, source)
+          ? parseActionItemsFromMeeting(content, person.slug, ownerSlug, source, meetingArea)
           : [];
         const personActionItemList = personActionItems.get(person.slug);
         if (personActionItemList) {

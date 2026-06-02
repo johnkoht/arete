@@ -34,6 +34,8 @@ export type ParsedActionItem = {
   hash: string;
   stale: boolean;
   completed: boolean;
+  /** Optional area slug — propagated from meeting frontmatter or inference fallback. Metadata only, NOT part of dedup hash. */
+  area?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -320,6 +322,9 @@ function extractActionItemsSection(content: string): string | null {
  * @param personSlug - Filter to items where this person is owner OR counterparty
  * @param ownerSlug - The meeting owner's slug (used for direction inference in fallback)
  * @param source - Meeting filename (passed through to result)
+ * @param meetingArea - Optional area slug (resolved by caller from meeting frontmatter
+ *   or inference fallback). Propagated onto each returned ParsedActionItem as `area`.
+ *   Metadata only — NOT part of the dedup hash.
  * @returns Array of parsed action items for this person, or empty array if no section
  */
 export function parseActionItemsFromMeeting(
@@ -327,6 +332,7 @@ export function parseActionItemsFromMeeting(
   personSlug: string,
   ownerSlug: string,
   source: string,
+  meetingArea?: string,
 ): ParsedActionItem[] {
   // Extract date from frontmatter
   const date = extractDateFromFrontmatter(content);
@@ -399,6 +405,9 @@ export function parseActionItemsFromMeeting(
       hash,
       stale: false, // Caller computes via isActionItemStale()
       completed: parsed.completed,
+      // Area is metadata only — passed through from caller (frontmatter or inference).
+      // NOT included in `hash` to preserve dedup-hash invariance (commitments.ts:559).
+      ...(meetingArea ? { area: meetingArea } : {}),
     });
   }
 
