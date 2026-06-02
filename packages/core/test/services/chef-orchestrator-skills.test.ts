@@ -564,6 +564,50 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
     });
   });
 
+  // Phase 8-followup-5 (Item C) — weekly-winddown agenda GC step.
+  // Daily-winddown's Step 1g cleans up orphan agendas only when daily
+  // runs; on Fri/Sat/Sun when weekly-winddown closes the chain,
+  // agendas accumulate. User reported 6 orphans spanning 2+ weeks
+  // before this step shipped. Mirror Step 1g's principle with a 14d
+  // cutoff.
+  describe('Phase 8-followup-5 Item C — weekly-winddown agenda GC step', () => {
+    const wwContent = readFileSync(
+      join(SKILLS_DIR, 'weekly-winddown', 'SKILL.md'),
+      'utf8',
+    );
+
+    it('SKILL.md has an agenda-GC step (scans now/agendas/)', () => {
+      assert.match(
+        wwContent,
+        /Orphan agenda GC|Agenda GC|agenda-GC|agenda GC|orphan agenda/i,
+        'weekly-winddown SKILL.md missing agenda-GC step header/prose',
+      );
+      assert.match(
+        wwContent,
+        /now\/agendas\//,
+        'weekly-winddown agenda-GC step missing now/agendas/ scan',
+      );
+    });
+
+    it('GC step uses a date cutoff (default 14 days)', () => {
+      assert.match(
+        wwContent,
+        /14[- ]?day|14d|cutoff/i,
+        'weekly-winddown agenda-GC step missing 14-day cutoff reference',
+      );
+    });
+
+    it('GC step surfaces orphans to the curated view (not silent auto-delete)', () => {
+      // Default behavior: list orphan agendas in the review for
+      // user approval. Auto-delete is opt-in via APPEND.
+      assert.match(
+        wwContent,
+        /Surface, don't auto-delete|surface.*not.*auto|Carryovers from agenda/i,
+        'weekly-winddown agenda-GC should surface orphans (not silently delete)',
+      );
+    });
+  });
+
   // Phase 8-followup-5 (Item B) — importance taxonomy alignment.
   // Canonical source of truth: packages/core/src/integrations/meetings.ts
   //   export type Importance = 'skip' | 'light' | 'normal' | 'important';

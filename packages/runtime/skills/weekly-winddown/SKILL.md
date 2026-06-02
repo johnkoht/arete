@@ -118,6 +118,57 @@ arete search "<thread>" --timeline --days 7 --json
 # Aggregate into a "threads that moved this week" view.
 ```
 
+#### 1j — Orphan agenda GC (cutoff: 14 days)
+
+Daily-winddown's Step 1g cleans up `now/agendas/<date>-*.md` when the
+agenda merges into a matched meeting file. But Step 1g only fires
+when daily-winddown runs. On Fri/Sat/Sun when the day closes via
+weekly-winddown (and daily-winddown is skipped), agendas accumulate
+in `now/agendas/` indefinitely — the user reported 6 orphan agendas
+spanning 2+ weeks before weekly-winddown gained this step.
+
+Scan `now/agendas/` for files older than the configured cutoff
+(default: 14 days back from today). For each orphan:
+
+```bash
+CUTOFF_DATE=$(date -v-14d +%Y-%m-%d)  # macOS; GNU: date -d "14 days ago" +%Y-%m-%d
+
+for agenda in now/agendas/*.md; do
+  [ -f "$agenda" ] || continue
+  # Filename pattern: YYYY-MM-DD-*.md — extract date prefix.
+  basename=$(basename "$agenda")
+  agenda_date="${basename:0:10}"
+  if [[ "$agenda_date" < "$CUTOFF_DATE" ]]; then
+    # Orphan candidate — surface in `## Carryovers from agenda items`
+    # OR auto-delete (user-configured per APPEND).
+    echo "Orphan agenda: $agenda (date: $agenda_date)"
+  fi
+done
+```
+
+**Surface, don't auto-delete** by default. The default behavior is
+to list orphan agendas under the curated review's `## Carryovers from
+agenda items` section with a `[gc-candidate]` reason label, so the
+user can:
+
+- **Approve GC** — agenda's meeting never happened or was abandoned;
+  delete the file.
+- **Lift to next-week prep** — agenda is still relevant; carry into
+  next week's prepare-meeting-agenda flow.
+- **Keep in place** — agenda points at a future meeting that hasn't
+  occurred yet; do nothing.
+
+If the user's APPEND file (`.arete/skills-local/weekly-winddown.md`)
+sets `auto_gc_orphan_agendas: true`, auto-delete agendas older than
+the cutoff WITHOUT surfacing — listed under `## Notes` as a single
+count line ("N orphan agendas GC'd, see action [X] for the IDs").
+
+Mirror the daily-winddown 1g principle: prefer durability over
+cleanup. An orphan agenda older than 14d almost certainly missed its
+meeting — keeping it indefinitely just clutters `now/agendas/`. The
+14-day cutoff is conservative; future-dated agendas (e.g., a Friday
+agenda created Wed for a Mon meeting) are unaffected.
+
 ### Step 2 — Read APPEND + apply judgment
 
 The weekly judgment is broader than daily:
