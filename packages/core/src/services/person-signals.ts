@@ -21,9 +21,9 @@ import { createHash } from 'node:crypto';
 export type LLMCallFn = (prompt: string) => Promise<string>;
 
 /** Direction of a person's stance on a topic. */
-export type StanceDirection = 'supports' | 'opposes' | 'concerned' | 'neutral';
+export type StanceDirection = 'supports' | 'opposes' | 'concerned';
 
-const VALID_DIRECTIONS = new Set<string>(['supports', 'opposes', 'concerned', 'neutral']);
+const VALID_DIRECTIONS = new Set<string>(['supports', 'opposes', 'concerned']);
 
 /** A stance extracted from meeting content for a specific person. */
 export type PersonStance = {
@@ -31,6 +31,7 @@ export type PersonStance = {
   direction: StanceDirection;
   summary: string;
   evidenceQuote: string;
+  justification: string;
   source: string;
   date: string;
 };
@@ -44,6 +45,7 @@ type RawStanceResult = {
     direction?: string;
     summary?: string;
     evidence_quote?: string;
+    _justification?: string;
   }>;
 };
 
@@ -230,9 +232,13 @@ export function parseStanceResponse(response: string): PersonStance[] {
     const direction = typeof item.direction === 'string' ? item.direction.trim().toLowerCase() : '';
     const summary = typeof item.summary === 'string' ? item.summary.trim() : '';
     const evidenceQuote = typeof item.evidence_quote === 'string' ? item.evidence_quote.trim() : '';
+    const justification = typeof item._justification === 'string' ? item._justification.trim() : '';
 
-    // All required fields must be present and direction must be valid
-    if (!topic || !direction || !summary || !evidenceQuote) continue;
+    // All required fields must be present and direction must be valid.
+    // Justification is required (audit-trail invariant from Proposal C): if missing or empty
+    // (whitespace-only), drop the stance — generic/missing justifications signal the model
+    // could not honestly defend the extraction.
+    if (!topic || !direction || !summary || !evidenceQuote || !justification) continue;
     if (!VALID_DIRECTIONS.has(direction)) continue;
 
     stances.push({
@@ -240,12 +246,15 @@ export function parseStanceResponse(response: string): PersonStance[] {
       direction: direction as StanceDirection,
       summary,
       evidenceQuote,
+      justification,
       source: '',
       date: '',
     });
   }
 
-  return stances;
+  // Hard-cap at 3 stances per call (Proposal C belt-and-suspenders).
+  // Order matters: per-stance validation runs first, slice happens at parser exit.
+  return stances.slice(0, 3);
 }
 
 // ---------------------------------------------------------------------------

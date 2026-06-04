@@ -80,6 +80,7 @@ describe('parseStanceResponse', () => {
           direction: 'supports',
           summary: 'Advocates for using React over Vue.',
           evidence_quote: 'I think React is the better choice for our team.',
+          _justification: 'Considered SKIP (feature-endorsement) — ruled out because the position is a framework philosophy, not approval of a specific component.',
         },
       ],
     });
@@ -90,6 +91,7 @@ describe('parseStanceResponse', () => {
     assert.equal(result[0].direction, 'supports');
     assert.equal(result[0].summary, 'Advocates for using React over Vue.');
     assert.equal(result[0].evidenceQuote, 'I think React is the better choice for our team.');
+    assert.equal(result[0].justification, 'Considered SKIP (feature-endorsement) — ruled out because the position is a framework philosophy, not approval of a specific component.');
     assert.equal(result[0].source, '');
     assert.equal(result[0].date, '');
   });
@@ -102,12 +104,14 @@ describe('parseStanceResponse', () => {
           direction: 'supports',
           summary: 'Wants microservices.',
           evidence_quote: 'We should go with microservices.',
+          _justification: 'Architectural philosophy that transfers to any service-design decision; not feature-endorsement.',
         },
         {
           topic: 'Monolith',
           direction: 'opposes',
           summary: 'Against monolith.',
           evidence_quote: 'The monolith approach will slow us down.',
+          _justification: 'Position on architectural pattern, contestable and transfers; not a project-specific opinion.',
         },
       ],
     });
@@ -139,21 +143,21 @@ describe('parseStanceResponse', () => {
   });
 
   it('strips markdown code fences (json label)', () => {
-    const response = '```json\n{"stances": [{"topic": "Testing", "direction": "supports", "summary": "Likes tests.", "evidence_quote": "We need more tests."}]}\n```';
+    const response = '```json\n{"stances": [{"topic": "Testing", "direction": "supports", "summary": "Likes tests.", "evidence_quote": "We need more tests.", "_justification": "Methodology stance, transfers across projects."}]}\n```';
     const result = parseStanceResponse(response);
     assert.equal(result.length, 1);
     assert.equal(result[0].topic, 'Testing');
   });
 
   it('strips code fences without json label', () => {
-    const response = '```\n{"stances": [{"topic": "CI", "direction": "supports", "summary": "Wants CI.", "evidence_quote": "Let us set up CI."}]}\n```';
+    const response = '```\n{"stances": [{"topic": "CI", "direction": "supports", "summary": "Wants CI.", "evidence_quote": "Let us set up CI.", "_justification": "Engineering practice position, not project-specific."}]}\n```';
     const result = parseStanceResponse(response);
     assert.equal(result.length, 1);
     assert.equal(result[0].topic, 'CI');
   });
 
   it('extracts JSON from surrounding text', () => {
-    const response = 'Here are the stances:\n{"stances": [{"topic": "API", "direction": "concerned", "summary": "Worried about API.", "evidence_quote": "The API concerns me."}]}\nDone.';
+    const response = 'Here are the stances:\n{"stances": [{"topic": "API", "direction": "concerned", "summary": "Worried about API.", "evidence_quote": "The API concerns me.", "_justification": "Persistent concern about a class of integration, not a one-off observation."}]}\nDone.';
     const result = parseStanceResponse(response);
     assert.equal(result.length, 1);
     assert.equal(result[0].direction, 'concerned');
@@ -162,8 +166,8 @@ describe('parseStanceResponse', () => {
   it('skips stances with missing required fields', () => {
     const response = JSON.stringify({
       stances: [
-        { direction: 'supports', summary: 'No topic.', evidence_quote: 'Quote.' },
-        { topic: 'Valid', direction: 'supports', summary: 'Has topic.', evidence_quote: 'Quote.' },
+        { direction: 'supports', summary: 'No topic.', evidence_quote: 'Quote.', _justification: 'has justification but missing topic.' },
+        { topic: 'Valid', direction: 'supports', summary: 'Has topic.', evidence_quote: 'Quote.', _justification: 'Considered PAIR 1 SKIP, ruled out because it transfers.' },
       ],
     });
 
@@ -198,6 +202,7 @@ describe('parseStanceResponse', () => {
           direction: '  supports  ',
           summary: '  Likes React.  ',
           evidence_quote: '  React is great.  ',
+          _justification: '  Framework philosophy stance.  ',
         },
       ],
     });
@@ -208,11 +213,12 @@ describe('parseStanceResponse', () => {
     assert.equal(result[0].direction, 'supports');
     assert.equal(result[0].summary, 'Likes React.');
     assert.equal(result[0].evidenceQuote, 'React is great.');
+    assert.equal(result[0].justification, 'Framework philosophy stance.');
   });
 
   it('handles non-object items in stances array', () => {
     const response = JSON.stringify({
-      stances: [null, 'not an object', 42, { topic: 'Valid', direction: 'supports', summary: 'OK.', evidence_quote: 'Quote.' }],
+      stances: [null, 'not an object', 42, { topic: 'Valid', direction: 'supports', summary: 'OK.', evidence_quote: 'Quote.', _justification: 'A real position on methodology, not project-endorsement.' }],
     });
 
     const result = parseStanceResponse(response);
@@ -223,7 +229,7 @@ describe('parseStanceResponse', () => {
   it('normalizes direction to lowercase', () => {
     const response = JSON.stringify({
       stances: [
-        { topic: 'Testing', direction: 'Supports', summary: 'Likes it.', evidence_quote: 'Quote.' },
+        { topic: 'Testing', direction: 'Supports', summary: 'Likes it.', evidence_quote: 'Quote.', _justification: 'Engineering-practice philosophy, transfers.' },
       ],
     });
 
@@ -247,6 +253,7 @@ describe('extractStancesForPerson', () => {
             direction: 'supports',
             summary: 'Advocates for K8s migration.',
             evidence_quote: 'We should move to Kubernetes this quarter.',
+            _justification: 'Infrastructure philosophy stance, not a schedule commitment.',
           },
         ],
       });
@@ -304,7 +311,7 @@ describe('extractStancesForPerson', () => {
 
   it('handles LLM returning code-fenced JSON', async () => {
     const mockLLM: LLMCallFn = async () =>
-      '```json\n{"stances": [{"topic": "TypeScript", "direction": "supports", "summary": "Prefers TS.", "evidence_quote": "TypeScript catches bugs early."}]}\n```';
+      '```json\n{"stances": [{"topic": "TypeScript", "direction": "supports", "summary": "Prefers TS.", "evidence_quote": "TypeScript catches bugs early.", "_justification": "Language-choice philosophy, contestable and transfers."}]}\n```';
 
     const result = await extractStancesForPerson('Content.', 'Bob', mockLLM);
     assert.equal(result.length, 1);
@@ -327,9 +334,9 @@ describe('extractStancesForPerson', () => {
     const mockLLM: LLMCallFn = async () =>
       JSON.stringify({
         stances: [
-          { topic: 'Remote work', direction: 'supports', summary: 'Prefers remote.', evidence_quote: 'I work better from home.' },
-          { topic: 'Open offices', direction: 'opposes', summary: 'Dislikes open offices.', evidence_quote: 'Open offices are too noisy.' },
-          { topic: 'Budget cuts', direction: 'concerned', summary: 'Worried about budget.', evidence_quote: 'The budget cuts concern me.' },
+          { topic: 'Remote work', direction: 'supports', summary: 'Prefers remote.', evidence_quote: 'I work better from home.', _justification: 'Persistent workplace philosophy, transfers.' },
+          { topic: 'Open offices', direction: 'opposes', summary: 'Dislikes open offices.', evidence_quote: 'Open offices are too noisy.', _justification: 'Position on office design that transfers across companies.' },
+          { topic: 'Budget cuts', direction: 'concerned', summary: 'Worried about budget.', evidence_quote: 'The budget cuts concern me.', _justification: 'Pattern-level concern about resourcing, not a current-sprint observation.' },
         ],
       });
 
@@ -347,6 +354,7 @@ describe('extractStancesForPerson', () => {
       direction: 'supports' as StanceDirection,
       summary: 'test',
       evidenceQuote: 'test',
+      justification: 'test justification',
       source: 'test.md',
       date: '2026-01-01',
     };
