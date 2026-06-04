@@ -1,7 +1,9 @@
 /**
  * Intelligence commands — context, memory, resolve, brief
  */
-import { createServices, PRODUCT_PRIMITIVES, loadConfig, refreshQmdIndex } from '@arete/core';
+import { createServices, PRODUCT_PRIMITIVES, loadConfig, refreshQmdIndex, formatPersonBriefMarkdown, formatProjectBriefMarkdown, formatAreaBriefMarkdown, formatMeetingBriefMarkdown, } from '@arete/core';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import chalk from 'chalk';
 import { header, info, success, warn, error, listItem, deprecated, } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
@@ -668,28 +670,116 @@ export function registerResolveCommand(program) {
         console.log('');
     });
 }
+/**
+ * Phase 9 AC10c — telemetry: append one line per typed-mode invocation
+ * to `dev/diary/brief-invocations.log`. Best-effort; failures don't block.
+ */
+async function appendBriefInvocationTelemetry(workspaceRoot, mode, input) {
+    try {
+        const dir = join(workspaceRoot, 'dev', 'diary');
+        await fs.mkdir(dir, { recursive: true });
+        const logPath = join(dir, 'brief-invocations.log');
+        const line = `${new Date().toISOString()} ${mode} ${JSON.stringify(input)}\n`;
+        await fs.appendFile(logPath, line, 'utf8');
+    }
+    catch {
+        // best-effort — never block the command
+    }
+}
+/** Simple Levenshtein for project-slug typo suggestions (M4). */
+function levenshtein(a, b) {
+    const m = a.length;
+    const n = b.length;
+    if (m === 0)
+        return n;
+    if (n === 0)
+        return m;
+    const prev = new Array(n + 1);
+    const curr = new Array(n + 1);
+    for (let j = 0; j <= n; j++)
+        prev[j] = j;
+    for (let i = 1; i <= m; i++) {
+        curr[0] = i;
+        for (let j = 1; j <= n; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+        }
+        for (let j = 0; j <= n; j++)
+            prev[j] = curr[j];
+    }
+    return prev[n];
+}
+async function closestProjectSlug(workspaceRoot, attempted) {
+    try {
+        const activeDir = join(workspaceRoot, 'projects', 'active');
+        const entries = await fs.readdir(activeDir, { withFileTypes: true });
+        const slugs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+        if (slugs.length === 0)
+            return null;
+        let best = null;
+        for (const slug of slugs) {
+            const dist = levenshtein(attempted.toLowerCase(), slug.toLowerCase());
+            if (!best || dist < best.dist)
+                best = { slug, dist };
+        }
+        return best && best.dist <= Math.max(2, Math.floor(attempted.length / 2))
+            ? best.slug
+            : null;
+    }
+    catch {
+        return null;
+    }
+}
 export function registerBriefCommand(program) {
     program
         .command('brief')
-        .description('Assemble raw context for a topic; downstream consumers apply judgment')
-        .requiredOption('--for <query>', 'Task or topic description')
-        .option('--skill <name>', 'Skill name for the briefing')
-        .option('--primitives <list>', 'Comma-separated primitives')
+        .description('Assemble structured context — typed modes (--person/--project/--area/--meeting) or free-text (--for)')
+        // Phase 9 AC8: --for demoted from requiredOption to option so mode-count
+        // validation can enforce mutual exclusion across {--for, --person, etc.}.
+        .option('--for <query>', 'Free-text task or topic description (ad-hoc mode)')
+        .option('--person <slug>', 'Typed mode: assemble a brief for a person')
+        .option('--project <slug>', 'Typed mode: assemble a brief for a project (also: override for --meeting)')
+        .option('--area <slug>', 'Typed mode: assemble a brief for an area')
+        .option('--meeting <slug-or-title>', 'Typed mode: assemble a brief for a meeting (slug or free-text title)')
+        .option('--skill <name>', '(--for mode only) Skill name for the briefing')
+        .option('--primitives <list>', '(--for mode only) Comma-separated primitives')
         // --raw is retained as a hidden no-op for backward compat; raw is now the only mode.
         .option('--raw', 'Deprecated: raw is now the only mode (flag accepted, no-op)', false)
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
-        const task = opts.for;
-        if (!task?.trim()) {
+        // -------------------------------------------------------------------
+        // Phase 9 AC8: mode-count validation.
+        // Exactly ONE of {--for, --person, --project, --area, --meeting}.
+        // --project is special: it ALSO acts as an override on --meeting mode,
+        // so when --meeting is also passed, --project is not counted as a mode.
+        // -------------------------------------------------------------------
+        const modes = ['for', 'person', 'project', 'area', 'meeting'];
+        // If --meeting is set, --project is the override, not a mode.
+        const isProjectOverride = !!opts.meeting && !!opts.project;
+        const activeModes = modes.filter((k) => {
+            if (k === 'project' && isProjectOverride)
+                return false;
+            return !!opts[k];
+        });
+        if (activeModes.length === 0) {
+            const msg = 'exactly one of --for/--person/--project/--area/--meeting required';
             if (opts.json) {
-                console.log(JSON.stringify({
-                    success: false,
-                    error: 'Missing --for. Usage: arete brief --for "create PRD"',
-                }));
+                console.log(JSON.stringify({ success: false, error: msg }));
             }
             else {
-                error('Missing --for option');
-                info('Usage: arete brief --for "topic"');
+                error(msg);
+                info('Usage: arete brief --meeting "John / Lindsay 1:1"');
+            }
+            process.exit(1);
+        }
+        if (activeModes.length > 1) {
+            const flagList = activeModes.map((k) => `--${k}`).join(', ');
+            const msg = `exactly one of --for/--person/--project/--area/--meeting required (got: ${flagList})`;
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
             }
             process.exit(1);
         }
@@ -708,6 +798,90 @@ export function registerBriefCommand(program) {
             process.exit(1);
         }
         const paths = services.workspace.getPaths(root);
+        // ----------------- Typed-mode dispatch -----------------
+        if (opts.person) {
+            const brief = await services.intelligence.assembleBriefForPerson(opts.person, paths);
+            await appendBriefInvocationTelemetry(root, '--person', opts.person);
+            if (opts.json) {
+                const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections } = brief;
+                console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections }, null, 2));
+            }
+            else {
+                console.log(formatPersonBriefMarkdown(brief));
+            }
+            return;
+        }
+        if (opts.area) {
+            const brief = await services.intelligence.assembleBriefForArea(opts.area, paths);
+            await appendBriefInvocationTelemetry(root, '--area', opts.area);
+            if (opts.json) {
+                const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections } = brief;
+                console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections }, null, 2));
+            }
+            else {
+                console.log(formatAreaBriefMarkdown(brief));
+            }
+            return;
+        }
+        if (opts.meeting) {
+            // M4: validate --project override slug if provided.
+            if (opts.project) {
+                const projectDir = join(root, 'projects', 'active', opts.project, 'README.md');
+                try {
+                    await fs.access(projectDir);
+                }
+                catch {
+                    const closest = await closestProjectSlug(root, opts.project);
+                    const hint = closest ? `; did you mean: ${closest}?` : '';
+                    const msg = `project '${opts.project}' not found${hint}`;
+                    if (opts.json) {
+                        console.log(JSON.stringify({ success: false, error: msg }));
+                    }
+                    else {
+                        error(msg);
+                    }
+                    process.exit(1);
+                }
+            }
+            const brief = await services.intelligence.assembleBriefForMeeting(opts.meeting, paths, {
+                projectOverride: opts.project,
+            });
+            await appendBriefInvocationTelemetry(root, '--meeting', opts.meeting);
+            if (opts.json) {
+                const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections, attendeeMiniBriefs } = brief;
+                console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections, attendeeMiniBriefs }, null, 2));
+            }
+            else {
+                console.log(formatMeetingBriefMarkdown(brief));
+            }
+            return;
+        }
+        if (opts.project) {
+            // --project (standalone, not an override) is a typed mode.
+            const brief = await services.intelligence.assembleBriefForProject(opts.project, paths);
+            await appendBriefInvocationTelemetry(root, '--project', opts.project);
+            if (opts.json) {
+                const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections } = brief;
+                console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections }, null, 2));
+            }
+            else {
+                console.log(formatProjectBriefMarkdown(brief));
+            }
+            return;
+        }
+        // ----------------- Free-text --for mode (unchanged) -----------------
+        const task = opts.for;
+        if (!task?.trim()) {
+            const msg = 'Missing --for. Usage: arete brief --for "create PRD"';
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error('Missing --for option');
+                info('Usage: arete brief --for "topic"');
+            }
+            process.exit(1);
+        }
         const primitives = parsePrimitives(opts.primitives);
         const briefing = await services.intelligence.assembleBriefing({
             task,

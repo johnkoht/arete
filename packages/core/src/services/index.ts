@@ -6,6 +6,13 @@ export { ContextService } from './context.js';
 export { MemoryService, getMemoryItemsForTopics } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
+// Phase 9 — typed-mode brief markdown formatters
+export {
+  formatPersonBriefMarkdown,
+  formatProjectBriefMarkdown,
+  formatAreaBriefMarkdown,
+  formatMeetingBriefMarkdown,
+} from './brief-formatters.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
 export {
