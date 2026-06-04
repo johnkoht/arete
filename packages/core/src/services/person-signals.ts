@@ -55,33 +55,131 @@ type RawStanceResult = {
  * Build the LLM prompt for extracting stances from content for a specific person.
  */
 export function buildStancePrompt(content: string, personName: string): string {
-  return `You are analyzing a meeting transcript to extract stances for a specific person.
+  return `You are extracting STANCES held by ${personName} from a meeting transcript.
 
-Extract stances ONLY for: ${personName}
+A STANCE is a position ${personName} holds that:
+- Would be re-articulated in an unrelated conversation 3 months later (the TRANSFER test)
+- Could be reasonably disagreed with by a smart colleague (the CONTESTABILITY test)
+- Is about how things SHOULD be, not how things ARE, not what was decided, not what will be done next
 
-A stance is a clear position, opinion, or preference expressed by this person — NOT a question or neutral statement. If uncertain whether something is a stance, OMIT it. Precision over recall.
+Your job is to be picky. A typical meeting yields 0-2 stances. Most things people say in meetings are NOT stances — they're decisions already made, observations of current state, action items, project approvals, schedule commitments, or generic exhortations. **When in doubt, SKIP.**
 
-Return ONLY valid JSON with no markdown formatting, no code fences, no explanation.
+Output a MAXIMUM of 3 stances from this transcript. Most meetings should yield 0-2. A meeting that yields 3 is exceptional.
 
-JSON schema:
+================================================================
+LEARN BY EXAMPLE — CONTRASTIVE PAIRS
+================================================================
+
+Below are 10 pairs of similar-looking statements where one is a real stance (KEEP) and one is not (SKIP). Study the contrast — the boundary is shown, not described.
+
+PAIR 1 — "supports X" surface form
+  KEEP: "Lindsay strongly opposes making Claude chat the primary interface for adjusters, arguing the product must be a proper software UI with clickable interactions."
+    Why KEEP: A philosophical position on UI design. Contestable (some PMs would argue chat IS the future). Transfers to any product.
+  SKIP: "Lindsay supports John's project to revamp the team's Notion setup."
+    Why SKIP: Endorsement of a specific project at a specific moment. Not contestable in any interesting way. Does not transfer.
+
+PAIR 2 — "wants X" surface form
+  KEEP: "Lindsay wants ML and AI model projects run like research projects rather than requiring detailed product requirements upfront."
+    Why KEEP: A position on methodology — how a class of work should be approached. Contestable. Transfers.
+  SKIP: "Lindsay wants a front-end engineer assigned to the Glance claim view redesign as soon as possible."
+    Why SKIP: Resourcing intent — a thing she wants to happen, not a position she holds. Belongs in commitments/action-items.
+
+PAIR 3 — "concerned" direction
+  KEEP: "Lindsay is skeptical of engineering time estimates, believing they consistently underestimate the actual effort required."
+    Why KEEP: A persistent belief about a pattern. She would say this on any project. Contestable.
+  SKIP: "Lindsay is concerned that engineers are slipping back into old habits of spinning their wheels instead of working at the pace they demonstrated during the Pop sprint."
+    Why SKIP: An observation about current behavior in a current sprint. State-of-the-world, not a position. Will not transfer past this sprint.
+
+PAIR 4 — agreement statements
+  KEEP: "Lindsay agrees that adjusters won't adapt to new tools unless legacy systems like Snapsheet are cut off."
+    Why KEEP: Agreement with a sharp, contestable change-management thesis. Transfers to other tool migrations.
+  SKIP: "Lindsay agrees workflows cannot be fully defined until the broader vision for actions and notifications is established."
+    Why SKIP: Sequencing observation — agreeing that one thing must precede another. No real contestable position taken.
+
+PAIR 5 — "believes X is needed/important"
+  KEEP: "Lindsay believes the change management role is necessary because product features were being built and deployed with no accountability for adoption."
+    Why KEEP: A position on org structure — a role that should exist and why. Contestable (some would say PMs own adoption). Transfers.
+  SKIP: "Lindsay emphasizes the importance of maintaining development velocity."
+    Why SKIP: Vague exhortation any leader would agree with. Not contestable. Reveals nothing distinctive.
+
+PAIR 6 — opinions on specific items
+  KEEP: "Lindsay prefers wired headphones over wireless ones and dislikes dealing with Bluetooth."
+    Why KEEP: A persistent personal preference she would re-articulate. Contestable in the trivial sense. Distinctive.
+  SKIP: "Lindsay supports the DSP info section as it would allow CX to self-serve information."
+    Why SKIP: Approval of a specific feature. Does not transfer past this feature. No deeper philosophy stated.
+
+PAIR 7 — "supports pausing/canceling" surface form
+  KEEP: "Lindsay opposes building products reliant on ECHECK because it is declining rapidly and major banks are refusing to accept it."
+    Why KEEP: A position on a class of technology and where the industry is going. Transfers to any payment product decision.
+  SKIP: "Lindsay supports pausing the Claim Clear program due to Marsh's legal concerns."
+    Why SKIP: A decision about a specific program for an external reason. Not Lindsay's position — she's accepting an external constraint.
+
+PAIR 8 — verbs of acknowledgment
+  KEEP: "Lindsay believes the adjuster experience must start structured because most adjusters need to be told what to do."
+    Why KEEP: A UX philosophy claim about a population. Contestable. Drives many downstream decisions.
+  SKIP: "Lindsay Gray acknowledges that Snapsheet is effectively serving as the template editing UI for now."
+    Why SKIP: Acknowledging a state of affairs. "For now" gives it away — situational, not a held position.
+
+PAIR 9 — "should" claims
+  KEEP: "Lindsay believes BI claims should keep the adjuster in the driver's seat due to complexity, litigation risk, and claimant sensitivity."
+    Why KEEP: A "should" claim about how a category of work should be handled, with reasoning that transfers.
+  SKIP: "Lindsay supports a timeline of August through November for heads-down development with a December testing target."
+    Why SKIP: A schedule commitment. Has the surface form of "supports X" but X is a date range.
+
+PAIR 10 — topic identification
+  KEEP: "Lindsay insists on using 'responsibility' rather than 'liability' for POP since it is not an insurance program."
+    Why KEEP: Persistent terminology stance rooted in a substantive claim. She corrects this repeatedly.
+  SKIP: "Lindsay believes guidelines need to be established for what CDJs are allowed to say when demoing AI Glance features externally."
+    Why SKIP: Identifies that guidelines are needed — does not state what they should be. Agenda topic, not a position.
+
+================================================================
+QUICK RULES (apply when no example matches)
+================================================================
+
+- If the statement is about a specific project, deadline, or sprint — SKIP unless the philosophy behind it is also stated and transfers.
+- If the verb is "wants X built/done/scheduled/assigned/created" — SKIP (action item).
+- If the statement is "concerned that X is happening right now" — SKIP (observation).
+- If the statement is something any reasonable leader would say ("velocity matters", "we should ship quality") — SKIP (not distinctive).
+- If you would label it "neutral" — SKIP. Stances have a clear direction.
+- If the lead verb is "acknowledged", "clarified", "confirmed", "noted" — SKIP unless the person is articulating their OWN view that just happens to align with prior statements.
+
+================================================================
+DIRECTION
+================================================================
+
+Direction must be EXACTLY one of: supports | opposes | concerned
+
+Do NOT use "neutral" — if there's no clear direction, it's not a stance.
+
+================================================================
+OUTPUT SCHEMA
+================================================================
+
+Return ONLY valid JSON, no markdown, no code fences, no prose:
+
 {
   "stances": [
     {
-      "topic": "string — the topic or subject of the stance",
-      "direction": "supports | opposes | concerned | neutral",
-      "summary": "string — one sentence summarizing the stance",
-      "evidence_quote": "string — exact quote from the transcript"
+      "topic": "short noun phrase naming what the stance is about (no project names, no dates, no person names)",
+      "direction": "supports | opposes | concerned",
+      "summary": "one sentence: ${personName} [direction] ___ because ___ (must pass the transfer test — drop the names and it should still make sense)",
+      "evidence_quote": "exact quote from the transcript supporting this stance",
+      "_justification": "one sentence: which similar-looking SKIP pattern did you consider and rule out (cite the pair number if applicable), and why this candidate passes both the contestability test AND the transfer test"
     }
   ]
 }
 
-Rules:
-- Return ONLY the JSON object, no other text
-- Extract stances ONLY for ${personName}, ignore other participants
-- A stance requires a clear position — questions, acknowledgments, or procedural statements are NOT stances
-- If uncertain whether something is a stance, OMIT it
-- evidence_quote must be an actual quote from the transcript text
-- If no stances are found, return {"stances": []}
+If no stances meet the bar, return: {"stances": []}
+
+The _justification field is REQUIRED. If you cannot write an honest justification — one that genuinely names the rejected alternative and defends the extraction — DO NOT emit the stance. Empty or generic justifications will be discarded.
+
+================================================================
+FINAL REMINDERS
+================================================================
+
+- Extract stances ONLY for ${personName}. Ignore positions held by other participants.
+- Maximum 3 stances from this transcript. If you have more candidates, pick the 3 most distinctive (least likely for any other leader in the same role to hold).
+- Most meetings should yield 0-2. Zero is a valid count. A meeting that yields 3 is exceptional.
 
 Transcript:
 ${content}`;

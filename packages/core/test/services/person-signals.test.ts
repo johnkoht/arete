@@ -50,13 +50,14 @@ describe('buildStancePrompt', () => {
 
   it('includes omission instruction for uncertain stances', () => {
     const prompt = buildStancePrompt('content', 'Bob');
-    assert.ok(prompt.toLowerCase().includes('if uncertain'));
-    assert.ok(prompt.toLowerCase().includes('omit'));
+    // Proposal C uses "When in doubt, SKIP" rather than the older "if uncertain, omit" phrasing
+    assert.ok(prompt.toLowerCase().includes('when in doubt'));
+    assert.ok(prompt.toLowerCase().includes('skip'));
   });
 
   it('instructs to extract only for the named person', () => {
     const prompt = buildStancePrompt('content', 'Alice');
-    assert.ok(prompt.includes('Extract stances ONLY for: Alice'));
+    assert.ok(prompt.includes('Extract stances ONLY for Alice'));
   });
 
   it('requests JSON output without code fences', () => {
