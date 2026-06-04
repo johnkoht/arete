@@ -93,6 +93,18 @@ export async function createServices(workspaceRoot, options) {
     // `area:` frontmatter, suggestAreaForMeeting() resolves an area at ≥0.7
     // confidence and stamps it onto extracted action items / commitments.
     entity.setAreaParser(areaParser);
+    // Phase 9 — typed-mode brief assembler dependencies. Pure aggregator
+    // dependency set: storage, commitments, topicMemory, areaMemory,
+    // areaParser, optional searchProvider. NO AIService — `arete brief`
+    // never embeds LLM calls.
+    intelligence.setBriefDependencies({
+        commitments,
+        topicMemory,
+        areaMemory,
+        areaParser,
+        storage,
+        searchProvider: search,
+    });
     // AI service (depends on config)
     const ai = new AIService(config);
     // GWS detection (non-blocking — returns { installed: false } if binary missing)

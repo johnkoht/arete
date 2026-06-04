@@ -8,14 +8,59 @@
 import type { ContextService } from './context.js';
 import type { MemoryService } from './memory.js';
 import type { EntityService } from './entity.js';
+import type { CommitmentsService } from './commitments.js';
+import type { TopicMemoryService } from './topic-memory.js';
+import type { AreaMemoryService } from './area-memory.js';
+import type { AreaParserService } from './area-parser.js';
+import type { StorageAdapter } from '../storage/adapter.js';
+import type { SearchProvider } from '../search/types.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
-import type { BriefingRequest, PrimitiveBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths } from '../models/index.js';
+import type { BriefingRequest, PrimitiveBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief } from '../models/index.js';
+import { type MeetingBriefOptions } from './brief-assemblers.js';
 export declare class IntelligenceService {
     private context;
     private memory;
     private entities;
     private emailProvider?;
+    private commitments?;
+    private topicMemory?;
+    private areaMemory?;
+    private areaParser?;
+    private storage?;
+    private searchProvider?;
     constructor(context: ContextService, memory: MemoryService, entities: EntityService, emailProvider?: (EmailProvider | null) | undefined);
+    /**
+     * Inject the dependency surface required by Phase 9 typed-brief modes.
+     * Called by the factory; tests that only exercise free-text briefing
+     * can skip this entirely.
+     *
+     * Pure aggregator contract: no AIService is part of this set. The
+     * brief CLI verb must not embed LLM calls.
+     */
+    setBriefDependencies(deps: {
+        commitments: CommitmentsService;
+        topicMemory: TopicMemoryService;
+        areaMemory: AreaMemoryService;
+        areaParser: AreaParserService;
+        storage: StorageAdapter;
+        searchProvider?: SearchProvider;
+    }): void;
+    private requireBriefDeps;
+    /**
+     * Assemble a structured brief for a person — AC1 + AC1a.
+     * Pure aggregator; no LLM call.
+     */
+    assembleBriefForPerson(slug: string, paths: WorkspacePaths): Promise<PersonBrief>;
+    /** Assemble a structured brief for a project — AC2. Pure aggregator. */
+    assembleBriefForProject(slug: string, paths: WorkspacePaths): Promise<ProjectBrief>;
+    /** Assemble a structured brief for an area — AC3. Pure aggregator. */
+    assembleBriefForArea(slug: string, paths: WorkspacePaths): Promise<AreaBrief>;
+    /**
+     * Assemble a structured brief for a meeting — AC4, AC4a-d. Pure aggregator.
+     * Supports `--project <slug>` override and a calendar events list passed by
+     * the caller (the brief service does not fetch calendars itself).
+     */
+    assembleBriefForMeeting(input: string, paths: WorkspacePaths, opts?: MeetingBriefOptions): Promise<MeetingBrief>;
     assembleBriefing(request: BriefingRequest): Promise<PrimitiveBriefing>;
     /**
      * Search for recent email threads related to resolved entities.

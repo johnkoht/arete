@@ -162,6 +162,19 @@ export async function createServices(
   // confidence and stamps it onto extracted action items / commitments.
   entity.setAreaParser(areaParser);
 
+  // Phase 9 — typed-mode brief assembler dependencies. Pure aggregator
+  // dependency set: storage, commitments, topicMemory, areaMemory,
+  // areaParser, optional searchProvider. NO AIService — `arete brief`
+  // never embeds LLM calls.
+  intelligence.setBriefDependencies({
+    commitments,
+    topicMemory,
+    areaMemory,
+    areaParser,
+    storage,
+    searchProvider: search,
+  });
+
   // AI service (depends on config)
   const ai = new AIService(config);
 

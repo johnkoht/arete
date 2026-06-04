@@ -9,6 +9,12 @@
 import type { ContextService } from './context.js';
 import type { MemoryService } from './memory.js';
 import type { EntityService } from './entity.js';
+import type { CommitmentsService } from './commitments.js';
+import type { TopicMemoryService } from './topic-memory.js';
+import type { AreaMemoryService } from './area-memory.js';
+import type { AreaParserService } from './area-parser.js';
+import type { StorageAdapter } from '../storage/adapter.js';
+import type { SearchProvider } from '../search/types.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
 import type { ProductPrimitive, WorkType } from '../models/common.js';
 import type {
@@ -25,7 +31,18 @@ import type {
   EntityRelationship,
   ContextFile,
   WorkspacePaths,
+  PersonBrief,
+  ProjectBrief,
+  AreaBrief,
+  MeetingBrief,
 } from '../models/index.js';
+import {
+  assembleBriefForPerson as assemblePersonImpl,
+  assembleBriefForProject as assembleProjectImpl,
+  assembleBriefForArea as assembleAreaImpl,
+  assembleBriefForMeeting as assembleMeetingImpl,
+  type MeetingBriefOptions,
+} from './brief-assemblers.js';
 
 // ---------------------------------------------------------------------------
 // routeToSkill — ported from skill-router.ts
@@ -328,12 +345,143 @@ function formatBriefingMarkdown(
 // ---------------------------------------------------------------------------
 
 export class IntelligenceService {
+  // Phase 9 typed-brief dependencies — injected via setters to preserve
+  // backward compat with existing constructor callers. The free-text
+  // assembleBriefing() path does not require any of these.
+  private commitments?: CommitmentsService;
+  private topicMemory?: TopicMemoryService;
+  private areaMemory?: AreaMemoryService;
+  private areaParser?: AreaParserService;
+  private storage?: StorageAdapter;
+  private searchProvider?: SearchProvider;
+
   constructor(
     private context: ContextService,
     private memory: MemoryService,
     private entities: EntityService,
     private emailProvider?: EmailProvider | null,
   ) {}
+
+  /**
+   * Inject the dependency surface required by Phase 9 typed-brief modes.
+   * Called by the factory; tests that only exercise free-text briefing
+   * can skip this entirely.
+   *
+   * Pure aggregator contract: no AIService is part of this set. The
+   * brief CLI verb must not embed LLM calls.
+   */
+  setBriefDependencies(deps: {
+    commitments: CommitmentsService;
+    topicMemory: TopicMemoryService;
+    areaMemory: AreaMemoryService;
+    areaParser: AreaParserService;
+    storage: StorageAdapter;
+    searchProvider?: SearchProvider;
+  }): void {
+    this.commitments = deps.commitments;
+    this.topicMemory = deps.topicMemory;
+    this.areaMemory = deps.areaMemory;
+    this.areaParser = deps.areaParser;
+    this.storage = deps.storage;
+    this.searchProvider = deps.searchProvider;
+  }
+
+  private requireBriefDeps(): {
+    commitments: CommitmentsService;
+    topicMemory: TopicMemoryService;
+    areaMemory: AreaMemoryService;
+    areaParser: AreaParserService;
+    storage: StorageAdapter;
+  } {
+    if (
+      !this.commitments ||
+      !this.topicMemory ||
+      !this.areaMemory ||
+      !this.areaParser ||
+      !this.storage
+    ) {
+      throw new Error(
+        'IntelligenceService brief dependencies not configured. Call setBriefDependencies() ' +
+          'before invoking assembleBriefForPerson/Project/Area/Meeting.',
+      );
+    }
+    return {
+      commitments: this.commitments,
+      topicMemory: this.topicMemory,
+      areaMemory: this.areaMemory,
+      areaParser: this.areaParser,
+      storage: this.storage,
+    };
+  }
+
+  /**
+   * Assemble a structured brief for a person — AC1 + AC1a.
+   * Pure aggregator; no LLM call.
+   */
+  async assembleBriefForPerson(
+    slug: string,
+    paths: WorkspacePaths,
+  ): Promise<PersonBrief> {
+    const deps = this.requireBriefDeps();
+    return assemblePersonImpl(slug, paths, {
+      storage: deps.storage,
+      entities: this.entities,
+      commitments: deps.commitments,
+      topicMemory: deps.topicMemory,
+      areaParser: deps.areaParser,
+    });
+  }
+
+  /** Assemble a structured brief for a project — AC2. Pure aggregator. */
+  async assembleBriefForProject(
+    slug: string,
+    paths: WorkspacePaths,
+  ): Promise<ProjectBrief> {
+    const deps = this.requireBriefDeps();
+    return assembleProjectImpl(slug, paths, {
+      storage: deps.storage,
+      commitments: deps.commitments,
+      topicMemory: deps.topicMemory,
+      areaMemory: deps.areaMemory,
+      entities: this.entities,
+    });
+  }
+
+  /** Assemble a structured brief for an area — AC3. Pure aggregator. */
+  async assembleBriefForArea(
+    slug: string,
+    paths: WorkspacePaths,
+  ): Promise<AreaBrief> {
+    const deps = this.requireBriefDeps();
+    return assembleAreaImpl(slug, paths, {
+      storage: deps.storage,
+      commitments: deps.commitments,
+      topicMemory: deps.topicMemory,
+      areaParser: deps.areaParser,
+    });
+  }
+
+  /**
+   * Assemble a structured brief for a meeting — AC4, AC4a-d. Pure aggregator.
+   * Supports `--project <slug>` override and a calendar events list passed by
+   * the caller (the brief service does not fetch calendars itself).
+   */
+  async assembleBriefForMeeting(
+    input: string,
+    paths: WorkspacePaths,
+    opts: MeetingBriefOptions = {},
+  ): Promise<MeetingBrief> {
+    const deps = this.requireBriefDeps();
+    return assembleMeetingImpl(input, paths, {
+      storage: deps.storage,
+      commitments: deps.commitments,
+      topicMemory: deps.topicMemory,
+      areaMemory: deps.areaMemory,
+      areaParser: deps.areaParser,
+      entities: this.entities,
+      searchProvider: this.searchProvider,
+    }, opts);
+  }
 
   async assembleBriefing(request: BriefingRequest): Promise<PrimitiveBriefing> {
     const now = new Date().toISOString();
