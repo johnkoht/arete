@@ -3,6 +3,8 @@
  */
 import { createServices, loadConfig, refreshQmdIndex, extractPersonMemorySection, readPersonChannels, PEOPLE_CATEGORIES, } from '@arete/core';
 import { join } from 'node:path';
+import { promises as fsp, existsSync, readFileSync, readdirSync } from 'node:fs';
+import * as readline from 'node:readline';
 import chalk from 'chalk';
 import { header, section, listItem, error, info, formatPath, } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
@@ -407,12 +409,17 @@ export function registerPeopleCommands(program) {
         .command('refresh')
         .description('Refresh auto-generated person memory highlights from meetings. ' +
         'Extracts asks, concerns, and action items via regex. ' +
-        'Stance extraction requires an LLM (--llm flag or ARETE_LLM env); if unavailable, stances are skipped silently.')
+        'Stance extraction uses an LLM by default (services.ai.call(\'extraction\', ...)); ' +
+        'pass --no-llm to skip stance extraction.')
         .option('--person <slug>', 'Refresh only one person by slug')
         .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
         .option('--if-stale-days <n>', 'Only refresh when Last refreshed is older than N days')
         .option('--dry-run', 'Preview what would be extracted without writing files')
         .option('--skip-qmd', 'Skip automatic qmd index update')
+        // Phase 9 AC8a — callLLM wiring + cost gating
+        .option('--no-llm', 'Skip stance extraction (no LLM calls); produces signal-only memory')
+        .option('--yes', 'Bypass cost-preview confirm gate ($1 threshold; required for >$10 ceiling regardless)')
+        .option('--snapshot-path <path>', 'Write a pre-refresh snapshot of AUTO_PERSON_MEMORY blocks to this path before writing')
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
         const services = await createServices(process.cwd());
@@ -435,12 +442,127 @@ export function registerPeopleCommands(program) {
         const ifStaleDays = typeof ifStaleDaysParsed === 'number' && !isNaN(ifStaleDaysParsed)
             ? ifStaleDaysParsed
             : undefined;
+        // -----------------------------------------------------------------
+        // Phase 9 AC8a — LLM wiring + stance-specific cost estimator
+        //
+        // Stance extraction is per-person × per-meeting-they-appear-in
+        // (see entity.ts:1354-1372). The topic.ts:415 cost-preview formula
+        // models per-integration; that's the WRONG unit for stances.
+        //
+        // F2 mitigation: estimate by walking refreshable people and counting
+        // their meeting appearances in the last 90 days; multiply by
+        // COST_PER_STANCE_CALL. Calibrated at $0.015/call default. TODO:
+        // empirically recalibrate post-build by dividing actual spend
+        // across N extractions.
+        //
+        // F1 mitigation: snapshot AUTO_PERSON_MEMORY blocks BEFORE any
+        // writes when --snapshot-path is provided.
+        // -----------------------------------------------------------------
+        const useLLM = opts.llm !== false; // commander inverts --no-llm
+        let callLLM;
+        let estimatedCost = 0;
+        let stanceCallCount = 0;
+        if (useLLM) {
+            // Estimate (best-effort): count refreshable people × their meeting appearances in last 90d.
+            // This is the AC8a stance-specific shape: count = Σ over people of
+            // count(meetings person appears in, last 90d).
+            const COST_PER_STANCE_CALL = 0.015; // TODO: empirically calibrate
+            const COST_CEILING_USD = 10.0;
+            const COST_CONFIRM_THRESHOLD_USD = 1.0;
+            try {
+                const allPeople = await services.entity.listPeople(paths);
+                const targetPeople = opts.person
+                    ? allPeople.filter((p) => p.slug === opts.person)
+                    : allPeople;
+                const meetingsDir = join(paths.resources, 'meetings');
+                if (existsSync(meetingsDir)) {
+                    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+                        .toISOString()
+                        .slice(0, 10);
+                    const meetingFiles = readdirSync(meetingsDir).filter((f) => f.endsWith('.md') && f !== 'index.md');
+                    for (const person of targetPeople) {
+                        const nameLower = person.name.toLowerCase();
+                        for (const meetingFile of meetingFiles) {
+                            const dateMatch = meetingFile.match(/^(\d{4}-\d{2}-\d{2})-/);
+                            if (!dateMatch || dateMatch[1] < ninetyDaysAgo)
+                                continue;
+                            // Cheap: filename contains person slug, OR file content includes person name.
+                            if (meetingFile.toLowerCase().includes(person.slug.toLowerCase())) {
+                                stanceCallCount++;
+                                continue;
+                            }
+                            // Read content lazily — only when slug doesn't match filename.
+                            try {
+                                const content = readFileSync(join(meetingsDir, meetingFile), 'utf8');
+                                if (content.toLowerCase().includes(nameLower))
+                                    stanceCallCount++;
+                            }
+                            catch {
+                                // skip unreadable
+                            }
+                        }
+                    }
+                }
+                estimatedCost = stanceCallCount * COST_PER_STANCE_CALL;
+            }
+            catch {
+                // Best-effort — if estimator fails, fall through to ceiling check
+                // with stanceCallCount = 0 (no gate).
+            }
+            // Ceiling — borrowed from topic.ts:963 seedMaxUsd pattern. Above
+            // this requires interactive TTY confirmation, NOT just --yes.
+            if (estimatedCost > COST_CEILING_USD) {
+                if (opts.json) {
+                    console.log(JSON.stringify({
+                        success: false,
+                        error: 'cost_exceeds_ceiling',
+                        estimate: { stanceCallCount, costUsd: estimatedCost, ceilingUsd: COST_CEILING_USD },
+                        hint: 'Re-run in a TTY to confirm interactively; --yes is insufficient for this magnitude.',
+                    }, null, 2));
+                    process.exit(1);
+                }
+                const ok = await confirmInteractive(`Estimated $${estimatedCost.toFixed(2)} (${stanceCallCount} stance calls). Above $${COST_CEILING_USD.toFixed(2)} ceiling — proceed?`);
+                if (!ok) {
+                    info('Aborted by user.');
+                    return;
+                }
+            }
+            else if (!opts.dryRun &&
+                estimatedCost >= COST_CONFIRM_THRESHOLD_USD &&
+                !opts.yes) {
+                if (opts.json) {
+                    console.log(JSON.stringify({
+                        success: false,
+                        error: 'confirm_required',
+                        estimate: { stanceCallCount, costUsd: estimatedCost },
+                        hint: 'Re-run with --yes to proceed, or --dry-run to inspect.',
+                    }, null, 2));
+                    process.exit(0);
+                }
+                info(`Will extract stances for ~${stanceCallCount} person×meeting pairs — estimated cost ~$${estimatedCost.toFixed(2)}.`);
+                info('Re-run with --yes to proceed, --no-llm to skip stance extraction, or --dry-run for a no-spend preview.');
+                process.exit(0);
+            }
+            // Wire callLLM (pattern from meeting.ts:838)
+            if (services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
+                callLLM = async (prompt) => {
+                    const r = await services.ai.call('extraction', prompt);
+                    return r.text;
+                };
+            }
+        }
+        // Pre-refresh snapshot (F1 rollback artifact) — write BEFORE any
+        // refresh path that could mutate person files.
+        if (opts.snapshotPath && !opts.dryRun) {
+            await writePreRefreshSnapshot(paths, opts.snapshotPath, opts.person);
+        }
         const result = await services.entity.refreshPersonMemory(paths, {
             personSlug: opts.person,
             minMentions,
             ifStaleDays,
             dryRun: opts.dryRun,
             commitments: services.commitments,
+            ...(callLLM ? { callLLM } : {}),
         });
         // Auto-refresh qmd index after writes (skip if nothing updated or dry-run)
         let qmdResult;
@@ -480,5 +602,69 @@ function parseCategory(cat) {
     if (PEOPLE_CATEGORIES.includes(c))
         return c;
     return undefined;
+}
+/**
+ * Phase 9 AC8a — F1 rollback artifact.
+ *
+ * Walks people/{internal,users,customers}/*.md and snapshots every
+ * <!-- AUTO_PERSON_MEMORY:START --> ... :END --> block to JSON.
+ * Restoration is via dev/work/plans/.../restore-memory-blocks.sh.
+ */
+async function writePreRefreshSnapshot(paths, snapshotPath, personSlugFilter) {
+    const START = '<!-- AUTO_PERSON_MEMORY:START -->';
+    const END = '<!-- AUTO_PERSON_MEMORY:END -->';
+    const blocks = [];
+    for (const cat of PEOPLE_CATEGORIES) {
+        const catDir = join(paths.people, cat);
+        if (!existsSync(catDir))
+            continue;
+        let files;
+        try {
+            files = readdirSync(catDir).filter((f) => f.endsWith('.md') && f !== 'index.md');
+        }
+        catch {
+            continue;
+        }
+        for (const f of files) {
+            const slug = f.replace(/\.md$/, '');
+            if (personSlugFilter && slug !== personSlugFilter)
+                continue;
+            const filePath = join(catDir, f);
+            try {
+                const content = readFileSync(filePath, 'utf8');
+                const start = content.indexOf(START);
+                const end = content.indexOf(END);
+                const block = start >= 0 && end > start ? content.slice(start, end + END.length) : null;
+                blocks.push({
+                    path: filePath,
+                    relativePath: filePath.startsWith(paths.root + '/')
+                        ? filePath.slice(paths.root.length + 1)
+                        : filePath,
+                    block,
+                });
+            }
+            catch {
+                // skip
+            }
+        }
+    }
+    const target = snapshotPath.startsWith('/') ? snapshotPath : join(paths.root, snapshotPath);
+    const dir = target.substring(0, target.lastIndexOf('/'));
+    if (dir)
+        await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(target, JSON.stringify({ snapshotAt: new Date().toISOString(), blocks }, null, 2), 'utf8');
+    info(`Wrote pre-refresh snapshot: ${target} (${blocks.length} person files)`);
+}
+/** Prompt for y/N interactive confirmation. Returns false in non-TTY. */
+async function confirmInteractive(prompt) {
+    if (!process.stdin.isTTY)
+        return false;
+    return new Promise((resolve) => {
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        rl.question(`${prompt} [y/N] `, (answer) => {
+            rl.close();
+            resolve(/^y(es)?$/i.test(answer.trim()));
+        });
+    });
 }
 //# sourceMappingURL=people.js.map
