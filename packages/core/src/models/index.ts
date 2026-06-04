@@ -125,6 +125,15 @@ export type {
   PrimitiveBriefing,
   SkillContext,
   Suggestion,
+  // Phase 9 typed-mode briefs
+  BriefSection,
+  BriefBase,
+  PersonBrief,
+  ProjectBrief,
+  AreaBrief,
+  MeetingBrief,
+  AttendeeMiniBrief,
+  TypedBrief,
 } from './intelligence.js';
 
 // Integrations domain
