@@ -67,26 +67,23 @@ arete template resolve --skill prepare-meeting-agenda --variant {type}
 ```
 The command output defines the complete section structure. If the user wants a different type, switch and re-run the command.
 
-### 4. Gather Context When It Adds Value
+### 4. Gather Context (REQUIRED — verb invocation is the gate)
 
-**Default: gather context** so the agenda can include suggested items (recent topics, open action items, related projects).
+**Always invoke** `arete brief --meeting "<exact meeting title>"` as your first action. The brief verb is the single source of truth for context aggregation. Do NOT shortcut by reading person files directly with the Read tool — that path produces the regressed thin-template output and is what Phase 9 was built to replace.
 
-- Run the **get_meeting_context** pattern (see [PATTERNS.md](../PATTERNS.md)) with the meeting's attendees and use its outputs to suggest bullets under the template sections.
-- If attendees are known/resolved, run stale-aware refresh before using highlights:
-  - `arete people memory refresh --person <slug> --if-stale-days 3`
-- Check attendee person files for `## Memory Highlights (Auto)` and call out recurring asks/concerns as suggested agenda items.
-- If attendees are unknown, skip refresh and proceed with template-only agenda.
-- **Meetings index** - Read `resources/meetings/index.md` for high-level themes: recent meeting titles and dates often surface recurring topics, priorities, or follow-ups to include as agenda ideas.
-- **Latest meetings** - Read the latest 2-3 meeting files (by filename date) for summaries and key points; use them to suggest agenda items (e.g. follow-ups, open threads, decisions to revisit).
+Only fall back to per-attendee briefs (`arete brief --person <slug>` for each attendee) when `arete brief --meeting` returns the `(unresolved — no calendar match, no saved file)` AC4d path.
 
-**Gather context when** (proactive; don't wait for the user to ask):
-- The meeting has a specific purpose (e.g. kickoff, strategic planning, two teams meeting, "get things in motion").
-- The user named attendees or teams - resolve them and pull their context.
-- Multiple attendees or cross-group meeting - context is especially valuable.
-- Planning/strategy files are relevant (e.g. `goals/quarter.md`, `now/week.md` open or referenced) - read them and align suggested items. **Goals**: Read `goals/quarter.md`. Goals are markdown headings (`## Goal Title`) with `Area`, `Success`, and `Status` fields. Filter to `Status: Active`.
-- The user gave more than a generic "create an agenda" (e.g. "agenda for the Acme kickoff tomorrow").
+If you want richer person memory before composing, run `arete people memory refresh --person <slug> --if-stale-days 3 --skip-qmd` to refresh stale stances. The `--skip-qmd` flag prevents the auto-index output from being surfaced to the user as a status prompt.
 
-**Skip context only when**: No attendees are identified and the user explicitly wants a blank template, or the user says they only want the template structure with no suggested items.
+**Critical: brief section names are NOT agenda section names.** The brief returns sections like `## Open commitments touching this group`, `## Related wiki pages`, `## Attendees`. These are organizational headers in the *input*, not headers for the *output*. **Synthesize themed agenda sections** named by topic (e.g., "Glance 2.0 Roadmap — Start the Conversation", "Discovery Process Update", "30/60/90 Surface", "Carries"). Each themed section should weave together signal from multiple brief sections.
+
+**Concrete synthesis pattern**:
+- Read the brief output top-to-bottom.
+- Identify 3-6 themes the meeting needs to cover. Themes come from cross-source signal: an open commitment + a related decision + a wiki callback = one themed section.
+- For each theme, draft a section with: short framing prose, 2-4 specific bullets citing commitment IDs/meeting dates/wiki pages, an "ask" or "decision needed" framing line where appropriate.
+- Do not pattern-fill the template's generic sections (Priorities / Feedback / Next Steps) without synthesizing first. Those sections belong AT THE END after the themed sections.
+
+Example agenda quality bar: `resources/meetings/2026-04-29-john-lindsay-11.md` lines 88-158. Themed sections ("Glance 2.0 Roadmap — Start the Conversation (20min)", "Discovery Process Update (10min)"), specific commitment IDs ("commitment 45ef9b64"), prior-conversation callbacks ("Per our 4/22 conversation, past misfires came from leadership defining the experience before adjuster-driven research"). That's the target shape.
 
 Do not reimplement calendar or context logic; use existing commands and patterns only.
 
