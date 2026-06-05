@@ -135,6 +135,25 @@ export type {
   AmbiguousName,
   ExtractCounterpartiesResult,
 } from './commitments-counterparty-parser.js';
+
+// Phase 10a v2 — migration engine (Step 4)
+export {
+  migrateCommitmentsToV2,
+  formatMigrationDiff,
+} from './migrations/migrate-to-v2.js';
+export type {
+  Disambiguations,
+  MigrationRowCategory,
+  MigrationDiffRow,
+  MigrationResult,
+  MigrationInputs,
+} from './migrations/migrate-to-v2.js';
+
+// Phase 10a v2 — feature flag for v2 read path (Step 5)
+export {
+  isCommitmentsV2Active,
+  isCommitmentsV2ActiveFromConfig,
+} from './commitments-v2-flag.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type {
   AICallOptions,

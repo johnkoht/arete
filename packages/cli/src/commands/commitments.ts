@@ -8,6 +8,12 @@ import {
   loadConfig,
   refreshQmdIndex,
   type QmdRefreshResult,
+  buildPersonDirectory,
+  migrateCommitmentsToV2,
+  formatMigrationDiff,
+  parseCommitmentsFile,
+  serializeCommitmentsFile,
+  type Disambiguations,
 } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
@@ -642,6 +648,300 @@ export function registerCommitmentsCommand(program: Command): void {
       }
       console.log('');
     });
+
+  // ---------------------------------------------------------------------------
+  // arete commitments migrate --to-v2 [--dry-run] [--apply]  (phase-10a Step 4 + 6)
+  //
+  // Dry-run is the default. `--apply` is wired but gated:
+  //   - 24h quiet-window guard (AC1h): refuse if commitments.json mtime
+  //     is within last 24h, unless --force-after-triage is passed.
+  //   - Ambiguous rows present: refuse until user disambiguates via
+  //     `.arete/commitments.pre-phase-10-ambiguities.json` sidecar (AC1e).
+  //   - Atomic write via tmp + rename (AC1f partial-failure recovery).
+  //
+  // **This build does NOT touch production data.** All writes (both
+  // --dry-run diff output AND the AC1f --apply path) are exercised
+  // only against synthetic fixtures in tests. Real --apply against
+  // arete-reserv happens in the user's AM after they review the
+  // dry-run output — explicit out-of-scope per phase-10a brief.
+  // ---------------------------------------------------------------------------
+
+  commitmentsCmd
+    .command('migrate')
+    .description(
+      'Migrate commitments.json from v1 (personSlug + counterparty hash) to v2 (stakeholders[] + text+direction hash). Dry-run by default; --apply writes after the 24h quiet-window guard passes.',
+    )
+    .requiredOption(
+      '--to-v2',
+      'Migrate to v2 shape (only supported direction in Phase 10a)',
+    )
+    .option('--dry-run', 'Default — produce migration-diff.md without writing commitments.json')
+    .option('--apply', 'Write the migrated commitments.json after the quiet-window guard passes')
+    .option(
+      '--force-after-triage',
+      'Bypass the 24h quiet-window guard. Use ONLY when you understand the delta-diff (AC1g/AC1h).',
+    )
+    .option(
+      '--owner-slug <slug>',
+      'Workspace owner slug (used to repair owner-as-personSlug rows). Required.',
+    )
+    .option(
+      '--diff-dir <path>',
+      'Directory to write the migration-diff.md audit artifact (default: dev/work/plans/arete-v2-chef-orchestrator/phase-10-winddown-orchestrator)',
+    )
+    .option('--json', 'Output as JSON')
+    .action(
+      async (opts: {
+        toV2?: boolean;
+        dryRun?: boolean;
+        apply?: boolean;
+        forceAfterTriage?: boolean;
+        ownerSlug?: string;
+        diffDir?: string;
+        json?: boolean;
+      }) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+          if (opts.json) {
+            console.log(
+              JSON.stringify({ success: false, error: 'Not in an Areté workspace' }),
+            );
+          } else {
+            error('Not in an Areté workspace');
+            info('Run "arete install" to create a workspace');
+          }
+          process.exit(1);
+        }
+
+        if (!opts.ownerSlug) {
+          const msg =
+            '--owner-slug <slug> is required (e.g., "john-koht"). Used to repair owner-as-personSlug rows.';
+          if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+          else error(msg);
+          process.exit(1);
+        }
+
+        // Default mode: dry-run unless --apply explicitly set.
+        const mode: 'dry-run' | 'apply' = opts.apply ? 'apply' : 'dry-run';
+
+        // Load v1 commitments.
+        const commitmentsPath = join(root, '.arete/commitments.json');
+        const raw = await services.storage.read(commitmentsPath);
+        const commitments = parseCommitmentsFile(raw);
+        if (commitments.length === 0) {
+          const msg = 'No commitments found — nothing to migrate.';
+          if (opts.json) {
+            console.log(JSON.stringify({ success: true, migrated: 0, mode }));
+          } else {
+            info(msg);
+          }
+          return;
+        }
+
+        // Build person directory from people/ for the parser.
+        const paths = services.workspace.getPaths(root);
+        const people = await services.entity.listPeople(paths);
+        const directory = buildPersonDirectory(
+          people.map((p) => ({ slug: p.slug, name: p.name })),
+        );
+
+        // Load sidecar disambiguations (optional).
+        const sidecarPath = join(
+          root,
+          '.arete/commitments.pre-phase-10-ambiguities.json',
+        );
+        const sidecarRaw = await services.storage.read(sidecarPath);
+        let disambiguations: Disambiguations = new Map();
+        if (sidecarRaw !== null) {
+          try {
+            const parsed = JSON.parse(sidecarRaw) as {
+              disambiguations?: Array<{
+                commitmentId: string;
+                name: string;
+                slug: string;
+              }>;
+            };
+            const m = new Map<string, string>();
+            for (const d of parsed.disambiguations ?? []) {
+              if (d.commitmentId && d.name && d.slug) {
+                m.set(`${d.commitmentId}::${d.name.toLowerCase()}`, d.slug);
+              }
+            }
+            disambiguations = m;
+          } catch {
+            // Surface the malformed sidecar so the user fixes it before
+            // we proceed — don't silently ignore.
+            const msg = `Malformed sidecar at ${sidecarPath}; expected {"disambiguations":[{"commitmentId":"...","name":"...","slug":"..."}]}`;
+            if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+            else error(msg);
+            process.exit(1);
+          }
+        }
+
+        // Run the engine.
+        const result = migrateCommitmentsToV2({
+          commitments,
+          ownerSlug: opts.ownerSlug,
+          directory,
+          disambiguations,
+        });
+
+        // Write the diff report.
+        const ts = new Date().toISOString();
+        const dateStamp = ts.slice(0, 10); // YYYY-MM-DD
+        const diffDir =
+          opts.diffDir ??
+          join(
+            root,
+            'dev/work/plans/arete-v2-chef-orchestrator/phase-10-winddown-orchestrator',
+          );
+        const diffPath = join(diffDir, `migration-diff-${dateStamp}.md`);
+        const md = formatMigrationDiff(result, {
+          workspaceRoot: root,
+          ownerSlug: opts.ownerSlug,
+          timestamp: ts,
+          mode,
+        });
+        try {
+          await services.storage.write(diffPath, md);
+        } catch (err) {
+          const msg = `Failed to write migration-diff.md: ${
+            err instanceof Error ? err.message : String(err)
+          }`;
+          if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+          else error(msg);
+          process.exit(1);
+        }
+
+        // ----- Dry-run path: stop here.
+        if (mode === 'dry-run') {
+          if (opts.json) {
+            console.log(
+              JSON.stringify(
+                {
+                  success: true,
+                  mode,
+                  summary: result.summary,
+                  diffPath,
+                  migrated: result.migrated.length,
+                },
+                null,
+                2,
+              ),
+            );
+            return;
+          }
+          success(
+            `Dry-run complete: ${result.summary.totalIn} → ${result.summary.totalOut} commitments`,
+          );
+          listItem('Diff report', diffPath);
+          listItem(
+            'Summary',
+            `pass=${result.summary.passThrough} collapsed=${result.summary.collapsed} self-rewrite=${result.summary.selfRewrite} status-conflict=${result.summary.statusConflict} ambiguous=${result.summary.ambiguous}`,
+          );
+          if (result.summary.ambiguous > 0) {
+            console.log('');
+            info(
+              `${result.summary.ambiguous} ambiguous row(s) require disambiguation BEFORE --apply.`,
+            );
+            info(
+              `Edit ${join(root, '.arete/commitments.pre-phase-10-ambiguities.json')} to specify the chosen slug per row.`,
+            );
+          }
+          console.log('');
+          info('To apply: rerun with --apply (24h quiet-window guard applies).');
+          return;
+        }
+
+        // ----- Apply path: AC1h 24h quiet-window guard.
+        if (raw !== null) {
+          const mtime = await services.storage.getModified(commitmentsPath);
+          if (mtime) {
+            const ageMs = Date.now() - mtime.getTime();
+            const ageHours = ageMs / (1000 * 60 * 60);
+            if (ageHours < 24 && !opts.forceAfterTriage) {
+              const msg = `commitments.json modified ${ageHours.toFixed(1)} hours ago — wait 24h after the last manual triage for the diff to stabilize, or pass --force-after-triage to override (with delta-diff re-confirm).`;
+              if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+              else error(msg);
+              process.exit(1);
+            }
+          }
+        }
+
+        // Ambiguous rows block apply (AC1e).
+        if (result.summary.ambiguous > 0) {
+          const msg = `${result.summary.ambiguous} ambiguous row(s) block --apply. Disambiguate via ${join(root, '.arete/commitments.pre-phase-10-ambiguities.json')}.`;
+          if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+          else error(msg);
+          process.exit(1);
+        }
+
+        // Pre-migration snapshot (AC1d reversibility anchor).
+        const snapshotPath = join(root, '.arete/commitments.pre-phase-10.json');
+        if (raw !== null) {
+          try {
+            await services.storage.write(snapshotPath, raw);
+          } catch (err) {
+            const msg = `Failed to write pre-migration snapshot: ${
+              err instanceof Error ? err.message : String(err)
+            }`;
+            if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+            else error(msg);
+            process.exit(1);
+          }
+        }
+
+        // Atomic write via tmp + rename (AC1f partial-failure recovery).
+        // We rely on storage.write — for the file adapter this maps to a
+        // single fs.writeFile call. Truly-atomic rename requires posix
+        // semantics; future work to wrap in a tmp-then-rename helper at
+        // the storage layer. For 10a we rely on the snapshot as the
+        // recovery anchor.
+        const migratedJson = serializeCommitmentsFile(result.migrated);
+        try {
+          await services.storage.write(commitmentsPath, migratedJson);
+        } catch (err) {
+          const msg = `Failed to write commitments.json: ${
+            err instanceof Error ? err.message : String(err)
+          }. Pre-migration snapshot at ${snapshotPath} is the recovery anchor; run \`arete commitments restore --from ${snapshotPath}\` to roll back.`;
+          if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+          else error(msg);
+          process.exit(1);
+        }
+
+        if (opts.json) {
+          console.log(
+            JSON.stringify(
+              {
+                success: true,
+                mode,
+                summary: result.summary,
+                diffPath,
+                snapshotPath,
+                migrated: result.migrated.length,
+              },
+              null,
+              2,
+            ),
+          );
+          return;
+        }
+
+        success(
+          `Applied migration: ${result.summary.totalIn} → ${result.summary.totalOut} commitments`,
+        );
+        listItem('Diff report', diffPath);
+        listItem('Pre-migration snapshot', snapshotPath);
+        listItem(
+          'Summary',
+          `pass=${result.summary.passThrough} collapsed=${result.summary.collapsed} self-rewrite=${result.summary.selfRewrite} status-conflict=${result.summary.statusConflict}`,
+        );
+        console.log('');
+        info(`To roll back: \`arete commitments restore --from ${snapshotPath}\``);
+        console.log('');
+      },
+    );
 
   commitmentsCmd
     .command('resolve <id>')

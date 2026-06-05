@@ -176,8 +176,59 @@ export type CommitmentStatus = 'open' | 'resolved' | 'dropped';
  *
  * Defined here in models (parallel to ActionItemDirection in services) to
  * avoid circular imports between models and services.
+ *
+ * Phase 10a (v2) introduces `'self'` for self-reminder commitments — these
+ * carry no counterparty and the only stakeholder is the workspace owner.
+ * Migration's owner-as-personSlug parser routes the "note to self" /
+ * "remember to" / etc. patterns to this direction. Pre-Phase-10 code paths
+ * NEVER emit `'self'` — old shape (only `'i_owe_them' | 'they_owe_me'`)
+ * remains the v1 read path until `COMMITMENTS_V2_ACTIVE` is flipped.
  */
-export type CommitmentDirection = 'i_owe_them' | 'they_owe_me';
+export type CommitmentDirection = 'i_owe_them' | 'they_owe_me' | 'self';
+/**
+ * Role a Stakeholder plays on a Commitment (Phase 10a v2 — PM G6).
+ *
+ *  - `recipient`: outbound — the user owes / will deliver TO this person.
+ *  - `sender`:    inbound  — this person owes / will deliver TO the user.
+ *  - `mentioned`: appears in the text as context, but isn't the counterparty.
+ *  - `self`:      self-reminder; the only stakeholder is the workspace owner.
+ *
+ * The role distinction matters for downstream gates (Phase 8 R4 set-overlap
+ * EXCLUDES role='self' so a self-reminder doesn't match a recurring-meeting
+ * attendee just because the owner is on the attendee list — see
+ * `getCommitmentCounterpartySlugs` in commitments.ts).
+ */
+export type StakeholderRole = 'recipient' | 'sender' | 'mentioned' | 'self';
+/**
+ * Stakeholder on a commitment (Phase 10a v2 data model).
+ *
+ * Replaces v1's single `personSlug` field. A commitment may carry multiple
+ * stakeholders with distinct roles (e.g., "Send Lindsay the deck and CC
+ * Anthony" → recipient=lindsay, mentioned=anthony).
+ */
+export type Stakeholder = {
+    /** Person slug (matches a file in people/<category>/<slug>.md). */
+    slug: string;
+    /** Role this person plays on the commitment. */
+    role: StakeholderRole;
+};
+/**
+ * External source for a commitment (Phase 11 — RESERVED in v2).
+ *
+ * In Phase 10a v2 this is always an empty array on persisted entries;
+ * Phase 11 will populate it from Slack / Gmail / Jira cross-references.
+ * The shape is committed up front so v2 dry-run reads emit a stable JSON
+ * key layout — adding the field later would shift diffs unnecessarily.
+ */
+export type ExternalSource = {
+    kind: 'slack' | 'gmail' | 'jira';
+    /** Optional permalink. Phase 11 fills this when the integration provides it. */
+    url?: string;
+    /** Free-form reference (channel/ts, message-id, ticket key). */
+    ref: string;
+};
+/** Hard cap on `Commitment.textVariants` (PM Q3 / Phase 10a v2 spec). */
+export declare const COMMITMENT_TEXT_VARIANTS_MAX = 5;
 /**
  * A tracked commitment between the user and another person.
  *
@@ -186,6 +237,15 @@ export type CommitmentDirection = 'i_owe_them' | 'they_owe_me';
  *   Null means the commitment is still open and must NOT be pruned.
  *   A commitment from months ago resolved yesterday will have a recent `resolvedAt`
  *   and must be retained; pruning logic must use `resolvedAt`, never `date`.
+ *
+ * **v1 → v2 coexistence** (Phase 10a, AC0a / AC1c): the v1 fields
+ * (`personSlug`, `personName`, `source`) remain REQUIRED so the v1 read path
+ * keeps working during the 3-5 day dry-run window between
+ * `arete commitments migrate --to-v2 --dry-run` and `--apply`. The v2 fields
+ * (`stakeholders`, `source_meetings`, `source_external`, `textVariants`) are
+ * OPTIONAL on read — code that needs them defaults sensibly when absent (see
+ * `getCommitmentCounterpartySlugs` for the canonical dual-shape pattern).
+ * After `--apply` runs, all rows carry both shapes.
  */
 export type Commitment = {
     id: string;
@@ -225,6 +285,43 @@ export type Commitment = {
      * when area itself is absent.
      */
     areaSetBy?: 'backfill';
+    /**
+     * Stakeholders on this commitment (Phase 10a v2).
+     *
+     * Replaces v1's single `personSlug` semantically. v1 `personSlug` remains
+     * populated for backward compat; readers MUST prefer `stakeholders` when
+     * present (see `getCommitmentCounterpartySlugs`). Migration's owner-as-
+     * personSlug parser rewrites v1 rows by extracting counterparties from
+     * the commitment text (arrow notation + natural language) so the workspace
+     * owner does not appear as a fake recipient.
+     */
+    stakeholders?: Stakeholder[];
+    /**
+     * Meeting slugs that surfaced this commitment (Phase 10a v2).
+     *
+     * Replaces v1's single `source` field semantically. v1 `source` remains
+     * populated for backward compat (the canonical meeting that minted the row);
+     * `source_meetings` carries the union across all dedup merges — same
+     * commitment voiced in three meetings has three entries here.
+     */
+    source_meetings?: string[];
+    /**
+     * External cross-references (Phase 11 — RESERVED in v2).
+     *
+     * Phase 10a writes this as `[]` on every v2 row for shape stability.
+     * Phase 11 populates from Slack/Gmail/Jira providers.
+     */
+    source_external?: ExternalSource[];
+    /**
+     * Observed wordings of the commitment text (Phase 10a v2).
+     *
+     * Cap = `COMMITMENT_TEXT_VARIANTS_MAX` (5). Eviction is oldest-first when
+     * full. Phase 10b's semantic dedup pipeline appends to this when an
+     * extracted item lands on an existing canonical with non-identical text.
+     * The migration seeds this with `[text]` so every v2 row has at least
+     * one variant on disk.
+     */
+    textVariants?: string[];
 };
 /** Persisted commitments file structure */
 export type CommitmentsFile = {

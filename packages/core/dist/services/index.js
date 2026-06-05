@@ -25,6 +25,14 @@ export { appendChefSkipLog } from './chef-skip-log.js';
 export { parseChefSkipDirectives, resolveChefSkipDirective, formatDirectiveStatusMessage, } from './chef-skip-directives.js';
 // Migrations (phase-10a-pre and onward)
 export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
+// Phase 10a v2 — commitment hash + text normalization (Step 2)
+export { normalizeCommitmentTextV2, computeCommitmentHashV2, } from './commitments-hash-v2.js';
+// Phase 10a v2 — counterparty parser (Step 3)
+export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitments-counterparty-parser.js';
+// Phase 10a v2 — migration engine (Step 4)
+export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
+// Phase 10a v2 — feature flag for v2 read path (Step 5)
+export { isCommitmentsV2Active, isCommitmentsV2ActiveFromConfig, } from './commitments-v2-flag.js';
 export { AIService, parseModelSpec } from './ai.js';
 // Similarity utilities (shared Jaccard computation)
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';

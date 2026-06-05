@@ -29,6 +29,12 @@ export type { ChefSkipDirective, ChefSkipDirectiveKind, ResolvedDirective, Resol
 export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, CreateCommitmentOptions, CreateCommitmentResult, CreateTaskFn, CommitmentLike, } from './commitments.js';
 export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
 export type { AddCreatedAtReport, AddCreatedAtPerEntryResult, } from './migrations/add-created-at.js';
+export { normalizeCommitmentTextV2, computeCommitmentHashV2, } from './commitments-hash-v2.js';
+export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitments-counterparty-parser.js';
+export type { PersonDirectory, AmbiguousName, ExtractCounterpartiesResult, } from './commitments-counterparty-parser.js';
+export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
+export type { Disambiguations, MigrationRowCategory, MigrationDiffRow, MigrationResult, MigrationInputs, } from './migrations/migrate-to-v2.js';
+export { isCommitmentsV2Active, isCommitmentsV2ActiveFromConfig, } from './commitments-v2-flag.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type { AICallOptions, AICallResult, AIStructuredResult, AIServiceTestDeps, ModelSpec, } from './ai.js';
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
