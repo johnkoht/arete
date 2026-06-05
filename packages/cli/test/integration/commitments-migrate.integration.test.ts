@@ -330,4 +330,61 @@ describe('arete commitments migrate --to-v2 (integration)', () => {
     const result = JSON.parse(stdout) as { success: boolean; migrated?: number };
     assert.equal(result.success, true);
   });
+
+  // ---------------------------------------------------------------------------
+  // phase-10a-fixup HIGH-3: malformed commitments.json refuses to migrate
+  // ---------------------------------------------------------------------------
+  it('malformed commitments.json → refuses to migrate (HIGH-3)', () => {
+    // Truncated JSON — exists on disk but won't parse.
+    writeFile(
+      tmpDir,
+      '.arete/commitments.json',
+      '{"commitments": [{"id":',
+    );
+    const { stdout, stderr, code } = runCliRaw(
+      [
+        'commitments',
+        'migrate',
+        '--to-v2',
+        '--dry-run',
+        '--owner-slug',
+        'john-koht',
+        '--diff-dir',
+        join(tmpDir, 'diffs'),
+        '--json',
+      ],
+      { cwd: tmpDir },
+    );
+    assert.notEqual(code, 0, 'expected non-zero exit on malformed JSON');
+    const out = stdout + stderr;
+    assert.match(out, /malformed/i, 'error message must mention "malformed"');
+  });
+
+  it('malformed commitments.json (shape invalid) → refuses (HIGH-3)', () => {
+    // Valid JSON but missing the `commitments` array. parseCommitmentsFile
+    // would return [] and the verb would falsely report "nothing to migrate";
+    // the guard catches this.
+    writeFile(
+      tmpDir,
+      '.arete/commitments.json',
+      JSON.stringify({ commitments: 'not-an-array' }),
+    );
+    const { stdout, stderr, code } = runCliRaw(
+      [
+        'commitments',
+        'migrate',
+        '--to-v2',
+        '--dry-run',
+        '--owner-slug',
+        'john-koht',
+        '--diff-dir',
+        join(tmpDir, 'diffs'),
+        '--json',
+      ],
+      { cwd: tmpDir },
+    );
+    assert.notEqual(code, 0, 'expected non-zero exit on shape-invalid JSON');
+    const out = stdout + stderr;
+    assert.match(out, /malformed/i);
+  });
 });

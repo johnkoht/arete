@@ -728,6 +728,40 @@ export function registerCommitmentsCommand(program: Command): void {
         // Load v1 commitments.
         const commitmentsPath = join(root, '.arete/commitments.json');
         const raw = await services.storage.read(commitmentsPath);
+
+        // HIGH-3 defensive guard (phase-10a-fixup): `parseCommitmentsFile`
+        // is a shared library helper that returns [] for both "file missing"
+        // and "file exists but malformed" — fine for most callers, but the
+        // migrate verb would then take its empty-no-op branch and the user
+        // would see "nothing to migrate" success while their commitments.json
+        // is silently corrupt on disk. Distinguish here:
+        //   - raw === null              → file truly missing (fresh workspace)
+        //   - raw.trim() === ''         → empty file, treat as missing
+        //   - raw !== null && parses OK → normal flow
+        //   - raw !== null && fails to parse OR shape-invalid → REFUSE
+        // The narrow guard runs only in this verb; we don't change shared
+        // library behavior.
+        if (raw !== null && raw.trim() !== '') {
+          let parseError: string | null = null;
+          try {
+            const parsed = JSON.parse(raw) as { commitments?: unknown };
+            if (!Array.isArray(parsed.commitments)) {
+              parseError =
+                'commitments.json exists but is malformed (missing or non-array `commitments` field); refusing to migrate.';
+            }
+          } catch (err) {
+            parseError = `commitments.json exists but is malformed (${
+              err instanceof Error ? err.message : String(err)
+            }); refusing to migrate.`;
+          }
+          if (parseError !== null) {
+            if (opts.json)
+              console.log(JSON.stringify({ success: false, error: parseError }));
+            else error(parseError);
+            process.exit(1);
+          }
+        }
+
         const commitments = parseCommitmentsFile(raw);
         if (commitments.length === 0) {
           const msg = 'No commitments found — nothing to migrate.';
