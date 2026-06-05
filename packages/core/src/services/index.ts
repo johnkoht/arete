@@ -203,6 +203,41 @@ export type {
   DedupLLMTier,
 } from './dedup-decisions-log.js';
 
+// Phase 10e — background dedup hygiene engine
+export {
+  runBackgroundDedup,
+  applyCommitmentsDedup,
+  formatBackgroundDedupDiff,
+  BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR,
+  BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR,
+} from './background-dedup.js';
+export type {
+  BackgroundDedupScope,
+  BackgroundDedupGroup,
+  BackgroundDedupDuplicate,
+  BackgroundDedupCandidatePair,
+  BackgroundDedupSummary,
+  BackgroundDedupResult,
+  RunBackgroundDedupInputs,
+  MemorySectionInput,
+  TopicPageInput,
+} from './background-dedup.js';
+
+// Phase 10b-min wiring — CLI-facing glue that bridges meeting.ts and
+// the pure pipeline modules above. See extract-dedup-wiring.ts for the
+// flow (lock → load same-day → orchestrator → reverse-stamp → log).
+export {
+  wireExtractDedup,
+  loadSameDayStagedItems,
+  resolveMeetingSlugToPath,
+  adaptFilteredItemsForDedup,
+} from './extract-dedup-wiring.js';
+export type {
+  WireExtractDedupInputs,
+  WireExtractDedupOptions,
+  WireExtractDedupResult,
+} from './extract-dedup-wiring.js';
+
 // Phase 10a v2 — migration engine (Step 4)
 export {
   migrateCommitmentsToV2,

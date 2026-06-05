@@ -37,6 +37,12 @@ export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWi
 export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampIntoBody, applyReverseStamp, } from './commitment-dedup-reverse-stamp.js';
 // Phase 10b-min — dedup-decisions audit log writer (Step 6, AC9)
 export { sanitizeReasoning, renderDedupDecisionLine, payloadFromExtractDecision, appendDedupDecisionLog, appendDedupDecisionLogBatch, } from './dedup-decisions-log.js';
+// Phase 10e — background dedup hygiene engine
+export { runBackgroundDedup, applyCommitmentsDedup, formatBackgroundDedupDiff, BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR, BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR, } from './background-dedup.js';
+// Phase 10b-min wiring — CLI-facing glue that bridges meeting.ts and
+// the pure pipeline modules above. See extract-dedup-wiring.ts for the
+// flow (lock → load same-day → orchestrator → reverse-stamp → log).
+export { wireExtractDedup, loadSameDayStagedItems, resolveMeetingSlugToPath, adaptFilteredItemsForDedup, } from './extract-dedup-wiring.js';
 // Phase 10a v2 — migration engine (Step 4)
 export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
 // Phase 10a v2 — feature flag for v2 read path (Step 5)
