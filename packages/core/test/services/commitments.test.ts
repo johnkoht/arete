@@ -1,8 +1,15 @@
 /**
  * Tests for CommitmentsService.
  *
- * Uses a mock StorageAdapter — no filesystem access.
+ * Uses a mock StorageAdapter — no filesystem access. The virtual workspace
+ * root (`/workspace`) cannot be mkdir'd on a real filesystem, so we set
+ * `ARETE_LOCK_BYPASS_MOCK=1` to allow `runUnderLock` to skip the lock
+ * acquire and run `fn` directly in-process. Cross-process safety is
+ * irrelevant in single-process unit tests; the flag is unset in production.
+ * See `commitments-withlock.test.ts` for real-fs lock contract tests.
  */
+
+process.env.ARETE_LOCK_BYPASS_MOCK = '1';
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -164,6 +171,56 @@ describe('CommitmentsService — hash invariance gate (AC5/C2, R3)', () => {
       computeCommitmentHash(text, personSlug, direction),
       hashCanonical,
       'hash must be deterministic across calls',
+    );
+  });
+
+  it('computeCommitmentHash is invariant when createdAt differs (LOW-2, phase-10a-pre)', () => {
+    // The hash signature is (text, personSlug, direction) — `createdAt`
+    // cannot perturb it by construction (type system). This test makes
+    // that explicit so a future refactor that inlines the hash from a
+    // full Commitment object would fail loudly rather than silently
+    // dup-creating commitments on backfill.
+    const text = 'Send the customer the signed contract';
+    const personSlug = 'jane-doe';
+    const direction: CommitmentDirection = 'i_owe_them';
+
+    const hashBefore = computeCommitmentHash(text, personSlug, direction);
+
+    // Build two commitments identical in everything except createdAt.
+    const earlierCreatedAt = '2026-05-01T08:00:00.000Z';
+    const laterCreatedAt = '2026-05-27T18:42:11.000Z';
+
+    const cEarlier: Commitment = {
+      id: hashBefore,
+      text,
+      direction,
+      personSlug,
+      personName: 'Jane Doe',
+      source: 'meeting.md',
+      date: '2026-05-27',
+      status: 'open',
+      resolvedAt: null,
+      createdAt: earlierCreatedAt,
+    };
+    const cLater: Commitment = { ...cEarlier, createdAt: laterCreatedAt };
+
+    const reHash = (c: Commitment) =>
+      computeCommitmentHash(c.text, c.personSlug, c.direction);
+
+    assert.equal(
+      reHash(cEarlier),
+      hashBefore,
+      'earlier-createdAt construction must yield canonical hash',
+    );
+    assert.equal(
+      reHash(cLater),
+      hashBefore,
+      'later-createdAt construction must yield canonical hash',
+    );
+    assert.equal(
+      reHash(cEarlier),
+      reHash(cLater),
+      'differing createdAt values must produce identical hashes',
     );
   });
 

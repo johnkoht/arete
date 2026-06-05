@@ -23,10 +23,11 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CommitmentsService } from '../../src/services/commitments.js';
+import { CommitmentsService, LockBootstrapError } from '../../src/services/commitments.js';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import type { CommitmentsFile } from '../../src/models/index.js';
 import type { PersonActionItem } from '../../src/services/person-signals.js';
+import type { StorageAdapter } from '../../src/storage/adapter.js';
 
 function makeActionItem(
   overrides: Partial<PersonActionItem> = {},
@@ -219,5 +220,109 @@ describe('CommitmentsService.withLock + concurrent save() — F5/R12', () => {
     const raw = readFileSync(join(workspaceRoot, '.arete/commitments.json'), 'utf8');
     const parsed = JSON.parse(raw) as CommitmentsFile;
     assert.equal(parsed.commitments[0].text, 'bootstrap');
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 10a-pre HIGH-1 mitigation: bootstrap failure surfaces explicitly
+  // -------------------------------------------------------------------------
+  //
+  // Previously `ensureLockTarget` returned false on bootstrap failure and
+  // `runUnderLock` silently bypassed the lock. The plan says "abstain,
+  // never silent corruption" — the new behavior throws `LockBootstrapError`
+  // so a future StorageAdapter shape (remote / S3 / SQLite) that lacks
+  // filesystem semantics cannot silently degrade cross-process safety.
+  //
+  // The mock-storage tests in commitments.test.ts set
+  // `ARETE_LOCK_BYPASS_MOCK=1` to opt back into the bypass for unit tests
+  // running against virtual paths. Production code never sets the flag.
+  it('runUnderLock throws LockBootstrapError when bootstrap fails (HIGH-1)', async () => {
+    // Mock storage adapter backed by an in-memory Map — write/read work,
+    // but the lockfile bootstrap mkdir against a virtual root will fail.
+    const store = new Map<string, string>();
+    const mockStorage: StorageAdapter = {
+      async read(path: string): Promise<string | null> {
+        return store.get(path) ?? null;
+      },
+      async write(path: string, content: string): Promise<void> {
+        store.set(path, content);
+      },
+      async exists(path: string): Promise<boolean> {
+        return store.has(path);
+      },
+      async delete(path: string): Promise<void> {
+        store.delete(path);
+      },
+      async list(): Promise<string[]> {
+        return [];
+      },
+      async listSubdirectories(): Promise<string[]> {
+        return [];
+      },
+      async mkdir(): Promise<void> {},
+      async getModified(): Promise<Date | null> {
+        return null;
+      },
+    };
+
+    // Virtual root that cannot be mkdir'd on a real filesystem.
+    const virtualSvc = new CommitmentsService(mockStorage, '/nonexistent-virtual-root-for-bootstrap-test');
+
+    // Save sentinel: make sure the bypass flag is NOT set during this test.
+    const prior = process.env.ARETE_LOCK_BYPASS_MOCK;
+    delete process.env.ARETE_LOCK_BYPASS_MOCK;
+    try {
+      await assert.rejects(
+        virtualSvc.withLock(async () => 'unreachable'),
+        (err: Error) => {
+          assert.ok(err instanceof LockBootstrapError, `expected LockBootstrapError, got ${err.constructor.name}`);
+          assert.match(err.message, /Cannot bootstrap lock target/);
+          assert.match(err.message, /abstaining rather than silently bypassing/);
+          return true;
+        },
+      );
+    } finally {
+      if (prior !== undefined) process.env.ARETE_LOCK_BYPASS_MOCK = prior;
+    }
+  });
+
+  it('ARETE_LOCK_BYPASS_MOCK=1 allows mock-path bypass without throwing', async () => {
+    // With the env flag set, virtual-root mock storage runs `fn` without
+    // a lock. This is the explicit, opt-in escape hatch for unit tests.
+    const store = new Map<string, string>();
+    const mockStorage: StorageAdapter = {
+      async read(path: string): Promise<string | null> {
+        return store.get(path) ?? null;
+      },
+      async write(path: string, content: string): Promise<void> {
+        store.set(path, content);
+      },
+      async exists(path: string): Promise<boolean> {
+        return store.has(path);
+      },
+      async delete(path: string): Promise<void> {
+        store.delete(path);
+      },
+      async list(): Promise<string[]> {
+        return [];
+      },
+      async listSubdirectories(): Promise<string[]> {
+        return [];
+      },
+      async mkdir(): Promise<void> {},
+      async getModified(): Promise<Date | null> {
+        return null;
+      },
+    };
+    const virtualSvc = new CommitmentsService(mockStorage, '/nonexistent-virtual-root-for-bootstrap-test');
+
+    const prior = process.env.ARETE_LOCK_BYPASS_MOCK;
+    process.env.ARETE_LOCK_BYPASS_MOCK = '1';
+    try {
+      const result = await virtualSvc.withLock(async () => 'ok');
+      assert.equal(result, 'ok');
+    } finally {
+      if (prior !== undefined) process.env.ARETE_LOCK_BYPASS_MOCK = prior;
+      else delete process.env.ARETE_LOCK_BYPASS_MOCK;
+    }
   });
 });

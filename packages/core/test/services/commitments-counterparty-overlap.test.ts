@@ -44,9 +44,14 @@ describe('getCommitmentCounterpartySlugs — dual-shape read (AC0a)', () => {
     assert.deepEqual(getCommitmentCounterpartySlugs(c), []);
   });
 
-  it('returns empty set when stakeholders is an empty array (no fallback to personSlug)', () => {
-    // Empty stakeholders[] is an intentional "no counterparties" signal —
-    // do NOT fall back to a possibly-stale personSlug.
+  it('falls back to personSlug when stakeholders is an empty array', () => {
+    // The code treats `stakeholders[].length === 0` the same as
+    // `stakeholders == null` and falls through to the personSlug branch.
+    // This documents the actual behavior (an earlier name claimed
+    // "no fallback to personSlug" which contradicted the assertion).
+    // If the intended semantics ever change to "empty array = explicit
+    // no-counterparties signal," update BOTH the code (in
+    // `getCommitmentCounterpartySlugs`) and this test.
     const c: CommitmentLike = { stakeholders: [], personSlug: 'dave' };
     assert.deepEqual(getCommitmentCounterpartySlugs(c), ['dave']);
   });

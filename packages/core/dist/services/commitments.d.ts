@@ -176,6 +176,21 @@ export type CompleteTaskFromCommitmentFn = (commitmentIdPrefix: string) => Promi
  * Injected by factory to avoid circular dep.
  */
 export type HasOpenTaskReferencesFn = (commitmentIdPrefixes: string[]) => Promise<Set<string>>;
+/**
+ * Thrown when `ensureLockTarget` cannot bootstrap the lock target file
+ * (typically because the parent directory cannot be created — e.g. a unit
+ * test using a virtual-path mock storage adapter like `/workspace/...`).
+ *
+ * The earlier behavior was to silently fall back to no-op locking; that
+ * violated the plan's "abstain, never silent corruption" contract, so we
+ * now surface the failure to the caller. Production code paths today
+ * always succeed (FileStorageAdapter has filesystem semantics); this
+ * defends the boundary so future StorageAdapter shapes (remote / S3 /
+ * SQLite) cannot silently degrade cross-process locking.
+ */
+export declare class LockBootstrapError extends Error {
+    constructor(filePath: string, cause: unknown);
+}
 export declare class CommitmentsService {
     private readonly storage;
     private readonly filePath;

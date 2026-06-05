@@ -388,13 +388,18 @@ export function registerCommitmentsCommand(program) {
             }
             process.exit(1);
         }
-        // Resolve the source path. Absolute paths used as-is; relative paths
-        // anchored to the workspace root so users can pass
+        // Resolve the source path. Absolute paths are used as-is; relative
+        // paths are anchored to the workspace root so users can pass
         // `.arete/commitments.pre-phase-10.json` without a leading ./.
-        // Always pass the resolved path through normalize-against-root to
-        // catch trivial `..` escapes; this is a soft injection guard — we
-        // accept any in-workspace OR absolute path the user can supply
-        // intentionally, but normalize first so the error message is sane.
+        //
+        // Path-handling policy (LOW-3 / 10a-pre code review): we accept ANY
+        // absolute path the caller can supply, including paths outside the
+        // workspace. The CLI runs with the workspace owner's privileges and
+        // delegates read permission enforcement to the OS — there is no
+        // explicit out-of-workspace rejection. `resolvePath` normalizes
+        // for nicer error messages, not for security. Threat model: the
+        // workspace owner is trusted; this CLI does not defend against
+        // them reading their own files.
         const sourcePath = isAbsolute(opts.from)
             ? resolvePath(opts.from)
             : resolvePath(root, opts.from);

@@ -468,6 +468,30 @@ const LOCK_OPTIONS: LockOptions = {
 };
 
 /**
+ * Thrown when `ensureLockTarget` cannot bootstrap the lock target file
+ * (typically because the parent directory cannot be created — e.g. a unit
+ * test using a virtual-path mock storage adapter like `/workspace/...`).
+ *
+ * The earlier behavior was to silently fall back to no-op locking; that
+ * violated the plan's "abstain, never silent corruption" contract, so we
+ * now surface the failure to the caller. Production code paths today
+ * always succeed (FileStorageAdapter has filesystem semantics); this
+ * defends the boundary so future StorageAdapter shapes (remote / S3 /
+ * SQLite) cannot silently degrade cross-process locking.
+ */
+export class LockBootstrapError extends Error {
+  constructor(filePath: string, cause: unknown) {
+    const causeMsg = cause instanceof Error ? cause.message : String(cause);
+    super(
+      `Cannot bootstrap lock target at ${filePath}: ${causeMsg}. ` +
+        `proper-lockfile requires a real filesystem; abstaining rather than ` +
+        `silently bypassing the lock.`,
+    );
+    this.name = 'LockBootstrapError';
+  }
+}
+
+/**
  * Ensure a file exists at `path` so `proper-lockfile` has a target to lock.
  *
  * `proper-lockfile.lock()` requires the target file to exist (it derives
@@ -475,29 +499,23 @@ const LOCK_OPTIONS: LockOptions = {
  * present). For a fresh workspace where commitments.json hasn't been
  * written yet, we touch an empty {"commitments":[]} file first.
  *
- * Returns `true` if the lock target exists / was bootstrapped (lock is
- * usable). Returns `false` if the parent directory can't be created
- * (e.g. unit tests with a mock storage backed by a virtual path like
- * `/workspace/...` — we don't have permission to create `/workspace`
- * on a real fs). In that case the caller skips the lock and falls back
- * to the prior in-process behavior; this is safe because mock-backed
- * tests run in a single process where the JS event loop already
- * serializes operations.
+ * Throws `LockBootstrapError` if the parent directory can't be created
+ * (e.g. virtual/mock paths that lack real filesystem semantics). Callers
+ * MUST propagate or handle the error — silent fallback to no-op locking
+ * was the prior behavior and is no longer permitted (plan §"abstain,
+ * never silent corruption").
  */
-async function ensureLockTarget(filePath: string): Promise<boolean> {
+async function ensureLockTarget(filePath: string): Promise<void> {
   try {
     await access(filePath);
-    return true;
+    return;
   } catch {
     // File doesn't exist — try to bootstrap it.
     try {
       await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, '{"commitments":[]}\n', 'utf8');
-      return true;
-    } catch {
-      // Can't bootstrap (e.g., virtual/mock path). Lock is unavailable;
-      // caller falls back to no-op locking.
-      return false;
+    } catch (bootstrapErr) {
+      throw new LockBootstrapError(filePath, bootstrapErr);
     }
   }
 }
@@ -672,18 +690,30 @@ export class CommitmentsService {
       // re-acquisition to avoid self-deadlock.
       return fn();
     }
-    const lockable = await ensureLockTarget(this.filePath);
-    if (!lockable) {
-      // Mock/virtual path that can't be bootstrapped on disk. Skip the
-      // lock and run fn directly — the test harness's mock storage
-      // adapter already runs in-process where JS event-loop serialization
-      // suffices.
-      this.holdsLock = true;
-      try {
-        return await fn();
-      } finally {
-        this.holdsLock = false;
+    // Bootstrap the lock target. If this throws LockBootstrapError, the
+    // caller MUST handle/propagate — silent fallback to no-op locking is
+    // no longer allowed (plan: "abstain, never silent corruption").
+    //
+    // Test escape hatch: ARETE_LOCK_BYPASS_MOCK=1 catches the bootstrap
+    // error and runs `fn` without a lock — used ONLY by mock-storage
+    // unit tests under a virtual root (`/workspace/...`). The flag is
+    // unset in production; FileStorageAdapter always satisfies the
+    // bootstrap. If a future StorageAdapter shape (remote / S3 / SQLite)
+    // ships without filesystem semantics, leaving this flag unset
+    // surfaces the gap loudly via LockBootstrapError rather than
+    // silently degrading cross-process safety.
+    try {
+      await ensureLockTarget(this.filePath);
+    } catch (err) {
+      if (err instanceof LockBootstrapError && process.env.ARETE_LOCK_BYPASS_MOCK === '1') {
+        this.holdsLock = true;
+        try {
+          return await fn();
+        } finally {
+          this.holdsLock = false;
+        }
       }
+      throw err;
     }
     const release = await lockfileLock(this.filePath, LOCK_OPTIONS);
     this.holdsLock = true;
