@@ -41,6 +41,7 @@ import {
   buildDismissedItemFateEvents,
   writeMeetingApplyFrontmatter,
   appendChefSkipLog,
+  writeWithLock,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -1069,9 +1070,6 @@ export function registerMeetingCommands(program: Command): void {
         );
 
         if (!dryRun) {
-          // Clone frontmatter before mutating (pre-mortem mitigation: caching/mutation)
-          const fm = { ...frontmatter };
-
           // Topics + counts + status via unified writer (phase-3-5-followup-5
           // AC1). Pre-AC1, path 3 (`extract --stage`) silently omitted
           // `topics`/counts — the chef-orchestrator regression caught by the
@@ -1084,39 +1082,82 @@ export function registerMeetingCommands(program: Command): void {
                 return r.text;
               }
             : undefined;
-          await writeMeetingApplyFrontmatter(
-            fm,
-            extractionResult.intelligence,
-            { status: stageStatus, processedAt: new Date().toISOString() },
-            {
-              topicMemory: services.topicMemory,
-              workspacePaths: paths,
-              callLLM: aliasCallLLM,
-              onWarning: (msg) => {
-                if (!opts.json) warn(msg);
-              },
+
+          // phase-10-followup-2 HIGH-1: wire extract through `writeWithLock`
+          // so the F2 partial-merge contract protects chef-written sibling
+          // fields (`staged_item_skip_reason`, etc.) from being wholesale-
+          // overwritten. The mutator returns ONLY the keys this path owns —
+          // anything we don't mention survives by definition. mtimeGuard=0
+          // because the extract command is the user-initiated entry point;
+          // the partial-merge contract (not the mtime guard) provides race
+          // safety with chef writes.
+          const proc = processed;
+          const writeResult = await writeWithLock(
+            services.storage,
+            meetingPath,
+            async (current) => {
+              // Build the patch object — start empty so `writeMeetingApplyFrontmatter`
+              // (which mutates the object passed in) only sets the keys it owns.
+              const patch: Record<string, unknown> = {};
+              await writeMeetingApplyFrontmatter(
+                patch,
+                extractionResult.intelligence,
+                { status: stageStatus, processedAt: new Date().toISOString() },
+                {
+                  topicMemory: services.topicMemory,
+                  workspacePaths: paths,
+                  callLLM: aliasCallLLM,
+                  onWarning: (msg) => {
+                    if (!opts.json) warn(msg);
+                  },
+                },
+              );
+
+              // Status map: merge chef-set `'skipped'` (entries with a
+              // `staged_item_skip_reason` whose `setBy ∈ {'chef','chef-proposed'}`)
+              // on top of the extract-produced status so a re-extract cannot
+              // silently demote a chef skip back to `'pending'`. Bare-extract
+              // statuses fall through unchanged.
+              const currentStatus = (current.frontmatter['staged_item_status'] ?? {}) as Record<string, string>;
+              const currentSkipReason = (current.frontmatter['staged_item_skip_reason'] ?? {}) as Record<string, { setBy?: string } | undefined>;
+              const mergedStatus: Record<string, string> = { ...proc.stagedItemStatus };
+              for (const [id, prior] of Object.entries(currentStatus)) {
+                const sr = currentSkipReason[id];
+                const isChefOwned = sr?.setBy === 'chef' || sr?.setBy === 'chef-proposed';
+                if (isChefOwned && prior === 'skipped' && mergedStatus[id] !== 'approved') {
+                  // chef-confirmed skip survives re-extract
+                  mergedStatus[id] = 'skipped';
+                }
+              }
+
+              // Staged-item maps owned by the extract path. `staged_item_skip_reason`
+              // is intentionally NOT mentioned — partial-merge preserves it.
+              patch['staged_item_source'] = proc.stagedItemSource;
+              patch['staged_item_confidence'] = proc.stagedItemConfidence;
+              patch['staged_item_status'] = mergedStatus;
+              if (Object.keys(proc.stagedItemOwner).length > 0) {
+                patch['staged_item_owner'] = proc.stagedItemOwner;
+              }
+              if (proc.stagedItemMatchedText && Object.keys(proc.stagedItemMatchedText).length > 0) {
+                patch['staged_item_matched_text'] = proc.stagedItemMatchedText;
+              }
+
+              // Update body with staged sections. `current.body` already
+              // reflects whatever the file held when the lock was acquired;
+              // `updateMeetingContent` rewrites only the staged sections so
+              // user edits to other body regions are preserved.
+              const updatedBody = updateMeetingContent(current.body, stagedSections);
+
+              return { frontmatter: patch, body: updatedBody };
             },
+            { mtimeGuardSeconds: 0 },
           );
-
-          // Staged-item maps (path-3-specific; written AFTER unified writer
-          // so insertion order keeps status/processed_at/topics/counts up
-          // front, then per-item metadata).
-          fm['staged_item_source'] = processed.stagedItemSource;
-          fm['staged_item_confidence'] = processed.stagedItemConfidence;
-          fm['staged_item_status'] = processed.stagedItemStatus;
-          if (Object.keys(processed.stagedItemOwner).length > 0) {
-            fm['staged_item_owner'] = processed.stagedItemOwner;
+          // Fallback: a vanished/raced file makes `writeWithLock` abstain;
+          // surface as warning so the extraction artifacts aren't silently
+          // lost. Backwards-compatible no-throw shape.
+          if (!writeResult.written && !opts.json) {
+            warn(`Extract write abstained: ${writeResult.abstainReason ?? 'unknown'}`);
           }
-          if (processed.stagedItemMatchedText && Object.keys(processed.stagedItemMatchedText).length > 0) {
-            fm['staged_item_matched_text'] = processed.stagedItemMatchedText;
-          }
-
-          // Update body with staged sections
-          const updatedBody = updateMeetingContent(body, stagedSections);
-
-          // Reconstruct file: frontmatter + body
-          const updatedFile = `---\n${stringifyYaml(fm)}---\n\n${updatedBody}`;
-          await services.storage.write(meetingPath, updatedFile);
 
           // Phase 0 instrumentation — emit one item-fate event per skipped
           // staged item and per silently-merged decision/learning. Best
