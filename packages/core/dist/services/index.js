@@ -19,7 +19,8 @@ export { listTools, getTool } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 // Phase 7a AC5 — person channels convention helpers.
 export { readPersonChannels, computeChannelsAudit, CHANNEL_FIELD_NAMES, } from './entity.js';
-export { CommitmentsService, computeCommitmentPriority, computeCounterpartyOverlap, getCommitmentCounterpartySlugs, } from './commitments.js';
+export { CommitmentsService, computeCommitmentPriority, computeCounterpartyOverlap, getCommitmentCounterpartySlugs, LockBootstrapError, } from './commitments.js';
+export { writeWithLock } from './meeting-lock.js';
 // Migrations (phase-10a-pre and onward)
 export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
 export { AIService, parseModelSpec } from './ai.js';

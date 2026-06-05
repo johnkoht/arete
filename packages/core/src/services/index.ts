@@ -74,7 +74,16 @@ export {
   computeCommitmentPriority,
   computeCounterpartyOverlap,
   getCommitmentCounterpartySlugs,
+  LockBootstrapError,
 } from './commitments.js';
+export { writeWithLock } from './meeting-lock.js';
+export type {
+  MeetingFrontmatterRead,
+  MeetingMutationResult,
+  MeetingMutator,
+  WriteWithLockOptions,
+  WriteWithLockResult,
+} from './meeting-lock.js';
 export type {
   PriorityLevel,
   CommitmentPriorityInput,
