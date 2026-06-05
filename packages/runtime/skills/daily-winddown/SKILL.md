@@ -705,6 +705,90 @@ matches → `## Uncertain` tier, **never silently collapsed**. Per AC4
 (below), all proposed collapses surface for user approval — the
 reconciler never executes the collapse itself.
 
+#### Rule 5 — Chef writes a STRUCTURAL skip on staged items (phase-10-followup-2)
+
+When a staged action item (in the meeting frontmatter) appears already
+fulfilled by an earlier authored action (slack DM, sent email, calendar
+event), the chef MUST write a structural marker to the meeting file
+BEFORE the user runs `arete meeting approve`. Prose-only "remember to
+exclude CT2" is not enough — `commitApprovedItems` honors only frontmatter.
+
+**Data path** (load-bearing):
+
+- `staged_item_status[id] = 'skipped'` (post-week-1 path) OR stays
+  `'pending'` (week-1 gate, see "First-week confirm gate" below).
+- `staged_item_skip_reason[id] = { reason, evidence, setBy, setAt }` —
+  always populated when chef writes the skip. `setBy` encodes
+  provenance: `'chef'` for post-week-1 / confirmed skips, `'chef-proposed'`
+  for week-1 gate skips, `'user'` for explicit user-set skips.
+- Inline `<!-- chef-skip: <reason> | evidence: <ref> -->` body comment
+  next to the staged-item line for in-editor visibility.
+
+Implementation lives in `writeChefSkipToFile(storage, filePath, itemId,
+{reason, evidence, setBy})` — wraps `writeWithLock` (the meeting-file
+lockfile from phase-10-followup-2 Step 2). The mutator returns ONLY
+`staged_item_status` + `staged_item_skip_reason`; the F2 partial-merge
+contract guarantees other sibling fields (edits, source, confidence,
+owner) survive untouched by default.
+
+**When chef writes a skip**: same "concrete match" precision threshold
+as Rule 1 — real message authored by user, real sent email, real
+calendar event, OR explicit in-meeting agreement that the action was
+already done. No fuzzy matches. Override rate > 20% in soak → demote
+via feature flag.
+
+**First-week confirm gate (HP3 / AC8)**: during the first 7 days
+post-ship (sentinel at `.arete/phase-10-followup-2-ship-date.json`),
+chef writes `setBy: 'chef-proposed'` and leaves `staged_item_status`
+at `'pending'`. The chef-proposed skip lapses harmlessly on apply
+(pending items don't commit). User confirms via `[[confirm-skip <id>]]`
+directive in the next winddown (flips status → `'skipped'` + setBy →
+`'chef'`); user overrides via `[[unskip <id>]]` (deletes skip_reason).
+Demotion criterion (v3 F1 stricter): +7d elapsed AND ≥1 CONFIRM AND
+zero UNSKIP → chef demotes to direct write. Zero-CONFIRM at +7d → stay
+in week-1, surface nudge "you haven't audited any chef skips this week
+— review or run `arete dedup --scope chef-skips` to clear backlog."
+
+**Three visibility surfaces** (all of, not one of):
+
+1. **Winddown curated view** — every chef-proposed skip surfaces under
+   the new "Chef-skip proposals (week-1)" subsection OR (post-demotion)
+   the existing "Closed today (proposed)" section. Each line carries
+   `[[unskip <id>]]` hint persistently (past first-week banner removal,
+   PM C2). Week-1 lines additionally carry `[[confirm-skip <id>]]`.
+2. **Meeting body audit comment** — inline `<!-- chef-skip ... -->`.
+3. **Frontmatter** — load-bearing structural field.
+
+**Filter for "Chef-skip proposals" section (M2 discriminator)**: chef
+proposes filtering by `staged_item_skip_reason[id]?.setBy ===
+'chef-proposed'`. Bare-pending items (extract default, no skip_reason
+entry) MUST NOT be surfaced in this section — they're handled by the
+existing staging flow.
+
+**User override directives** (Step 6 parser):
+
+- `[[unskip <id>]]` or `[[unskip <slug>:<id>]]` — flip status to
+  `'pending'`, delete `staged_item_skip_reason[id]`, append UNSKIP audit
+  line. Both id-alone and slug-qualified forms accepted from day 1.
+- `[[confirm-skip <id>]]` (week-1 only) — flip status to `'skipped'`,
+  update `setBy: 'chef'`, append CONFIRM audit line.
+- Resolver scans meetings with non-empty `staged_item_status` map,
+  capped at N=50 most-recent-mtime. Ambiguous id-alone NO-OPs with
+  "please qualify" line in next winddown. Zero-match surfaces "no
+  match — may have already been processed."
+
+**Audit log**: `dev/diary/chef-skip-log.md`, one JSON line per event,
+Phase 9 shape (`${ISO} chef-skip ${JSON.stringify(payload)}`). Actions:
+SKIP / PROPOSE / UNSKIP / CONFIRM / ABSTAIN / APPLY-SKIP. Gitignored;
+local-only soak observability.
+
+**Apply path interaction (AC3 / F5)**: `commitApprovedItems` filter at
+`staged-items.ts:487` accepts only `status === 'approved'`. Skipped
+items drop. Cleanup at the same file (Step 4a, v3) filters sibling
+fields by `approvedIds` — pending + skipped + chef-proposed entries
+SURVIVE for next round if not committed. The body emits a `## Skipped
+on Apply` section listing each dropped item with its reason + setBy.
+
 ### Step 3 — Read APPEND + apply judgment
 
 **Read the APPEND file** for per-skill context (already loaded in Step 0).
@@ -793,15 +877,43 @@ collapse; reject to keep in your queue.
 N items kept in `## Uncertain — your call` (low-confidence match;
 channel backfill would lift these).
 
+## Chef-skip proposals (week-1 — phase-10-followup-2)
+
+{First 7 days post-ship of phase-10-followup-2 only. Each line: a
+staged item the chef proposes skipping because cross-source evidence
+shows it's already done. User confirms via `[[confirm-skip <id>]]`
+or overrides via `[[unskip <id>]]`. Omitting both lapses harmlessly —
+item stays pending and stages normally on apply. Filter by
+`staged_item_skip_reason[id]?.setBy === 'chef-proposed'`.}
+
+- [ai_0042] Share the Notion claim-review-process doc with Jamie
+  ↪ chef proposes skip: already fulfilled via Slack DM to @jamie-burk today.
+    Evidence: Slack DM → Jamie Burk, 2026-06-04
+    Confirm: `[[confirm-skip ai_0042]]` · Override: `[[unskip ai_0042]]`
+
 ## Stage for approval
 
 {High-confidence items the user should approve. Each item: type +
 text + reason label. Items that landed in `## Closed today (proposed)`
-above are NOT also staged here — the proposed collapse IS the surface.}
+above are NOT also staged here — the proposed collapse IS the surface.
+Items chef has confirmed-skipped (`staged_item_status: 'skipped'` +
+`setBy: 'chef'`) also do NOT appear here — surfaced under "Chef
+already-skipped" below.}
 
 - [ ] Send API spec to Anthony — open commitment to Anthony, 9d old
 - Decision: Adopt Sonnet for reconciliation tier — matches week focus #2 (cost gate)
 - Learning: Customer X validates pricing assumption — high-importance meeting, novel insight
+
+## Chef already-skipped (post-week-1)
+
+{Items where chef wrote `staged_item_status: 'skipped'` directly
+(week-2+ demotion path OR earlier confirmed-then-flipped). These will
+drop on apply. `[[unskip <id>]]` hint persists for the user to
+override at any time (PM C2 — past banner removal).}
+
+- [ai_0042] Share the Notion claim-review-process doc with Jamie
+  ↪ chef skip-already-done: already fulfilled via Slack DM (2026-06-04)
+    Override: `[[unskip ai_0042]]`
 
 ## Uncertain — your call
 

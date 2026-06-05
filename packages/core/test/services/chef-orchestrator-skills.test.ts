@@ -940,12 +940,12 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
         );
       });
 
-      it('Step 2 contains four "### Rule " sub-sections (was three before followup-7)', () => {
+      it('Step 2 contains five "#### Rule " sub-sections (was four before phase-10-followup-2 added Rule 5)', () => {
         const ruleHeaderMatches = dwContent.match(/#### Rule /g) ?? [];
         assert.equal(
           ruleHeaderMatches.length,
-          4,
-          `followup-7 AC1: expected 4 #### Rule sub-sections, got ${ruleHeaderMatches.length}`,
+          5,
+          `phase-10-followup-2: expected 5 #### Rule sub-sections (3, 4, 1, 2 + new Rule 5 chef-skip), got ${ruleHeaderMatches.length}`,
         );
       });
 
@@ -1156,6 +1156,66 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
           dwContent,
           /AC11.*45|45 min.*hard stop|> ?45 min.*revert|45m.*hard stop|> ?45m|45 min on any single/i,
           'AC6: missing AC11 >45m hard stop',
+        );
+      });
+    });
+
+    describe('phase-10-followup-2 — Rule 5 chef-skip prose', () => {
+      it('Rule 5 — chef writes a STRUCTURAL skip subsection present', () => {
+        assert.match(
+          dwContent,
+          /#### Rule 5 — Chef writes a STRUCTURAL skip/,
+          'phase-10-followup-2: Rule 5 chef-skip section missing',
+        );
+      });
+
+      it('mentions staged_item_skip_reason sibling field + setBy provenance union', () => {
+        assert.match(
+          dwContent,
+          /staged_item_skip_reason/,
+          'phase-10-followup-2: staged_item_skip_reason field not documented',
+        );
+        assert.match(
+          dwContent,
+          /['‘’]chef['‘’].*['‘’]chef-proposed['‘’].*['‘’]user['‘’]|setBy[\s\S]{0,400}chef-proposed/i,
+          'phase-10-followup-2: setBy union not documented',
+        );
+      });
+
+      it('first-week confirm gate (HP3/AC8) prose present', () => {
+        assert.match(
+          dwContent,
+          /\[\[confirm-skip <id>\]\]|first 7 days post-ship|chef-proposed/,
+          'phase-10-followup-2: week-1 gate prose missing',
+        );
+      });
+
+      it('[[unskip <id>]] directive surfaced (with both id-alone and slug-qualified forms)', () => {
+        assert.match(
+          dwContent,
+          /\[\[unskip <id>\]\]|\[\[unskip.*ai_/,
+          'phase-10-followup-2: [[unskip]] directive prose missing',
+        );
+        assert.match(
+          dwContent,
+          /slug-qualified|<slug>:<id>/,
+          'phase-10-followup-2: slug-qualified form not mentioned',
+        );
+      });
+
+      it('M2 discriminator filter rule for chef-proposed subsection documented', () => {
+        assert.match(
+          dwContent,
+          /setBy ===? ['‘’]chef-proposed['‘’]/,
+          'phase-10-followup-2: M2 discriminator filter missing from SKILL.md',
+        );
+      });
+
+      it('audit log location dev/diary/chef-skip-log.md mentioned', () => {
+        assert.match(
+          dwContent,
+          /chef-skip-log\.md/,
+          'phase-10-followup-2: audit log file location not surfaced',
         );
       });
     });
