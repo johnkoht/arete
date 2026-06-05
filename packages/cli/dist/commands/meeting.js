@@ -1,7 +1,9 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
+// Phase 10b-min wiring — reactive cross-meeting dedup
+wireExtractDedup, adaptFilteredItemsForDedup, decorateStagedSectionsWithDupeBadges, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -774,6 +776,10 @@ export function registerMeetingCommands(program) {
         // For --stage: process extraction to get filtered items and metadata
         let stagedSections;
         let processed;
+        // Phase 10b-min wiring — cross-meeting dedup outcome, lifted to outer
+        // scope so the response payload + post-stage summary can surface
+        // per-decision counts to the user.
+        let dedupResult;
         // Lifted so the post-merge response can surface counts to the user.
         const silentlyMerged = { decisions: 0, learnings: 0 };
         // Phase 0 instrumentation — snapshots of items that get silently merged
@@ -874,12 +880,79 @@ export function registerMeetingCommands(program) {
                     }
                 }
             }
+            // Phase 10b-min wiring — reactive cross-meeting dedup pipeline.
+            //
+            // Runs AFTER the existing reconciliation passes (so they get first
+            // crack at semantic dedup against memory + last-7d) but BEFORE the
+            // staged sections are formatted and written. Marks definite-dupe
+            // items as `'skipped'` with a `staged_item_skip_reason` whose
+            // `reason = "dupe_of_<canonical-id>"` so the apply-flow's existing
+            // dupe-of-status honors the cross-meeting decision (Phase 10b-min
+            // Step 4 contract).
+            //
+            // Safe to run on every extract:
+            //   - When the filtered set has no action items, returns immediately
+            //     without an LLM call.
+            //   - When commitments.json is empty and no other same-day meetings
+            //     exist, returns new-canonical for every item (no skips).
+            //   - When the LLM is unreachable, the pipeline fail-safes to
+            //     UNCERTAIN (item kept as new canonical, flagged for review).
+            try {
+                const extractedItemsForDedup = adaptFilteredItemsForDedup(processed.filteredItems.map((fi) => ({
+                    id: fi.id,
+                    text: fi.text,
+                    type: fi.type,
+                    ownerMeta: fi.ownerMeta,
+                })));
+                if (extractedItemsForDedup.length > 0) {
+                    // Same-tier wrapper as the dedup pipeline — `fast` per AC3a /
+                    // eng Q1. Tier promotion to `standard` is the AC11a soak gate.
+                    const dedupCallConcurrent = async (prompts) => services.ai.callConcurrent(prompts);
+                    // Meeting date from frontmatter; default to filename prefix if
+                    // missing (preserves the date-filter semantics for items where
+                    // the user hasn't filled in the date yet).
+                    const meetingDateRaw = typeof frontmatter.date === 'string'
+                        ? frontmatter.date.slice(0, 10)
+                        : (file.match(/(\d{4}-\d{2}-\d{2})/)?.[1] ?? new Date().toISOString().slice(0, 10));
+                    const meetingFilename = meetingPath.split('/').pop() ?? '';
+                    const meetingSlug = meetingFilename.replace(/\.md$/, '');
+                    const meetingsDir = join(root, paths.resources, 'meetings');
+                    dedupResult = await wireExtractDedup({ storage: services.storage, commitments: services.commitments }, {
+                        workspaceRoot: root,
+                        meetingsDir,
+                        currentMeetingPath: meetingPath,
+                        currentMeetingSlug: meetingSlug,
+                        meetingDate: meetingDateRaw,
+                        extractedItems: extractedItemsForDedup,
+                    }, dedupCallConcurrent, { tier: 'fast', dryRun });
+                    // Apply statusPatch to processed.stagedItemStatus so the
+                    // downstream writeWithLock mutator sees `'skipped'` for dupes.
+                    // The skipReasonPatch is threaded into the mutator below.
+                    for (const [id, status] of Object.entries(dedupResult.statusPatch)) {
+                        processed.stagedItemStatus[id] = status;
+                    }
+                }
+            }
+            catch (err) {
+                // Pipeline failure should NEVER block the extract. Surface as a
+                // warning; staged items proceed as new canonicals.
+                if (!opts.json) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    warn(`Cross-meeting dedup skipped due to error: ${msg}`);
+                }
+            }
             // Format body sections from filtered items (IDs in body match IDs in metadata).
             // Task 10: thread `core` and `could_include` (from Task 7's wiki-aware
             // extraction) so the formatter emits `## Core` + `## Could include`
             // when the LLM populates them. Falls back to `## Summary` when absent
             // (formatter handles the precedence — see meeting-processing.ts:625).
             stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include, extractionResult.validationWarnings);
+            // Phase 10b-min wiring — decorate staged sections with `↪ canonical
+            // in <slug>` badges (definite-dupe) and `↪ possibly merges with
+            // <slug>` flags (possibly-mergeable). Idempotent against re-extract.
+            if (dedupResult && dedupResult.decisions.length > 0) {
+                stagedSections = decorateStagedSectionsWithDupeBadges(stagedSections, dedupResult.decisions);
+            }
             if (!dryRun) {
                 // Topics + counts + status via unified writer (phase-3-5-followup-5
                 // AC1). Pre-AC1, path 3 (`extract --stage`) silently omitted
@@ -932,7 +1005,10 @@ export function registerMeetingCommands(program) {
                         }
                     }
                     // Staged-item maps owned by the extract path. `staged_item_skip_reason`
-                    // is intentionally NOT mentioned — partial-merge preserves it.
+                    // is intentionally NOT mentioned by default — partial-merge
+                    // preserves it. Phase 10b-min wiring adds the cross-meeting
+                    // dedup entries on top of any existing chef-set entries
+                    // (the merge below handles that explicitly).
                     patch['staged_item_source'] = proc.stagedItemSource;
                     patch['staged_item_confidence'] = proc.stagedItemConfidence;
                     patch['staged_item_status'] = mergedStatus;
@@ -941,6 +1017,19 @@ export function registerMeetingCommands(program) {
                     }
                     if (proc.stagedItemMatchedText && Object.keys(proc.stagedItemMatchedText).length > 0) {
                         patch['staged_item_matched_text'] = proc.stagedItemMatchedText;
+                    }
+                    // Phase 10b-min wiring — merge cross-meeting dedup skip_reason
+                    // entries on top of any existing entries. We explicitly merge
+                    // here (not relying on partial-merge) because adding NEW IDs
+                    // requires mentioning the key. Chef-proposed entries on OTHER
+                    // IDs (not in our patch) survive via partial-merge of the
+                    // existing currentSkipReason map.
+                    if (dedupResult && Object.keys(dedupResult.skipReasonPatch).length > 0) {
+                        const mergedSkipReason = {
+                            ...currentSkipReason,
+                            ...dedupResult.skipReasonPatch,
+                        };
+                        patch['staged_item_skip_reason'] = mergedSkipReason;
                     }
                     // Update body with staged sections. `current.body` already
                     // reflects whatever the file held when the lock was acquired;
@@ -1007,6 +1096,18 @@ export function registerMeetingCommands(program) {
                 return acc;
             }, { reconciled: 0, existingTask: 0, slackResolved: 0 })
             : { reconciled: 0, existingTask: 0, slackResolved: 0 };
+        // Phase 10b-min wiring — surface cross-meeting dedup outcome counts
+        // so callers (and the post-stage summary) can see how many items the
+        // pipeline marked as definite dupes vs flagged as possibly-mergeable.
+        const crossMeetingDedup = dedupResult
+            ? {
+                evaluated: dedupResult.decisions.length,
+                definiteDupes: dedupResult.decisions.filter((d) => d.outcome.kind === 'definite-dupe').length,
+                possiblyMergeable: dedupResult.decisions.filter((d) => d.outcome.kind === 'possibly-mergeable').length,
+                newCanonical: dedupResult.decisions.filter((d) => d.outcome.kind === 'new-canonical').length,
+                reverseStamps: dedupResult.reverseStampResults.length,
+            }
+            : { evaluated: 0, definiteDupes: 0, possiblyMergeable: 0, newCanonical: 0, reverseStamps: 0 };
         // Build response
         const response = {
             success: true,
@@ -1020,6 +1121,7 @@ export function registerMeetingCommands(program) {
             reconciled,
             skippedBySource,
             silentlyMerged,
+            crossMeetingDedup,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         // Add reconciliation stats when reconciliation was run
@@ -1078,6 +1180,17 @@ export function registerMeetingCommands(program) {
                 if (silentlyMerged.learnings > 0)
                     parts.push(`${silentlyMerged.learnings} learning${silentlyMerged.learnings === 1 ? '' : 's'}`);
                 info(`Merged into committed memory: ${parts.join(', ')}`);
+            }
+            // Phase 10b-min wiring — cross-meeting dedup summary.
+            if (dedupResult && (crossMeetingDedup.definiteDupes > 0 || crossMeetingDedup.possiblyMergeable > 0)) {
+                const parts = [];
+                if (crossMeetingDedup.definiteDupes > 0) {
+                    parts.push(`${crossMeetingDedup.definiteDupes} dupe${crossMeetingDedup.definiteDupes === 1 ? '' : 's'}`);
+                }
+                if (crossMeetingDedup.possiblyMergeable > 0) {
+                    parts.push(`${crossMeetingDedup.possiblyMergeable} possibly-mergeable`);
+                }
+                info(`Cross-meeting dedup: ${parts.join(', ')}`);
             }
             // Display reconciliation details
             if (reconciliationResult) {
