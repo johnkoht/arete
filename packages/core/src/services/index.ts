@@ -163,6 +163,20 @@ export type {
   LLMCallConcurrentFn,
 } from './commitment-dedup-pipeline.js';
 
+// Phase 10b-min — extract-time dedup orchestration (Step 2)
+export {
+  runExtractDedup,
+  filterSameDayOpenCommitments,
+  decorateStagedSectionsWithDupeBadges,
+  buildDupeSkipReasonEntries,
+  buildDupeStatusEntries,
+} from './commitment-dedup-extract.js';
+export type {
+  ExtractDedupDecision,
+  ExtractDedupInputs,
+  ExtractedItemForExtractDedup,
+} from './commitment-dedup-extract.js';
+
 // Phase 10a v2 — migration engine (Step 4)
 export {
   migrateCommitmentsToV2,
