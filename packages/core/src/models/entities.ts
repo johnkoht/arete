@@ -226,6 +226,16 @@ export type Commitment = {
   personName: string;
   source: string;
   date: string;
+  /**
+   * ISO 8601 wall-clock timestamp of first creation. Preserved across merges
+   * (Phase 10 dedup) and used as a secondary sort key when `date` ties.
+   *
+   * Added in phase-10a-pre. For pre-existing entries the migration script at
+   * `services/migrations/add-created-at.ts` backfills this with the `date`
+   * field value (sentinel — date-only, no time component); entries created
+   * after the migration use `new Date().toISOString()`.
+   */
+  createdAt: string;
   status: CommitmentStatus;
   resolvedAt: string | null;
   /** Optional project association — inherited from meeting's projectSlug */

@@ -78,6 +78,18 @@ export type {
   CreateCommitmentResult,
   CreateTaskFn,
 } from './commitments.js';
+
+// Migrations (phase-10a-pre and onward)
+export {
+  applyAddCreatedAt,
+  migrateAddCreatedAt,
+  parseCommitmentsFile,
+  serializeCommitmentsFile,
+} from './migrations/add-created-at.js';
+export type {
+  AddCreatedAtReport,
+  AddCreatedAtPerEntryResult,
+} from './migrations/add-created-at.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type {
   AICallOptions,

@@ -21,6 +21,8 @@ export { readPersonChannels, computeChannelsAudit, CHANNEL_FIELD_NAMES, } from '
 export type { PersonChannels, ChannelsAuditEntry, ChannelsAuditResult, } from './entity.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
 export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, CreateCommitmentOptions, CreateCommitmentResult, CreateTaskFn, } from './commitments.js';
+export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
+export type { AddCreatedAtReport, AddCreatedAtPerEntryResult, } from './migrations/add-created-at.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type { AICallOptions, AICallResult, AIStructuredResult, AIServiceTestDeps, ModelSpec, } from './ai.js';
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';

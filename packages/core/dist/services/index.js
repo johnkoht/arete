@@ -20,6 +20,8 @@ export { extractPersonMemorySection } from './person-memory.js';
 // Phase 7a AC5 — person channels convention helpers.
 export { readPersonChannels, computeChannelsAudit, CHANNEL_FIELD_NAMES, } from './entity.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
+// Migrations (phase-10a-pre and onward)
+export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
 export { AIService, parseModelSpec } from './ai.js';
 // Similarity utilities (shared Jaccard computation)
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';

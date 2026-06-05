@@ -557,6 +557,7 @@ export class CommitmentsService {
           personName: nameMap?.get(personSlug) ?? personSlug,
           source: item.source,
           date: item.date,
+          createdAt: new Date().toISOString(),
           status: 'open',
           resolvedAt: null,
           // Copy goalSlug if present on the action item
@@ -669,6 +670,7 @@ export class CommitmentsService {
       personName,
       source: options?.source ?? 'manual',
       date: dateStr,
+      createdAt: new Date().toISOString(),
       status: 'open',
       resolvedAt: null,
       ...(options?.goalSlug ? { goalSlug: options.goalSlug } : {}),
