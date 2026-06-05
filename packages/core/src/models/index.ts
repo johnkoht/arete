@@ -140,6 +140,8 @@ export type {
 export type {
   StagedItemDirection,
   StagedItemStatus,
+  StagedItemSkipReasonMeta,
+  StagedItemSkipReason,
   StagedItemEdits,
   StagedItemOwnerMeta,
   StagedItemOwner,

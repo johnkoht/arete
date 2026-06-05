@@ -98,6 +98,7 @@ export {
   parseStagedItemStatus,
   parseStagedItemEdits,
   parseStagedItemOwner,
+  parseStagedItemSkipReason,
   writeItemStatusToFile,
   commitApprovedItems,
 } from './integrations/staged-items.js';

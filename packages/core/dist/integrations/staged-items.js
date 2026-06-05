@@ -196,6 +196,53 @@ export function parseStagedItemOwner(content) {
     return result;
 }
 /**
+ * Parse the `staged_item_skip_reason` frontmatter field from raw markdown content.
+ * Returns a map of item IDs to skip-reason metadata.
+ *
+ * Phase 10 followup-2: chef may write a skip reason as a STRUCTURAL marker
+ * that `commitApprovedItems` honors (via the `'skipped'` status filter on
+ * the sibling `staged_item_status` field). The setBy union discriminates
+ * provenance — see `StagedItemSkipReasonMeta` JSDoc.
+ *
+ * Backward compat: returns `{}` for meeting files with no
+ * `staged_item_skip_reason` field (M3 first-ship — every pre-existing
+ * meeting has no skip_reason).
+ *
+ * Malformed entries (missing required fields, wrong setBy union value)
+ * drop silently. The `commitApprovedItems` consumer is shape-tolerant.
+ */
+export function parseStagedItemSkipReason(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_skip_reason'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    // Validate and normalize the structure
+    const result = {};
+    for (const [id, meta] of Object.entries(raw)) {
+        if (!meta || typeof meta !== 'object' || Array.isArray(meta))
+            continue;
+        const m = meta;
+        // Required fields: reason (string), evidence (string), setBy (union), setAt (string)
+        if (typeof m['reason'] !== 'string')
+            continue;
+        if (typeof m['evidence'] !== 'string')
+            continue;
+        if (typeof m['setAt'] !== 'string')
+            continue;
+        if (m['setBy'] !== 'chef' &&
+            m['setBy'] !== 'chef-proposed' &&
+            m['setBy'] !== 'user')
+            continue;
+        result[id] = {
+            reason: m['reason'],
+            evidence: m['evidence'],
+            setBy: m['setBy'],
+            setAt: m['setAt'],
+        };
+    }
+    return result;
+}
+/**
  * Update `staged_item_status` (and optionally `staged_item_edits`) for a
  * single item in a meeting file's frontmatter.
  *

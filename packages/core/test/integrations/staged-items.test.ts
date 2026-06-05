@@ -45,6 +45,7 @@ import {
   parseStagedItemStatus,
   parseStagedItemEdits,
   parseStagedItemOwner,
+  parseStagedItemSkipReason,
   writeItemStatusToFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
@@ -340,6 +341,138 @@ Body.`;
         ownerSlug: 'john-koht',
       },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseStagedItemSkipReason — phase-10-followup-2 Step 1
+// ---------------------------------------------------------------------------
+
+const FRONTMATTER_WITH_SKIP_REASON = `---
+title: "Test Meeting"
+date: "2026-06-04"
+staged_item_status:
+  ai_0042: skipped
+  ai_0043: pending
+staged_item_skip_reason:
+  ai_0042:
+    reason: already fulfilled via slack-dm
+    evidence: "Slack DM → Jamie Burk, 2026-06-04"
+    setBy: chef
+    setAt: 2026-06-04T18:42:11Z
+  ai_0099:
+    reason: discussed at standup
+    evidence: "Standup notes 2026-06-03"
+    setBy: chef-proposed
+    setAt: 2026-06-04T18:42:14Z
+---
+
+Body content.
+`;
+
+describe('parseStagedItemSkipReason (phase-10-followup-2 Step 1)', () => {
+  it('returns {} when content has no frontmatter (M3 first-ship default)', () => {
+    const result = parseStagedItemSkipReason('# Just a heading\nNo frontmatter here.');
+    assert.deepEqual(result, {});
+  });
+
+  it('returns {} when frontmatter has no staged_item_skip_reason field (M3 first-ship)', () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody text.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('reads chef + chef-proposed entries with full payload preserved', () => {
+    const result = parseStagedItemSkipReason(FRONTMATTER_WITH_SKIP_REASON);
+    assert.deepEqual(result, {
+      ai_0042: {
+        reason: 'already fulfilled via slack-dm',
+        evidence: 'Slack DM → Jamie Burk, 2026-06-04',
+        setBy: 'chef',
+        setAt: '2026-06-04T18:42:11Z',
+      },
+      ai_0099: {
+        reason: 'discussed at standup',
+        evidence: 'Standup notes 2026-06-03',
+        setBy: 'chef-proposed',
+        setAt: '2026-06-04T18:42:14Z',
+      },
+    });
+  });
+
+  it('accepts setBy: user (override path)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: I already sent this
+    evidence: "Manual override"
+    setBy: user
+    setAt: 2026-06-05T08:13:02Z
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.equal(result['ai_0001']?.setBy, 'user');
+  });
+
+  it('drops entries with invalid setBy value', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: foo
+    evidence: bar
+    setBy: typo-not-allowed
+    setAt: 2026-06-04T18:42:11Z
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('drops entries missing required fields (reason/evidence/setAt)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: only-reason-no-evidence
+    setBy: chef
+    setAt: 2026-06-04T18:42:11Z
+  ai_0002:
+    reason: ok
+    evidence: ok
+    setBy: chef
+    # missing setAt
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('drops entries where meta is non-object (null, string, array)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001: null
+  ai_0002: "string value"
+  ai_0003:
+    - element1
+    - element2
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('returns {} when staged_item_skip_reason is an array (wrong shape)', () => {
+    const content = `---
+staged_item_skip_reason:
+  - reason: foo
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
   });
 });
 
