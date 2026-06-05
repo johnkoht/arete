@@ -101,6 +101,9 @@ export type {
   EntityRelationship,
   CommitmentStatus,
   CommitmentDirection,
+  StakeholderRole,
+  Stakeholder,
+  ExternalSource,
   Commitment,
   CommitmentsFile,
   // Areas domain
@@ -117,6 +120,7 @@ export type {
   ReconciliationResult,
   ReconciliationContext,
 } from './entities.js';
+export { COMMITMENT_TEXT_VARIANTS_MAX } from './entities.js';
 
 // Intelligence domain
 export type {
