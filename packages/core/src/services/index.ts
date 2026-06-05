@@ -163,6 +163,39 @@ export type {
   LLMCallConcurrentFn,
 } from './commitment-dedup-pipeline.js';
 
+// Phase 11 11a — Gmail Sent external-resolution detection pipeline (Step 2)
+export {
+  findResolutionEvidence,
+  runResolutionCrossCheck,
+  applyResolutionDecisions,
+  runResolutionPipeline,
+  commitmentToResolutionInput,
+  peopleDirectoryFromMap,
+  buildResolutionPrompt,
+  parseResolutionResponse,
+  isSuppressed,
+  computeSuppressUntil,
+  inTemporalWindow,
+  extractArtifactNouns,
+  checkArtifactMatch,
+  tokenize as resolutionTokenize,
+  jaccard as resolutionJaccard,
+  PERMANENT_SUPPRESS_SENTINEL,
+  UNRESOLVE_SUPPRESS_DAYS,
+  TEMPORAL_WINDOW_FORWARD_DAYS,
+  RESOLUTION_JACCARD_THRESHOLD,
+  RESOLUTION_CANDIDATE_CAP,
+  ARTIFACT_NOUNS,
+} from './commitment-resolution-pipeline.js';
+export type {
+  PeopleDirectory,
+  OpenCommitmentForResolution,
+  ResolutionCandidate,
+  FindEvidenceResult,
+  ResolutionLLMDecision,
+  ResolutionOutcome,
+} from './commitment-resolution-pipeline.js';
+
 // Phase 10b-min — extract-time dedup orchestration (Step 2)
 export {
   runExtractDedup,
@@ -214,6 +247,24 @@ export type {
   DedupLogEntry,
   CommitmentLookupResult,
 } from './dedup-explain.js';
+
+// Phase 10b-aux — [[unmerge]] directive parser + resolver (Step 2, AC8)
+export {
+  parseUnmergeDirectives,
+  resolveUnmerge,
+} from './unmerge-directives.js';
+export type {
+  UnmergeDirective,
+  UnmergeResolution,
+} from './unmerge-directives.js';
+
+// Phase 10b-aux — dedup decision surfacing in winddown (Step 3, AC8a/AC4a)
+export {
+  filterLogByDate,
+  formatDedupedTodaySection,
+  formatPossiblyMergeableSection,
+  formatDedupWinddownSections,
+} from './dedup-winddown-surface.js';
 
 // Phase 10e — background dedup hygiene engine
 export {

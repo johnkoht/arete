@@ -384,3 +384,112 @@ Hold the line on FY25 hiring; defer additional eng headcount to Q4.
     assert.equal(after, before, 'decisions.md must not be modified');
   });
 });
+
+describe('arete dedup --explain (integration, AC7)', () => {
+  let tmpDir: string;
+
+  const CANON_ID = 'c8e3d2f1'.padEnd(64, '0');
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'arete-dedup-explain-'));
+    makeWorkspace(tmpDir);
+
+    // One canonical with 3 source meetings + 3 textVariants + stakeholders.
+    const file = {
+      commitments: [
+        {
+          id: CANON_ID,
+          text: 'Talk to Dave about staffing',
+          direction: 'i_owe_them',
+          personSlug: 'dave-wiedenheft',
+          personName: 'Dave Wiedenheft',
+          source: '2026-06-01-john-lindsay-11.md',
+          date: '2026-06-01',
+          createdAt: '2026-06-01T08:00:00Z',
+          status: 'open',
+          resolvedAt: null,
+          stakeholders: [
+            { slug: 'dave-wiedenheft', role: 'recipient' },
+            { slug: 'lindsay-gray', role: 'mentioned' },
+          ],
+          source_meetings: [
+            '2026-06-01-john-lindsay-11.md',
+            '2026-06-02-glance-2-sync.md',
+            '2026-06-03-pop-review.md',
+          ],
+          textVariants: [
+            'Talk to Dave about staffing',
+            'Going to chat with Dave on the staffing plan',
+            'Need to discuss staffing with Dave',
+          ],
+        },
+      ],
+    };
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify(file, null, 2));
+
+    // Decisions log with 2 merge entries pointing at the canonical.
+    writeFile(
+      tmpDir,
+      'dev/diary/dedup-decisions.log',
+      [
+        `2026-06-02T15:42:01Z MERGE ai_0042 ${CANON_ID} 0.78 fast SAME same actor + Dave + staffing`,
+        `2026-06-03T09:10:00Z MERGE ai_0050 ${CANON_ID} 1.00 - - text-hash exact match`,
+        '',
+      ].join('\n'),
+    );
+  });
+
+  afterEach(() => {
+    if (tmpDir && existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('prints provenance including all source meetings + log entries', () => {
+    const { stdout, code, stderr } = runCliRaw(
+      ['dedup', '--explain', 'c8e3d2f1'],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 0, `unexpected exit: ${stderr}`);
+    assert.match(stdout, /Canonical text: "Talk to Dave about staffing"/);
+    assert.match(stdout, /@dave-wiedenheft \(recipient\)/);
+    assert.match(stdout, /@lindsay-gray \(mentioned\)/);
+    assert.match(stdout, /2026-06-02-glance-2-sync/);
+    assert.match(stdout, /2026-06-03-pop-review/);
+    assert.match(stdout, /Text variants observed \(3\/5 capacity\)/);
+    assert.match(stdout, /Dedup decisions \(2 log entries\)/);
+  });
+
+  it('--json emits structured payload', () => {
+    const { stdout, code } = runCliRaw(
+      ['dedup', '--explain', 'c8e3d2f1', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 0);
+    const result = JSON.parse(stdout) as {
+      success: boolean;
+      id: string;
+      report: string;
+    };
+    assert.equal(result.success, true);
+    assert.equal(result.id, CANON_ID);
+    assert.match(result.report, /Talk to Dave about staffing/);
+  });
+
+  it('errors on unknown commitment id', () => {
+    const { stdout, stderr, code } = runCliRaw(
+      ['dedup', '--explain', 'deadbeef', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.notEqual(code, 0);
+    assert.match(stdout + stderr, /No commitment matches/);
+  });
+
+  it('errors when --scope missing and --explain absent', () => {
+    const { stdout, stderr, code } = runCliRaw(['dedup', '--json'], {
+      cwd: tmpDir,
+    });
+    assert.notEqual(code, 0);
+    assert.match(stdout + stderr, /Missing required option: --scope/);
+  });
+});

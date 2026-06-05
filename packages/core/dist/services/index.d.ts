@@ -34,6 +34,8 @@ export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitme
 export type { PersonDirectory, AmbiguousName, ExtractCounterpartiesResult, } from './commitments-counterparty-parser.js';
 export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPipeline, commitmentToDedupInput, buildCrossCheckPrompt, parseCrossCheckResponse, tokenizeForJaccard, jaccardSimilarity as dedupJaccardSimilarity, extractSlugMentions, buildPersonSlugSet, DEDUP_JACCARD_THRESHOLD, DEDUP_CANDIDATE_CAP, } from './commitment-dedup-pipeline.js';
 export type { ExtractedItemForDedup, ExistingCommitmentForDedup, DedupCandidate, FindCandidatesResult, ExactMatchDecision, LLMPairDecision, DedupOutcome, LLMCallConcurrentFn, } from './commitment-dedup-pipeline.js';
+export { findResolutionEvidence, runResolutionCrossCheck, applyResolutionDecisions, runResolutionPipeline, commitmentToResolutionInput, peopleDirectoryFromMap, buildResolutionPrompt, parseResolutionResponse, isSuppressed, computeSuppressUntil, inTemporalWindow, extractArtifactNouns, checkArtifactMatch, tokenize as resolutionTokenize, jaccard as resolutionJaccard, PERMANENT_SUPPRESS_SENTINEL, UNRESOLVE_SUPPRESS_DAYS, TEMPORAL_WINDOW_FORWARD_DAYS, RESOLUTION_JACCARD_THRESHOLD, RESOLUTION_CANDIDATE_CAP, ARTIFACT_NOUNS, } from './commitment-resolution-pipeline.js';
+export type { PeopleDirectory, OpenCommitmentForResolution, ResolutionCandidate, FindEvidenceResult, ResolutionLLMDecision, ResolutionOutcome, } from './commitment-resolution-pipeline.js';
 export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWithDupeBadges, buildDupeSkipReasonEntries, buildDupeStatusEntries, } from './commitment-dedup-extract.js';
 export type { ExtractDedupDecision, ExtractDedupInputs, ExtractedItemForExtractDedup, } from './commitment-dedup-extract.js';
 export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampIntoBody, applyReverseStamp, } from './commitment-dedup-reverse-stamp.js';
@@ -42,6 +44,9 @@ export { sanitizeReasoning, renderDedupDecisionLine, payloadFromExtractDecision,
 export type { DedupDecisionKind, DedupDecisionLogPayload, DedupLLMTier, } from './dedup-decisions-log.js';
 export { parseDedupLog, filterLogForCommitment, lookupCommitmentById, formatExplainReport, } from './dedup-explain.js';
 export type { DedupLogEntry, CommitmentLookupResult, } from './dedup-explain.js';
+export { parseUnmergeDirectives, resolveUnmerge, } from './unmerge-directives.js';
+export type { UnmergeDirective, UnmergeResolution, } from './unmerge-directives.js';
+export { filterLogByDate, formatDedupedTodaySection, formatPossiblyMergeableSection, formatDedupWinddownSections, } from './dedup-winddown-surface.js';
 export { runBackgroundDedup, applyCommitmentsDedup, formatBackgroundDedupDiff, BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR, BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR, } from './background-dedup.js';
 export type { BackgroundDedupScope, BackgroundDedupGroup, BackgroundDedupDuplicate, BackgroundDedupCandidatePair, BackgroundDedupSummary, BackgroundDedupResult, RunBackgroundDedupInputs, MemorySectionInput, TopicPageInput, } from './background-dedup.js';
 export { wireExtractDedup, loadSameDayStagedItems, resolveMeetingSlugToPath, adaptFilteredItemsForDedup, } from './extract-dedup-wiring.js';
