@@ -36,6 +36,12 @@ export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPip
 export type { ExtractedItemForDedup, ExistingCommitmentForDedup, DedupCandidate, FindCandidatesResult, ExactMatchDecision, LLMPairDecision, DedupOutcome, LLMCallConcurrentFn, } from './commitment-dedup-pipeline.js';
 export { findResolutionEvidence, runResolutionCrossCheck, applyResolutionDecisions, runResolutionPipeline, commitmentToResolutionInput, peopleDirectoryFromMap, buildResolutionPrompt, parseResolutionResponse, isSuppressed, computeSuppressUntil, inTemporalWindow, extractArtifactNouns, checkArtifactMatch, tokenize as resolutionTokenize, jaccard as resolutionJaccard, PERMANENT_SUPPRESS_SENTINEL, UNRESOLVE_SUPPRESS_DAYS, TEMPORAL_WINDOW_FORWARD_DAYS, RESOLUTION_JACCARD_THRESHOLD, RESOLUTION_CANDIDATE_CAP, ARTIFACT_NOUNS, } from './commitment-resolution-pipeline.js';
 export type { PeopleDirectory, OpenCommitmentForResolution, ResolutionCandidate, FindEvidenceResult, ResolutionLLMDecision, ResolutionOutcome, } from './commitment-resolution-pipeline.js';
+export { appendResolutionDecisionLog, renderResolutionDecisionLine, sanitizeReasoning as sanitizeResolutionReasoning, parseResolutionLog, hasPriorUnresolveForEvidence, RESOLUTION_LOG_PHASE, } from './resolution-decisions-log.js';
+export type { ResolutionDecisionAction, ResolutionDecisionLogPayload, ResolutionLogConfidence, ResolutionLogEntry, } from './resolution-decisions-log.js';
+export { parseResolutionDirectives, stageResolve, autoResolve, applyConfirm, applyUnconfirm, applyUnresolve, evaluatePromotionGate, UNCONFIRM_WINDOW_HOURS, PROMOTION_WINDOW_DAYS, } from './resolution-directives.js';
+export type { ResolutionDirective, ResolutionDirectiveKind, RejectedBulkDirective, ParseDirectivesResult, MutatorResult, PromotionGateInput, PromotionGateResult, } from './resolution-directives.js';
+export { decideResolutionOrdering } from './resolution-ordering.js';
+export type { OrderingDecision } from './resolution-ordering.js';
 export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWithDupeBadges, buildDupeSkipReasonEntries, buildDupeStatusEntries, } from './commitment-dedup-extract.js';
 export type { ExtractDedupDecision, ExtractDedupInputs, ExtractedItemForExtractDedup, } from './commitment-dedup-extract.js';
 export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampIntoBody, applyReverseStamp, } from './commitment-dedup-reverse-stamp.js';

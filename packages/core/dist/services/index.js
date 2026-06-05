@@ -33,6 +33,12 @@ export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitme
 export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPipeline, commitmentToDedupInput, buildCrossCheckPrompt, parseCrossCheckResponse, tokenizeForJaccard, jaccardSimilarity as dedupJaccardSimilarity, extractSlugMentions, buildPersonSlugSet, DEDUP_JACCARD_THRESHOLD, DEDUP_CANDIDATE_CAP, } from './commitment-dedup-pipeline.js';
 // Phase 11 11a — Gmail Sent external-resolution detection pipeline (Step 2)
 export { findResolutionEvidence, runResolutionCrossCheck, applyResolutionDecisions, runResolutionPipeline, commitmentToResolutionInput, peopleDirectoryFromMap, buildResolutionPrompt, parseResolutionResponse, isSuppressed, computeSuppressUntil, inTemporalWindow, extractArtifactNouns, checkArtifactMatch, tokenize as resolutionTokenize, jaccard as resolutionJaccard, PERMANENT_SUPPRESS_SENTINEL, UNRESOLVE_SUPPRESS_DAYS, TEMPORAL_WINDOW_FORWARD_DAYS, RESOLUTION_JACCARD_THRESHOLD, RESOLUTION_CANDIDATE_CAP, ARTIFACT_NOUNS, } from './commitment-resolution-pipeline.js';
+// Phase 11 11a — resolution-decisions audit log (Step 5, F1/M2)
+export { appendResolutionDecisionLog, renderResolutionDecisionLine, sanitizeReasoning as sanitizeResolutionReasoning, parseResolutionLog, hasPriorUnresolveForEvidence, RESOLUTION_LOG_PHASE, } from './resolution-decisions-log.js';
+// Phase 11 11a — resolution directive parser + mutators (Steps 3+4, F2/M4)
+export { parseResolutionDirectives, stageResolve, autoResolve, applyConfirm, applyUnconfirm, applyUnresolve, evaluatePromotionGate, UNCONFIRM_WINDOW_HOURS, PROMOTION_WINDOW_DAYS, } from './resolution-directives.js';
+// Phase 11 11a — auto-resolve vs followup-2 ordering guard (Step 6, G1/AC8/M2)
+export { decideResolutionOrdering } from './resolution-ordering.js';
 // Phase 10b-min — extract-time dedup orchestration (Step 2)
 export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWithDupeBadges, buildDupeSkipReasonEntries, buildDupeStatusEntries, } from './commitment-dedup-extract.js';
 // Phase 10b-min — reverse-stamp on canonical's meeting (Step 5)
