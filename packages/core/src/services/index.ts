@@ -124,6 +124,17 @@ export {
   normalizeCommitmentTextV2,
   computeCommitmentHashV2,
 } from './commitments-hash-v2.js';
+
+// Phase 10a v2 — counterparty parser (Step 3)
+export {
+  extractCounterpartiesFromText,
+  buildPersonDirectory,
+} from './commitments-counterparty-parser.js';
+export type {
+  PersonDirectory,
+  AmbiguousName,
+  ExtractCounterpartiesResult,
+} from './commitments-counterparty-parser.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type {
   AICallOptions,
