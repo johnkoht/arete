@@ -285,4 +285,103 @@ describe('writeWithLock — phase-10-followup-2 Step 2', () => {
       },
     );
   });
+
+  // -------------------------------------------------------------------------
+  // Concurrent CLI race (HP1, AC4) — phase-10-followup-2 HIGH-2
+  // -------------------------------------------------------------------------
+  //
+  // Plan §Tests required: "drive two writeWithLock calls in parallel for
+  // same meeting; assert lock serializes; both writes land; no corrupt
+  // frontmatter." This closes the unverified meeting-file-lockfile-under-
+  // contention surface — proper-lockfile is the same primitive that
+  // commitments uses, but the meeting-file lock has its own bootstrap and
+  // acquire path and is worth verifying independently.
+
+  it('serializes two concurrent writeWithLock calls on the same meeting; both writes survive', async () => {
+    // Both mutators target DIFFERENT keys on the same file so each can
+    // assert its own write survived after the other completed. mutatorA
+    // sets status[id1] = 'approved'; mutatorB sets skip_reason[id1] = {...}.
+    // If the lock serializes, the final file contains BOTH writes because
+    // each mutator returns a partial patch that doesn't clobber the other.
+
+    const mutatorA = async (current: {
+      frontmatter: Readonly<Record<string, unknown>>;
+    }): Promise<{ frontmatter: Partial<Record<string, unknown>> }> => {
+      const status =
+        (current.frontmatter['staged_item_status'] as Record<string, string> | undefined) ?? {};
+      return {
+        frontmatter: {
+          staged_item_status: { ...status, ai_0042: 'approved' },
+        },
+      };
+    };
+
+    const mutatorB = async (current: {
+      frontmatter: Readonly<Record<string, unknown>>;
+    }): Promise<{ frontmatter: Partial<Record<string, unknown>> }> => {
+      const skip =
+        (current.frontmatter['staged_item_skip_reason'] as Record<string, unknown> | undefined) ?? {};
+      return {
+        frontmatter: {
+          staged_item_skip_reason: {
+            ...skip,
+            ai_0042: {
+              reason: 'mutB-set',
+              evidence: 'concurrent-write-test',
+              setBy: 'chef',
+              setAt: '2026-06-04T20:00:00Z',
+            },
+          },
+        },
+      };
+    };
+
+    // Launch in parallel. proper-lockfile's retry config will block the
+    // second acquire until the first releases — by design.
+    const [resultA, resultB] = await Promise.all([
+      writeWithLock(storage, meetingPath, mutatorA, { mtimeGuardSeconds: 0 }),
+      writeWithLock(storage, meetingPath, mutatorB, { mtimeGuardSeconds: 0 }),
+    ]);
+
+    assert.equal(resultA.written, true, 'mutatorA must succeed');
+    assert.equal(resultB.written, true, 'mutatorB must succeed');
+
+    // File parses cleanly (no corrupt YAML — the assert below would throw
+    // otherwise).
+    const raw = readFileSync(meetingPath, 'utf8');
+    const { data } = parseFrontmatterFromRaw(raw);
+
+    // BOTH writes survived — last-writer-wins on the FIELD level (not the
+    // FILE level) because writeWithLock does a shallow-merge inside the lock.
+    const status = data['staged_item_status'] as Record<string, string>;
+    assert.equal(
+      status['ai_0042'],
+      'approved',
+      "mutatorA's status mutation must be in the final file",
+    );
+    // Also assert pre-existing entries (from the seed) are still there —
+    // partial-merge contract holds for both writers.
+    assert.equal(
+      status['ai_0043'],
+      'pending',
+      'pre-existing status entries must survive both writes',
+    );
+
+    const skipReason = data['staged_item_skip_reason'] as Record<string, Record<string, unknown>>;
+    assert.equal(
+      skipReason['ai_0042']?.['reason'],
+      'mutB-set',
+      "mutatorB's skip_reason mutation must be in the final file",
+    );
+    assert.equal(skipReason['ai_0042']?.['setBy'], 'chef');
+
+    // No leftover lockfile directory — the lock target must be released
+    // (otherwise the next test's writeWithLock would block).
+    const lockTarget = `${meetingPath}.lock`;
+    assert.equal(
+      existsSync(lockTarget),
+      false,
+      'lock target should be released after both writes complete',
+    );
+  });
 });
