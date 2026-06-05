@@ -823,6 +823,83 @@ to check.
 **Conflict-with-priorities** — items contradicting week.md priorities
 (or APPEND active initiatives) get a flag in their reason label.
 
+### Step 3.5 — Surface today's dedup decisions (phase-10b-aux, AC8a / AC4a)
+
+The reactive dedup pipeline (Phase 10b) writes one line per decision to
+`dev/diary/dedup-decisions.log` as `arete meeting extract` runs through
+the day. This step reads that log and prepares two curated-view sections
+so the user can SEE every merge the chef made (never silent) and recover
+from wrong calls.
+
+1. Read `dev/diary/dedup-decisions.log` (best-effort — if absent, skip
+   this step; no error).
+2. Parse + scope to TODAY's entries via the core helpers:
+
+   ```ts
+   import {
+     parseDedupLog,
+     formatDedupWinddownSections,
+   } from '@arete/core';
+
+   const entries = parseDedupLog(rawLog);                 // tolerant parse
+   const block = formatDedupWinddownSections(entries, todayIso); // YYYY-MM-DD
+   ```
+
+   `formatDedupWinddownSections` returns BOTH sections (or `''` when the
+   day had no dedup activity):
+
+   - **`### Deduped today (N merges)`** — every MERGE decision, each with
+     an inline, copy-paste-ready `[[unmerge: <canonical> ← <dupe>]]`
+     directive (F3 discoverability). If a merge was wrong, the user adds
+     the directive below it; the NEXT winddown's Step 2.6 (below) splits
+     it back out.
+   - **`### Possibly mergeable (N pairs — your call)`** — UNCERTAIN
+     decisions. The pipeline registered these as NEW canonicals (never
+     auto-merged); the user can confirm a merge in the per-meeting
+     approval UI or leave them distinct.
+
+3. Drop the returned block into the curated view under the
+   `## Dedup activity (phase-10)` section (template below). Omit the
+   section entirely when the block is empty.
+
+**First-week banner (AC8a)**: for the first 7 days after Phase 10 ships,
+OR until the user's first `[[unmerge]]` use (whichever comes first), add
+this line to the top of the `## Dedup activity` section:
+
+> Phase 10 dedup is active — merges in "Deduped today" below; use the
+> `[[unmerge: <canonical> ← <dupe>]]` directive to undo any wrong call.
+
+### Step 2.6 — Resolve `[[unmerge]]` directives from the prior winddown (phase-10b-aux, AC8)
+
+Mirrors Step 0.6's directive scan. Before composing the new view, scan
+the PREVIOUS winddown view for `[[unmerge: <canonical-id> ← <dupe-id>]]`
+directives the user added, and resolve each:
+
+```ts
+import {
+  parseUnmergeDirectives,
+  resolveUnmerge,
+  appendDedupDecisionLog,
+} from '@arete/core';
+
+const directives = parseUnmergeDirectives(priorWinddownContent);
+// Under commitments.withLock(...): for each directive, resolveUnmerge(...)
+// against the current commitment list, write the returned commitments,
+// then appendDedupDecisionLog(root, resolution.logPayload).
+```
+
+`resolveUnmerge` (per Q7) splits the dupe back out as an INDEPENDENT
+commitment carrying its ORIGINAL extracted wording (recovered from the
+canonical's `textVariants[]`), removes that source meeting + variant from
+the canonical, and returns an `UNMERGE` log payload. Surface
+`"Unmerged N commitment(s)"` in the new view's `## Notes`. Resolution
+statuses `no-canonical` / `nothing-to-split` surface their `.message` in
+`## Notes` so the user sees why a directive didn't take (e.g. the merge
+was already split, or the id was a typo).
+
+Run this BEFORE Step 3.5 so the freshly-split commitments are reflected
+in the day's surface.
+
 ### Step 4 — Compose the curated view
 
 Build the single message to the user. **No engagement before this.**
@@ -890,6 +967,28 @@ item stays pending and stages normally on apply. Filter by
   ↪ chef proposes skip: already fulfilled via Slack DM to @jamie-burk today.
     Evidence: Slack DM → Jamie Burk, 2026-06-04
     Confirm: `[[confirm-skip ai_0042]]` · Override: `[[unskip ai_0042]]`
+
+## Dedup activity (phase-10)
+
+{From Step 3.5. Omit entirely when the day had no dedup activity. The
+two sub-sections below are produced verbatim by
+`formatDedupWinddownSections(entries, todayIso)`. First-week banner
+prepended here per AC8a.}
+
+Phase 10 dedup is active — merges in "Deduped today" below; use the
+`[[unmerge: <canonical> ← <dupe>]]` directive to undo any wrong call.
+
+### Deduped today (2 merges)
+
+- merged ai_0042 → canonical c8e3d2f1 (jaccard 0.78, fast-tier SAME) — same actor + Dave + staffing
+  → wrong? add `[[unmerge: c8e3d2f1 ← ai_0042]]` below to split next winddown
+- merged ai_0050 → canonical c8e3d2f1 (exact text-hash match)
+  → wrong? add `[[unmerge: c8e3d2f1 ← ai_0050]]` below to split next winddown
+
+### Possibly mergeable (1 pair — your call)
+
+- ai_0044 may be the same as canonical b22f1ccc (jaccard 0.62, fast-tier UNCERTAIN) — ambiguous staffing ref
+  → confirm merge in the per-meeting approval UI, or leave as-is to keep them distinct
 
 ## Stage for approval
 
