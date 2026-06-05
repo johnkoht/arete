@@ -19,7 +19,7 @@ export { getCalendarProvider, type BusyBlock, type FreeBusyResult, type FreeBusy
 export { saveMeetingFile, meetingFilename, findMatchingAgenda, findMatchingAgendaPath, findMatchingCalendarEvent, inferMeetingImportance, } from './integrations/meetings.js';
 export type { MeetingForSave, AgendaMatchResult, Importance } from './integrations/meetings.js';
 export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, parseStagedItemSkipReason, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
-export type { WriteItemStatusOptions, ApprovedItemRecord, ApprovedItemObserver, CommitApprovedItemsOptions, } from './integrations/staged-items.js';
+export type { WriteItemStatusOptions, ApprovedItemRecord, ApprovedItemObserver, CommitApprovedItemsOptions, SkippedItemRecord, SkippedItemObserver, } from './integrations/staged-items.js';
 export { saveConversationFile, conversationFilename, updateConversationFrontmatter, parseConversation, extractInsights, } from './integrations/conversations/index.js';
 export type { ConversationForSave, ConversationInsights, ConversationProvenance, ParsedConversation, ParsedMessage, LLMCallFn, } from './integrations/conversations/index.js';
 export { createServices } from './factory.js';

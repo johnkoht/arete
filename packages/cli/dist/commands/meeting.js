@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -1315,6 +1315,9 @@ export function registerMeetingCommands(program) {
             && ['light', 'normal', 'important', 'skip'].includes(frontmatter['importance'])
             ? frontmatter['importance']
             : null;
+        // phase-10-followup-2 Step 4 / AC9 — derive meeting slug for audit
+        // log payloads (slug = basename without `.md`).
+        const meetingSlug = meetingPath.replace(/^.*\//, '').replace(/\.md$/, '');
         await commitApprovedItems(services.storage, meetingPath, memoryDir, {
             onApproved: async (item) => {
                 try {
@@ -1331,6 +1334,19 @@ export function registerMeetingCommands(program) {
                 catch {
                     // best-effort
                 }
+            },
+            onSkipped: async (item) => {
+                // phase-10-followup-2 AC9: APPLY-SKIP audit log line per
+                // skipped item. Best-effort; appendChefSkipLog already
+                // swallows errors internally.
+                await appendChefSkipLog(root, {
+                    action: 'APPLY-SKIP',
+                    id: item.id,
+                    meeting: meetingSlug,
+                    ...(item.reason !== null ? { reason: item.reason } : {}),
+                    ...(item.evidence !== null ? { evidence: item.evidence } : {}),
+                    ...(item.setBy !== null ? { setBy: item.setBy } : {}),
+                });
             },
         });
         // --------------------------------------------------------------------------

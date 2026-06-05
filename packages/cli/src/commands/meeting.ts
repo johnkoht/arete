@@ -40,6 +40,7 @@ import {
   buildSkippedItemFateEvents,
   buildDismissedItemFateEvents,
   writeMeetingApplyFrontmatter,
+  appendChefSkipLog,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -1546,6 +1547,9 @@ export function registerMeetingCommands(program: Command): void {
           && (['light', 'normal', 'important', 'skip'] as const).includes(frontmatter['importance'] as 'light' | 'normal' | 'important' | 'skip')
           ? (frontmatter['importance'] as 'light' | 'normal' | 'important' | 'skip')
           : null;
+      // phase-10-followup-2 Step 4 / AC9 — derive meeting slug for audit
+      // log payloads (slug = basename without `.md`).
+      const meetingSlug = meetingPath.replace(/^.*\//, '').replace(/\.md$/, '');
       await commitApprovedItems(services.storage, meetingPath, memoryDir, {
         onApproved: async (item) => {
           try {
@@ -1561,6 +1565,19 @@ export function registerMeetingCommands(program: Command): void {
           } catch {
             // best-effort
           }
+        },
+        onSkipped: async (item) => {
+          // phase-10-followup-2 AC9: APPLY-SKIP audit log line per
+          // skipped item. Best-effort; appendChefSkipLog already
+          // swallows errors internally.
+          await appendChefSkipLog(root, {
+            action: 'APPLY-SKIP',
+            id: item.id,
+            meeting: meetingSlug,
+            ...(item.reason !== null ? { reason: item.reason } : {}),
+            ...(item.evidence !== null ? { evidence: item.evidence } : {}),
+            ...(item.setBy !== null ? { setBy: item.setBy } : {}),
+          });
         },
       });
 

@@ -104,9 +104,36 @@ export interface ApprovedItemRecord {
     /** Recorded confidence at extraction time, when known. */
     confidence: number | null;
 }
+/**
+ * Per-skipped-item callback invoked once per skipped item AFTER the meeting
+ * file is written. Phase 10 followup-2 AC9 / PM C3 instrumentation hook —
+ * callers wire this to `appendChefSkipLog(..., { action: 'APPLY-SKIP', ... })`
+ * to record the apply-time honoring of chef's skip signal.
+ *
+ * Errors thrown from the callback are caught internally; the commit always
+ * completes normally even if instrumentation fails.
+ */
+export type SkippedItemObserver = (item: SkippedItemRecord) => Promise<void>;
+export interface SkippedItemRecord {
+    /** Frontmatter id (e.g. `ai_001`). */
+    id: string;
+    /** Skip reason text, if `staged_item_skip_reason[id]` was populated. */
+    reason: string | null;
+    /** Evidence reference, if `staged_item_skip_reason[id]` was populated. */
+    evidence: string | null;
+    /** Provenance, if `staged_item_skip_reason[id]` was populated. */
+    setBy: 'chef' | 'chef-proposed' | 'user' | null;
+}
 export interface CommitApprovedItemsOptions {
     /** Phase 0 instrumentation. */
     onApproved?: ApprovedItemObserver;
+    /**
+     * Phase 10 followup-2 AC9: per-skipped-item callback. Receives one
+     * SkippedItemRecord per `'skipped'`-status item dropped by the apply
+     * filter. Callers typically wire this to `appendChefSkipLog` with
+     * `action: 'APPLY-SKIP'`.
+     */
+    onSkipped?: SkippedItemObserver;
 }
 /**
  * Commit all approved staged items:

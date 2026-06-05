@@ -383,8 +383,20 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
     // Snapshot confidence map BEFORE the frontmatter cleanup deletes it; the
     // observer needs it for the fate event.
     const confidenceMap = data['staged_item_confidence'] ?? {};
+    // Phase 10 followup-2 — snapshot skip_reason BEFORE the v3/F5 cleanup
+    // filters it; we need full payloads to render the "## Skipped on Apply"
+    // section + emit APPLY-SKIP audit events.
+    const skipReasonMap = parseStagedItemSkipReason(raw);
     const approvedIds = new Set(Object.entries(statusMap)
         .filter(([, v]) => v === 'approved')
+        .map(([k]) => k));
+    // Phase 10 followup-2 — IDs whose status is explicitly `'skipped'` get
+    // their skip-reason metadata surfaced in the "## Skipped on Apply"
+    // section + an APPLY-SKIP audit line (AC3, AC9, PM C3). Pending items
+    // are NOT in this set even when they have a `chef-proposed` skip_reason
+    // — those lapse through to the normal staging flow (week-1 gate).
+    const skippedIds = new Set(Object.entries(statusMap)
+        .filter(([, v]) => v === 'skipped')
         .map(([k]) => k));
     // ── 2. Cross-reference with parsed sections ──────────────────────────────
     const sections = parseStagedSections(body);
@@ -439,6 +451,32 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
         approvedSections += '\n## Approved Learnings\n' +
             approvedLearnings.map(item => `- ${item.text}`).join('\n') + '\n';
     }
+    // Phase 10 followup-2 — Skipped on Apply audit section.
+    // Lists every staged item dropped because `staged_item_status === 'skipped'`,
+    // along with its skip reason if `staged_item_skip_reason` was populated.
+    // This puts the audit trail in the meeting body permanently AFTER the
+    // sibling-field cleanup below (Step 4a) clears the frontmatter.
+    if (skippedIds.size > 0) {
+        const skippedLines = [];
+        for (const item of allItems) {
+            if (!skippedIds.has(item.id))
+                continue;
+            const reasonMeta = skipReasonMap[item.id];
+            // Use edited text if user override is present; else the original text.
+            const text = editsMap[item.id] ?? item.text;
+            if (reasonMeta) {
+                const ts = reasonMeta.setAt.replace(/T/, ' ').replace(/:\d{2}(?:\.\d+)?Z?$/, '');
+                skippedLines.push(`- [${item.id}] ${text}  ↪ skipped: ${reasonMeta.reason} (${reasonMeta.setBy}, ${ts})`);
+            }
+            else {
+                // Extract-time skip (no skip_reason) — surface without reason.
+                skippedLines.push(`- [${item.id}] ${text}  ↪ skipped (extract-time, no reason recorded)`);
+            }
+        }
+        if (skippedLines.length > 0) {
+            approvedSections += '\n## Skipped on Apply\n' + skippedLines.join('\n') + '\n';
+        }
+    }
     // Insert before ## Transcript if it exists, otherwise append
     if (approvedSections) {
         const transcriptIndex = cleanedBody.indexOf('\n## Transcript');
@@ -460,12 +498,42 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
     // Defensive cleanup: remove any pre-Phase-2 `approved_items` field on
     // re-approval. Idempotent — no-op when the field doesn't exist.
     delete data['approved_items'];
-    // ── 5-6. Update frontmatter ───────────────────────────────────────────────
-    delete data['staged_item_status'];
-    delete data['staged_item_edits'];
-    delete data['staged_item_owner'];
-    delete data['staged_item_source'];
-    delete data['staged_item_confidence'];
+    // ── 5-6. Update frontmatter (Step 4a, v3 F5 fix) ──────────────────────────
+    //
+    // BEFORE (pre-followup-2 bug):
+    //   delete data['staged_item_status']; delete data['staged_item_edits']; ...
+    // wholesale-deleted ALL sibling fields regardless of which IDs were
+    // committed. That clobbered chef-proposed skip_reason entries on
+    // pending items + lost the user's `[[unskip]]` work because the
+    // unsked-back-to-pending item disappeared from frontmatter on next
+    // apply.
+    //
+    // AFTER (v3 F5): filter each map by approvedIds. Pending items
+    // (chef-proposed OR bare-extract) + skipped items the user [[unskip]]'d
+    // back to pending retain their sibling fields for the next round.
+    // Only committed items lose their bookkeeping. Closes F5 + enables
+    // AC11 (week-1 unskip survival).
+    for (const key of [
+        'staged_item_status',
+        'staged_item_edits',
+        'staged_item_owner',
+        'staged_item_source',
+        'staged_item_confidence',
+        'staged_item_skip_reason',
+    ]) {
+        const map = data[key];
+        if (map === undefined)
+            continue;
+        const filtered = Object.fromEntries(Object.entries(map).filter(([id]) => !approvedIds.has(id)));
+        if (Object.keys(filtered).length === 0) {
+            // All entries were for approved IDs OR the map was already empty —
+            // preserve the legacy post-apply shape (drop the key entirely).
+            delete data[key];
+        }
+        else {
+            data[key] = filtered;
+        }
+    }
     data['status'] = 'approved';
     data['approved_at'] = new Date().toISOString();
     // ── 7. Write cleaned file ─────────────────────────────────────────────────
@@ -506,6 +574,25 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
                 // caller may forget to wrap the observer, so we trap here.
                 const msg = err instanceof Error ? err.message : String(err);
                 process.stderr.write(`[commitApprovedItems] onApproved observer failed for ${record.kind} ${record.id}: ${msg}\n`);
+            }
+        }
+    }
+    // ── 9. Phase 10 followup-2 — fire onSkipped per skipped item (AC9) ──────
+    if (options.onSkipped !== undefined) {
+        for (const id of skippedIds) {
+            const meta = skipReasonMap[id];
+            const record = {
+                id,
+                reason: meta?.reason ?? null,
+                evidence: meta?.evidence ?? null,
+                setBy: meta?.setBy ?? null,
+            };
+            try {
+                await options.onSkipped(record);
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                process.stderr.write(`[commitApprovedItems] onSkipped observer failed for ${id}: ${msg}\n`);
             }
         }
     }

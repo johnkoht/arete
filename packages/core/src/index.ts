@@ -107,6 +107,8 @@ export type {
   ApprovedItemRecord,
   ApprovedItemObserver,
   CommitApprovedItemsOptions,
+  SkippedItemRecord,
+  SkippedItemObserver,
 } from './integrations/staged-items.js';
 export {
   saveConversationFile,
