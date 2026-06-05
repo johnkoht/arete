@@ -66,7 +66,7 @@ A STANCE is a position ${personName} holds that:
 
 Your job is to be picky. A typical meeting yields 0-2 stances. Most things people say in meetings are NOT stances — they're decisions already made, observations of current state, action items, project approvals, schedule commitments, or generic exhortations. **When in doubt, SKIP.**
 
-Output a MAXIMUM of 3 stances from this transcript. Most meetings should yield 0-2. A meeting that yields 3 is exceptional.
+Output AT MOST 5 stances from this transcript. Most meetings should yield 0-2. A meeting that yields 5 is exceptional.
 
 ================================================================
 LEARN BY EXAMPLE — CONTRASTIVE PAIRS
@@ -180,8 +180,8 @@ FINAL REMINDERS
 ================================================================
 
 - Extract stances ONLY for ${personName}. Ignore positions held by other participants.
-- Maximum 3 stances from this transcript. If you have more candidates, pick the 3 most distinctive (least likely for any other leader in the same role to hold).
-- Most meetings should yield 0-2. Zero is a valid count. A meeting that yields 3 is exceptional.
+- Maximum 5 stances from this transcript. If you have more candidates, pick the 5 most distinctive (least likely for any other leader in the same role to hold).
+- Most meetings should yield 0-2. Zero is a valid count. A meeting that yields 5 is exceptional.
 
 Transcript:
 ${content}`;
@@ -252,9 +252,9 @@ export function parseStanceResponse(response: string): PersonStance[] {
     });
   }
 
-  // Hard-cap at 3 stances per call (Proposal C belt-and-suspenders).
+  // Hard-cap at 5 stances per call (Phase 9 followup-6: raised from 3).
   // Order matters: per-stance validation runs first, slice happens at parser exit.
-  return stances.slice(0, 3);
+  return stances.slice(0, 5);
 }
 
 // ---------------------------------------------------------------------------

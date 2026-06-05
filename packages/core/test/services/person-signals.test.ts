@@ -245,8 +245,10 @@ describe('parseStanceResponse', () => {
 // Proposal C tightens the parser to enforce three invariants:
 //   1. `neutral` is not a valid direction — drop any stance that uses it.
 //   2. `_justification` is required (audit-trail) — drop missing/empty.
-//   3. Hard-cap of 3 stances at parser exit (belt-and-suspenders with
-//      the prompt's max-3 instruction). Validation runs first, then slice.
+//   3. Hard-cap of 5 stances at parser exit (belt-and-suspenders with
+//      the prompt's max-5 instruction; raised from 3 in Phase 9
+//      followup-6 — was too aggressive, depressing yield to ~13 per
+//      297-meeting backfill). Validation runs first, then slice.
 // ---------------------------------------------------------------------------
 
 describe('parseStanceResponse — Proposal C invariants', () => {
@@ -337,31 +339,37 @@ describe('parseStanceResponse — Proposal C invariants', () => {
     assert.deepEqual(result, []);
   });
 
-  it('hard-caps output at 3 stances even when LLM returns 5', () => {
+  it('hard-caps output at 5 stances even when LLM returns 7', () => {
+    // Phase 9 followup-6 raised the per-meeting cap from 3 → 5.
     const response = JSON.stringify({
       stances: [
         { topic: 't1', direction: 'supports', summary: 's1', evidence_quote: 'q1', _justification: 'j1 — first most-distinctive position.' },
         { topic: 't2', direction: 'opposes', summary: 's2', evidence_quote: 'q2', _justification: 'j2 — second most-distinctive.' },
         { topic: 't3', direction: 'concerned', summary: 's3', evidence_quote: 'q3', _justification: 'j3 — third most-distinctive.' },
-        { topic: 't4', direction: 'supports', summary: 's4', evidence_quote: 'q4', _justification: 'j4 — would be dropped by cap.' },
-        { topic: 't5', direction: 'opposes', summary: 's5', evidence_quote: 'q5', _justification: 'j5 — would be dropped by cap.' },
+        { topic: 't4', direction: 'supports', summary: 's4', evidence_quote: 'q4', _justification: 'j4 — fourth most-distinctive.' },
+        { topic: 't5', direction: 'opposes', summary: 's5', evidence_quote: 'q5', _justification: 'j5 — fifth most-distinctive.' },
+        { topic: 't6', direction: 'supports', summary: 's6', evidence_quote: 'q6', _justification: 'j6 — would be dropped by cap.' },
+        { topic: 't7', direction: 'opposes', summary: 's7', evidence_quote: 'q7', _justification: 'j7 — would be dropped by cap.' },
       ],
     });
 
     const result = parseStanceResponse(response);
-    // Hard-cap enforced regardless of how many the LLM emitted.
-    assert.equal(result.length, 3);
+    // Hard-cap of 5 enforced regardless of how many the LLM emitted.
+    assert.equal(result.length, 5);
     // Order is preserved: model emits most-distinctive first per prompt.
     assert.equal(result[0].topic, 't1');
     assert.equal(result[1].topic, 't2');
     assert.equal(result[2].topic, 't3');
+    assert.equal(result[3].topic, 't4');
+    assert.equal(result[4].topic, 't5');
   });
 
   it('validation runs before slice: dropped stances do not count toward the cap', () => {
-    // If validation ran AFTER slice, the first 3 (neutral+missing-just+empty-just)
-    // would be sliced first and all dropped, leaving zero valid stances.
-    // Proposal C invariant: validation first, then slice. So the 3 valid
-    // stances at positions 3-5 survive.
+    // If validation ran AFTER slice, the first 5 (3 invalid + 2 valid) would
+    // be sliced first and the 3 invalid dropped, leaving only 2 valid stances.
+    // Proposal C invariant: validation first, then slice. So the 5 valid
+    // stances at positions 3-7 survive (cap of 5 still applies — valid-6
+    // would be dropped at slice time).
     const response = JSON.stringify({
       stances: [
         { topic: 'neutral-stance', direction: 'neutral', summary: 's', evidence_quote: 'q', _justification: 'should drop on direction.' },
@@ -370,14 +378,19 @@ describe('parseStanceResponse — Proposal C invariants', () => {
         { topic: 'valid-1', direction: 'supports', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
         { topic: 'valid-2', direction: 'opposes', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
         { topic: 'valid-3', direction: 'concerned', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-4', direction: 'supports', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-5', direction: 'opposes', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-6', direction: 'supports', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance — would be dropped by cap of 5.' },
       ],
     });
 
     const result = parseStanceResponse(response);
-    assert.equal(result.length, 3);
+    assert.equal(result.length, 5);
     assert.equal(result[0].topic, 'valid-1');
     assert.equal(result[1].topic, 'valid-2');
     assert.equal(result[2].topic, 'valid-3');
+    assert.equal(result[3].topic, 'valid-4');
+    assert.equal(result[4].topic, 'valid-5');
   });
 
   it('schema-pass: well-formed stance with all required fields is accepted', () => {
