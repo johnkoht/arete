@@ -30,7 +30,7 @@ import {
   existsSync,
   utimesSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runCliRaw } from '../helpers.js';
 
@@ -386,5 +386,138 @@ describe('arete commitments migrate --to-v2 (integration)', () => {
     assert.notEqual(code, 0, 'expected non-zero exit on shape-invalid JSON');
     const out = stdout + stderr;
     assert.match(out, /malformed/i);
+  });
+
+  // ---------------------------------------------------------------------------
+  // phase-10a-fixup HIGH-2: --apply uses CommitmentsService.withLock
+  // ---------------------------------------------------------------------------
+  it('--apply serializes against concurrent writers via withLock (HIGH-2)', async () => {
+    // Verifies that migrate --apply's read-migrate-write is wrapped in
+    // services.commitments.withLock, so a concurrent writer (e.g. a parallel
+    // process holding the same proper-lockfile lock) cannot race the write.
+    //
+    // We dynamically import CommitmentsService + FileStorageAdapter from
+    // the BUILT dist (the CLI uses the same source) and run two operations:
+    //   (a) The migrate --apply CLI invocation.
+    //   (b) A concurrent withLock(fn) that holds the lock for ~700ms before
+    //       releasing.
+    // We start (b) first so the CLI must WAIT on its withLock acquire. After
+    // both complete, commitments.json must:
+    //   - Parse cleanly (no torn write).
+    //   - Either reflect the migration (CLI won the race) — confirmed via
+    //     v2 fields present — OR retain the inserted-by-(b) state. The lock
+    //     guarantees exactly-one-at-a-time, never interleaved.
+    const commitmentsPath = join(tmpDir, '.arete/commitments.json');
+    // Backdate so the 24h gate passes.
+    const old = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    utimesSync(commitmentsPath, old, old);
+
+    // Resolve the Lindsay ambiguity via sidecar so --apply doesn't block.
+    writeFile(
+      tmpDir,
+      '.arete/commitments.pre-phase-10-ambiguities.json',
+      JSON.stringify(
+        {
+          disambiguations: [
+            {
+              commitmentId: '03'.repeat(32),
+              name: 'Lindsay',
+              slug: 'lindsay-gray',
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+
+    // Compute absolute paths to the built core dist so the spawned ESM
+    // process can resolve them irrespective of the test runner's cwd.
+    const { fileURLToPath } = await import('node:url');
+    const here = fileURLToPath(new URL('.', import.meta.url));
+    // here = packages/cli/test/integration/ → up 4 levels = repo root
+    const repoRoot = resolvePath(here, '..', '..', '..', '..');
+    const commitmentsModuleUrl = new URL(
+      `file://${join(repoRoot, 'packages/core/dist/services/commitments.js')}`,
+    ).toString();
+    const fileStorageModuleUrl = new URL(
+      `file://${join(repoRoot, 'packages/core/dist/storage/file.js')}`,
+    ).toString();
+
+    // Spawn a holder that grabs withLock for ~700ms.
+    const holderScript = `
+      import { CommitmentsService } from '${commitmentsModuleUrl}';
+      import { FileStorageAdapter } from '${fileStorageModuleUrl}';
+      const svc = new CommitmentsService(new FileStorageAdapter(), '${tmpDir}');
+      await svc.withLock(async () => {
+        await new Promise((r) => setTimeout(r, 700));
+      });
+      console.log('holder-done');
+    `;
+    const { spawn } = await import('node:child_process');
+    const holder = spawn(
+      process.execPath,
+      ['--input-type=module', '-e', holderScript],
+      { cwd: tmpDir, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let holderOut = '';
+    holder.stdout?.on('data', (d: Buffer) => {
+      holderOut += d.toString();
+    });
+    let holderErr = '';
+    holder.stderr?.on('data', (d: Buffer) => {
+      holderErr += d.toString();
+    });
+    const holderExit = new Promise<number>((resolve) => {
+      holder.on('exit', (c) => resolve(c ?? -1));
+    });
+
+    // Wait until the holder has actually acquired the lock. We poll for
+    // the proper-lockfile sidecar dir presence.
+    const { existsSync: existsSyncNode } = await import('node:fs');
+    const lockDir = `${commitmentsPath}.lock`;
+    const start = Date.now();
+    while (!existsSyncNode(lockDir) && Date.now() - start < 4000) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+
+    const cliStart = Date.now();
+    const { code, stdout, stderr } = runCliRaw(
+      [
+        'commitments',
+        'migrate',
+        '--to-v2',
+        '--apply',
+        '--owner-slug',
+        'john-koht',
+        '--diff-dir',
+        join(tmpDir, 'diffs'),
+        '--json',
+      ],
+      { cwd: tmpDir },
+    );
+    const cliElapsed = Date.now() - cliStart;
+    const holderCode = await holderExit;
+    assert.equal(holderCode, 0, `holder failed: ${holderErr}`);
+    assert.match(holderOut, /holder-done/);
+
+    // CLI must have succeeded eventually.
+    assert.equal(code, 0, `apply must succeed: ${stderr}`);
+    // CLI must have WAITED — measured by elapsed > ~300ms (holder slept
+    // 700ms; we tolerate slack but anything well under that means the
+    // lock wasn't honored).
+    assert.ok(
+      cliElapsed >= 300,
+      `apply should have waited on holder; elapsed=${cliElapsed}ms`,
+    );
+
+    // commitments.json reflects the migration (v2 shape).
+    const after = JSON.parse(
+      readFileSync(commitmentsPath, 'utf8'),
+    ) as { commitments: Array<Record<string, unknown>> };
+    assert.ok(after.commitments.length > 0);
+    for (const c of after.commitments) {
+      assert.ok(Array.isArray(c.stakeholders));
+    }
   });
 });

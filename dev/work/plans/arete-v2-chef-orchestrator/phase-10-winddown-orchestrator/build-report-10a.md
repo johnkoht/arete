@@ -100,7 +100,7 @@ npm run build:packages    ← tsc -b packages/core packages/cli passes
 | AC1c    | `--apply` writes the v2 commitments.json + retains the old file at `.arete/commitments.pre-phase-10.json`. Verified via tmp-workspace integration test (NOT run against production). |
 | AC1d    | `arete commitments restore --from <snapshot>` already existed from phase-10a-pre. The migrate verb's success message points the user at it for rollback. |
 | AC1e    | Bare-name ambiguity (e.g., two Lindsays) → `ambiguous: true` row with candidate list. Sidecar at `.arete/commitments.pre-phase-10-ambiguities.json` resolves; `--apply` blocks until all ambiguities resolved. |
-| AC1f    | Partial-failure recovery via pre-migration snapshot. **Caveat**: storage adapter does not yet implement true tmp+rename atomicity; we rely on the snapshot as the anchor and surface the restore command in error messages. Documented as TODO in CLI verb comment. |
+| AC1f    | Partial-failure recovery via pre-migration snapshot **PLUS** atomic write at the storage-adapter layer. `packages/core/src/storage/file.ts:30-42` writes via a `randomBytes(6)`-suffixed tmp file in the same directory, then `fs.rename` (POSIX-atomic). Readers see either the old or new content, never a torn write. The pre-migration snapshot is the LOGIC-bug recovery anchor (we wrote bad content); the tmp+rename is the I/O-bug recovery anchor (we crashed mid-write). Updated 2026-06-04 by phase-10a-fixup; original build report said "adapter does not yet implement tmp+rename atomicity" — that was wrong. |
 | AC1g    | `formatMigrationDiff` emits a delta-source breakdown section when caller passes `meta.deltaSources` (new-extract / manual-resolve / manual-drop / manual-create). The CLI path that computes deltas is **not yet wired** — this is reactive for the post-3-5-day delta path of `--apply`. |
 | AC1h    | `--apply` blocks when `commitments.json` mtime is within 24h, with override via `--force-after-triage`. Integration test verifies the block + override path. |
 
@@ -186,16 +186,20 @@ npm run build:packages
 
 ## Known issues / caveats
 
-1. **Storage-adapter atomic writes (AC1f)** — the CLI's `--apply`
-   path writes commitments.json via the standard storage adapter
-   `write` method. The adapter does NOT yet implement tmp+rename
-   atomicity at the per-file level. We rely on the pre-migration
-   snapshot (`.arete/commitments.pre-phase-10.json`) as the
-   recovery anchor; the error message on failed write tells the
-   user the exact `restore` command. This matches the existing
-   write semantics for `arete commitments resolve` etc. — Phase
-   10b can revisit if real partial-write corruption is observed
-   in soak.
+1. **Storage-adapter atomic writes (AC1f)** — UPDATED 2026-06-04
+   (phase-10a-fixup): the original caveat ("adapter does NOT yet
+   implement tmp+rename atomicity") was FACTUALLY WRONG. The
+   `FileStorageAdapter.write` method at
+   `packages/core/src/storage/file.ts:30-42` writes via a
+   `randomBytes(6)`-suffixed tmp file in the same directory, then
+   `fs.rename` into place. POSIX `rename(2)` is atomic within a
+   filesystem, so readers see either the old content or the new
+   content — never a torn write. AC1f is therefore satisfied at
+   TWO independent layers: (a) the storage adapter for I/O-bug
+   recovery, and (b) the pre-migration snapshot
+   (`.arete/commitments.pre-phase-10.json`) for logic-bug
+   recovery. The error message on failed write tells the user
+   the exact `restore` command for case (b).
 
 2. **Delta-diff at --apply time (AC1g)** — the engine + diff
    writer support delta source breakdowns, but the CLI does NOT

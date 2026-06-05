@@ -911,34 +911,72 @@ export function registerCommitmentsCommand(program: Command): void {
           process.exit(1);
         }
 
-        // Pre-migration snapshot (AC1d reversibility anchor).
+        // HIGH-2 fix (phase-10a-fixup): wrap the read-migrate-write block
+        // inside `services.commitments.withLock(...)`. The pre-mortem F5
+        // mitigation `withLock(fn)` was introduced in 10a-pre but was NOT
+        // applied here — meaning a concurrent `meeting apply` in another
+        // process could write a new commitment AFTER migrate's initial
+        // read above but BEFORE migrate's write below, and migrate would
+        // clobber it (the snapshot wouldn't help, since the snapshot was
+        // taken from the same stale read).
+        //
+        // Strategy: re-read commitments.json INSIDE the lock, re-run the
+        // engine against the locked content, snapshot the locked content
+        // verbatim, then write the migrated content. All under one lock
+        // acquisition. The earlier (unlocked) read/engine pass above is
+        // still used for the ambiguity + diff-report gates — those are
+        // safe reads. The locked re-read is the authoritative input to
+        // the actual write.
+        //
+        // AC1f atomicity: `storage.write` ALREADY does tmp+rename via
+        // `randomBytes(6)`-suffixed sidecar + `fs.rename` (see
+        // packages/core/src/storage/file.ts:30-42). On POSIX rename(2)
+        // is atomic within a filesystem — readers see either the old or
+        // the new content, never a torn write. The pre-migration
+        // snapshot remains the recovery anchor for the rare case where
+        // the migrated content itself turns out to be wrong (logic bug)
+        // rather than corrupted (I/O bug).
         const snapshotPath = join(root, '.arete/commitments.pre-phase-10.json');
-        if (raw !== null) {
-          try {
-            await services.storage.write(snapshotPath, raw);
-          } catch (err) {
-            const msg = `Failed to write pre-migration snapshot: ${
-              err instanceof Error ? err.message : String(err)
-            }`;
-            if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
-            else error(msg);
-            process.exit(1);
-          }
-        }
-
-        // Atomic write via tmp + rename (AC1f partial-failure recovery).
-        // We rely on storage.write — for the file adapter this maps to a
-        // single fs.writeFile call. Truly-atomic rename requires posix
-        // semantics; future work to wrap in a tmp-then-rename helper at
-        // the storage layer. For 10a we rely on the snapshot as the
-        // recovery anchor.
-        const migratedJson = serializeCommitmentsFile(result.migrated);
         try {
-          await services.storage.write(commitmentsPath, migratedJson);
+          await services.commitments.withLock(async () => {
+            // Re-read under the lock for the authoritative input.
+            const lockedRaw = await services.storage.read(commitmentsPath);
+            const lockedSource = lockedRaw ?? raw ?? '';
+            const lockedCommitments = parseCommitmentsFile(lockedRaw);
+            const lockedResult = migrateCommitmentsToV2({
+              commitments: lockedCommitments,
+              ownerSlug: opts.ownerSlug!,
+              directory,
+              disambiguations,
+            });
+            // Ambiguity may have changed if the file shifted under us;
+            // re-check and refuse if so (caller should re-run dry-run).
+            if (lockedResult.summary.ambiguous > 0) {
+              throw new Error(
+                `commitments.json changed under the lock (${lockedResult.summary.ambiguous} ambiguous row(s) now present); re-run --dry-run before --apply.`,
+              );
+            }
+
+            // Pre-migration snapshot (AC1d reversibility anchor): capture
+            // the EXACT content we are about to overwrite.
+            if (lockedRaw !== null) {
+              await services.storage.write(snapshotPath, lockedSource);
+            }
+
+            // Atomic write via tmp + rename (handled by storage adapter
+            // for the file backend; see file.ts:30-42).
+            const migratedJson = serializeCommitmentsFile(lockedResult.migrated);
+            await services.storage.write(commitmentsPath, migratedJson);
+
+            // Mutate `result.summary` so the success JSON payload below
+            // reflects what was actually written under the lock.
+            result.summary = lockedResult.summary;
+            result.migrated = lockedResult.migrated;
+          });
         } catch (err) {
-          const msg = `Failed to write commitments.json: ${
+          const msg = `Failed to apply migration under lock: ${
             err instanceof Error ? err.message : String(err)
-          }. Pre-migration snapshot at ${snapshotPath} is the recovery anchor; run \`arete commitments restore --from ${snapshotPath}\` to roll back.`;
+          }. Pre-migration snapshot at ${snapshotPath} is the recovery anchor (if written); run \`arete commitments restore --from ${snapshotPath}\` to roll back.`;
           if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
           else error(msg);
           process.exit(1);
