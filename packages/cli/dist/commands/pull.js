@@ -1,7 +1,7 @@
 /**
  * arete pull [integration] — fetch data from integrations
  */
-import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath, getEmailProvider, getDriveProvider } from '@arete/core';
+import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath, getEmailProvider, getDriveProvider, writeGmailSentCache, gmailSentCachePath, } from '@arete/core';
 import { isAbsolute, join, basename } from 'path';
 import { tmpdir } from 'os';
 import { header, listItem, success, error, info } from '../formatters.js';
@@ -35,6 +35,9 @@ export function registerPullCommand(program) {
         .option('--skip-qmd', 'Skip automatic qmd index update')
         .option('--json', 'Output as JSON')
         .option('--query <q>', 'Search query (drive, gmail)')
+        // Phase 11-pre (F4) — Sent-folder extraction for gmail
+        .option('--sent', 'Also pull Sent folder (gmail only) — writes .arete/cache/gmail-sent-YYYY-MM-DD.json')
+        .option('--fetch-body', 'Include decoded body + attachments in cache (gmail --sent only). Default: metadata only.')
         .action(async (integration, opts) => {
         const services = await createServices(process.cwd());
         const root = await services.workspace.findRoot();
@@ -80,6 +83,8 @@ export function registerPullCommand(program) {
                 days,
                 json: opts.json ?? false,
                 query: opts.query,
+                sent: opts.sent ?? false,
+                fetchBody: opts.fetchBody ?? false,
             });
             if (!opts.json)
                 showInboxTip(root);
@@ -464,12 +469,12 @@ export async function pullCalendarHelper(services, workspaceRoot, opts, deps = {
     console.log(`Total: ${enrichedEvents.length} event(s)`);
     console.log('');
 }
-// ---------------------------------------------------------------------------
-// Gmail helper
-// ---------------------------------------------------------------------------
-export async function pullGmailHelper(services, workspaceRoot, opts) {
-    const config = await loadConfig(services.storage, workspaceRoot);
-    const provider = await getEmailProvider(config, services.storage, workspaceRoot);
+export async function pullGmailHelper(services, workspaceRoot, opts, deps = {
+    loadConfigFn: loadConfig,
+    getEmailProviderFn: getEmailProvider,
+}) {
+    const config = await deps.loadConfigFn(services.storage, workspaceRoot);
+    const provider = await deps.getEmailProviderFn(config, services.storage, workspaceRoot);
     if (!provider) {
         if (opts.json) {
             console.log(JSON.stringify({
@@ -523,29 +528,83 @@ export async function pullGmailHelper(services, workspaceRoot, opts) {
     else {
         threads = await provider.getImportantUnread({ maxResults: 20 });
     }
+    // -------------------------------------------------------------------------
+    // Phase 11-pre (F4) — Sent folder pull (additive; only when --sent set)
+    // -------------------------------------------------------------------------
+    let sentResult;
+    if (opts.sent) {
+        if (typeof provider.fetchSent !== 'function') {
+            // Defensive — the EmailProvider interface declares fetchSent as
+            // optional. Production Gmail provider implements it; tests with
+            // mock providers may not.
+            const msg = `Email provider "${provider.name}" does not implement fetchSent()`;
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        }
+        // sinceDate: today - days (YYYY-MM-DD)
+        let sinceDate;
+        if (opts.days > 0) {
+            const d = new Date();
+            d.setDate(d.getDate() - opts.days);
+            sinceDate = d.toISOString().slice(0, 10);
+        }
+        const sentThreads = await provider.fetchSent({
+            sinceDate,
+            fetchBody: opts.fetchBody ?? false,
+            limit: 100,
+        });
+        const cachePath = await writeGmailSentCache(services.storage, workspaceRoot, sentThreads, { daysCovered: opts.days });
+        sentResult = { cachePath, threadCount: sentThreads.length };
+    }
     if (opts.json) {
-        console.log(JSON.stringify({
+        const payload = {
             success: true,
             integration: 'gmail',
             threads,
-        }, null, 2));
+        };
+        if (sentResult) {
+            payload.sent = {
+                cachePath: sentResult.cachePath,
+                threadCount: sentResult.threadCount,
+                fetchBody: opts.fetchBody ?? false,
+            };
+        }
+        console.log(JSON.stringify(payload, null, 2));
         return;
     }
     header('Gmail — Important Unread');
     console.log('');
     if (threads.length === 0) {
         info('No important unread threads found.');
-        return;
     }
-    for (const thread of threads) {
-        console.log(`  * [${thread.subject}] — from ${thread.from}, ${thread.date}`);
-        if (thread.snippet) {
-            console.log(`    ${thread.snippet}`);
+    else {
+        for (const thread of threads) {
+            console.log(`  * [${thread.subject}] — from ${thread.from}, ${thread.date}`);
+            if (thread.snippet) {
+                console.log(`    ${thread.snippet}`);
+            }
+            console.log('');
         }
+        console.log(`Total: ${threads.length} thread(s)`);
         console.log('');
     }
-    console.log(`Total: ${threads.length} thread(s)`);
-    console.log('');
+    if (sentResult) {
+        header('Gmail — Sent (Phase 11-pre)');
+        console.log('');
+        listItem('Cache file', sentResult.cachePath);
+        listItem('Threads cached', String(sentResult.threadCount));
+        listItem('Body included', opts.fetchBody ? 'yes' : 'no');
+        console.log('');
+        // Mark the cache path is canonical for the date so the caller knows
+        // where to look. (Path was already shown above; this also confirms the
+        // helper used the default date.)
+        void gmailSentCachePath;
+    }
 }
 // ---------------------------------------------------------------------------
 // Drive helper
