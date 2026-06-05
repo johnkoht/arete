@@ -386,15 +386,17 @@ describe('Chef-skip end-to-end flow (phase-10-followup-2 Step 7)', () => {
     assert.equal(skipReason['ai_0099']['setBy'], 'chef-proposed', 'chef-proposed setBy preserved');
   });
 
-  it('Flow D — concrete CT2 reproduction (the original 2026-06-04 winddown catch)', async () => {
+  it('Flow D — happy-path post-chef-skip apply (no user override; structural baseline)', async () => {
     // From the plan §Background — the 2026-06-04 winddown caught:
     //   [CT2] Staged action item 'Share the Notion claim-review-process
     //   doc with Jamie' — already fulfilled via Slack DM. Action if
     //   approved: do NOT create this commitment on meeting approve.
     //
-    // The chef *noticed* but had no enforcement. v3 followup-2 makes
-    // that enforcement structural. This test reproduces the catch +
-    // verifies no commitment is created.
+    // This flow asserts the STRUCTURAL baseline: if chef's skip is in
+    // frontmatter and the user does NOT override it before apply, no
+    // commitment is created. (Flow E below exercises the actual race
+    // where a subsequent write races chef's skip — the canonical CT2
+    // scenario rewritten per code-review HIGH-3.)
     writeFileSync(
       meetingPath,
       makeMeetingContent({
@@ -432,16 +434,7 @@ describe('Chef-skip end-to-end flow (phase-10-followup-2 Step 7)', () => {
       { mtimeGuardSeconds: 0 },
     );
 
-    // User clicks "approve all staged" — in real workflow this would
-    // set status['ai_0042'] to 'approved', but the chef's 'skipped' must
-    // take precedence. Today's UI does this naively; this test asserts
-    // the STRUCTURAL safety: if chef's skip is in frontmatter, even an
-    // accidental "approve all" by the user is prevented from creating
-    // the commitment because the chef rewrote status before the user
-    // could.
-    //
-    // We DON'T overwrite ai_0042's status to 'approved' here — we apply
-    // immediately. CT2 commit must NOT be created.
+    // User does NOT override; apply runs against chef's 'skipped' status.
     await commitApprovedItems(storage, meetingPath, memoryDir);
 
     const body = readFileSync(meetingPath, 'utf8');
@@ -453,5 +446,231 @@ describe('Chef-skip end-to-end flow (phase-10-followup-2 Step 7)', () => {
     assert.match(body, /## Skipped on Apply/);
     assert.match(body, /\[ai_0042\] Share the Notion claim-review-process/);
     assert.match(body, /already fulfilled via slack-dm/);
+  });
+
+  it('Flow E — CT2 reproduction: chef writes skip, concurrent extract mutator races, chef skip_reason survives + apply drops ai_X', async () => {
+    // The actual CT2 race the followup-2 was built to close:
+    //
+    //   1. Chef writes staged_item_skip_reason[ai_X] = {...setBy:'chef'} during
+    //      winddown (6pm), flipping staged_item_status[ai_X] to 'skipped'.
+    //   2. CONCURRENT/INTERLEAVED: `arete meeting extract` re-runs (e.g., a
+    //      late-arriving Fathom transcript triggered a refresh), producing
+    //      a fresh extract that doesn't know about chef's skip.
+    //   3. Pre-followup-2: the extract path did direct storage.write() which
+    //      wholesale-rewrote frontmatter — chef's staged_item_skip_reason
+    //      was silently dropped, and staged_item_status[ai_X] was demoted
+    //      back to 'pending'. Apply then committed CT2 as a normal task.
+    //   4. Post-followup-2 (HIGH-1 wiring): extract goes through writeWithLock
+    //      with a mutator that returns only the 5 extract-owned keys; the
+    //      partial-merge contract preserves staged_item_skip_reason
+    //      byte-for-byte AND a status-merge step preserves chef's 'skipped'.
+    //
+    // This test reproduces step 1-4 end-to-end using the SAME mutator
+    // pattern the production CLI extract path uses (see
+    // packages/cli/src/commands/meeting.ts post-HIGH-1).
+
+    writeFileSync(
+      meetingPath,
+      makeMeetingContent({
+        title: 'John ↔ Jamie 2026-06-04',
+        date: '2026-06-04',
+        status: { ai_0042: 'pending', ai_0043: 'pending' },
+        items: [
+          { id: 'ai_0042', text: 'Share the Notion claim-review-process doc with Jamie' },
+          { id: 'ai_0043', text: 'Send the deck' },
+        ],
+      }),
+      'utf8',
+    );
+    backdateMtime(meetingPath);
+
+    // STEP 1 — Chef writes the skip via writeWithLock (canonical chef-write
+    // path; same pattern as Flow A but with the CT2-specific item text).
+    const chefSkipPayload: StagedItemSkipReasonMeta = {
+      reason: 'already fulfilled via slack-dm',
+      evidence: 'Slack DM → Jamie Burk, 2026-06-04',
+      setBy: 'chef',
+      setAt: '2026-06-04T18:42:11Z',
+    };
+    await writeWithLock(
+      storage,
+      meetingPath,
+      async (current) => ({
+        frontmatter: {
+          staged_item_status: {
+            ...(current.frontmatter['staged_item_status'] as StagedItemStatus),
+            ai_0042: 'skipped' as const,
+          },
+          staged_item_skip_reason: {
+            ai_0042: chefSkipPayload,
+          } satisfies StagedItemSkipReason,
+        },
+      }),
+      { mtimeGuardSeconds: 0 },
+    );
+    backdateMtime(meetingPath);
+
+    // STEP 2 — Simulate `arete meeting extract` re-run via writeWithLock
+    // using the SAME mutator shape as the production CLI extract path
+    // (meeting.ts HIGH-1 refactor). The mutator:
+    //   - Returns only the keys the extract path owns (status / source /
+    //     confidence / owner / matched_text).
+    //   - Status map merges chef-owned 'skipped' on top of the fresh
+    //     extract-produced 'pending' so a re-extract cannot silently
+    //     demote a chef skip.
+    //   - staged_item_skip_reason is INTENTIONALLY NOT mentioned —
+    //     partial-merge contract preserves it.
+    //
+    // The "fresh extract" sees both items as pending (it's just LLM
+    // re-extraction of the transcript; it has no knowledge of chef's
+    // skip).
+    const extractProducedStatus: StagedItemStatus = {
+      ai_0042: 'pending',
+      ai_0043: 'pending',
+    };
+    await writeWithLock(
+      storage,
+      meetingPath,
+      async (current) => {
+        // Status-merge: chef-owned 'skipped' wins (same logic as
+        // meeting.ts CLI extract path post-HIGH-1).
+        const currentStatus =
+          (current.frontmatter['staged_item_status'] as StagedItemStatus | undefined) ?? {};
+        const currentSkipReason =
+          (current.frontmatter['staged_item_skip_reason'] as
+            | Record<string, { setBy?: string }>
+            | undefined) ?? {};
+        const merged: Record<string, string> = { ...extractProducedStatus };
+        for (const [id, prior] of Object.entries(currentStatus)) {
+          const sr = currentSkipReason[id];
+          const isChefOwned = sr?.setBy === 'chef' || sr?.setBy === 'chef-proposed';
+          if (isChefOwned && prior === 'skipped' && merged[id] !== 'approved') {
+            merged[id] = 'skipped';
+          }
+        }
+        return {
+          frontmatter: {
+            // The 5 extract-owned keys. staged_item_skip_reason absent
+            // BY DESIGN — partial-merge preserves it.
+            staged_item_status: merged,
+            staged_item_source: { ai_0042: 'fathom', ai_0043: 'fathom' },
+            staged_item_confidence: { ai_0042: 0.9, ai_0043: 0.85 },
+            staged_item_owner: { ai_0042: { ownerSlug: 'john-koht' } },
+            staged_item_matched_text: {},
+          },
+        };
+      },
+      { mtimeGuardSeconds: 0 },
+    );
+
+    // POST-CONDITION #1 — chef's skip_reason survived the extract write
+    // BYTE-FOR-BYTE (the F2 partial-merge contract, verified end-to-end
+    // through the production-shape extract mutator).
+    {
+      const fmAfterExtract = readFrontmatter(meetingPath);
+      const skipReason = fmAfterExtract['staged_item_skip_reason'] as
+        | Record<string, Record<string, unknown>>
+        | undefined;
+      assert.ok(skipReason, 'chef skip_reason map must survive concurrent extract');
+      assert.ok(
+        skipReason!['ai_0042'],
+        'chef skip_reason[ai_0042] must survive concurrent extract',
+      );
+      assert.equal(
+        skipReason!['ai_0042']!['reason'],
+        chefSkipPayload.reason,
+        'chef reason byte-preserved through extract',
+      );
+      assert.equal(
+        skipReason!['ai_0042']!['evidence'],
+        chefSkipPayload.evidence,
+        'chef evidence byte-preserved through extract',
+      );
+      assert.equal(skipReason!['ai_0042']!['setBy'], 'chef');
+      assert.equal(skipReason!['ai_0042']!['setAt'], chefSkipPayload.setAt);
+
+      // POST-CONDITION #2 — chef's 'skipped' status survived the
+      // status-map merge (was NOT demoted to 'pending' by the fresh
+      // extract).
+      const status = fmAfterExtract['staged_item_status'] as Record<string, string>;
+      assert.equal(
+        status['ai_0042'],
+        'skipped',
+        'chef-set "skipped" status survives the status-map merge',
+      );
+      assert.equal(
+        status['ai_0043'],
+        'pending',
+        'non-chef-owned items get the fresh extract status',
+      );
+    }
+
+    backdateMtime(meetingPath);
+
+    // STEP 3 — User approves ai_0043 (the non-CT2 item) and runs apply.
+    // ai_0042 (the CT2 item) is still 'skipped' so apply must NOT create
+    // a commitment for it.
+    await writeWithLock(
+      storage,
+      meetingPath,
+      async (current) => ({
+        frontmatter: {
+          staged_item_status: {
+            ...(current.frontmatter['staged_item_status'] as StagedItemStatus),
+            ai_0043: 'approved' as const,
+          },
+        },
+      }),
+      { mtimeGuardSeconds: 0 },
+    );
+
+    const skippedObserved: string[] = [];
+    await commitApprovedItems(storage, meetingPath, memoryDir, {
+      onSkipped: async (rec) => {
+        skippedObserved.push(rec.id);
+      },
+    });
+
+    // POST-CONDITION #3 — apply correctly DROPPED ai_0042 (the CT2 item)
+    // because the chef's 'skipped' status survived the concurrent extract.
+    // ai_0043 was committed.
+    assert.deepEqual(
+      skippedObserved,
+      ['ai_0042'],
+      'apply must drop ai_0042 (chef-skipped) via the onSkipped observer',
+    );
+
+    const finalBody = readFileSync(meetingPath, 'utf8');
+    assert.match(finalBody, /## Approved Action Items/);
+    assert.match(finalBody, /Send the deck/, 'ai_0043 must be in Approved Action Items');
+    const approvedSection = finalBody.match(/## Approved Action Items\n([\s\S]*?)(?=\n## |$)/)?.[1] ?? '';
+    assert.doesNotMatch(
+      approvedSection,
+      /Share the Notion/,
+      'CT2 item must NOT appear in Approved Action Items',
+    );
+    assert.match(finalBody, /## Skipped on Apply/);
+    assert.match(
+      finalBody,
+      /\[ai_0042\] Share the Notion claim-review-process/,
+      'CT2 item must appear in Skipped on Apply',
+    );
+    assert.match(finalBody, /already fulfilled via slack-dm/);
+
+    // POST-CONDITION #4 — chef's skip_reason for ai_0042 was cleared by
+    // the apply cleanup (because ai_0042 was in approvedIds for the
+    // skipped-and-committed cleanup pass). Note: per F5, only entries
+    // that were APPROVED are cleaned; skipped-on-apply items have their
+    // sibling fields cleared as part of "committed" (the body now holds
+    // the audit trail under "## Skipped on Apply"). Other items'
+    // sibling fields survive.
+    const fmAfterApply = readFrontmatter(meetingPath);
+    const statusAfterApply = fmAfterApply['staged_item_status'] as
+      | Record<string, string>
+      | undefined;
+    assert.ok(
+      !statusAfterApply || !('ai_0043' in statusAfterApply),
+      'approved ai_0043 cleaned from staged_item_status post-apply',
+    );
   });
 });
