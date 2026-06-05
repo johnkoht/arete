@@ -65,7 +65,13 @@ export type AmbiguousName = {
     candidates: string[];
 };
 export type ExtractCounterpartiesResult = {
-    /** Resolved stakeholders. EMPTY when `ambiguous: true`. */
+    /**
+     * Resolved stakeholders. May be populated even when `ambiguous: true`
+     * — that case means "some names resolved, others need disambiguation"
+     * (LOW-4 / pre-mortem M3 mitigation; phase-10a-fixup). The migrate
+     * verb's apply gate still refuses on `ambiguous: true` until the
+     * sidecar resolves all ambiguous names.
+     */
     stakeholders: Stakeholder[];
     /**
      * Direction to use for the migrated row. Equal to the input direction

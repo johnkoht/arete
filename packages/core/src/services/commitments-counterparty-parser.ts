@@ -77,7 +77,13 @@ export type AmbiguousName = {
 };
 
 export type ExtractCounterpartiesResult = {
-  /** Resolved stakeholders. EMPTY when `ambiguous: true`. */
+  /**
+   * Resolved stakeholders. May be populated even when `ambiguous: true`
+   * — that case means "some names resolved, others need disambiguation"
+   * (LOW-4 / pre-mortem M3 mitigation; phase-10a-fixup). The migrate
+   * verb's apply gate still refuses on `ambiguous: true` until the
+   * sidecar resolves all ambiguous names.
+   */
   stakeholders: Stakeholder[];
   /**
    * Direction to use for the migrated row. Equal to the input direction
@@ -193,6 +199,25 @@ function isSelfPattern(text: string): boolean {
 }
 
 /**
+ * Conjunction continuation for multi-name lists (LOW-4 / pre-mortem M3
+ * mitigation). After matching `to <Name>`, we scan the trailing text for
+ * "<conjunction> <Name>" patterns and accumulate them as additional
+ * candidates. Supported conjunctions:
+ *   - " and "       — "to Lindsay and Anthony"
+ *   - " & "         — "to Lindsay & Anthony"
+ *   - ", "          — "to Lindsay, Anthony"
+ *   - ", and "      — "to Lindsay, Anthony, and Dave" (Oxford comma)
+ *
+ * The pattern is non-global on purpose — we run it iteratively from
+ * the end of the previous match so we can short-circuit on the first
+ * non-conjunction continuation. Same multi-word peek as the primary
+ * preposition path (so "to Lindsay Gray and Anthony" picks the full
+ * "Lindsay Gray").
+ */
+const CONJUNCTION_CONTINUATION_PATTERN =
+  /^\s*(?:,\s*and\s+|,\s*|\s+and\s+|\s+&\s+)([A-Z][a-z]+(?:-[A-Z][a-z]+)?)\b/;
+
+/**
  * Extract candidate name tokens from natural-language prepositions.
  * Returns the literal name strings (preserved case) in document order.
  * Duplicates are de-duplicated by lowercase key.
@@ -201,6 +226,14 @@ function isSelfPattern(text: string): boolean {
  * "to Lindsay" — we then peek the next token; if it's also capitalized
  * AND the combined "Lindsay Gray" resolves in the directory, we use the
  * combined form.
+ *
+ * Multi-name resolution (LOW-4 / pre-mortem M3 mitigation): when
+ * "to Lindsay and Anthony" appears, the primary preposition regex
+ * matches "to Lindsay" — we then scan the trailing text for
+ * conjunction-joined names ("and Anthony", ", Anthony", "& Anthony",
+ * ", and Anthony") and accumulate them. This avoids the silent
+ * "first-name-wins, rest-lost" gap where the diff report misleadingly
+ * shows the row resolved cleanly while subsequent names are dropped.
  */
 function extractNaturalLanguageNames(
   text: string,
@@ -216,8 +249,9 @@ function extractNaturalLanguageNames(
     const firstName = m[2];
     if (!firstName) continue;
     // Peek the next 1-2 tokens for a multi-word name.
-    const afterIdx = (m.index ?? 0) + m[0].length;
+    let afterIdx = (m.index ?? 0) + m[0].length;
     const tail = text.slice(afterIdx).match(/^\s+([A-Z][a-z]+)/);
+    let pushed: string | null = null;
     if (tail) {
       const combined = `${firstName} ${tail[1]}`;
       const combinedKey = normalizeLookupKey(combined);
@@ -226,13 +260,49 @@ function extractNaturalLanguageNames(
           seen.add(combinedKey);
           out.push(combined);
         }
-        continue;
+        pushed = combined;
+        // Advance afterIdx past the consumed second token so the
+        // conjunction-continuation scan starts from the right place.
+        afterIdx += (tail[0]?.length ?? 0);
       }
     }
-    const key = normalizeLookupKey(firstName);
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(firstName);
+    if (pushed === null) {
+      const key = normalizeLookupKey(firstName);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(firstName);
+      }
+      pushed = firstName;
+    }
+
+    // Multi-name conjunction continuation: scan forward for
+    // " and <Name>" / ", <Name>" / " & <Name>" / ", and <Name>".
+    // Each accepted continuation advances the cursor; we stop at the
+    // first non-conjunction continuation (or end of string).
+    let cursor = afterIdx;
+    while (cursor < text.length) {
+      const rest = text.slice(cursor);
+      const cm = rest.match(CONJUNCTION_CONTINUATION_PATTERN);
+      if (!cm) break;
+      const contFirst = cm[1];
+      const consumed = cm[0].length;
+      let nextCursor = cursor + consumed;
+      let nextName: string = contFirst;
+      // Peek for multi-word combined name in the continuation too.
+      const contTail = text.slice(nextCursor).match(/^\s+([A-Z][a-z]+)/);
+      if (contTail) {
+        const combined = `${contFirst} ${contTail[1]}`;
+        if (directory.has(normalizeLookupKey(combined))) {
+          nextName = combined;
+          nextCursor += (contTail[0]?.length ?? 0);
+        }
+      }
+      const key = normalizeLookupKey(nextName);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(nextName);
+      }
+      cursor = nextCursor;
     }
   }
   return out;
@@ -342,10 +412,20 @@ export function extractCounterpartiesFromText(
   }
 
   if (ambiguousNames.length > 0) {
-    // AC1e: ambiguous → empty stakeholders[], populated ambiguousNames.
-    // Caller (migration) surfaces these for user disambiguation.
+    // LOW-4 / pre-mortem M3 mitigation (phase-10a-fixup): when a row has
+    // BOTH ambiguous names AND cleanly-resolved names (e.g. "send to
+    // Lindsay and Anthony"), retain the cleanly-resolved stakeholders
+    // AND flag the remaining ambiguous names for disambiguation. The
+    // previous contract dropped ALL stakeholders on any ambiguity which
+    // forced sidecar disambiguation even for the unambiguous half — a
+    // worse UX and a higher risk of stakeholder gaps after --apply.
+    //
+    // AC1e is still honored: `ambiguous: true` + `ambiguousNames` are
+    // surfaced; the migrate verb's apply gate still refuses until the
+    // sidecar resolves all ambiguous names. The only behavior change is
+    // that the resolved subset is no longer hidden from the diff report.
     return {
-      stakeholders: [],
+      stakeholders: resolved,
       direction,
       ambiguous: true,
       ambiguousNames,

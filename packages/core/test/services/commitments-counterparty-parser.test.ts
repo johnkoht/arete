@@ -201,6 +201,120 @@ describe('Step 2 — natural language', () => {
   });
 });
 
+describe('Step 2 — multi-name natural language (LOW-4 / pre-mortem M3)', () => {
+  it('"to X and Y" → both stakeholders (Lindsay ambiguous + Anthony resolved)', () => {
+    const result = extractCounterpartiesFromText(
+      'send the deck to Lindsay and Anthony',
+      OWNER,
+      'i_owe_them',
+      buildTestDirectory(),
+    );
+    // Anthony resolves cleanly to anthony-avina; Lindsay is ambiguous.
+    // New contract (phase-10a-fixup): resolved stakeholders are kept
+    // even when other names are ambiguous.
+    assert.equal(result.ambiguous, true);
+    assert.equal(result.stakeholders.length, 1, 'Anthony resolved');
+    assert.equal(result.stakeholders[0].slug, 'anthony-avina');
+    assert.equal(result.stakeholders[0].role, 'recipient');
+    assert.equal(result.ambiguousNames!.length, 1);
+    assert.equal(result.ambiguousNames![0].name, 'Lindsay');
+  });
+
+  it('"to X and Y" with both unambiguous → two stakeholders', () => {
+    const result = extractCounterpartiesFromText(
+      'send the deck to Dave and Anthony',
+      OWNER,
+      'i_owe_them',
+      buildTestDirectory(),
+    );
+    assert.equal(result.ambiguous, false);
+    assert.equal(result.stakeholders.length, 2);
+    const slugs = result.stakeholders.map((s) => s.slug).sort();
+    assert.deepEqual(slugs, ['anthony-avina', 'dave-wiedenheft']);
+    for (const s of result.stakeholders) {
+      assert.equal(s.role, 'recipient');
+    }
+  });
+
+  it('"to X, Y, and Z" Oxford-comma list → three stakeholders', () => {
+    const result = extractCounterpartiesFromText(
+      'send the deck to Lindsay Calar, Anthony, and Dave',
+      OWNER,
+      'i_owe_them',
+      buildTestDirectory(),
+    );
+    assert.equal(result.ambiguous, false, 'Lindsay Calar disambiguates via combined key');
+    const slugs = result.stakeholders.map((s) => s.slug).sort();
+    assert.deepEqual(slugs, ['anthony-avina', 'dave-wiedenheft', 'lindsay-calar']);
+  });
+
+  it('"to X & Y" ampersand form → two stakeholders', () => {
+    const result = extractCounterpartiesFromText(
+      'send the deck to Dave & Anthony',
+      OWNER,
+      'i_owe_them',
+      buildTestDirectory(),
+    );
+    assert.equal(result.ambiguous, false);
+    const slugs = result.stakeholders.map((s) => s.slug).sort();
+    assert.deepEqual(slugs, ['anthony-avina', 'dave-wiedenheft']);
+  });
+
+  it('"to X, Y" comma-only list → two stakeholders', () => {
+    const result = extractCounterpartiesFromText(
+      'send the deck to Dave, Anthony',
+      OWNER,
+      'i_owe_them',
+      buildTestDirectory(),
+    );
+    assert.equal(result.ambiguous, false);
+    const slugs = result.stakeholders.map((s) => s.slug).sort();
+    assert.deepEqual(slugs, ['anthony-avina', 'dave-wiedenheft']);
+  });
+
+  it('"to <owner> and Y" → owner filtered, Y kept', () => {
+    // "to John and Anthony" — John is the workspace owner; he's excluded
+    // from stakeholders. Anthony remains the resolved recipient.
+    const result = extractCounterpartiesFromText(
+      'send the deck to John and Anthony',
+      OWNER,
+      'i_owe_them',
+      buildTestDirectory(),
+    );
+    assert.equal(result.ambiguous, false);
+    assert.equal(result.stakeholders.length, 1);
+    assert.equal(result.stakeholders[0].slug, 'anthony-avina');
+  });
+
+  it('"from X and Y" inbound → both stakeholders carry sender role', () => {
+    const result = extractCounterpartiesFromText(
+      'expect feedback from Dave and Anthony',
+      OWNER,
+      'they_owe_me',
+      buildTestDirectory(),
+    );
+    assert.equal(result.ambiguous, false);
+    assert.equal(result.stakeholders.length, 2);
+    for (const s of result.stakeholders) {
+      assert.equal(s.role, 'sender');
+    }
+  });
+
+  it('"to X and lowercase" → only X (lowercase is NOT a name continuation)', () => {
+    // Regression-pin: continuation requires a capitalized word. Generic
+    // English like "to Dave and the team" must NOT swallow "team" as a name.
+    const result = extractCounterpartiesFromText(
+      'send the deck to Dave and the team',
+      OWNER,
+      'i_owe_them',
+      buildTestDirectory(),
+    );
+    assert.equal(result.ambiguous, false);
+    assert.equal(result.stakeholders.length, 1);
+    assert.equal(result.stakeholders[0].slug, 'dave-wiedenheft');
+  });
+});
+
 describe('Step 2 — bare-name ambiguity (AC1e)', () => {
   it('"to Lindsay" with two Lindsays → ambiguous: true + ambiguousNames populated', () => {
     const result = extractCounterpartiesFromText(
@@ -232,11 +346,12 @@ describe('Step 2 — bare-name ambiguity (AC1e)', () => {
     assert.equal(result.stakeholders[0].slug, 'lindsay-calar');
   });
 
-  it('mixed: one resolvable, one ambiguous → reports ambiguous (caller surfaces)', () => {
+  it('mixed: one resolvable, one ambiguous → keeps resolved stakeholders AND flags ambiguity (phase-10a-fixup LOW-4)', () => {
     // Both prepositions present; Dave resolves cleanly, Lindsay is
-    // ambiguous (two candidates in the directory). The whole row
-    // surfaces as ambiguous so the user disambiguates BEFORE --apply
-    // (we don't silently pick Dave-only and drop Lindsay).
+    // ambiguous (two candidates in the directory). The migrate verb's
+    // apply gate still refuses on any ambiguity → user disambiguates
+    // BEFORE --apply via sidecar. BUT the diff report now shows the
+    // resolved subset so the user can see what we picked up cleanly.
     const result = extractCounterpartiesFromText(
       'Send the deck to Dave and follow up with Lindsay',
       OWNER,
@@ -244,7 +359,8 @@ describe('Step 2 — bare-name ambiguity (AC1e)', () => {
       buildTestDirectory(),
     );
     assert.equal(result.ambiguous, true);
-    assert.equal(result.stakeholders.length, 0);
+    assert.equal(result.stakeholders.length, 1, 'Dave is resolved');
+    assert.equal(result.stakeholders[0].slug, 'dave-wiedenheft');
     assert.equal(result.ambiguousNames!.length, 1);
     assert.equal(result.ambiguousNames![0].name, 'Lindsay');
   });

@@ -145,13 +145,38 @@ function parseRow(c, index, inputs) {
         }
         if (stillAmbiguous.length === 0) {
             // All ambiguities resolved via sidecar.
+            // phase-10a-fixup LOW-4: the parser may already have returned
+            // resolved stakeholders alongside ambiguous names (e.g. "to
+            // Lindsay and Anthony" → stakeholders=[anthony] + ambiguous=Lindsay).
+            // Merge sidecar-resolved with parser-resolved, de-duping by slug.
+            const merged = [...stakeholders];
+            const seen = new Set(merged.map((s) => s.slug));
+            for (const r of resolved) {
+                if (!seen.has(r.slug)) {
+                    seen.add(r.slug);
+                    merged.push(r);
+                }
+            }
             ambiguous = false;
             ambiguousNames = undefined;
-            stakeholders = resolved;
+            stakeholders = merged;
         }
         else {
             // Partial resolution — still ambiguous overall.
             ambiguousNames = stillAmbiguous;
+            // phase-10a-fixup LOW-4: also merge any newly-resolved-via-sidecar
+            // stakeholders into the resolved list so the diff report shows them.
+            if (resolved.length > 0) {
+                const merged = [...stakeholders];
+                const seen = new Set(merged.map((s) => s.slug));
+                for (const r of resolved) {
+                    if (!seen.has(r.slug)) {
+                        seen.add(r.slug);
+                        merged.push(r);
+                    }
+                }
+                stakeholders = merged;
+            }
         }
     }
     const selfRewritten = direction === 'self' &&
