@@ -40,6 +40,8 @@ export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampInt
 export type { ReverseStampRequest, ReverseStampResult, } from './commitment-dedup-reverse-stamp.js';
 export { sanitizeReasoning, renderDedupDecisionLine, payloadFromExtractDecision, appendDedupDecisionLog, appendDedupDecisionLogBatch, } from './dedup-decisions-log.js';
 export type { DedupDecisionKind, DedupDecisionLogPayload, DedupLLMTier, } from './dedup-decisions-log.js';
+export { parseDedupLog, filterLogForCommitment, lookupCommitmentById, formatExplainReport, } from './dedup-explain.js';
+export type { DedupLogEntry, CommitmentLookupResult, } from './dedup-explain.js';
 export { runBackgroundDedup, applyCommitmentsDedup, formatBackgroundDedupDiff, BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR, BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR, } from './background-dedup.js';
 export type { BackgroundDedupScope, BackgroundDedupGroup, BackgroundDedupDuplicate, BackgroundDedupCandidatePair, BackgroundDedupSummary, BackgroundDedupResult, RunBackgroundDedupInputs, MemorySectionInput, TopicPageInput, } from './background-dedup.js';
 export { wireExtractDedup, loadSameDayStagedItems, resolveMeetingSlugToPath, adaptFilteredItemsForDedup, } from './extract-dedup-wiring.js';

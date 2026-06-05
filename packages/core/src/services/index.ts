@@ -203,6 +203,18 @@ export type {
   DedupLLMTier,
 } from './dedup-decisions-log.js';
 
+// Phase 10b-aux — `arete dedup --explain <id>` provenance (Step 1, AC7)
+export {
+  parseDedupLog,
+  filterLogForCommitment,
+  lookupCommitmentById,
+  formatExplainReport,
+} from './dedup-explain.js';
+export type {
+  DedupLogEntry,
+  CommitmentLookupResult,
+} from './dedup-explain.js';
+
 // Phase 10e — background dedup hygiene engine
 export {
   runBackgroundDedup,

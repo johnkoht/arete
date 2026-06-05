@@ -32,6 +32,9 @@ import {
   parseMemorySections,
   runBackgroundDedup,
   applyCommitmentsDedup,
+  parseDedupLog,
+  lookupCommitmentById,
+  formatExplainReport,
   type BackgroundDedupScope,
   type RunBackgroundDedupInputs,
   type MemorySectionInput,
@@ -54,9 +57,13 @@ export function registerDedupCommand(program: Command): void {
     .description(
       'Background dedup hygiene pass. Reuses the reactive hybrid pipeline retroactively across an --since window. Default is --dry-run (writes diff report only); --apply mutates commitments.json under lock.',
     )
-    .requiredOption(
+    .option(
       '--scope <scope>',
-      `Scope: ${VALID_SCOPES.join(' | ')}`,
+      `Scope: ${VALID_SCOPES.join(' | ')} (required unless --explain is used)`,
+    )
+    .option(
+      '--explain <commitment-id>',
+      'Print dedup provenance for a single commitment (8-char prefix or full hash): canonical text, stakeholders, source meetings with merge events, textVariants, and dedup-decisions log entries. Read-only.',
     )
     .option(
       '--dry-run',
@@ -86,7 +93,8 @@ export function registerDedupCommand(program: Command): void {
     .option('--json', 'Output as JSON')
     .action(
       async (opts: {
-        scope: string;
+        scope?: string;
+        explain?: string;
         dryRun?: boolean;
         apply?: boolean;
         since?: string;
@@ -95,6 +103,22 @@ export function registerDedupCommand(program: Command): void {
         diffDir?: string;
         json?: boolean;
       }) => {
+        // ----- Explain mode (Phase 10b-aux, AC7) -----
+        // Branches BEFORE scope validation: --explain does not take a scope.
+        if (opts.explain) {
+          await runExplain(opts.explain, Boolean(opts.json));
+          return;
+        }
+
+        // Scope is required for all non-explain modes.
+        if (!opts.scope) {
+          const msg =
+            'Missing required option: --scope (or use --explain <commitment-id>)';
+          if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+          else error(msg);
+          process.exit(1);
+        }
+
         // Validate scope.
         if (!VALID_SCOPES.includes(opts.scope as BackgroundDedupScope)) {
           const msg = `Invalid --scope: "${opts.scope}". Must be one of: ${VALID_SCOPES.join(', ')}`;
@@ -268,6 +292,89 @@ export function registerDedupCommand(program: Command): void {
         });
       },
     );
+}
+
+// ---------------------------------------------------------------------------
+// Explain mode (Phase 10b-aux, AC7)
+// ---------------------------------------------------------------------------
+
+/**
+ * `arete dedup --explain <id>` — print provenance for one commitment.
+ *
+ * Read-only: loads commitments.json + dev/diary/dedup-decisions.log, resolves
+ * the commitment by full hash or short prefix, and renders the AC7 report.
+ * The log is best-effort observability (missing log → report still prints,
+ * with a "(no log entries)" note).
+ */
+async function runExplain(idOrPrefix: string, json: boolean): Promise<void> {
+  const services = await createServices(process.cwd());
+  const root = await services.workspace.findRoot();
+  if (!root) {
+    const msg = 'Not in an Areté workspace';
+    if (json) console.log(JSON.stringify({ success: false, error: msg }));
+    else {
+      error(msg);
+      info('Run "arete install" to create a workspace');
+    }
+    process.exit(1);
+  }
+
+  // Load commitments.json.
+  const commitmentsPath = join(root, '.arete/commitments.json');
+  const rawCommitments = await services.storage.read(commitmentsPath);
+  if (rawCommitments === null) {
+    const msg = `No commitments.json found at ${commitmentsPath}`;
+    if (json) console.log(JSON.stringify({ success: false, error: msg }));
+    else error(msg);
+    process.exit(1);
+  }
+  const commitments = parseCommitmentsFile(rawCommitments);
+
+  // Resolve the commitment.
+  const lookup = lookupCommitmentById(commitments, idOrPrefix);
+  if (lookup.kind === 'not-found') {
+    const msg = `No commitment matches "${idOrPrefix}" (full hash or hash prefix).`;
+    if (json) console.log(JSON.stringify({ success: false, error: msg }));
+    else error(msg);
+    process.exit(1);
+  }
+  if (lookup.kind === 'ambiguous') {
+    const ids = lookup.matches.map((c) => c.id.slice(0, 12));
+    const msg = `Prefix "${idOrPrefix}" matches ${lookup.matches.length} commitments: ${ids.join(', ')}… — use a longer prefix.`;
+    if (json) {
+      console.log(
+        JSON.stringify({ success: false, error: msg, matches: ids }),
+      );
+    } else error(msg);
+    process.exit(1);
+  }
+
+  // Load + parse the decisions log (best-effort — absence is fine).
+  const logPath = join(root, 'dev', 'diary', 'dedup-decisions.log');
+  let logEntries = parseDedupLog('');
+  try {
+    const rawLog = await services.storage.read(logPath);
+    if (rawLog !== null) logEntries = parseDedupLog(rawLog);
+  } catch {
+    // Best-effort: log read failure → empty provenance overlay.
+  }
+
+  const report = formatExplainReport(lookup.commitment, logEntries);
+  if (json) {
+    console.log(
+      JSON.stringify(
+        {
+          success: true,
+          id: lookup.commitment.id,
+          report,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    console.log(report);
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -322,6 +322,70 @@ export type Commitment = {
      * one variant on disk.
      */
     textVariants?: string[];
+    /**
+     * Who/what resolved this commitment (Phase 11 11a).
+     *
+     * Phase 10 had implicit `'user'` semantics (any `resolve()` call). Phase 11
+     * adds `'auto-gmail'` for Gmail-Sent-evidence auto-resolutions. The union is
+     * load-bearing for:
+     *  - the audit trail (`arete resolve --explain`),
+     *  - the `[[unresolve]]` filter (only `'auto-gmail'` + week-1-staged are
+     *    `[[unresolve]]`-eligible; `'user'`-resolved use `arete commitments
+     *    reopen` or `[[unconfirm]]` within 24h),
+     *  - the `--revert-all` mass-unresolve (AC13).
+     *
+     * Absent on open commitments and on pre-Phase-11 resolutions.
+     */
+    resolvedBy?: 'user' | 'auto-gmail';
+    /**
+     * Gmail thread URL (or other external evidence permalink) that fulfilled
+     * the commitment (Phase 11 11a). Clickable in winddown output. Preserved
+     * across `[[unresolve]]` as part of the audit trail (only `resolvedBy` /
+     * `resolvedConfidence` / `resolvedAt` clear; `resolvedEvidence` +
+     * `source_external[]` stay for forensics).
+     */
+    resolvedEvidence?: string;
+    /**
+     * Confidence of the auto-resolution (Phase 11 11a).
+     *
+     * Only `'HIGH'` ever writes to disk — MEDIUM is a winddown-surface-only
+     * "possibly done, confirm?" signal and never mutates a commitment (Q6).
+     * `[[confirm]]` on a MEDIUM-flagged item writes `'HIGH'` (user adjudicated).
+     */
+    resolvedConfidence?: 'HIGH' | 'MEDIUM';
+    /**
+     * Suppress-until marker for `[[unresolve]]` (Phase 11 11a, G5 structured).
+     *
+     * Set to `now + 14d` when the user `[[unresolve]]`s an auto-resolution.
+     * The auto-resolve pipeline checks this field BEFORE firing (Step 2a) and
+     * skips the commitment while `now < unresolveSuppressedUntil`. This is a
+     * STRUCTURED field, NOT a log-grep (G5) — the pre-check is a direct field
+     * comparison.
+     *
+     * Sentinel `'2100-01-01T00:00:00.000Z'` = permanent suppress
+     * (`[[unresolve <id> --permanent]]`, M4 / AC6c) — pipeline treats far-future
+     * identically to 14d.
+     */
+    unresolveSuppressedUntil?: string;
+    /**
+     * First-week confirm-gate marker (Phase 11 11a, F2 / AC2a).
+     *
+     * During days 1-7 post-ship, a HIGH-confidence match STAGES the resolve by
+     * setting this field WITHOUT mutating `status` — the commitment stays
+     * `'open'` and is surfaced under "Staged for confirm" with full inline
+     * evidence. Cleared on `[[confirm]]` (converts to user-resolve) or
+     * `[[unresolve]]` (rejects + 14d suppress).
+     */
+    resolveStagedAt?: string;
+    /**
+     * `[[unconfirm]]` 24h-recovery marker (Phase 11 11a, F2 / AC2b).
+     *
+     * Set to `now` when a `[[confirm]]` writes a user-resolve. Within 24h, an
+     * `[[unconfirm <id>]]` directive can flip the resolution back to staged
+     * (re-evaluation). Outside the 24h window, `[[unconfirm]]` is a no-op and
+     * the user must use `arete commitments reopen` / `[[unresolve]]`.
+     */
+    confirmedAt?: string;
 };
 /** Persisted commitments file structure */
 export type CommitmentsFile = {

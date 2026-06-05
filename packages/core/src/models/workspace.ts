@@ -18,7 +18,9 @@ export type AITask =
   | 'significance_analysis'
   | 'reconciliation'
   | 'synthesis'
-  | 'brief';
+  | 'brief'
+  /** Phase 11 11a — Gmail Sent auto-resolution cross-check (fast tier, eng MC2). */
+  | 'external_resolution';
 
 /** AI tier levels */
 export type AITier = 'fast' | 'standard' | 'frontier';

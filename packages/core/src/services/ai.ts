@@ -87,6 +87,10 @@ const DEFAULT_TASK_TIERS: Record<AITask, AITier> = {
   reconciliation: 'standard',
   synthesis: 'standard',
   brief: 'standard',
+  // Phase 11 11a — fast tier per AC3a (precision floor ≥0.95 with the
+  // hybrid pre-filter doing the heavy throttling). Promote to standard only
+  // if golden-set precision drops below 0.95.
+  external_resolution: 'fast',
 };
 
 /**
