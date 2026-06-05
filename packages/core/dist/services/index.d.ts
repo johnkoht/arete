@@ -38,6 +38,8 @@ export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWi
 export type { ExtractDedupDecision, ExtractDedupInputs, ExtractedItemForExtractDedup, } from './commitment-dedup-extract.js';
 export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampIntoBody, applyReverseStamp, } from './commitment-dedup-reverse-stamp.js';
 export type { ReverseStampRequest, ReverseStampResult, } from './commitment-dedup-reverse-stamp.js';
+export { sanitizeReasoning, renderDedupDecisionLine, payloadFromExtractDecision, appendDedupDecisionLog, appendDedupDecisionLogBatch, } from './dedup-decisions-log.js';
+export type { DedupDecisionKind, DedupDecisionLogPayload, DedupLLMTier, } from './dedup-decisions-log.js';
 export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
 export type { Disambiguations, MigrationRowCategory, MigrationDiffRow, MigrationResult, MigrationInputs, } from './migrations/migrate-to-v2.js';
 export { isCommitmentsV2Active, isCommitmentsV2ActiveFromConfig, } from './commitments-v2-flag.js';

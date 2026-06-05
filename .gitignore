@@ -122,6 +122,12 @@ npm-debug.log*
 # its own line.
 dev/diary/chef-skip-log.md
 
+# Dedup-decisions audit log (phase-10b-min Step 6, AC9) — local-only
+# soak observability. Matches Phase 9's brief-invocations.log convention
+# (already covered by *.log above; this line is here for documentation
+# next to its sibling chef-skip-log).
+dev/diary/dedup-decisions.log
+
 # Temporary files
 *.tmp
 *.temp

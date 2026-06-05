@@ -35,6 +35,8 @@ export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPip
 export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWithDupeBadges, buildDupeSkipReasonEntries, buildDupeStatusEntries, } from './commitment-dedup-extract.js';
 // Phase 10b-min — reverse-stamp on canonical's meeting (Step 5)
 export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampIntoBody, applyReverseStamp, } from './commitment-dedup-reverse-stamp.js';
+// Phase 10b-min — dedup-decisions audit log writer (Step 6, AC9)
+export { sanitizeReasoning, renderDedupDecisionLine, payloadFromExtractDecision, appendDedupDecisionLog, appendDedupDecisionLogBatch, } from './dedup-decisions-log.js';
 // Phase 10a v2 — migration engine (Step 4)
 export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
 // Phase 10a v2 — feature flag for v2 read path (Step 5)

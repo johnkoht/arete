@@ -189,6 +189,20 @@ export type {
   ReverseStampResult,
 } from './commitment-dedup-reverse-stamp.js';
 
+// Phase 10b-min — dedup-decisions audit log writer (Step 6, AC9)
+export {
+  sanitizeReasoning,
+  renderDedupDecisionLine,
+  payloadFromExtractDecision,
+  appendDedupDecisionLog,
+  appendDedupDecisionLogBatch,
+} from './dedup-decisions-log.js';
+export type {
+  DedupDecisionKind,
+  DedupDecisionLogPayload,
+  DedupLLMTier,
+} from './dedup-decisions-log.js';
+
 // Phase 10a v2 — migration engine (Step 4)
 export {
   migrateCommitmentsToV2,
