@@ -33,6 +33,8 @@ export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitme
 export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPipeline, commitmentToDedupInput, buildCrossCheckPrompt, parseCrossCheckResponse, tokenizeForJaccard, jaccardSimilarity as dedupJaccardSimilarity, extractSlugMentions, buildPersonSlugSet, DEDUP_JACCARD_THRESHOLD, DEDUP_CANDIDATE_CAP, } from './commitment-dedup-pipeline.js';
 // Phase 10b-min — extract-time dedup orchestration (Step 2)
 export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWithDupeBadges, buildDupeSkipReasonEntries, buildDupeStatusEntries, } from './commitment-dedup-extract.js';
+// Phase 10b-min — reverse-stamp on canonical's meeting (Step 5)
+export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampIntoBody, applyReverseStamp, } from './commitment-dedup-reverse-stamp.js';
 // Phase 10a v2 — migration engine (Step 4)
 export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
 // Phase 10a v2 — feature flag for v2 read path (Step 5)

@@ -177,6 +177,18 @@ export type {
   ExtractedItemForExtractDedup,
 } from './commitment-dedup-extract.js';
 
+// Phase 10b-min — reverse-stamp on canonical's meeting (Step 5)
+export {
+  buildReverseStampMarker,
+  matchReverseStampMarker,
+  insertReverseStampIntoBody,
+  applyReverseStamp,
+} from './commitment-dedup-reverse-stamp.js';
+export type {
+  ReverseStampRequest,
+  ReverseStampResult,
+} from './commitment-dedup-reverse-stamp.js';
+
 // Phase 10a v2 — migration engine (Step 4)
 export {
   migrateCommitmentsToV2,
