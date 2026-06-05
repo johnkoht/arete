@@ -84,6 +84,8 @@ export type {
   WriteWithLockOptions,
   WriteWithLockResult,
 } from './meeting-lock.js';
+export { appendChefSkipLog } from './chef-skip-log.js';
+export type { ChefSkipAction, ChefSkipPayload } from './chef-skip-log.js';
 export type {
   PriorityLevel,
   CommitmentPriorityInput,

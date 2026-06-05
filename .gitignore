@@ -116,6 +116,12 @@ GUIDE.md
 *.log
 npm-debug.log*
 
+# Chef-skip audit log (phase-10-followup-2 F4 mitigation) — local-only
+# soak observability. Matches Phase 9's brief-invocations.log convention
+# (covered by *.log above); chef-skip-log.md uses .md extension so needs
+# its own line.
+dev/diary/chef-skip-log.md
+
 # Temporary files
 *.tmp
 *.temp
