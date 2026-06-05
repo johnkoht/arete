@@ -2,7 +2,7 @@
  * Services barrel export.
  */
 export { ContextService } from './context.js';
-export { MemoryService, getMemoryItemsForTopics } from './memory.js';
+export { MemoryService, getMemoryItemsForTopics, parseMemorySections } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 export { formatPersonBriefMarkdown, formatProjectBriefMarkdown, formatAreaBriefMarkdown, formatMeetingBriefMarkdown, } from './brief-formatters.js';

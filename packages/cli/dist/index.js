@@ -38,6 +38,7 @@ import { registerInboxCommand } from './commands/inbox.js';
 import { registerHygieneCommand } from './commands/hygiene.js';
 import { registerCostCommand } from './commands/cost.js';
 import { registerEventsCommand } from './commands/events.js';
+import { registerDedupCommand } from './commands/dedup.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -161,5 +162,6 @@ registerInboxCommand(program);
 registerHygieneCommand(program);
 registerCostCommand(program);
 registerEventsCommand(program);
+registerDedupCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

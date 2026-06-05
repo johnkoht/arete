@@ -3,7 +3,7 @@
  */
 
 export { ContextService } from './context.js';
-export { MemoryService, getMemoryItemsForTopics } from './memory.js';
+export { MemoryService, getMemoryItemsForTopics, parseMemorySections } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 // Phase 9 — typed-mode brief markdown formatters
