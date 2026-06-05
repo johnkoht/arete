@@ -118,6 +118,12 @@ export type {
   AddCreatedAtReport,
   AddCreatedAtPerEntryResult,
 } from './migrations/add-created-at.js';
+
+// Phase 10a v2 — commitment hash + text normalization (Step 2)
+export {
+  normalizeCommitmentTextV2,
+  computeCommitmentHashV2,
+} from './commitments-hash-v2.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type {
   AICallOptions,
