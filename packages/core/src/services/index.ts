@@ -136,6 +136,33 @@ export type {
   ExtractCounterpartiesResult,
 } from './commitments-counterparty-parser.js';
 
+// Phase 10b-min — reactive cross-meeting dedup pipeline (Step 1)
+export {
+  findDedupCandidates,
+  runLLMCrossCheck,
+  applyDedupDecisions,
+  runDedupPipeline,
+  commitmentToDedupInput,
+  buildCrossCheckPrompt,
+  parseCrossCheckResponse,
+  tokenizeForJaccard,
+  jaccardSimilarity as dedupJaccardSimilarity,
+  extractSlugMentions,
+  buildPersonSlugSet,
+  DEDUP_JACCARD_THRESHOLD,
+  DEDUP_CANDIDATE_CAP,
+} from './commitment-dedup-pipeline.js';
+export type {
+  ExtractedItemForDedup,
+  ExistingCommitmentForDedup,
+  DedupCandidate,
+  FindCandidatesResult,
+  ExactMatchDecision,
+  LLMPairDecision,
+  DedupOutcome,
+  LLMCallConcurrentFn,
+} from './commitment-dedup-pipeline.js';
+
 // Phase 10a v2 — migration engine (Step 4)
 export {
   migrateCommitmentsToV2,

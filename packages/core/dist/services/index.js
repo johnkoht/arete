@@ -29,6 +29,8 @@ export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serialize
 export { normalizeCommitmentTextV2, computeCommitmentHashV2, } from './commitments-hash-v2.js';
 // Phase 10a v2 — counterparty parser (Step 3)
 export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitments-counterparty-parser.js';
+// Phase 10b-min — reactive cross-meeting dedup pipeline (Step 1)
+export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPipeline, commitmentToDedupInput, buildCrossCheckPrompt, parseCrossCheckResponse, tokenizeForJaccard, jaccardSimilarity as dedupJaccardSimilarity, extractSlugMentions, buildPersonSlugSet, DEDUP_JACCARD_THRESHOLD, DEDUP_CANDIDATE_CAP, } from './commitment-dedup-pipeline.js';
 // Phase 10a v2 — migration engine (Step 4)
 export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
 // Phase 10a v2 — feature flag for v2 read path (Step 5)

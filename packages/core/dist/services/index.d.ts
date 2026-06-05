@@ -32,6 +32,8 @@ export type { AddCreatedAtReport, AddCreatedAtPerEntryResult, } from './migratio
 export { normalizeCommitmentTextV2, computeCommitmentHashV2, } from './commitments-hash-v2.js';
 export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitments-counterparty-parser.js';
 export type { PersonDirectory, AmbiguousName, ExtractCounterpartiesResult, } from './commitments-counterparty-parser.js';
+export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPipeline, commitmentToDedupInput, buildCrossCheckPrompt, parseCrossCheckResponse, tokenizeForJaccard, jaccardSimilarity as dedupJaccardSimilarity, extractSlugMentions, buildPersonSlugSet, DEDUP_JACCARD_THRESHOLD, DEDUP_CANDIDATE_CAP, } from './commitment-dedup-pipeline.js';
+export type { ExtractedItemForDedup, ExistingCommitmentForDedup, DedupCandidate, FindCandidatesResult, ExactMatchDecision, LLMPairDecision, DedupOutcome, LLMCallConcurrentFn, } from './commitment-dedup-pipeline.js';
 export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
 export type { Disambiguations, MigrationRowCategory, MigrationDiffRow, MigrationResult, MigrationInputs, } from './migrations/migrate-to-v2.js';
 export { isCommitmentsV2Active, isCommitmentsV2ActiveFromConfig, } from './commitments-v2-flag.js';
