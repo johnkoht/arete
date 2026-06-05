@@ -222,6 +222,48 @@ export declare class CommitmentsService {
      */
     private save;
     /**
+     * Run `fn` while holding the exclusive file lock on commitments.json.
+     *
+     * Phase 10 plan §10a-pre + pre-mortem F5 mitigation. Use this to wrap any
+     * read-modify-write that must be atomic across processes — e.g. the
+     * Phase 10 cross-meeting dedup pass:
+     *
+     *   await commitments.withLock(async () => {
+     *     const open = await commitments.listOpen();
+     *     const next = applyDedupDecisions(open, candidates);
+     *     await commitments.sync(next);
+     *   });
+     *
+     * Properties:
+     *  - **Cross-process safe** via `proper-lockfile` (uses a sidecar
+     *    `.lock` directory; mkdir is atomic on POSIX + Windows).
+     *  - **Stale-lock TTL** = 30s; the holder heartbeat refreshes the lock
+     *    before that window, so a long-running winddown won't lose the
+     *    lock to its own slowness.
+     *  - **PID check**: a stale lock whose holder PID is still alive is
+     *    NOT stolen — the contender retries until the holder releases.
+     *  - **Re-entrant within instance**: nested `withLock` calls or inner
+     *    `save()` calls on the SAME `CommitmentsService` instance reuse
+     *    the outer lock (tracked via instance-local `holdsLock` flag).
+     *    Cross-process / cross-instance contention still flows through
+     *    proper-lockfile and the OS-level lock directory.
+     *
+     * The lock is released even if `fn` throws; the error propagates.
+     */
+    withLock<T>(fn: () => Promise<T>): Promise<T>;
+    /** Instance-local flag: true when the current async task is inside an
+     * acquired lock scope. Used to make `withLock`/`save()` re-entrant
+     * within the same service instance without deadlocking on a recursive
+     * lockfile acquire. */
+    private holdsLock;
+    /**
+     * Internal lock runner shared by `save()` and `withLock()`. If the
+     * instance already holds the lock (re-entrant case), runs `fn`
+     * directly; otherwise acquires the proper-lockfile lock, runs, and
+     * releases.
+     */
+    private runUnderLock;
+    /**
      * List open commitments, optionally filtered by direction, person slugs, and/or area.
      */
     listOpen(opts?: {

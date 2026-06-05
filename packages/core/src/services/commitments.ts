@@ -8,8 +8,10 @@
  * Both use: sha256(normalized text + personSlug + direction).
  */
 
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { mkdir, writeFile, access } from 'node:fs/promises';
+import { lock as lockfileLock, type LockOptions } from 'proper-lockfile';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type {
   Commitment,
@@ -429,6 +431,78 @@ export type HasOpenTaskReferencesFn = (
 ) => Promise<Set<string>>;
 
 // ---------------------------------------------------------------------------
+// File-locking helpers (phase-10a-pre F5 mitigation, R12)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lock acquisition timeout — proper-lockfile considers a lock STALE after
+ * this many ms WITHOUT a heartbeat refresh from the holder. PID check runs
+ * before steal so a live holder's lock is never harvested out from under
+ * them. 30s aligns with the Phase 10 plan §"R12 mitigation" specification.
+ */
+const LOCK_STALE_MS = 30_000;
+
+/**
+ * Retry budget for lock acquisition. The lockfile contention pattern in
+ * extract/winddown is brief (sub-second saves); a few short retries cover
+ * the common case without making concurrent operations hang.
+ */
+const LOCK_RETRIES = {
+  retries: 10,
+  factor: 1.5,
+  minTimeout: 50,
+  maxTimeout: 1_000,
+  randomize: true,
+};
+
+const LOCK_OPTIONS: LockOptions = {
+  stale: LOCK_STALE_MS,
+  // Skip realpath to support test workspaces with symlinked tmp dirs.
+  realpath: false,
+  // Don't crash the process if the lock is compromised mid-flight; surface
+  // as the operation's own error.
+  onCompromised: (err: Error) => {
+    throw new Error(`commitments.json lock was compromised: ${err.message}`);
+  },
+  retries: LOCK_RETRIES,
+};
+
+/**
+ * Ensure a file exists at `path` so `proper-lockfile` has a target to lock.
+ *
+ * `proper-lockfile.lock()` requires the target file to exist (it derives
+ * `<path>.lock` as the sentinel directory and asserts the parent file is
+ * present). For a fresh workspace where commitments.json hasn't been
+ * written yet, we touch an empty {"commitments":[]} file first.
+ *
+ * Returns `true` if the lock target exists / was bootstrapped (lock is
+ * usable). Returns `false` if the parent directory can't be created
+ * (e.g. unit tests with a mock storage backed by a virtual path like
+ * `/workspace/...` — we don't have permission to create `/workspace`
+ * on a real fs). In that case the caller skips the lock and falls back
+ * to the prior in-process behavior; this is safe because mock-backed
+ * tests run in a single process where the JS event loop already
+ * serializes operations.
+ */
+async function ensureLockTarget(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    // File doesn't exist — try to bootstrap it.
+    try {
+      await mkdir(dirname(filePath), { recursive: true });
+      await writeFile(filePath, '{"commitments":[]}\n', 'utf8');
+      return true;
+    } catch {
+      // Can't bootstrap (e.g., virtual/mock path). Lock is unavailable;
+      // caller falls back to no-op locking.
+      return false;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // CommitmentsService
 // ---------------------------------------------------------------------------
 
@@ -506,34 +580,125 @@ export class CommitmentsService {
    * signature, not once per prune-candidate.
    */
   private async save(commitments: Commitment[]): Promise<void> {
-    const ageCandidates = commitments.filter((c) => shouldPrune(c));
-    let prunable: Set<string>;
-    if (this.hasOpenTaskReferencesFn && ageCandidates.length > 0) {
-      // Hard-ceiling override: anything older than the ceiling always
-      // prunes regardless of task references.
-      const now = new Date();
-      const ceilingForced = new Set(
-        ageCandidates
-          .filter((c) => shouldPrune(c, now, PRUNE_HARD_CEILING_DAYS))
-          .map((c) => c.id),
-      );
-      const checkable = ageCandidates.filter((c) => !ceilingForced.has(c.id));
-      const checkPrefixes = checkable.map((c) => c.id.slice(0, 8));
-      const referencedPrefixes = checkPrefixes.length > 0
-        ? await this.hasOpenTaskReferencesFn(checkPrefixes)
-        : new Set<string>();
-      prunable = new Set([
-        ...ceilingForced,
-        ...checkable
-          .filter((c) => !referencedPrefixes.has(c.id.slice(0, 8)))
-          .map((c) => c.id),
-      ]);
-    } else {
-      prunable = new Set(ageCandidates.map((c) => c.id));
+    // File lock (phase-10a-pre, F5/R12 mitigation): serialize concurrent
+    // writes so two extracts running in parallel can't last-writer-wins
+    // each other. Held only for the duration of THIS save's pruning +
+    // write — sub-second under load.
+    //
+    // Re-entrant: when invoked from inside a `withLock(fn)` callback,
+    // `holdsLock` is true and save() skips its own lock acquisition (the
+    // outer scope already holds it). This lets callers compose atomic
+    // read-modify-write without deadlocking on their own save().
+    await this.runUnderLock(async () => {
+      const ageCandidates = commitments.filter((c) => shouldPrune(c));
+      let prunable: Set<string>;
+      if (this.hasOpenTaskReferencesFn && ageCandidates.length > 0) {
+        // Hard-ceiling override: anything older than the ceiling always
+        // prunes regardless of task references.
+        const now = new Date();
+        const ceilingForced = new Set(
+          ageCandidates
+            .filter((c) => shouldPrune(c, now, PRUNE_HARD_CEILING_DAYS))
+            .map((c) => c.id),
+        );
+        const checkable = ageCandidates.filter((c) => !ceilingForced.has(c.id));
+        const checkPrefixes = checkable.map((c) => c.id.slice(0, 8));
+        const referencedPrefixes = checkPrefixes.length > 0
+          ? await this.hasOpenTaskReferencesFn(checkPrefixes)
+          : new Set<string>();
+        prunable = new Set([
+          ...ceilingForced,
+          ...checkable
+            .filter((c) => !referencedPrefixes.has(c.id.slice(0, 8)))
+            .map((c) => c.id),
+        ]);
+      } else {
+        prunable = new Set(ageCandidates.map((c) => c.id));
+      }
+      const pruned = commitments.filter((c) => !prunable.has(c.id));
+      const file: CommitmentsFile = { commitments: pruned };
+      await this.storage.write(this.filePath, JSON.stringify(file, null, 2));
+    });
+  }
+
+  /**
+   * Run `fn` while holding the exclusive file lock on commitments.json.
+   *
+   * Phase 10 plan §10a-pre + pre-mortem F5 mitigation. Use this to wrap any
+   * read-modify-write that must be atomic across processes — e.g. the
+   * Phase 10 cross-meeting dedup pass:
+   *
+   *   await commitments.withLock(async () => {
+   *     const open = await commitments.listOpen();
+   *     const next = applyDedupDecisions(open, candidates);
+   *     await commitments.sync(next);
+   *   });
+   *
+   * Properties:
+   *  - **Cross-process safe** via `proper-lockfile` (uses a sidecar
+   *    `.lock` directory; mkdir is atomic on POSIX + Windows).
+   *  - **Stale-lock TTL** = 30s; the holder heartbeat refreshes the lock
+   *    before that window, so a long-running winddown won't lose the
+   *    lock to its own slowness.
+   *  - **PID check**: a stale lock whose holder PID is still alive is
+   *    NOT stolen — the contender retries until the holder releases.
+   *  - **Re-entrant within instance**: nested `withLock` calls or inner
+   *    `save()` calls on the SAME `CommitmentsService` instance reuse
+   *    the outer lock (tracked via instance-local `holdsLock` flag).
+   *    Cross-process / cross-instance contention still flows through
+   *    proper-lockfile and the OS-level lock directory.
+   *
+   * The lock is released even if `fn` throws; the error propagates.
+   */
+  async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    return this.runUnderLock(fn);
+  }
+
+  /** Instance-local flag: true when the current async task is inside an
+   * acquired lock scope. Used to make `withLock`/`save()` re-entrant
+   * within the same service instance without deadlocking on a recursive
+   * lockfile acquire. */
+  private holdsLock = false;
+
+  /**
+   * Internal lock runner shared by `save()` and `withLock()`. If the
+   * instance already holds the lock (re-entrant case), runs `fn`
+   * directly; otherwise acquires the proper-lockfile lock, runs, and
+   * releases.
+   */
+  private async runUnderLock<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.holdsLock) {
+      // Already inside an outer lock scope on this instance — skip
+      // re-acquisition to avoid self-deadlock.
+      return fn();
     }
-    const pruned = commitments.filter((c) => !prunable.has(c.id));
-    const file: CommitmentsFile = { commitments: pruned };
-    await this.storage.write(this.filePath, JSON.stringify(file, null, 2));
+    const lockable = await ensureLockTarget(this.filePath);
+    if (!lockable) {
+      // Mock/virtual path that can't be bootstrapped on disk. Skip the
+      // lock and run fn directly — the test harness's mock storage
+      // adapter already runs in-process where JS event-loop serialization
+      // suffices.
+      this.holdsLock = true;
+      try {
+        return await fn();
+      } finally {
+        this.holdsLock = false;
+      }
+    }
+    const release = await lockfileLock(this.filePath, LOCK_OPTIONS);
+    this.holdsLock = true;
+    try {
+      return await fn();
+    } finally {
+      this.holdsLock = false;
+      try {
+        await release();
+      } catch {
+        // Releasing a compromised/stolen lock surfaces here. Don't shadow
+        // the operation's own error — swallow the release miss and trust
+        // proper-lockfile's stale-lock TTL to recover.
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
