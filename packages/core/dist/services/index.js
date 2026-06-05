@@ -22,6 +22,7 @@ export { readPersonChannels, computeChannelsAudit, CHANNEL_FIELD_NAMES, } from '
 export { CommitmentsService, computeCommitmentPriority, computeCounterpartyOverlap, getCommitmentCounterpartySlugs, LockBootstrapError, } from './commitments.js';
 export { writeWithLock } from './meeting-lock.js';
 export { appendChefSkipLog } from './chef-skip-log.js';
+export { parseChefSkipDirectives, resolveChefSkipDirective, formatDirectiveStatusMessage, } from './chef-skip-directives.js';
 // Migrations (phase-10a-pre and onward)
 export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
 export { AIService, parseModelSpec } from './ai.js';

@@ -86,6 +86,17 @@ export type {
 } from './meeting-lock.js';
 export { appendChefSkipLog } from './chef-skip-log.js';
 export type { ChefSkipAction, ChefSkipPayload } from './chef-skip-log.js';
+export {
+  parseChefSkipDirectives,
+  resolveChefSkipDirective,
+  formatDirectiveStatusMessage,
+} from './chef-skip-directives.js';
+export type {
+  ChefSkipDirective,
+  ChefSkipDirectiveKind,
+  ResolvedDirective,
+  ResolveOptions,
+} from './chef-skip-directives.js';
 export type {
   PriorityLevel,
   CommitmentPriorityInput,

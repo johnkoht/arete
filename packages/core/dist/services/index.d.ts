@@ -24,6 +24,8 @@ export { writeWithLock } from './meeting-lock.js';
 export type { MeetingFrontmatterRead, MeetingMutationResult, MeetingMutator, WriteWithLockOptions, WriteWithLockResult, } from './meeting-lock.js';
 export { appendChefSkipLog } from './chef-skip-log.js';
 export type { ChefSkipAction, ChefSkipPayload } from './chef-skip-log.js';
+export { parseChefSkipDirectives, resolveChefSkipDirective, formatDirectiveStatusMessage, } from './chef-skip-directives.js';
+export type { ChefSkipDirective, ChefSkipDirectiveKind, ResolvedDirective, ResolveOptions, } from './chef-skip-directives.js';
 export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, CreateCommitmentOptions, CreateCommitmentResult, CreateTaskFn, CommitmentLike, } from './commitments.js';
 export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
 export type { AddCreatedAtReport, AddCreatedAtPerEntryResult, } from './migrations/add-created-at.js';
