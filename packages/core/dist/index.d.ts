@@ -53,8 +53,8 @@ export type { GoogleCalendarCredentials } from './integrations/calendar/google-a
 export { KrispMcpClient } from './integrations/krisp/client.js';
 export { loadKrispCredentials, saveKrispCredentials, } from './integrations/krisp/config.js';
 export type { KrispCredentials } from './integrations/krisp/config.js';
-export { detectGws, gwsExec, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider, GmailProvider, getGmailProvider, GwsDriveProvider, getGwsDriveProvider, GwsDocsProvider, getGwsDocsProvider, GwsSheetsProvider, getGwsSheetsProvider, GwsDirectoryProvider, getGwsDirectoryProvider, GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, } from './integrations/gws/index.js';
-export type { GwsDetectionResult, GwsExecOptions, GwsDeps, EmailThread, DriveFile, DocMetadata, SheetRange, DirectoryPerson, EmailProvider, DriveProvider, DocsProvider, SheetsProvider, DirectoryProvider, } from './integrations/gws/index.js';
+export { detectGws, gwsExec, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider, GmailProvider, getGmailProvider, GwsDriveProvider, getGwsDriveProvider, GwsDocsProvider, getGwsDocsProvider, GwsSheetsProvider, getGwsSheetsProvider, GwsDirectoryProvider, getGwsDirectoryProvider, GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, GMAIL_SENT_CACHE_VERSION, normalizeEmail, } from './integrations/gws/index.js';
+export type { GwsDetectionResult, GwsExecOptions, GwsDeps, EmailThread, GmailSentCache, DriveFile, DocMetadata, SheetRange, DirectoryPerson, EmailProvider, DriveProvider, DocsProvider, SheetsProvider, DirectoryProvider, } from './integrations/gws/index.js';
 export { pullNotionPages } from './integrations/notion/index.js';
 export { loadNotionApiKey } from './integrations/notion/config.js';
 export { resolvePageId } from './integrations/notion/url.js';

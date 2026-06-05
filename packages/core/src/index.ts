@@ -265,12 +265,15 @@ export {
   GwsAuthError,
   GwsTimeoutError,
   GwsExecError,
+  GMAIL_SENT_CACHE_VERSION,
+  normalizeEmail,
 } from './integrations/gws/index.js';
 export type {
   GwsDetectionResult,
   GwsExecOptions,
   GwsDeps,
   EmailThread,
+  GmailSentCache,
   DriveFile,
   DocMetadata,
   SheetRange,

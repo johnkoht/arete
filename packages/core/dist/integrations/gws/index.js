@@ -4,7 +4,7 @@
  * Phase 0: detection + generic CLI wrapper.
  * Phase 1+: email, drive, docs providers.
  */
-export { GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, } from './types.js';
+export { GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, GMAIL_SENT_CACHE_VERSION, normalizeEmail, } from './types.js';
 export { detectGws } from './detection.js';
 export { gwsExec } from './client.js';
 export { GmailProvider, getGmailProvider } from './gmail.js';
