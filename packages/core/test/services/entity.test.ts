@@ -16,10 +16,17 @@ import {
   updatePeopleIndex,
   slugifyPersonName,
 } from '../../src/compat/entity.js';
-import { EntityService } from '../../src/services/entity.js';
+import {
+  EntityService,
+  normalizeStanceTokens,
+  stanceJaccardSimilarity,
+  dedupeStancesByJaccard,
+  STANCE_JACCARD_DEDUP_THRESHOLD,
+} from '../../src/services/entity.js';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 import type { ResolvedEntity } from '../../src/models/entities.js';
+import type { PersonStance } from '../../src/services/person-signals.js';
 
 function makePaths(root: string): WorkspacePaths {
   return {
@@ -579,5 +586,195 @@ category: users`,
     const dan = result.gaps.find((g) => g.slug === 'dan');
     assert.ok(dan);
     assert.deepEqual(dan.populated, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 9 followup-6 — Jaccard cross-session stance dedup
+// ---------------------------------------------------------------------------
+
+function makeStance(topic: string, direction: PersonStance['direction'], source = 'm.md'): PersonStance {
+  return {
+    topic,
+    direction,
+    summary: `summary for ${topic}`,
+    evidenceQuote: 'q',
+    justification: 'j',
+    source,
+    date: '2025-01-01',
+  };
+}
+
+describe('normalizeStanceTokens', () => {
+  it('lowercases, strips non-alphanumeric, drops tokens of length ≤ 2', () => {
+    const tokens = normalizeStanceTokens('Product Focus on Revenue!');
+    assert.ok(tokens.has('product'));
+    assert.ok(tokens.has('focus'));
+    assert.ok(tokens.has('revenue'));
+    // "on" is length 2 → dropped
+    assert.ok(!tokens.has('on'));
+  });
+
+  it('returns empty set for empty input', () => {
+    assert.equal(normalizeStanceTokens('').size, 0);
+  });
+
+  it('dedups repeated tokens (it is a Set)', () => {
+    const tokens = normalizeStanceTokens('focus focus focus');
+    assert.equal(tokens.size, 1);
+    assert.ok(tokens.has('focus'));
+  });
+
+  it('replaces punctuation with space (does not concatenate tokens)', () => {
+    const tokens = normalizeStanceTokens('product-focus');
+    // The hyphen becomes a space, so this is two tokens, not one "productfocus"
+    assert.ok(tokens.has('product'));
+    assert.ok(tokens.has('focus'));
+    assert.ok(!tokens.has('productfocus'));
+  });
+});
+
+describe('stanceJaccardSimilarity', () => {
+  it('returns 1 for identical token sets', () => {
+    const a = new Set(['product', 'focus', 'revenue']);
+    const b = new Set(['product', 'focus', 'revenue']);
+    assert.equal(stanceJaccardSimilarity(a, b), 1);
+  });
+
+  it('returns 0 for disjoint token sets', () => {
+    const a = new Set(['product', 'focus']);
+    const b = new Set(['headphones', 'wired']);
+    assert.equal(stanceJaccardSimilarity(a, b), 0);
+  });
+
+  it('returns 0 when both sides are empty', () => {
+    assert.equal(stanceJaccardSimilarity(new Set(), new Set()), 0);
+  });
+
+  it('returns 0 when one side is empty', () => {
+    assert.equal(stanceJaccardSimilarity(new Set(['x']), new Set()), 0);
+  });
+
+  it('computes |intersection| / |union| correctly', () => {
+    // a = {x,y,z}, b = {y,z,w} → intersection {y,z}=2, union {x,y,z,w}=4 → 0.5
+    const a = new Set(['x', 'y', 'z']);
+    const b = new Set(['y', 'z', 'w']);
+    assert.equal(stanceJaccardSimilarity(a, b), 0.5);
+  });
+});
+
+describe('dedupeStancesByJaccard', () => {
+  it('threshold default is 0.7', () => {
+    assert.equal(STANCE_JACCARD_DEDUP_THRESHOLD, 0.7);
+  });
+
+  it('keeps first occurrence stable (preserves earliest-meeting provenance)', () => {
+    const a = makeStance('product focus prioritization revenue', 'supports', 'older.md');
+    const b = makeStance('product focus prioritization revenue concentration', 'supports', 'newer.md');
+    // a tokens: {product, focus, prioritization, revenue} = 4
+    // b tokens: {product, focus, prioritization, revenue, concentration} = 5
+    // intersection = 4, union = 5, jaccard = 0.8 ≥ 0.7 → b dropped
+    const result = dedupeStancesByJaccard([a, b]);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].source, 'older.md');
+    assert.equal(result[0].topic, 'product focus prioritization revenue');
+  });
+
+  it('semantic duplicates (high Jaccard, same direction) are deduped', () => {
+    // Same direction + topic re-wording where token overlap is ≥ 0.7.
+    // (The motivating Lindsay case "product focus prioritization by revenue
+    // concentration" vs "product focus on dominant revenue line over full
+    // portfolio coverage" shares only 3 tokens out of 11 union ≈ 0.27 — too
+    // low to dedup at 0.7 by token Jaccard alone. The Jaccard threshold
+    // catches near-restatements, not arbitrary paraphrases.)
+    const a = makeStance('engineering velocity over careful planning', 'supports');
+    const b = makeStance('engineering velocity over planning', 'supports');
+    // a: {engineering, velocity, over, careful, planning} = 5
+    // b: {engineering, velocity, over, planning} = 4
+    // intersection = 4, union = 5, jaccard = 0.8 ≥ 0.7 → b dropped
+    const result = dedupeStancesByJaccard([a, b]);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].topic, 'engineering velocity over careful planning');
+  });
+
+  it('different domains are NOT deduped (low Jaccard, same direction)', () => {
+    const a = makeStance('ai tooling supports fast release', 'supports');
+    const b = makeStance('wired headphones preference', 'supports');
+    // No token overlap → jaccard = 0 → both kept
+    const result = dedupeStancesByJaccard([a, b]);
+    assert.equal(result.length, 2);
+  });
+
+  it('same topic but different direction is NOT deduped (direction scoping)', () => {
+    const a = makeStance('engineer autonomy', 'supports');
+    const b = makeStance('engineer autonomy', 'opposes');
+    // Topics identical (jaccard=1) but direction differs → both kept
+    const result = dedupeStancesByJaccard([a, b]);
+    assert.equal(result.length, 2);
+    assert.equal(result[0].direction, 'supports');
+    assert.equal(result[1].direction, 'opposes');
+  });
+
+  it('threshold boundary: Jaccard exactly 0.7 → DROP (≥ threshold)', () => {
+    // Construct sets with intersection 7, union 10 → jaccard = 0.7
+    const a = makeStance('alpha beta gamma delta epsilon zeta eta theta', 'supports');
+    const b = makeStance('alpha beta gamma delta epsilon zeta eta iota kappa', 'supports');
+    // a: {alpha, beta, gamma, delta, epsilon, zeta, eta, theta} = 8
+    // b: {alpha, beta, gamma, delta, epsilon, zeta, eta, iota, kappa} = 9
+    // intersection = 7 (alpha..eta), union = 10 (8+9-7), jaccard = 0.7
+    const aTokens = normalizeStanceTokens(a.topic);
+    const bTokens = normalizeStanceTokens(b.topic);
+    assert.equal(stanceJaccardSimilarity(aTokens, bTokens), 0.7);
+    const result = dedupeStancesByJaccard([a, b]);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].topic, a.topic);
+  });
+
+  it('threshold boundary: Jaccard 0.69 (just below 0.7) → KEEP', () => {
+    // Construct sets with intersection 9, union 13 → jaccard ≈ 0.6923 < 0.7.
+    // All tokens must be > 2 chars (else they're dropped by normalizeStanceTokens).
+    const a = makeStance(
+      'alpha bravo charlie delta echo foxtrot golf hotel india',
+      'supports',
+    );
+    const b = makeStance(
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike',
+      'supports',
+    );
+    // a: 9 unique > 2-char tokens, b: a's 9 + {juliet, kilo, lima, mike} = 13
+    // intersection 9, union 13, jaccard = 9/13 ≈ 0.692
+    const aTokens = normalizeStanceTokens(a.topic);
+    const bTokens = normalizeStanceTokens(b.topic);
+    const sim = stanceJaccardSimilarity(aTokens, bTokens);
+    assert.ok(sim < 0.7, `expected sim < 0.7, got ${sim}`);
+    assert.ok(sim > 0.69, `expected sim > 0.69, got ${sim}`);
+    const result = dedupeStancesByJaccard([a, b]);
+    assert.equal(result.length, 2);
+  });
+
+  it('chains: third stance compared against ALL previously-kept (not just last)', () => {
+    const a = makeStance('product focus revenue line', 'supports', 'a.md');
+    // b shares low overlap with a, kept
+    const b = makeStance('engineer autonomy mandate', 'supports', 'b.md');
+    // c is near-dup of a, should be dropped vs a even though b was kept in between
+    const c = makeStance('product focus revenue line concentration', 'supports', 'c.md');
+    const result = dedupeStancesByJaccard([a, b, c]);
+    assert.equal(result.length, 2);
+    assert.deepEqual(
+      result.map((s) => s.source),
+      ['a.md', 'b.md'],
+    );
+  });
+
+  it('empty input returns empty array', () => {
+    assert.deepEqual(dedupeStancesByJaccard([]), []);
+  });
+
+  it('does not dedupe across different directions even with identical topics (regression)', () => {
+    const a = makeStance('engineer autonomy supports work', 'supports');
+    const b = makeStance('engineer autonomy supports work', 'opposes');
+    const c = makeStance('engineer autonomy supports work', 'concerned');
+    const result = dedupeStancesByJaccard([a, b, c]);
+    assert.equal(result.length, 3);
   });
 });

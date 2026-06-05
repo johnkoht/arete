@@ -106,6 +106,88 @@ function fuzzyScore(reference: string, candidate: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Stance dedup (Jaccard token similarity)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tokenize stance topic text for Jaccard comparison.
+ * Lowercase, replace non-alphanumeric with space, split, drop tokens of length <= 2
+ * (filters stopwords-ish noise like "a", "an", "by", "of", "on").
+ *
+ * Exported for unit testing.
+ */
+export function normalizeStanceTokens(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 2),
+  );
+}
+
+/**
+ * Compute Jaccard similarity between two token sets.
+ * Returns 0–1 where 1 is identical and 0 is completely disjoint.
+ *
+ * Exported for unit testing.
+ */
+export function stanceJaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0;
+  let intersection = 0;
+  for (const t of a) {
+    if (b.has(t)) intersection += 1;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/** Jaccard threshold above which two stances with the same direction are considered duplicates. */
+export const STANCE_JACCARD_DEDUP_THRESHOLD = 0.7;
+
+/**
+ * Dedup a list of stances by Jaccard token similarity on `topic`, scoped per `direction`.
+ *
+ * For each new stance:
+ * - Compute its token set on `topic`.
+ * - Compare against already-kept stances with the same `direction`.
+ * - If any has Jaccard ≥ STANCE_JACCARD_DEDUP_THRESHOLD → drop the new one.
+ * - Otherwise → keep it.
+ *
+ * Order is preserved: the first occurrence (earliest meeting in input order) wins,
+ * preserving provenance.
+ *
+ * Exported for unit testing.
+ */
+export function dedupeStancesByJaccard(
+  stances: readonly PersonStance[],
+  threshold: number = STANCE_JACCARD_DEDUP_THRESHOLD,
+): PersonStance[] {
+  const kept: PersonStance[] = [];
+  // Cache token sets per kept stance, scoped by direction for fast lookup.
+  const tokensByDirection = new Map<string, Set<string>[]>();
+
+  for (const stance of stances) {
+    const tokens = normalizeStanceTokens(stance.topic);
+    const existing = tokensByDirection.get(stance.direction) ?? [];
+    let isDuplicate = false;
+    for (const existingTokens of existing) {
+      if (stanceJaccardSimilarity(tokens, existingTokens) >= threshold) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    if (!isDuplicate) {
+      kept.push(stance);
+      existing.push(tokens);
+      tokensByDirection.set(stance.direction, existing);
+    }
+  }
+
+  return kept;
+}
+
+// ---------------------------------------------------------------------------
 // Frontmatter parsing
 // ---------------------------------------------------------------------------
 
@@ -1463,17 +1545,13 @@ export class EntityService {
     let totalItemsAgedOut = 0;
 
     for (const person of refreshablePeople) {
-      // Stance dedup: keep first occurrence per topic+direction
+      // Stance dedup (Phase 9 followup-6): Jaccard token similarity on topic,
+      // scoped per direction. Threshold STANCE_JACCARD_DEDUP_THRESHOLD (0.7).
+      // First occurrence wins → preserves provenance from the earliest meeting.
+      // Replaces the prior exact `topic.toLowerCase():direction` key, which
+      // missed semantically-equivalent re-wordings across meetings.
       const rawStances = personStances.get(person.slug) ?? [];
-      const seenStanceKeys = new Set<string>();
-      const dedupedStances: PersonStance[] = [];
-      for (const stance of rawStances) {
-        const key = `${stance.topic.toLowerCase()}:${stance.direction}`;
-        if (!seenStanceKeys.has(key)) {
-          seenStanceKeys.add(key);
-          dedupedStances.push(stance);
-        }
-      }
+      const dedupedStances = dedupeStancesByJaccard(rawStances);
       personStances.set(person.slug, dedupedStances);
       totalStances += dedupedStances.length;
 

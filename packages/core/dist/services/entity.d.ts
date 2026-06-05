@@ -13,6 +13,38 @@ declare const PEOPLE_CATEGORIES: PersonCategory[];
  */
 export declare function slugifyPersonName(name: string): string;
 /**
+ * Tokenize stance topic text for Jaccard comparison.
+ * Lowercase, replace non-alphanumeric with space, split, drop tokens of length <= 2
+ * (filters stopwords-ish noise like "a", "an", "by", "of", "on").
+ *
+ * Exported for unit testing.
+ */
+export declare function normalizeStanceTokens(text: string): Set<string>;
+/**
+ * Compute Jaccard similarity between two token sets.
+ * Returns 0–1 where 1 is identical and 0 is completely disjoint.
+ *
+ * Exported for unit testing.
+ */
+export declare function stanceJaccardSimilarity(a: Set<string>, b: Set<string>): number;
+/** Jaccard threshold above which two stances with the same direction are considered duplicates. */
+export declare const STANCE_JACCARD_DEDUP_THRESHOLD = 0.7;
+/**
+ * Dedup a list of stances by Jaccard token similarity on `topic`, scoped per `direction`.
+ *
+ * For each new stance:
+ * - Compute its token set on `topic`.
+ * - Compare against already-kept stances with the same `direction`.
+ * - If any has Jaccard ≥ STANCE_JACCARD_DEDUP_THRESHOLD → drop the new one.
+ * - Otherwise → keep it.
+ *
+ * Order is preserved: the first occurrence (earliest meeting in input order) wins,
+ * preserving provenance.
+ *
+ * Exported for unit testing.
+ */
+export declare function dedupeStancesByJaccard(stances: readonly PersonStance[], threshold?: number): PersonStance[];
+/**
  * Channel-style fields recognized by Phase 7a AC5 convention. Only
  * populated fields are returned; missing fields are simply absent
  * from the returned object (so `Object.keys(channels).length` is the
@@ -75,7 +107,7 @@ export declare function computeChannelsAudit(perPerson: Array<{
 export { CHANNEL_FIELD_NAMES };
 import { CommitmentsService } from './commitments.js';
 import type { AreaParserService } from './area-parser.js';
-import type { LLMCallFn } from './person-signals.js';
+import type { LLMCallFn, PersonStance } from './person-signals.js';
 export interface ListPeopleOptions {
     category?: PersonCategory;
 }
