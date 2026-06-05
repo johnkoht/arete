@@ -2,6 +2,7 @@
  * Commitments commands — list and resolve open commitments
  */
 
+import { isAbsolute, resolve as resolvePath, join } from 'node:path';
 import {
   createServices,
   loadConfig,
@@ -451,6 +452,190 @@ export function registerCommitmentsCommand(program: Command): void {
       } else {
         info('No matches found at the 0.7 confidence threshold. Commitments unchanged.');
       }
+    });
+
+  // ---------------------------------------------------------------------------
+  // arete commitments restore --from <path>  (phase-10a-pre AC0/AC1d)
+  // ---------------------------------------------------------------------------
+
+  commitmentsCmd
+    .command('restore')
+    .description(
+      'Restore .arete/commitments.json from a snapshot JSON file. Idempotent; writes a pre-restore snapshot to .arete/commitments.pre-restore-<ts>.json before overwriting (M6 mitigation).',
+    )
+    .requiredOption('--from <path>', 'Path to snapshot JSON (absolute or relative to workspace root)')
+    .option('--yes', 'Skip confirmation prompt')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { from: string; yes?: boolean; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(
+            JSON.stringify({ success: false, error: 'Not in an Areté workspace' }),
+          );
+        } else {
+          error('Not in an Areté workspace');
+          info('Run "arete install" to create a workspace');
+        }
+        process.exit(1);
+      }
+
+      // Resolve the source path. Absolute paths used as-is; relative paths
+      // anchored to the workspace root so users can pass
+      // `.arete/commitments.pre-phase-10.json` without a leading ./.
+      // Always pass the resolved path through normalize-against-root to
+      // catch trivial `..` escapes; this is a soft injection guard — we
+      // accept any in-workspace OR absolute path the user can supply
+      // intentionally, but normalize first so the error message is sane.
+      const sourcePath = isAbsolute(opts.from)
+        ? resolvePath(opts.from)
+        : resolvePath(root, opts.from);
+
+      // Read source snapshot
+      const sourceContent = await services.storage.read(sourcePath);
+      if (sourceContent === null) {
+        const msg = `Snapshot file not found: ${sourcePath}`;
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
+      // Validate JSON shape — must parse and look like CommitmentsFile.
+      // We accept anything with a `commitments` array; deeper schema
+      // validation lives in CommitmentsService.load().
+      let parsed: { commitments?: unknown };
+      try {
+        parsed = JSON.parse(sourceContent) as { commitments?: unknown };
+      } catch (err) {
+        const msg = `Snapshot is not valid JSON: ${
+          err instanceof Error ? err.message : String(err)
+        }`;
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+      if (!Array.isArray(parsed.commitments)) {
+        const msg =
+          'Snapshot JSON does not match commitments file shape (missing or non-array `commitments` field)';
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+      const incomingCount = (parsed.commitments as unknown[]).length;
+
+      // Compute target + pre-restore snapshot paths
+      const targetPath = join(root, '.arete/commitments.json');
+      const currentContent = await services.storage.read(targetPath);
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const preRestorePath = join(
+        root,
+        `.arete/commitments.pre-restore-${ts}.json`,
+      );
+
+      // Confirmation prompt (unless --yes or --json)
+      if (!opts.yes && !opts.json) {
+        const { confirm } = await import('@inquirer/prompts');
+        const currentCount = currentContent
+          ? ((): number => {
+              try {
+                const cur = JSON.parse(currentContent) as { commitments?: unknown[] };
+                return Array.isArray(cur.commitments) ? cur.commitments.length : 0;
+              } catch {
+                return 0;
+              }
+            })()
+          : 0;
+        console.log('');
+        console.log(`  ${chalk.bold('From:')}    ${sourcePath}`);
+        console.log(`  ${chalk.bold('To:')}      ${targetPath}`);
+        console.log(`  ${chalk.bold('Current:')} ${currentCount} commitment(s)`);
+        console.log(`  ${chalk.bold('Incoming:')} ${incomingCount} commitment(s)`);
+        console.log(
+          `  ${chalk.bold('Backup:')}  ${preRestorePath} (written before overwrite)`,
+        );
+        console.log('');
+        const confirmed = await confirm({
+          message:
+            'Restore will REPLACE current commitments.json. Any commitments added since the snapshot will be lost. Continue?',
+          default: false,
+        });
+        if (!confirmed) {
+          info('Aborted.');
+          process.exit(0);
+        }
+      }
+
+      // Write pre-restore snapshot (best-effort; only if there's a current file)
+      if (currentContent !== null) {
+        try {
+          await services.storage.write(preRestorePath, currentContent);
+        } catch (err) {
+          const msg = `Failed to write pre-restore snapshot: ${
+            err instanceof Error ? err.message : String(err)
+          }`;
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: msg }));
+          } else {
+            error(msg);
+          }
+          process.exit(1);
+        }
+      }
+
+      // Restore: write source content verbatim. Byte-equal round-trip is
+      // the AC. We intentionally do NOT re-serialize via load/save
+      // (which would apply pruning + key-order normalization) — restore
+      // means restore.
+      try {
+        await services.storage.write(targetPath, sourceContent);
+      } catch (err) {
+        const msg = `Failed to write commitments.json: ${
+          err instanceof Error ? err.message : String(err)
+        }`;
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              restored: incomingCount,
+              from: sourcePath,
+              to: targetPath,
+              preRestoreSnapshot: currentContent !== null ? preRestorePath : null,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      success(`Restored ${incomingCount} commitment(s) from snapshot.`);
+      listItem('From', sourcePath);
+      listItem('To', targetPath);
+      if (currentContent !== null) {
+        listItem('Pre-restore snapshot', preRestorePath);
+      } else {
+        info('No prior commitments.json — pre-restore snapshot skipped.');
+      }
+      console.log('');
     });
 
   commitmentsCmd

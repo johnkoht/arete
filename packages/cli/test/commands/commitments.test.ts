@@ -37,6 +37,7 @@ function makeCommitment(overrides: Partial<Commitment>): Commitment {
     personName: 'Alice Smith',
     source: 'meeting-2026-01-15.md',
     date: '2026-01-15',
+    createdAt: '2026-01-15',
     status: 'open',
     resolvedAt: null,
     ...overrides,
@@ -702,5 +703,199 @@ describe('commitments create command', () => {
     const parsed1 = JSON.parse(raw1) as { commitment: { id: string } };
     const parsed2 = JSON.parse(raw2) as { commitment: { id: string } };
     assert.equal(parsed1.commitment.id, parsed2.commitment.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// commitments restore (phase-10a-pre AC0/AC1d)
+// ---------------------------------------------------------------------------
+
+describe('commitments restore command', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-commitments-restore');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('round-trips a snapshot byte-equal (AC1d reversibility)', async () => {
+    // Build a snapshot file with deterministic content.
+    const snapshotPath = join(tmpDir, '.arete/commitments.snapshot.json');
+    const c = makeCommitment({
+      id: computeHash('Send invoice to Lindsay', 'lindsay', 'i_owe_them'),
+      text: 'Send invoice to Lindsay',
+      personSlug: 'lindsay',
+      personName: 'Lindsay Gray',
+      direction: 'i_owe_them',
+      date: '2026-05-01',
+      createdAt: '2026-05-01',
+    });
+    const file: CommitmentsFile = { commitments: [c] };
+    const snapshotContent = JSON.stringify(file, null, 2);
+    writeFileSync(snapshotPath, snapshotContent, 'utf8');
+
+    // Restore from snapshot.
+    const raw = runCli(
+      ['commitments', 'restore', '--from', snapshotPath, '--yes', '--json'],
+      { cwd: tmpDir },
+    );
+    const parsed = JSON.parse(raw) as {
+      success: boolean;
+      restored: number;
+      from: string;
+      to: string;
+      preRestoreSnapshot: string | null;
+    };
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.restored, 1);
+
+    // commitments.json content must be byte-equal to the snapshot.
+    const { readFileSync } = await import('node:fs');
+    const written = readFileSync(join(tmpDir, '.arete/commitments.json'), 'utf8');
+    assert.equal(written, snapshotContent);
+  });
+
+  it('is idempotent: re-running with the same snapshot produces the same target file', async () => {
+    const snapshotPath = join(tmpDir, '.arete/commitments.snapshot.json');
+    const c = makeCommitment({
+      id: computeHash('Recurring action', 'dave', 'i_owe_them'),
+      text: 'Recurring action',
+      personSlug: 'dave',
+      direction: 'i_owe_them',
+    });
+    const file: CommitmentsFile = { commitments: [c] };
+    const snapshotContent = JSON.stringify(file, null, 2);
+    writeFileSync(snapshotPath, snapshotContent, 'utf8');
+
+    runCli(['commitments', 'restore', '--from', snapshotPath, '--yes', '--json'], {
+      cwd: tmpDir,
+    });
+    const { readFileSync } = await import('node:fs');
+    const afterFirst = readFileSync(join(tmpDir, '.arete/commitments.json'), 'utf8');
+
+    runCli(['commitments', 'restore', '--from', snapshotPath, '--yes', '--json'], {
+      cwd: tmpDir,
+    });
+    const afterSecond = readFileSync(join(tmpDir, '.arete/commitments.json'), 'utf8');
+
+    assert.equal(afterFirst, afterSecond, 're-running restore should produce identical output');
+    assert.equal(afterSecond, snapshotContent);
+  });
+
+  it('writes pre-restore snapshot before overwriting (M6 mitigation)', async () => {
+    // Seed an existing commitments.json so a pre-restore snapshot has content.
+    const existing = makeCommitment({
+      id: computeHash('Existing item', 'alice', 'i_owe_them'),
+      text: 'Existing item',
+    });
+    writeCommitments(tmpDir, [existing]);
+
+    // Build a snapshot to restore from.
+    const snapshotPath = join(tmpDir, '.arete/commitments.snapshot.json');
+    const snapC = makeCommitment({
+      id: computeHash('From snapshot', 'bob', 'i_owe_them'),
+      text: 'From snapshot',
+      personSlug: 'bob',
+    });
+    const file: CommitmentsFile = { commitments: [snapC] };
+    writeFileSync(snapshotPath, JSON.stringify(file, null, 2), 'utf8');
+
+    const raw = runCli(
+      ['commitments', 'restore', '--from', snapshotPath, '--yes', '--json'],
+      { cwd: tmpDir },
+    );
+    const parsed = JSON.parse(raw) as { preRestoreSnapshot: string };
+    assert.ok(parsed.preRestoreSnapshot, 'expected preRestoreSnapshot path in JSON output');
+
+    // Pre-restore snapshot must contain the original (pre-overwrite) content.
+    const { readFileSync } = await import('node:fs');
+    const snap = readFileSync(parsed.preRestoreSnapshot, 'utf8');
+    const parsedSnap = JSON.parse(snap) as { commitments: Array<{ text: string }> };
+    assert.equal(parsedSnap.commitments.length, 1);
+    assert.equal(parsedSnap.commitments[0].text, 'Existing item');
+  });
+
+  it('errors with non-zero exit when --from path does not exist', () => {
+    const result = runCliRaw(
+      ['commitments', 'restore', '--from', '/nonexistent-path-xyz.json', '--yes', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.notEqual(result.code, 0);
+    const parsed = JSON.parse(result.stdout) as { success: boolean; error: string };
+    assert.equal(parsed.success, false);
+    assert.match(parsed.error, /not found/i);
+  });
+
+  it('errors when snapshot is malformed JSON', () => {
+    const snapshotPath = join(tmpDir, '.arete/bad.json');
+    writeFileSync(snapshotPath, '{ not valid json', 'utf8');
+    const result = runCliRaw(
+      ['commitments', 'restore', '--from', snapshotPath, '--yes', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.notEqual(result.code, 0);
+    const parsed = JSON.parse(result.stdout) as { success: boolean; error: string };
+    assert.equal(parsed.success, false);
+    assert.match(parsed.error, /not valid json/i);
+  });
+
+  it('errors when snapshot lacks the `commitments` array', () => {
+    const snapshotPath = join(tmpDir, '.arete/wrong-shape.json');
+    writeFileSync(snapshotPath, JSON.stringify({ items: [] }), 'utf8');
+    const result = runCliRaw(
+      ['commitments', 'restore', '--from', snapshotPath, '--yes', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.notEqual(result.code, 0);
+    const parsed = JSON.parse(result.stdout) as { success: boolean; error: string };
+    assert.equal(parsed.success, false);
+    assert.match(parsed.error, /commitments/i);
+  });
+
+  it('resolves --from relative to workspace root', async () => {
+    // Place snapshot under .arete/ and pass a relative path
+    const snapshotRelPath = '.arete/snap-relative.json';
+    const c = makeCommitment({
+      id: computeHash('Relative-path snapshot', 'carol', 'i_owe_them'),
+      text: 'Relative-path snapshot',
+      personSlug: 'carol',
+    });
+    const file: CommitmentsFile = { commitments: [c] };
+    writeFileSync(join(tmpDir, snapshotRelPath), JSON.stringify(file, null, 2), 'utf8');
+
+    const raw = runCli(
+      ['commitments', 'restore', '--from', snapshotRelPath, '--yes', '--json'],
+      { cwd: tmpDir },
+    );
+    const parsed = JSON.parse(raw) as { success: boolean; restored: number };
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.restored, 1);
+
+    const { readFileSync } = await import('node:fs');
+    const written = readFileSync(join(tmpDir, '.arete/commitments.json'), 'utf8');
+    const writtenParsed = JSON.parse(written) as { commitments: Array<{ text: string }> };
+    assert.equal(writtenParsed.commitments[0].text, 'Relative-path snapshot');
+  });
+
+  it('skips pre-restore snapshot when no prior commitments.json exists', () => {
+    // No writeCommitments() call — fresh workspace.
+    const snapshotPath = join(tmpDir, '.arete/snap-only.json');
+    const c = makeCommitment({
+      id: computeHash('First commitment', 'alice', 'i_owe_them'),
+      text: 'First commitment',
+    });
+    const file: CommitmentsFile = { commitments: [c] };
+    writeFileSync(snapshotPath, JSON.stringify(file, null, 2), 'utf8');
+
+    const raw = runCli(
+      ['commitments', 'restore', '--from', snapshotPath, '--yes', '--json'],
+      { cwd: tmpDir },
+    );
+    const parsed = JSON.parse(raw) as { preRestoreSnapshot: string | null };
+    assert.equal(parsed.preRestoreSnapshot, null);
   });
 });
