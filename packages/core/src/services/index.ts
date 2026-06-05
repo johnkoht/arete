@@ -69,7 +69,12 @@ export type {
   ChannelsAuditEntry,
   ChannelsAuditResult,
 } from './entity.js';
-export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
+export {
+  CommitmentsService,
+  computeCommitmentPriority,
+  computeCounterpartyOverlap,
+  getCommitmentCounterpartySlugs,
+} from './commitments.js';
 export type {
   PriorityLevel,
   CommitmentPriorityInput,
@@ -77,6 +82,7 @@ export type {
   CreateCommitmentOptions,
   CreateCommitmentResult,
   CreateTaskFn,
+  CommitmentLike,
 } from './commitments.js';
 
 // Migrations (phase-10a-pre and onward)

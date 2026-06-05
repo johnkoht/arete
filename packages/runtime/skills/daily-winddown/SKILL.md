@@ -541,9 +541,23 @@ commitments list is already in cache from Step 1o), so it runs
 local-only and cheaper than Rules 1+2 (which scan slack/email/
 calendar); it runs as an early pre-filter after Rule 3's moot-check.
 
-- **Counterparty resolution** preferred via `arete people show
-  --channels` slug match. If counterparty slug matches OR loop has
-  no counterparty (fall-through), proceed to text compare.
+- **Counterparty resolution** uses **stakeholders[] set-overlap**
+  (Phase 10 rewrite, phase-10a-pre). The match condition is
+  `|commitment.counterparties ∩ meeting.attendees| ≥ 1`, where
+  `commitment.counterparties` is the deduplicated set of slugs from
+  `stakeholders[]` after EXCLUDING role='self' entries (M2 mitigation
+  — a self-reminder must not match a recurring meeting attendee just
+  because the owner is on the attendee list). Resolution still prefers
+  `arete people show --channels` slug match for attendee identification.
+  **Dual-shape read during 10a dry-run window (AC0a)**: when the
+  commitment carries `stakeholders[]`, use it; when it does NOT
+  (v1-shape entries written pre-migration), fall back to
+  `[personSlug]` as a singleton set. The set-overlap math is identical
+  in both cases — set-overlap of size-1 sets reduces to slug-equality,
+  preserving v1 behavior. Helper: `computeCounterpartyOverlap()` in
+  `commitments.ts` (exported from `@arete/core`). If counterparty
+  set-overlap matches OR loop has no counterparty (fall-through),
+  proceed to text compare.
 - **Text overlap** ≥ **0.7 Jaccard** on normalized tokens
   (lowercased, non-alphanumeric stripped, split on whitespace).
   Threshold ships **stricter** than `CommitmentsService.reconcile()`'s
@@ -564,11 +578,13 @@ calendar); it runs as an early pre-filter after Rule 3's moot-check.
   `they_owe_me` of the same text — they are different commitments
   with the same words.
 - **Mirror-pair signature exclusion** (per followup-7 review-1 C2):
-  if two open commitments exist for the **same counterparty +
+  if two open commitments exist for the **same counterparty set +
   ≥0.9 text overlap + opposite directions** (the parser-bug
-  mirror-pair signature), exclude **BOTH** from the Rule 4 candidate
-  set and surface them to `## Uncertain — your call` with a
-  `parser-bug-suspect` flag. Rule 4 must NOT mask a parser-bug
+  mirror-pair signature; "same counterparty set" reads from
+  `stakeholders[]` under the dual-shape rule above, falling back to
+  `personSlug` equality for v1 entries), exclude **BOTH** from the
+  Rule 4 candidate set and surface them to `## Uncertain — your call`
+  with a `parser-bug-suspect` flag. Rule 4 must NOT mask a parser-bug
   mirror-pair via silent collapse — the user needs to see both sides
   to triage the bug.
 - **Recurring-item guard** (per followup-7 review-1 C1): if the
@@ -594,9 +610,9 @@ calendar); it runs as an early pre-filter after Rule 3's moot-check.
   surface, not two competing ones. The cross-rule join is bounded —
   Rule 4's match output carries the commitment ID; Rule 1 already
   scans for fulfilling actions against open commitments.
-- **Concrete match** (≥0.7 Jaccard + counterparty match + direction
-  match, NOT in mirror-pair signature, NOT in recurring-item guard,
-  NOT preferred by Rule 1): propose collapse to
+- **Concrete match** (≥0.7 Jaccard + counterparty set-overlap ≥ 1 +
+  direction match, NOT in mirror-pair signature, NOT in recurring-item
+  guard, NOT preferred by Rule 1): propose collapse to
   `## Closed today (proposed)` with the action `skip staging this
   item (already tracked as commitment <ID>)`. NO new commitment
   created. NO staged item surfaced separately.

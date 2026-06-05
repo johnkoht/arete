@@ -54,6 +54,65 @@ export declare function computeCommitmentPriority(input: CommitmentPriorityInput
  */
 export declare function computeCommitmentHash(text: string, personSlug: string, direction: CommitmentDirection): string;
 /**
+ * Minimal counterparty-bearing shape used by Rule 4's set-overlap math.
+ *
+ * Phase 10 will extend the canonical Commitment with a `stakeholders[]`
+ * field; until that lands, R4 reads `personSlug` directly. This type
+ * captures BOTH shapes so a single helper serves the dry-run window.
+ */
+export type CommitmentLike = {
+    /** v1 shape: single counterparty slug. */
+    personSlug?: string;
+    /**
+     * v2 shape (Phase 10 10a): stakeholders with role distinction.
+     * When present, this is the authoritative counterparty source —
+     * `personSlug` is ignored (it may carry the owner slug under the
+     * "owner-as-personSlug" pattern that Phase 10 migration repairs).
+     */
+    stakeholders?: ReadonlyArray<{
+        slug: string;
+        role?: string;
+    }>;
+};
+/**
+ * Extract the set of counterparty slugs to use for Rule 4 set-overlap.
+ *
+ * Read order (AC0a dual-shape):
+ *  1. `stakeholders[]` if present → all non-self slugs (M2 fix)
+ *  2. otherwise → singleton `[personSlug]` (v1 fallback)
+ *  3. neither present → empty set (overlap is always 0)
+ *
+ * Returns a deduplicated array (Set semantics, array shape for ergonomic
+ * consumption). Slug order is preserved from the source for stable
+ * test snapshots.
+ */
+export declare function getCommitmentCounterpartySlugs(c: CommitmentLike): string[];
+/**
+ * Compute set-overlap count between a commitment's counterparties and a
+ * meeting's attendees. Used by Phase 8 Rule 4 (daily-winddown SKILL.md
+ * §"Rule 4 — Intent → already-tracked open commitment").
+ *
+ * Returns the count of common slugs after the AC0a dual-shape read.
+ * A return of 0 means R4's counterparty gate does NOT fire (no overlap,
+ * candidate is NOT a collapse target).
+ *
+ * Example:
+ *   commitment.stakeholders = [{slug:'dave'}, {slug:'lindsay', role:'mentioned'}]
+ *   meeting.attendees      = ['dave', 'jamie']
+ *   → overlap = 1 (dave)
+ *
+ * Example (self-exclusion per M2):
+ *   commitment.stakeholders = [{slug:'john-koht', role:'self'}]
+ *   meeting.attendees      = ['john-koht', 'lindsay']
+ *   → overlap = 0 (self excluded from numerator)
+ *
+ * Example (v1 fallback):
+ *   commitment.personSlug = 'dave'   (no stakeholders[] field)
+ *   meeting.attendees    = ['dave']
+ *   → overlap = 1
+ */
+export declare function computeCounterpartyOverlap(commitment: CommitmentLike, meetingAttendeeSlugs: ReadonlyArray<string>): number;
+/**
  * Options for creating a commitment.
  */
 export type CreateCommitmentOptions = {

@@ -248,6 +248,116 @@ function normalize(text: string): string[] {
 const JACCARD_THRESHOLD = 0.6;
 
 // ---------------------------------------------------------------------------
+// Counterparty overlap (Phase 8 R4 rewrite — phase-10a-pre)
+//
+// Phase 8 Rule 4 (`/daily-winddown`) gates commitment-collapse on whether the
+// fresh capture and the open commitment share counterparties. Pre-Phase 10
+// the data model had a single `personSlug` field and the rule reduced to
+// slug-equality. Phase 10 introduces `stakeholders[]` with `role` field
+// (recipient | sender | mentioned | self); the rule generalizes to
+// SET-OVERLAP across non-self stakeholders.
+//
+// Per Phase 10 plan AC0a (dual-shape read during dry-run window) and
+// pre-mortem F5/M2: this helper must
+//   1. Read `stakeholders[]` if present (post-10a, v2 shape)
+//   2. Fall back to `personSlug` if `stakeholders` is undefined (v1 shape)
+//   3. EXCLUDE role='self' stakeholders from overlap candidates (M2 fix —
+//      a self-reminder commitment must NOT match a recurring meeting
+//      attendee just because the owner is on the attendee list)
+//
+// The helper is type-permissive (accepts a CommitmentLike shape) so both
+// v1 and v2 Commitment values can be passed without union casts. Callers
+// pass either a real Commitment or a hand-built object whose shape
+// matches; the helper handles both transparently.
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal counterparty-bearing shape used by Rule 4's set-overlap math.
+ *
+ * Phase 10 will extend the canonical Commitment with a `stakeholders[]`
+ * field; until that lands, R4 reads `personSlug` directly. This type
+ * captures BOTH shapes so a single helper serves the dry-run window.
+ */
+export type CommitmentLike = {
+  /** v1 shape: single counterparty slug. */
+  personSlug?: string;
+  /**
+   * v2 shape (Phase 10 10a): stakeholders with role distinction.
+   * When present, this is the authoritative counterparty source —
+   * `personSlug` is ignored (it may carry the owner slug under the
+   * "owner-as-personSlug" pattern that Phase 10 migration repairs).
+   */
+  stakeholders?: ReadonlyArray<{ slug: string; role?: string }>;
+};
+
+/**
+ * Extract the set of counterparty slugs to use for Rule 4 set-overlap.
+ *
+ * Read order (AC0a dual-shape):
+ *  1. `stakeholders[]` if present → all non-self slugs (M2 fix)
+ *  2. otherwise → singleton `[personSlug]` (v1 fallback)
+ *  3. neither present → empty set (overlap is always 0)
+ *
+ * Returns a deduplicated array (Set semantics, array shape for ergonomic
+ * consumption). Slug order is preserved from the source for stable
+ * test snapshots.
+ */
+export function getCommitmentCounterpartySlugs(c: CommitmentLike): string[] {
+  if (c.stakeholders && c.stakeholders.length > 0) {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of c.stakeholders) {
+      // M2 mitigation: self-reminders must not bleed into overlap.
+      if (s.role === 'self') continue;
+      if (!s.slug || seen.has(s.slug)) continue;
+      seen.add(s.slug);
+      out.push(s.slug);
+    }
+    return out;
+  }
+  if (c.personSlug) return [c.personSlug];
+  return [];
+}
+
+/**
+ * Compute set-overlap count between a commitment's counterparties and a
+ * meeting's attendees. Used by Phase 8 Rule 4 (daily-winddown SKILL.md
+ * §"Rule 4 — Intent → already-tracked open commitment").
+ *
+ * Returns the count of common slugs after the AC0a dual-shape read.
+ * A return of 0 means R4's counterparty gate does NOT fire (no overlap,
+ * candidate is NOT a collapse target).
+ *
+ * Example:
+ *   commitment.stakeholders = [{slug:'dave'}, {slug:'lindsay', role:'mentioned'}]
+ *   meeting.attendees      = ['dave', 'jamie']
+ *   → overlap = 1 (dave)
+ *
+ * Example (self-exclusion per M2):
+ *   commitment.stakeholders = [{slug:'john-koht', role:'self'}]
+ *   meeting.attendees      = ['john-koht', 'lindsay']
+ *   → overlap = 0 (self excluded from numerator)
+ *
+ * Example (v1 fallback):
+ *   commitment.personSlug = 'dave'   (no stakeholders[] field)
+ *   meeting.attendees    = ['dave']
+ *   → overlap = 1
+ */
+export function computeCounterpartyOverlap(
+  commitment: CommitmentLike,
+  meetingAttendeeSlugs: ReadonlyArray<string>,
+): number {
+  const slugs = getCommitmentCounterpartySlugs(commitment);
+  if (slugs.length === 0 || meetingAttendeeSlugs.length === 0) return 0;
+  const attendeeSet = new Set(meetingAttendeeSlugs);
+  let overlap = 0;
+  for (const slug of slugs) {
+    if (attendeeSet.has(slug)) overlap += 1;
+  }
+  return overlap;
+}
+
+// ---------------------------------------------------------------------------
 // Types for create()
 // ---------------------------------------------------------------------------
 
