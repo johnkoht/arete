@@ -11,6 +11,8 @@ export { GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, GMAI
 export { detectGws } from './detection.js';
 export { gwsExec } from './client.js';
 export { GmailProvider, getGmailProvider } from './gmail.js';
+export { gmailSentCachePath, buildRecipientIndex, writeGmailSentCache, readGmailSentCache, deleteGmailSentCache, } from './gmail-sent-cache.js';
+export type { WriteCacheOpts, ReadCacheResult } from './gmail-sent-cache.js';
 export { GwsDriveProvider, getGwsDriveProvider } from './drive.js';
 export { GwsDocsProvider, getGwsDocsProvider } from './docs.js';
 export { GwsSheetsProvider, getGwsSheetsProvider } from './sheets.js';

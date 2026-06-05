@@ -267,6 +267,11 @@ export {
   GwsExecError,
   GMAIL_SENT_CACHE_VERSION,
   normalizeEmail,
+  gmailSentCachePath,
+  buildRecipientIndex,
+  writeGmailSentCache,
+  readGmailSentCache,
+  deleteGmailSentCache,
 } from './integrations/gws/index.js';
 export type {
   GwsDetectionResult,

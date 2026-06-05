@@ -60,7 +60,7 @@ export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCre
 export { KrispMcpClient } from './integrations/krisp/client.js';
 export { loadKrispCredentials, saveKrispCredentials, } from './integrations/krisp/config.js';
 // Google Workspace (gws CLI) integration
-export { detectGws, gwsExec, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider, GmailProvider, getGmailProvider, GwsDriveProvider, getGwsDriveProvider, GwsDocsProvider, getGwsDocsProvider, GwsSheetsProvider, getGwsSheetsProvider, GwsDirectoryProvider, getGwsDirectoryProvider, GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, GMAIL_SENT_CACHE_VERSION, normalizeEmail, } from './integrations/gws/index.js';
+export { detectGws, gwsExec, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider, GmailProvider, getGmailProvider, GwsDriveProvider, getGwsDriveProvider, GwsDocsProvider, getGwsDocsProvider, GwsSheetsProvider, getGwsSheetsProvider, GwsDirectoryProvider, getGwsDirectoryProvider, GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, GMAIL_SENT_CACHE_VERSION, normalizeEmail, gmailSentCachePath, buildRecipientIndex, writeGmailSentCache, readGmailSentCache, deleteGmailSentCache, } from './integrations/gws/index.js';
 // Notion integration
 export { pullNotionPages } from './integrations/notion/index.js';
 export { loadNotionApiKey } from './integrations/notion/config.js';
