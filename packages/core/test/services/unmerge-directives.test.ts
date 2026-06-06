@@ -156,6 +156,84 @@ describe('resolveUnmerge (AC8 — split dupe back out)', () => {
     assert.equal(res.status, 'nothing-to-split');
   });
 
+  // -------------------------------------------------------------------------
+  // HIGH-1: 3+ source canonical — dupeId must select the correct dupe.
+  // -------------------------------------------------------------------------
+
+  function threeSourceCanonical(): Commitment {
+    return commitment({
+      id: CANON,
+      text: 'Talk to Dave about staffing',
+      source: '2026-06-01-john-lindsay.md',
+      source_meetings: [
+        '2026-06-01-john-lindsay.md', // canonical's own meeting
+        '2026-06-02-glance-2-sync.md', // dupe A
+        '2026-06-03-pop-review.md', // dupe B
+      ],
+      textVariants: [
+        'Talk to Dave about staffing',
+        'Going to chat with Dave on the staffing plan', // dupe A wording
+        'Sync with Dave re: headcount', // dupe B wording
+      ],
+    });
+  }
+
+  it('splits the CORRECT dupe on a 3-source canonical when a dupe→source mapping is supplied', () => {
+    const c = threeSourceCanonical();
+    // dupe A is NOT the last source — old code would have wrongly peeled
+    // 2026-06-03-pop-review.md. The mapping pins dupeId → the middle source.
+    const res = resolveUnmerge(
+      [c],
+      { canonicalId: 'c8e3d2f1', dupeId: 'dupeAAA0', raw: '' },
+      {
+        dupeMapping: [
+          {
+            dupeId: 'dupeAAA0',
+            sourceMeeting: '2026-06-02-glance-2-sync.md',
+            text: 'Going to chat with Dave on the staffing plan',
+          },
+        ],
+        newId: 'splitnew'.padEnd(64, '0'),
+      },
+    );
+    assert.equal(res.status, 'resolved');
+    if (res.status !== 'resolved') return;
+
+    // Split out the MAPPED dupe (A), not the last source (B).
+    assert.deepEqual(res.splitOut.source_meetings, ['2026-06-02-glance-2-sync.md']);
+    assert.equal(res.splitOut.text, 'Going to chat with Dave on the staffing plan');
+
+    // Canonical keeps its own meeting + dupe B; loses only dupe A.
+    assert.deepEqual(res.canonical.source_meetings, [
+      '2026-06-01-john-lindsay.md',
+      '2026-06-03-pop-review.md',
+    ]);
+    assert.ok(
+      res.canonical.textVariants?.includes('Sync with Dave re: headcount'),
+      'dupe B variant must remain on the canonical',
+    );
+    assert.ok(
+      !res.canonical.textVariants?.includes('Going to chat with Dave on the staffing plan'),
+      'dupe A variant must be removed from the canonical',
+    );
+  });
+
+  it('REFUSES to split a 3-source canonical when dupeId cannot be resolved (ambiguous-dupe)', () => {
+    const res = resolveUnmerge([threeSourceCanonical()], {
+      canonicalId: 'c8e3d2f1',
+      dupeId: 'unknown0',
+      raw: '',
+    });
+    assert.equal(
+      res.status,
+      'ambiguous-dupe',
+      'must refuse rather than peel the wrong (last) dupe',
+    );
+    if (res.status !== 'ambiguous-dupe') return;
+    assert.match(res.message, /absorbed 3 sources/);
+    assert.match(res.message, /Refusing to split/);
+  });
+
   it('does not mutate the input commitment list', () => {
     const commitments = [mergedCanonical()];
     const before = JSON.stringify(commitments);

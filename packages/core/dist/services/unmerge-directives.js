@@ -18,13 +18,18 @@
  *
  * Resolver semantics (plan §"Week-1 audit + recovery controls" + Q7):
  *   1. Find the canonical commitment by id/prefix.
- *   2. Find the dupe's ORIGINAL extracted text in the canonical's
+ *   2. Select WHICH dupe to peel using `directive.dupeId` (HIGH-1): prefer a
+ *      caller-supplied dupe→source mapping (from the dedup-decisions log),
+ *      else an explicit meeting slug, else the unambiguous non-canonical
+ *      source on a 2-source canonical. On a 3+ source canonical with no
+ *      mapping, REFUSE (`ambiguous-dupe`) rather than peel the wrong one.
+ *   3. Find the dupe's ORIGINAL extracted text in the canonical's
  *      `textVariants[]` (Q7: split out with original wording, NOT the
  *      canonical's text — preserves provenance integrity).
- *   3. Build a NEW independent commitment carrying that text, the dupe's
+ *   4. Build a NEW independent commitment carrying that text, the dupe's
  *      source meeting, and a fresh hash.
- *   4. Remove the dupe's source meeting + text variant from the canonical.
- *   5. Emit an UNMERGE log payload (caller writes it best-effort).
+ *   5. Remove the dupe's source meeting + text variant from the canonical.
+ *   6. Emit an UNMERGE log payload (caller writes it best-effort).
  *
  * Pure module: NO filesystem, NO LLM, NO service coupling. The caller
  * (winddown wire-in) loads commitments.json under lock, applies the
@@ -70,19 +75,36 @@ function idMatches(full, needle) {
  *
  * Q7 (resolved): the split-out commitment carries the ORIGINAL extracted
  * wording. We recover it from the canonical's `textVariants[]` — the
- * non-canonical variant whose source we are splitting. When the canonical
- * has exactly one non-canonical variant we use it; when there are several
- * we pick the LAST (most-recently-merged, oldest-first eviction means the
- * tail is the freshest) unless `dupeText` hints a specific match. If no
- * non-canonical variant exists, we fall back to the canonical text.
+ * non-canonical variant whose source we are splitting.
+ *
+ * --- dupeId resolution (HIGH-1 fix) -------------------------------------
+ * The directive names WHICH dupe to split (`directive.dupeId`). To split the
+ * correct one we must map that id → a specific `source_meetings[]` entry +
+ * `textVariants[]` entry. The Commitment row does NOT persist this mapping:
+ * `applyCommitmentsDedup` (background-dedup.ts) unions absorbed dupes into a
+ * `Set<string>` of source meetings (then sorts alphabetically) and appends
+ * texts to `textVariants[]` — the originating dupe id is discarded after the
+ * merge. The only durable record of "dupe X came from meeting Y with text Z"
+ * lives in the dedup-decisions log + staged-item provenance.
+ *
+ * Resolution order:
+ *   1. If the caller supplies `opts.dupeMapping` and the entry matching
+ *      `directive.dupeId` points at a source meeting still on the canonical,
+ *      peel exactly that source + that text. (Correct for 3+ source
+ *      canonicals.)
+ *   2. Else if `opts.dupeMeetingSlug` names a current source, peel that.
+ *   3. Else if the canonical has exactly TWO sources, the non-canonical one
+ *      is unambiguous — peel it (the 2-source case the old code handled by
+ *      coincidence is still correct).
+ *   4. Else (3+ sources, no mapping) REFUSE with `ambiguous-dupe` rather than
+ *      silently peeling the wrong dupe.
  *
  * @param commitments   Current commitment list (read-only).
  * @param directive     Parsed directive.
- * @param opts.dupeMeetingSlug  Optional: the source meeting to peel off
- *   the canonical (when known from the "Deduped today" entry). When
- *   omitted, the LAST source meeting (most-recently merged) is split off.
- * @param opts.newId    Id for the new commitment. Defaults to a derived
- *   hash; callers that mint ids should pass one for stability.
+ * @param opts.dupeMapping  Optional dupe→source/text records resolved from the
+ *   dedup-decisions log. Enables correct splits on 3+ source canonicals.
+ * @param opts.dupeMeetingSlug  Optional explicit source meeting to peel.
+ * @param opts.newId    Id for the new commitment. Defaults to a derived hash.
  */
 export function resolveUnmerge(commitments, directive, opts = {}) {
     const canonical = commitments.find((c) => idMatches(c.id, directive.canonicalId));
@@ -100,21 +122,42 @@ export function resolveUnmerge(commitments, directive, opts = {}) {
             message: `[[unmerge: ${directive.canonicalId} ← ${directive.dupeId}]] — canonical "${shortId(canonical.id)}" has no merged source to split out (only its original meeting remains).`,
         };
     }
-    // Choose the source meeting to peel off.
+    const variants = canonical.textVariants ?? [canonical.text];
+    // Choose the source meeting + text to peel off, honoring dupeId (HIGH-1).
     let splitMeeting;
-    if (opts.dupeMeetingSlug && sources.includes(opts.dupeMeetingSlug)) {
+    let splitText;
+    // (1) Caller-supplied dupe→source mapping (from dedup-decisions log).
+    const mapped = opts.dupeMapping?.find((m) => idMatches(m.dupeId, directive.dupeId));
+    if (mapped && sources.includes(mapped.sourceMeeting)) {
+        splitMeeting = mapped.sourceMeeting;
+        // The mapped text IS the dupe's original wording (recorded at merge time).
+        splitText = mapped.text;
+    }
+    // (2) Explicit meeting slug override.
+    if (!splitMeeting && opts.dupeMeetingSlug && sources.includes(opts.dupeMeetingSlug)) {
         splitMeeting = opts.dupeMeetingSlug;
     }
-    else {
-        // Default: the LAST source (most-recently merged). Never peel the
-        // first source — that's the canonical's own original meeting.
-        splitMeeting = sources[sources.length - 1];
+    // (3) Exactly two sources → the non-canonical one is unambiguous.
+    if (!splitMeeting && sources.length === 2) {
+        const firstSource = canonical.source ?? sources[0];
+        splitMeeting = sources.find((s) => s !== firstSource) ?? sources[sources.length - 1];
     }
-    // Recover the original wording for the split-out commitment (Q7).
-    const variants = canonical.textVariants ?? [canonical.text];
-    const nonCanonical = variants.filter((v) => v !== canonical.text);
-    // Prefer the LAST non-canonical variant (freshest under oldest-first eviction).
-    const splitText = nonCanonical.length > 0 ? nonCanonical[nonCanonical.length - 1] : canonical.text;
+    // (4) 3+ sources with no mapping → REFUSE rather than peel the wrong dupe.
+    if (!splitMeeting) {
+        return {
+            status: 'ambiguous-dupe',
+            message: `[[unmerge: ${directive.canonicalId} ← ${directive.dupeId}]] — canonical "${shortId(canonical.id)}" absorbed ${sources.length} sources and no dupe→source mapping resolves "${directive.dupeId}" to a specific one. ` +
+                `Refusing to split (would peel the wrong dupe). The dupe→source association is not stored on the commitment; supply it from the dedup-decisions log, or use \`arete commitments reopen\` / re-extract the specific meeting.`,
+        };
+    }
+    // Recover the original wording for the split-out commitment (Q7) if the
+    // mapping did not already pin it.
+    if (splitText === undefined) {
+        const nonCanonical = variants.filter((v) => v !== canonical.text);
+        // Prefer the LAST non-canonical variant (freshest under oldest-first eviction).
+        splitText =
+            nonCanonical.length > 0 ? nonCanonical[nonCanonical.length - 1] : canonical.text;
+    }
     // Build the updated canonical: remove the split source + variant.
     const remainingSources = sources.filter((s) => s !== splitMeeting);
     const remainingVariants = variants.filter((v) => v !== splitText);
