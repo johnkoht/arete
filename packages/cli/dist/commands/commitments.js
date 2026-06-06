@@ -927,5 +927,108 @@ export function registerCommitmentsCommand(program) {
         displayQmdResult(qmdResult);
         console.log('');
     });
+    // ---------------------------------------------------------------------------
+    // arete commitments resolve-from-gmail  (Phase 11 11a — GATED OFF)
+    // ---------------------------------------------------------------------------
+    //
+    // Wires the Phase 11a pure-core Gmail-Sent external-resolution pipeline to a
+    // CLI verb. Auto-resolve stays GATED OFF behind PHASE_11_AUTO_RESOLVE_ENABLED
+    // (default false) pending real golden-pair precision validation (AC3a). With
+    // the gate off the verb exists but refuses; the plumbing is merge-ready and
+    // dormant. Even when the gate is ON this verb only PROPOSES (prints) — it
+    // never writes to commitments.json. Actual staging/mutation remains the chef
+    // winddown wire-in's job under lock.
+    const GATE_ENV = 'PHASE_11_AUTO_RESOLVE_ENABLED';
+    commitmentsCmd
+        .command('resolve-from-gmail')
+        .description('Propose auto-resolutions from Gmail Sent evidence (Phase 11 — GATED OFF, proposals only)')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        const gateOn = process.env[GATE_ENV] === 'true';
+        if (!gateOn) {
+            const msg = 'Phase 11 auto-resolve is gated off pending golden-pair validation. ' +
+                `Set ${GATE_ENV}=true to enable (only after AC3a precision validated against real labels).`;
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, gated: true, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        }
+        // --- Gated-ON path: proposals only, NO writes ---------------------------
+        const { createServices, readGmailSentCache, peopleDirectoryFromMap, commitmentToResolutionInput, runResolutionPipeline, } = await import('@arete/core');
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            const msg = 'Not in an Areté workspace';
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+                info('Run "arete install" to create a workspace');
+            }
+            process.exit(1);
+        }
+        if (!services.ai.isConfigured() || process.env.ARETE_NO_LLM === '1') {
+            const msg = 'AI is not configured (or ARETE_NO_LLM=1); cannot run resolution cross-check.';
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        }
+        const open = await services.commitments.listOpen();
+        const sentCache = await readGmailSentCache(services.storage, root);
+        if (!sentCache.ok) {
+            const msg = `Gmail Sent cache unavailable (${sentCache.reason}); run a Gmail pull first.`;
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        }
+        const sentMessages = sentCache.cache.threads;
+        // Build slug → email(s) directory for recipient matching.
+        const paths = services.workspace.getPaths(root);
+        const people = await services.entity.listPeople(paths);
+        const slugEmailMap = {};
+        for (const p of people) {
+            if (typeof p.email === 'string' && p.email.length > 0) {
+                slugEmailMap[p.slug] = p.email;
+            }
+        }
+        const peopleDir = peopleDirectoryFromMap(slugEmailMap);
+        const callConcurrent = (prompts) => services.ai.callConcurrent(prompts);
+        const proposals = [];
+        for (const c of open) {
+            const input = commitmentToResolutionInput(c);
+            const { outcome } = await runResolutionPipeline(input, sentMessages, peopleDir, callConcurrent);
+            if (outcome.kind === 'resolve-high' || outcome.kind === 'flag-medium') {
+                proposals.push({
+                    id: c.id.slice(0, 8),
+                    text: c.text,
+                    outcome: outcome.kind,
+                    reasoning: outcome.reasoning,
+                    evidence: outcome.candidate.threadId,
+                });
+            }
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({ success: true, gated: false, proposals }, null, 2));
+            return;
+        }
+        success(`Scanned ${open.length} open commitment(s); ${proposals.length} proposal(s). ` +
+            'Proposals only — no writes performed.');
+        for (const p of proposals) {
+            listItem(p.outcome, `${p.text} (${p.id})`);
+        }
+        console.log('');
+    });
 }
 //# sourceMappingURL=commitments.js.map

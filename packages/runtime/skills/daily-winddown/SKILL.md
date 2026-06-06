@@ -912,12 +912,71 @@ commitment carrying its ORIGINAL extracted wording (recovered from the
 canonical's `textVariants[]`), removes that source meeting + variant from
 the canonical, and returns an `UNMERGE` log payload. Surface
 `"Unmerged N commitment(s)"` in the new view's `## Notes`. Resolution
-statuses `no-canonical` / `nothing-to-split` surface their `.message` in
-`## Notes` so the user sees why a directive didn't take (e.g. the merge
-was already split, or the id was a typo).
+statuses `no-canonical` / `nothing-to-split` / `ambiguous-dupe` surface
+their `.message` in `## Notes` so the user sees why a directive didn't
+take (e.g. the merge was already split, the id was a typo, or — for
+`ambiguous-dupe`, a 3+ source canonical — the dupe→source mapping could
+not pin WHICH dupe to peel; the resolver refuses rather than split the
+wrong one). When a dedup-decisions-log mapping is available, pass it as
+`opts.dupeMapping` so 3+ source canonicals split correctly.
 
 Run this BEFORE Step 3.5 so the freshly-split commitments are reflected
 in the day's surface.
+
+### Step 2.7 — Resolve `[[confirm]]` / `[[unconfirm]]` / `[[unresolve]]` directives (Phase 11 11a)
+
+Mirrors Step 2.6's directive scan for the Phase 11 external-resolution
+recovery directives. Before composing the new view, scan the PREVIOUS
+winddown view for resolution-recovery directives the user added, and
+apply each under `commitments.withLock(...)`:
+
+```ts
+import {
+  parseResolutionDirectives,
+  applyConfirm,
+  applyUnconfirm,
+  applyUnresolve,
+  appendResolutionDecisionLog,
+} from '@arete/core';
+
+const { directives, rejectedBulk } = parseResolutionDirectives(priorWinddownContent);
+// Under commitments.withLock(...): for each directive, look up the
+// commitment by id-prefix, apply the matching mutator, write the result,
+// then appendResolutionDecisionLog(root, payload).
+```
+
+Directive semantics (recovery controls — these act ONLY on already-staged
+or auto-resolved commitments):
+
+- `[[confirm <id>]]` — a week-1 STAGED resolution OR a MEDIUM-flagged
+  "possibly done" item the user adjudicates done. `applyConfirm` writes
+  `status='resolved'`, `resolvedBy='user'`, `resolvedConfidence='HIGH'`,
+  `confirmedAt=now` (the 24h `[[unconfirm]]` window starts here).
+- `[[unconfirm <id>]]` — 24h flip-back of a `[[confirm]]` (F2/AC2b).
+- `[[unresolve <id>]]` — reopen an `auto-gmail` or week-1-staged
+  resolution and set a 14-day suppress window (G5/AC6) so the pipeline
+  does not immediately re-resolve it. `--permanent` uses the 2100 sentinel.
+- `[[confirm-all-week-1]]` and any `[[confirm-all*]]` bulk form are
+  INTENTIONALLY UNSUPPORTED (F2 — passive-vote foot-gun). The parser
+  returns these in `rejectedBulk`; surface each `.message` in `## Notes`
+  ("confirm each entry individually").
+
+Surface `"Confirmed / unconfirmed / unresolved N commitment(s)"` in the
+new view's `## Notes`. Mutator failures (e.g. id not found, already in the
+target state) surface their `.reason` in `## Notes`.
+
+**GATING NOTE (Phase 11 auto-resolve).** These recovery directives are
+SAFE to wire even while auto-resolve is gated OFF
+(`PHASE_11_AUTO_RESOLVE_ENABLED` defaults false): with the gate off the
+pipeline never STAGES or auto-resolves anything, so there are no
+`auto-gmail` / week-1-staged commitments for these directives to act on —
+the scan finds nothing and the step is a silent no-op. The plumbing is
+merge-ready and dormant. When the gate opens (after AC3a golden-pair
+precision validation), staged resolutions begin appearing and these
+directives become live. Do NOT auto-resolve from this skill; the
+`arete commitments resolve-from-gmail` verb (itself gated) proposes only.
+
+Run this BEFORE Step 3.5 alongside Step 2.6.
 
 ### Step 4 — Compose the curated view
 
