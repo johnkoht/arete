@@ -401,4 +401,75 @@ integrations:
   });
 });
 
+// ---------------------------------------------------------------------------
+// Tests: listConfigured() — winddown gather gating (new-user degradation fix)
+// ---------------------------------------------------------------------------
+
+describe('IntegrationService.listConfigured', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+  let service: IntegrationService;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    service = makeService(storage);
+  });
+
+  it('returns empty array for a brand-new workspace with no config', async () => {
+    const configured = await service.listConfigured(WORKSPACE);
+    assert.deepEqual(configured, [], 'a new user has no configured integrations');
+  });
+
+  it('returns active integration names from arete.yaml', async () => {
+    storage.files.set(MANIFEST_PATH, `
+schema: 1
+integrations:
+  krisp:
+    status: active
+  google-workspace:
+    status: active
+`.trim());
+
+    const configured = await service.listConfigured(WORKSPACE);
+    assert.ok(configured.includes('krisp'), 'krisp must be reported configured');
+    assert.ok(
+      configured.includes('google-workspace'),
+      'google-workspace must be reported configured',
+    );
+  });
+
+  it('excludes integrations with inactive status', async () => {
+    storage.files.set(MANIFEST_PATH, `
+schema: 1
+integrations:
+  krisp:
+    status: active
+  notion:
+    status: inactive
+`.trim());
+
+    const configured = await service.listConfigured(WORKSPACE);
+    assert.ok(configured.includes('krisp'), 'active krisp must be included');
+    assert.ok(
+      !configured.includes('notion'),
+      'inactive notion must NOT be reported as configured',
+    );
+  });
+
+  it('expands calendar provider alias to google-calendar', async () => {
+    storage.files.set(MANIFEST_PATH, `
+schema: 1
+integrations:
+  calendar:
+    provider: google
+    status: active
+`.trim());
+
+    const configured = await service.listConfigured(WORKSPACE);
+    assert.ok(
+      configured.includes('google-calendar'),
+      'google calendar provider must expand to google-calendar',
+    );
+  });
+});
+
 

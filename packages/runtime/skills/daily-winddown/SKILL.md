@@ -336,9 +336,19 @@ section.
 
 #### 1k — slack-digest in gather-only mode
 
-Invoke the slack-digest skill in `[gather-only]` mode (per PATTERNS.md
-§ "gather-only composition" → "Invocation convention"). Include the
-canonical instruction sentence:
+**Config pre-check (mirrors 1a's `if krisp/fathom is configured` style).**
+Before invoking slack-digest, check whether Slack is configured: present
+in `arete.yaml` `integrations` (any status other than `inactive`), OR the
+Slack MCP server is connected. If Slack is NOT configured, **SKIP this
+step SILENTLY** — do not invoke slack-digest and do not surface anything
+in `## Notes`. A user without Slack is in their **normal** configuration,
+not a degraded one. The degraded-warning path (see `## Notes` framing) is
+reserved for an integration the user *uses* that *failed* — never for a
+never-configured integration.
+
+If Slack IS configured, invoke the slack-digest skill in `[gather-only]`
+mode (per PATTERNS.md § "gather-only composition" → "Invocation
+convention"). Include the canonical instruction sentence:
 
 > "Run the slack-digest skill in `[gather-only]` mode. Return the
 > structured loop output described in slack-digest SKILL.md's
@@ -357,7 +367,16 @@ structured signal is salvageable.
 
 #### 1l — email-triage in gather-only mode
 
-Same shape as 1k. Include the canonical instruction sentence:
+**Config pre-check (same rule as 1k).** Before invoking email-triage,
+check whether email/Gmail is configured: `google-workspace` (or another
+email provider) present in `arete.yaml` `integrations` with a non-`inactive`
+status, OR a Gmail MCP server connected. If email is NOT configured,
+**SKIP this step SILENTLY** — no invocation, no `## Notes` entry. A user
+without Gmail is in their normal configuration, not degraded. Only a
+configured-but-failed email integration is "degraded."
+
+If email IS configured, proceed. Same shape as 1k. Include the canonical
+instruction sentence:
 
 > "Run the email-triage skill in `[gather-only]` mode. Return the
 > structured loop output described in email-triage SKILL.md's
@@ -1060,6 +1079,16 @@ evidence — channel backfill would lift these to Closed today).}
 
 What's your call?
 ```
+
+**Degraded vs. unconfigured (the `## Notes` distinction).** Only surface a
+"degraded — <integration> skipped / unavailable" note when an integration
+the user **uses** (configured per the 1k / 1l pre-checks) **failed** at
+gather time — e.g. Slack MCP timed out, Gmail auth expired, a configured
+pull errored. **Never** surface a degraded note for an integration that
+was silently skipped because it is not configured (1k / 1l SKIP path). For
+a new user who never set up Slack or Gmail, winddown ships **clean** — no
+phantom "degraded — Slack/email skipped" line. Absence of a never-configured
+integration is the normal configuration, not a degradation.
 
 **Reason-label rules** (Pattern 2):
 - ≤12 words.
