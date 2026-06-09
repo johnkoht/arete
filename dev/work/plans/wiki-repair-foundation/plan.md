@@ -28,7 +28,7 @@ Phase 12 (projects-first-class) builds project briefs directly on this foundatio
 
 **Made (John, 2026-06-09):**
 - **Summaries: YES** — wire meeting summaries into the live (approve) path. **Org entities: NO** — delete the dark code (ledger-negative).
-- **Avalanche: option 1+2** — batch alias-rescue + triage, one curated review sitting, before 6/24.
+- **Avalanche: option 1+2** — batch alias-rescue + triage; review-only sitting + resumable background apply (pre-mortem R8). **John pre-authorized slipping past 6/24** (2026-06-09): fallback verified nag-grade (1 stale topic/winddown, capped) — correctness over deadline.
 - **Out of scope, tracked, NOT silently dropped**: email→wiki (never planned), Notion→topics, inbox→topics (summaries are a leaf today), project-docs/PRDs→wiki (published-doc-sync workstream). Also explicitly excluded from this phase: area-memory staleness (4/4 areas ~1mo stale — resolved by normal `arete memory refresh` cadence once observability lands, not a code repair).
 
 **OPEN — needed from John before build:**
