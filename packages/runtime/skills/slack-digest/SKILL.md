@@ -488,6 +488,14 @@ Write `resources/notes/YYYY-MM-DD-slack-digest.md`. The `topics:`
 frontmatter is the **deduped union of per-thread topic slugs from
 Phase 2b**, scoped to user-approved threads. Sort for stable output.
 
+> Note: an `areas: [...]` frontmatter field was removed here (I-1). It was a
+> dead write — no code reads it in either spelling (`areas` plural OR `area`
+> singular); `area-memory.ts` only scans `resources/meetings/`, never digest
+> files, and the planned "Recent Digest Activity" consumer was never built.
+> Do not re-add it expecting it to do something. If a digest-activity consumer
+> is built later, re-introduce a field matching the system-wide singular
+> `area:` convention at that time.
+
 ```markdown
 ---
 title: "Slack Digest — YYYY-MM-DD"
@@ -500,7 +508,6 @@ items_approved: N
 tasks_updated: N
 commitments_resolved: N
 commitments_added: N
-areas: [...]
 topics: [slug1, slug2, ...]
 ---
 
