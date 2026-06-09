@@ -101,6 +101,9 @@ export type {
   EntityRelationship,
   CommitmentStatus,
   CommitmentDirection,
+  StakeholderRole,
+  Stakeholder,
+  ExternalSource,
   Commitment,
   CommitmentsFile,
   // Areas domain
@@ -117,21 +120,32 @@ export type {
   ReconciliationResult,
   ReconciliationContext,
 } from './entities.js';
+export { COMMITMENT_TEXT_VARIANTS_MAX } from './entities.js';
 
 // Intelligence domain
 export type {
   BriefingRequest,
   Briefing,
   PrimitiveBriefing,
-  SynthesizedBriefing,
   SkillContext,
   Suggestion,
+  // Phase 9 typed-mode briefs
+  BriefSection,
+  BriefBase,
+  PersonBrief,
+  ProjectBrief,
+  AreaBrief,
+  MeetingBrief,
+  AttendeeMiniBrief,
+  TypedBrief,
 } from './intelligence.js';
 
 // Integrations domain
 export type {
   StagedItemDirection,
   StagedItemStatus,
+  StagedItemSkipReasonMeta,
+  StagedItemSkipReason,
   StagedItemEdits,
   StagedItemOwnerMeta,
   StagedItemOwner,
@@ -177,3 +191,36 @@ export type {
   ParsedTaskLine,
   ListTasksOptions,
 } from './tasks.js';
+
+// Source-summary domain (Phase 1 wiki expansion)
+export type {
+  SourceType as SummarySourceType,
+  SourceSummaryFrontmatter,
+  MeetingSectionName,
+  InboxSectionName,
+  MeetingSummarySections,
+  InboxSummarySections,
+  MeetingSummary,
+  InboxSummary,
+  SourceSummary,
+} from './source-summary.js';
+export {
+  MEETING_SECTION_NAMES,
+  INBOX_SECTION_NAMES,
+  renderSourceSummary,
+  parseSourceSummary,
+} from './source-summary.js';
+
+// Org-entity domain (Phase 1 wiki expansion)
+export type {
+  OrgEntityFrontmatter,
+  OrgEntity,
+} from './org-entity.js';
+export {
+  AUTO_ORG_MEMORY_START,
+  AUTO_ORG_MEMORY_END,
+  renderOrgEntityPage,
+  parseOrgEntityPage,
+  upsertOrgMemorySection,
+  extractOrgMemorySection,
+} from './org-entity.js';

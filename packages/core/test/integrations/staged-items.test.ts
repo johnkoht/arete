@@ -45,6 +45,7 @@ import {
   parseStagedItemStatus,
   parseStagedItemEdits,
   parseStagedItemOwner,
+  parseStagedItemSkipReason,
   writeItemStatusToFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
@@ -340,6 +341,138 @@ Body.`;
         ownerSlug: 'john-koht',
       },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseStagedItemSkipReason — phase-10-followup-2 Step 1
+// ---------------------------------------------------------------------------
+
+const FRONTMATTER_WITH_SKIP_REASON = `---
+title: "Test Meeting"
+date: "2026-06-04"
+staged_item_status:
+  ai_0042: skipped
+  ai_0043: pending
+staged_item_skip_reason:
+  ai_0042:
+    reason: already fulfilled via slack-dm
+    evidence: "Slack DM → Jamie Burk, 2026-06-04"
+    setBy: chef
+    setAt: 2026-06-04T18:42:11Z
+  ai_0099:
+    reason: discussed at standup
+    evidence: "Standup notes 2026-06-03"
+    setBy: chef-proposed
+    setAt: 2026-06-04T18:42:14Z
+---
+
+Body content.
+`;
+
+describe('parseStagedItemSkipReason (phase-10-followup-2 Step 1)', () => {
+  it('returns {} when content has no frontmatter (M3 first-ship default)', () => {
+    const result = parseStagedItemSkipReason('# Just a heading\nNo frontmatter here.');
+    assert.deepEqual(result, {});
+  });
+
+  it('returns {} when frontmatter has no staged_item_skip_reason field (M3 first-ship)', () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody text.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('reads chef + chef-proposed entries with full payload preserved', () => {
+    const result = parseStagedItemSkipReason(FRONTMATTER_WITH_SKIP_REASON);
+    assert.deepEqual(result, {
+      ai_0042: {
+        reason: 'already fulfilled via slack-dm',
+        evidence: 'Slack DM → Jamie Burk, 2026-06-04',
+        setBy: 'chef',
+        setAt: '2026-06-04T18:42:11Z',
+      },
+      ai_0099: {
+        reason: 'discussed at standup',
+        evidence: 'Standup notes 2026-06-03',
+        setBy: 'chef-proposed',
+        setAt: '2026-06-04T18:42:14Z',
+      },
+    });
+  });
+
+  it('accepts setBy: user (override path)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: I already sent this
+    evidence: "Manual override"
+    setBy: user
+    setAt: 2026-06-05T08:13:02Z
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.equal(result['ai_0001']?.setBy, 'user');
+  });
+
+  it('drops entries with invalid setBy value', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: foo
+    evidence: bar
+    setBy: typo-not-allowed
+    setAt: 2026-06-04T18:42:11Z
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('drops entries missing required fields (reason/evidence/setAt)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: only-reason-no-evidence
+    setBy: chef
+    setAt: 2026-06-04T18:42:11Z
+  ai_0002:
+    reason: ok
+    evidence: ok
+    setBy: chef
+    # missing setAt
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('drops entries where meta is non-object (null, string, array)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001: null
+  ai_0002: "string value"
+  ai_0003:
+    - element1
+    - element2
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('returns {} when staged_item_skip_reason is an array (wrong shape)', () => {
+    const content = `---
+staged_item_skip_reason:
+  - reason: foo
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.deepEqual(result, {});
   });
 });
 
@@ -759,7 +892,9 @@ Content here.
     );
   });
 
-  it('(26) stores direction-aware owner notation in approved_items frontmatter', async () => {
+  it('(26) writes direction-aware owner notation to ## Approved Action Items body section', async () => {
+    // Phase 2 (Areté v2): the `frontmatter.approved_items` field is gone.
+    // Owner notation lives in the ## Approved Action Items body section.
     const meetingWithOwner = `---
 title: "Meeting with Owner"
 date: "2026-03-01"
@@ -790,17 +925,23 @@ Content here.
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
 
     const updated = storage.files.get(MEETING_FILE)!;
-    const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
-    const frontmatter = parseYaml(frontmatterMatch![1]) as Record<string, unknown>;
-    const approvedItems = frontmatter['approved_items'] as { actionItems: string[] };
 
+    // Body sections — single source of truth post-Phase-2
     assert.ok(
-      approvedItems.actionItems[0].includes('(@john-koht → @lindsay-gray)'),
-      'i_owe_them should use → in approved_items'
+      updated.includes('(@john-koht → @lindsay-gray)'),
+      'i_owe_them should use → in ## Approved Action Items body section',
     );
     assert.ok(
-      approvedItems.actionItems[1].includes('(@anthony-avina ← @john-koht)'),
-      'they_owe_me should use ← in approved_items'
+      updated.includes('(@anthony-avina ← @john-koht)'),
+      'they_owe_me should use ← in ## Approved Action Items body section',
+    );
+
+    // Frontmatter no longer carries the third-copy duplicate
+    const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatter = parseYaml(frontmatterMatch![1]) as Record<string, unknown>;
+    assert.ok(
+      !('approved_items' in frontmatter),
+      'frontmatter.approved_items should be removed (Phase 2 third-copy cleanup)',
     );
   });
 
@@ -1109,5 +1250,226 @@ describe('commitApprovedItems — onApproved observer error containment', () => 
     assert.match(stderr, /fail-ai_001/);
     assert.match(stderr, /fail-de_001/);
     assert.match(stderr, /fail-le_001/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// phase-10-followup-2 Step 4 / Step 4a — apply honors skip + F5 cleanup
+// ---------------------------------------------------------------------------
+
+const MEETING_WITH_CHEF_SKIP = `---
+title: "John ↔ Jamie 2026-06-04"
+date: "2026-06-04"
+status: synced
+attendees:
+  - name: John Koht
+  - name: Jamie Burk
+staged_item_status:
+  ai_0042: skipped
+  ai_0043: approved
+staged_item_skip_reason:
+  ai_0042:
+    reason: already fulfilled via slack-dm
+    evidence: "Slack DM → Jamie Burk, 2026-06-04"
+    setBy: chef
+    setAt: 2026-06-04T18:42:11Z
+---
+
+## Staged Action Items
+- ai_0042: Share the Notion claim-review-process doc with Jamie
+- ai_0043: Schedule follow-up next week
+
+## Transcript
+Stuff.
+`;
+
+describe('commitApprovedItems — AC3 chef skip honored on apply (phase-10-followup-2)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    storage.files.set(MEETING_FILE, MEETING_WITH_CHEF_SKIP);
+  });
+
+  it('AC3 — skipped item is NOT in the Approved Action Items section', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    // ai_0043 was approved → present.
+    assert.match(updated!, /Schedule follow-up next week/);
+    // ai_0042 was skipped → must NOT appear in the Approved Action Items.
+    const approvedSectionMatch = updated!.match(
+      /## Approved Action Items\n([\s\S]*?)(?=\n## |$)/,
+    );
+    assert.ok(approvedSectionMatch, 'expected ## Approved Action Items section');
+    assert.doesNotMatch(approvedSectionMatch![1], /Share the Notion/);
+  });
+
+  it('AC3 — ## Skipped on Apply section lists the skipped item with reason + setBy', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    assert.match(updated!, /## Skipped on Apply/);
+    // The skipped item line includes id, text, reason, setBy.
+    assert.match(updated!, /\[ai_0042\] Share the Notion/);
+    assert.match(updated!, /skipped: already fulfilled via slack-dm/);
+    assert.match(updated!, /\(chef,/);
+  });
+
+  it('AC3 — post-commit cleanup: approved IDs gone, skipped IDs gone, pending preserved (F5)', async () => {
+    // Add a pending item to verify it survives the F5 cleanup.
+    const fixture = MEETING_WITH_CHEF_SKIP.replace(
+      'ai_0043: approved',
+      `ai_0043: approved
+  ai_0044: pending`,
+    ).replace(
+      '- ai_0043: Schedule follow-up next week',
+      `- ai_0043: Schedule follow-up next week
+- ai_0044: Some pending item not acted on`,
+    );
+    storage.files.set(MEETING_FILE, fixture);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    const fmMatch = updated!.match(/^---\n([\s\S]*?)\n---/);
+    assert.ok(fmMatch);
+    const fm = parseYaml(fmMatch![1]) as Record<string, unknown>;
+
+    // F5 contract: cleanup filters by approvedIds. ai_0043 (approved)
+    // gets removed. ai_0042 (skipped, NOT approved) and ai_0044 (pending,
+    // NOT approved) BOTH survive. This is the v3 spec — skip_reason for
+    // skipped items lives in the audit trail (## Skipped on Apply body
+    // section) AND can be re-reviewed next round.
+    const status = fm['staged_item_status'] as Record<string, string> | undefined;
+    assert.ok(status, 'staged_item_status should still exist (ai_0044 pending)');
+    assert.ok(!('ai_0043' in status!), 'approved ai_0043 cleaned');
+    assert.equal(status!['ai_0042'], 'skipped', 'skipped ai_0042 SURVIVES (not in approvedIds — F5)');
+    assert.equal(status!['ai_0044'], 'pending', 'pending ai_0044 preserved');
+
+    // F5 critical: skip_reason for the skipped ai_0042 also survives the
+    // filter (ai_0042 was skipped, not approved).
+    const skipReason = fm['staged_item_skip_reason'] as Record<string, Record<string, unknown>> | undefined;
+    assert.ok(skipReason, 'skip_reason should survive for non-approved IDs');
+    assert.ok(skipReason!['ai_0042'], 'ai_0042 skip_reason preserved (was skipped, not approved)');
+  });
+
+  it('AC11 / F5 — week-1 unskip survival: unsked pending item + skip_reason both survive apply cleanup', async () => {
+    // Simulate the week-1 chef-proposed → user unskip flow:
+    // 1. Chef proposed ai_0099 as chef-proposed (status: pending, reason: chef-proposed)
+    // 2. User added [[unskip]] (skip_reason deleted, status stays pending)
+    // 3. Separately user approves ai_0042 and runs apply
+    // 4. Assert ai_0099 still present in staged_item_status as pending
+    const fixture = `---
+title: "Test"
+date: "2026-06-07"
+status: synced
+attendees:
+  - name: John Koht
+staged_item_status:
+  ai_0042: approved
+  ai_0099: pending
+staged_item_skip_reason:
+  ai_0099:
+    reason: discussed at standup
+    evidence: "Standup notes 2026-06-06"
+    setBy: chef-proposed
+    setAt: 2026-06-06T18:42:14Z
+---
+
+## Staged Action Items
+- ai_0042: Send the deck
+- ai_0099: A pending chef-proposed item
+
+## Transcript
+.
+`;
+    storage.files.set(MEETING_FILE, fixture);
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    const fmMatch = updated!.match(/^---\n([\s\S]*?)\n---/);
+    assert.ok(fmMatch);
+    const fm = parseYaml(fmMatch![1]) as Record<string, unknown>;
+
+    // ai_0099 must STILL be in staged_item_status as pending (NOT cleared
+    // by wholesale wipe). Closes F5/AC11.
+    const status = fm['staged_item_status'] as Record<string, string>;
+    assert.ok(status, 'staged_item_status survives because ai_0099 still pending');
+    assert.equal(status['ai_0099'], 'pending', 'ai_0099 pending entry survives');
+    assert.ok(!('ai_0042' in status), 'approved ai_0042 cleaned');
+
+    // Skip reason for ai_0099 survives too (chef-proposed lapsed, but
+    // skip_reason is preserved so next round chef can re-propose).
+    const skipReason = fm['staged_item_skip_reason'] as Record<string, Record<string, unknown>>;
+    assert.ok(skipReason['ai_0099'], 'ai_0099 chef-proposed skip_reason survives');
+    assert.equal(skipReason['ai_0099']['setBy'], 'chef-proposed');
+  });
+
+  it('AC9 — onSkipped observer fires per skipped item with payload', async () => {
+    const observed: Array<Record<string, unknown>> = [];
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR, {
+      onSkipped: async (rec) => {
+        observed.push({ id: rec.id, reason: rec.reason, setBy: rec.setBy });
+      },
+    });
+    assert.equal(observed.length, 1, 'one skipped item');
+    assert.equal(observed[0].id, 'ai_0042');
+    assert.equal(observed[0].reason, 'already fulfilled via slack-dm');
+    assert.equal(observed[0].setBy, 'chef');
+  });
+
+  it('onSkipped error containment — observer throw does not abort the commit', async () => {
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR, {
+        onSkipped: async () => {
+          throw new Error('observer-boom');
+        },
+      });
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+
+    // Commit completed despite observer throwing.
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    assert.match(updated!, /Skipped on Apply/);
+    assert.match(stderrChunks.join(''), /observer-boom/);
+  });
+
+  it('handles missing skip_reason gracefully (extract-time skip with no reason)', async () => {
+    // Item is `'skipped'` but has no entry in staged_item_skip_reason —
+    // this can happen for extract-time existing-task matches.
+    const fixture = `---
+title: "Test"
+date: "2026-06-04"
+status: synced
+attendees:
+  - name: John Koht
+staged_item_status:
+  ai_0042: skipped
+---
+
+## Staged Action Items
+- ai_0042: A line dropped at extract time
+
+## Transcript
+.
+`;
+    storage.files.set(MEETING_FILE, fixture);
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    assert.match(updated!, /Skipped on Apply/);
+    assert.match(updated!, /extract-time, no reason recorded/);
   });
 });

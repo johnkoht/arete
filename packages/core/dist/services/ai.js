@@ -17,6 +17,10 @@ const DEFAULT_TASK_TIERS = {
     reconciliation: 'standard',
     synthesis: 'standard',
     brief: 'standard',
+    // Phase 11 11a — fast tier per AC3a (precision floor ≥0.95 with the
+    // hybrid pre-filter doing the heavy throttling). Promote to standard only
+    // if golden-set precision drops below 0.95.
+    external_resolution: 'fast',
 };
 /**
  * Parse a model string into provider and model ID.
@@ -200,6 +204,51 @@ export class AIService {
             model: response.model,
             provider: response.provider,
         };
+    }
+    /**
+     * Run N independent AI calls concurrently, returning their text responses
+     * in the same order as the input.
+     *
+     * Phase 10 plan §10a-pre + pre-mortem F1 mitigation. The Phase 10b-min
+     * dedup pipeline needs to evaluate K candidate pairs per extract; running
+     * them serially against `fast` tier blows AC13's ≤5s/extract gate
+     * (5 candidates × ~600ms serial ≈ 3s, then 10 staged items × 3s = 30s).
+     * Promise.all gets the cluster to ~one call's latency for independent
+     * pairs.
+     *
+     * This is a deliberately thin wrapper around `call()` — it does NOT do
+     * prompt-level batching (joining N pairs into one prompt and parsing an
+     * array response). That higher-level batching can be built on top of
+     * `callConcurrent` when N is large enough that per-call overhead
+     * dominates; until then the parallel-Promise.all path covers the
+     * dedup-cross-check shape.
+     *
+     * Properties:
+     *  - **Ordering preserved**: result[i] corresponds to prompts[i].
+     *  - **All-or-throw**: if any call rejects, `callConcurrent` rejects with
+     *    the first rejection (Promise.all semantics). Callers that need
+     *    partial-success handling can wrap individual prompts with their own
+     *    try/catch or use `Promise.allSettled` at the call site instead.
+     *  - **Independent tiers**: each prompt carries its own tier, so a batch
+     *    can mix `fast`/`standard` calls (e.g., a confidence-tier promotion
+     *    pass).
+     *  - **No batching of provider tokens** — N concurrent HTTP requests
+     *    against the upstream API. Respect provider rate limits.
+     *
+     * @param prompts - Array of {tier, prompt} pairs to run in parallel.
+     * @param options - Shared call options applied to every prompt.
+     * @returns Array of response text strings, indexed parallel to input.
+     */
+    async callConcurrent(prompts, options) {
+        if (prompts.length === 0)
+            return [];
+        const results = await Promise.all(prompts.map(async ({ tier, prompt }) => {
+            const modelString = this.getModelForTier(tier);
+            const modelSpec = parseModelSpec(modelString);
+            const result = await this.callWithModel(modelSpec, prompt, options);
+            return result.text;
+        }));
+        return results;
     }
     /**
      * Call the AI and parse the response as structured JSON.

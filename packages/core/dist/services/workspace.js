@@ -19,6 +19,8 @@ const SKILLS_DOC_FILES = new Set([
 ]);
 import { loadConfig, getDefaultConfig } from '../config.js';
 import { SkillService } from './skills.js';
+import { seedSkillsLocal } from './skills-local.js';
+import { migratePreSplitAgentSkills } from './skill-fork.js';
 import { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from '../utils/integration.js';
 export class WorkspaceService {
     storage;
@@ -149,6 +151,7 @@ export class WorkspaceService {
             ideConfig: join(workspaceRoot, adapter.configDirName),
             rules: join(workspaceRoot, adapter.rulesDir()),
             agentSkills: join(workspaceRoot, '.agents', 'skills'),
+            managedSkills: join(workspaceRoot, '.arete', 'skills'),
             tools: join(workspaceRoot, adapter.toolsDir()),
             integrations: join(workspaceRoot, adapter.integrationsDir()),
             context: join(workspaceRoot, 'context'),
@@ -214,14 +217,18 @@ export class WorkspaceService {
         if (sourcePaths && this.storage.copy) {
             const paths = this.getPaths(targetDir);
             if (await this.storage.exists(sourcePaths.skills)) {
+                // Phase 3 Step 1: shipped skills land in `.arete/skills/` (managed,
+                // refreshed on update). User customizations live in `.agents/skills/`
+                // and take precedence at agent-load time (skill-resolver two-tier
+                // resolution).
                 const subdirs = await this.storage.listSubdirectories(sourcePaths.skills);
                 for (const src of subdirs) {
                     const name = src.split(/[/\\]/).pop() ?? '';
-                    const dest = join(paths.agentSkills, name);
+                    const dest = join(paths.managedSkills, name);
                     const destExists = await this.storage.exists(dest);
                     if (!destExists) {
                         try {
-                            await this.storage.mkdir(paths.agentSkills);
+                            await this.storage.mkdir(paths.managedSkills);
                             await this.storage.copy(src, dest, { recursive: true });
                             result.skills.push(name);
                         }
@@ -241,15 +248,15 @@ export class WorkspaceService {
                     const filename = src.split(/[/\\]/).pop() ?? '';
                     if (!filename || SKILLS_DOC_FILES.has(filename))
                         continue;
-                    const dest = join(paths.agentSkills, filename);
+                    const dest = join(paths.managedSkills, filename);
                     const destExists = await this.storage.exists(dest);
                     if (!destExists) {
                         try {
-                            await this.storage.mkdir(paths.agentSkills);
+                            await this.storage.mkdir(paths.managedSkills);
                             const content = await this.storage.read(src);
                             if (content !== null) {
                                 await this.storage.write(dest, content);
-                                result.files.push(join('.agents', 'skills', filename));
+                                result.files.push(join('.arete', 'skills', filename));
                             }
                         }
                         catch (err) {
@@ -421,6 +428,22 @@ export class WorkspaceService {
                 }
             }
         }
+        // Seed `.arete/skills-local/<slug>.md` APPEND-file templates for the
+        // five Phase 2 chef-orchestrator skills. Idempotent — never
+        // overwrites existing user content. The agent reads these files at
+        // the start of each chef-orchestrator skill run for per-skill
+        // user guidance.
+        try {
+            const seedResult = await seedSkillsLocal(this.storage, targetDir);
+            for (const file of seedResult.added) {
+                if (!result.files.includes(file))
+                    result.files.push(file);
+            }
+        }
+        catch {
+            // Non-fatal: skills-local seeding failure should never wedge
+            // workspace install.
+        }
         const manifest = {
             schema: 1,
             version: '0.1.0',
@@ -473,6 +496,7 @@ export class WorkspaceService {
                 ideConfig: join(workspaceRoot, adapter.configDirName),
                 rules: join(workspaceRoot, adapter.rulesDir()),
                 agentSkills: join(workspaceRoot, '.agents', 'skills'),
+                managedSkills: join(workspaceRoot, '.arete', 'skills'),
                 tools: join(workspaceRoot, adapter.toolsDir()),
                 integrations: join(workspaceRoot, adapter.integrationsDir()),
                 context: join(workspaceRoot, 'context'),
@@ -492,12 +516,67 @@ export class WorkspaceService {
             updated: [],
             preserved: config.skills?.overrides ? [...config.skills.overrides] : [],
             removed: [],
+            cleaned: [],
         };
         if (options.sourcePaths?.skills) {
-            const syncResult = await this.syncCoreSkills(options.sourcePaths.skills, paths.agentSkills, new Set(config.skills?.overrides ?? []));
+            // Phase 3 Step 1: shipped skills are refreshed in `.arete/skills/`,
+            // not `.agents/skills/`. User forks under `.agents/skills/` are
+            // never touched by `arete update`. Pre-Phase-3 workspaces with
+            // shipped content under `.agents/skills/` are migrated on first
+            // Phase 3 update — see `migratePreSplitAgentSkills` below.
+            const syncResult = await this.syncCoreSkills(options.sourcePaths.skills, paths.managedSkills, new Set(config.skills?.overrides ?? []));
             result.added.push(...syncResult.added);
             result.updated.push(...syncResult.updated);
             result.preserved.push(...syncResult.preserved);
+            // Phase 3 Step 7: migrate pre-Phase-3 `.agents/skills/<name>/`
+            // content to either (a) cleanup-as-tracked (matches managed) or
+            // (b) preserve-as-fork (differs from managed). Idempotent.
+            //
+            // Phase 3.5 (A2/A3/A4): pass `sourceSkillsDir` so the migration
+            // additionally cleans stale SKILL.legacy.md files (A2 — source
+            // is gone post-MC5), byte-equal aux files (A3), and empty user-
+            // skill directories (A4).
+            try {
+                const migrated = await migratePreSplitAgentSkills(this.storage, paths.agentSkills, paths.managedSkills, {
+                    sourceSkillsDir: options.sourcePaths.skills,
+                    // Phase 3.5 B1 — opportunistic git-history match for
+                    // user-edited forks with no recorded base. Best-effort.
+                    autoForkBase: true,
+                });
+                for (const name of migrated.removed) {
+                    if (!result.removed.includes(name))
+                        result.removed.push(name);
+                }
+                for (const name of migrated.preserved) {
+                    if (!result.preserved.includes(name))
+                        result.preserved.push(name);
+                }
+                if (migrated.cleaned.length > 0) {
+                    if (!result.cleaned)
+                        result.cleaned = [];
+                    result.cleaned.push(...migrated.cleaned);
+                }
+            }
+            catch {
+                // Non-fatal: migration failure must never wedge `arete update`.
+            }
+        }
+        // Seed `.arete/skills-local/<slug>.md` APPEND templates (Phase 2).
+        // Idempotent: existing user content is preserved verbatim. New
+        // templates are added; preserved files are listed in result.preserved.
+        try {
+            const seedResult = await seedSkillsLocal(this.storage, workspaceRoot);
+            for (const file of seedResult.added) {
+                if (!result.added.includes(file))
+                    result.added.push(file);
+            }
+            for (const file of seedResult.preserved) {
+                if (!result.preserved.includes(file))
+                    result.preserved.push(file);
+            }
+        }
+        catch {
+            // Non-fatal: skills-local seeding failure should never wedge update.
         }
         // Build skill list for commands and root files
         const skillService = new SkillService(this.storage);
@@ -574,11 +653,19 @@ export class WorkspaceService {
         }
         // Regenerate integration sections in all installed skills (unconditional).
         // Runs independently of options.sourcePaths so community/external skills benefit too.
+        // Phase 3: walks BOTH `.agents/skills/` (user forks + community skills)
+        // AND `.arete/skills/` (managed/shipped skills).
         {
-            const agentSkillsExists = await this.storage.exists(paths.agentSkills);
-            if (agentSkillsExists) {
-                const skillDirs = await this.storage.listSubdirectories(paths.agentSkills);
-                for (const skillDir of skillDirs) {
+            const skillDirsToScan = [];
+            for (const dir of [paths.agentSkills, paths.managedSkills]) {
+                const dirExists = await this.storage.exists(dir);
+                if (dirExists) {
+                    const subdirs = await this.storage.listSubdirectories(dir);
+                    skillDirsToScan.push(...subdirs);
+                }
+            }
+            if (skillDirsToScan.length > 0) {
+                for (const skillDir of skillDirsToScan) {
                     try {
                         const info = await skillService.getInfo(skillDir);
                         const integration = info.integration ?? deriveIntegrationFromLegacy(info);
@@ -773,6 +860,32 @@ export class WorkspaceService {
             await this.storage.write(targetPath, content);
         }
     }
+    /**
+     * Phase 3.5 A1 helper. Guarantees `<targetSkillDir>/SKILL.md` exists.
+     * Reads `<sourceSkillDir>/SKILL.md`; if missing in target, writes it.
+     * Idempotent and best-effort — a non-fatal storage error here must
+     * not wedge `arete update`.
+     */
+    async ensureManagedSkillMd(sourceSkillDir, targetSkillDir) {
+        try {
+            const targetSkillMd = join(targetSkillDir, 'SKILL.md');
+            const targetMdExists = await this.storage.exists(targetSkillMd);
+            if (targetMdExists)
+                return;
+            const sourceSkillMd = join(sourceSkillDir, 'SKILL.md');
+            const sourceMdExists = await this.storage.exists(sourceSkillMd);
+            if (!sourceMdExists)
+                return;
+            const content = await this.storage.read(sourceSkillMd);
+            if (content === null)
+                return;
+            await this.storage.mkdir(targetSkillDir);
+            await this.storage.write(targetSkillMd, content);
+        }
+        catch {
+            // Non-fatal: defensive write must never wedge update.
+        }
+    }
     async isCommunitySkill(skillDir) {
         const metaPath = join(skillDir, '.arete-meta.yaml');
         const exists = await this.storage.exists(metaPath);
@@ -806,10 +919,21 @@ export class WorkspaceService {
             const targetExists = await this.storage.exists(targetSkillDir);
             if (overrides.has(skillName)) {
                 preserved.push(skillName);
+                // AC3.5.1 (Phase 3.5 A1) — even when this skill is overridden,
+                // ensure the managed copy of SKILL.md exists. The override
+                // signals "don't overwrite the managed prose if the user has
+                // customized it via skills.overrides", but a missing managed
+                // SKILL.md leaves the resolver with no fallback if the user
+                // later removes their override. Defensive write.
+                await this.ensureManagedSkillMd(sourceSkillDir, targetSkillDir);
                 continue;
             }
             if (targetExists && await this.isCommunitySkill(targetSkillDir)) {
                 preserved.push(skillName);
+                // Same guarantee for community-tagged managed entries: the
+                // managed copy of SKILL.md must exist. Community metadata
+                // shouldn't suppress upstream prose refresh.
+                await this.ensureManagedSkillMd(sourceSkillDir, targetSkillDir);
                 continue;
             }
             await this.copyDirectory(sourceSkillDir, targetSkillDir);
@@ -819,6 +943,17 @@ export class WorkspaceService {
             else {
                 added.push(skillName);
             }
+        }
+        // AC3.5.1 (Phase 3.5 A1) defensive verification — for every
+        // source skill, confirm `<targetSkillsDir>/<name>/SKILL.md` exists.
+        // If any are missing (prior-bug residue, or a partial earlier
+        // failure), force-write SKILL.md from source. Idempotent.
+        for (const sourceSkillDir of sourceSkillDirs) {
+            const skillName = sourceSkillDir.split(/[/\\]/).pop() ?? '';
+            if (!skillName)
+                continue;
+            const targetSkillDir = join(targetSkillsDir, skillName);
+            await this.ensureManagedSkillMd(sourceSkillDir, targetSkillDir);
         }
         // Copy root-level .md files to target (always overwrite — consistent with copyDirectory behavior for core content)
         // Exclude documentation files that aren't skills (LEARNINGS.md, PATTERNS.md, etc.)

@@ -4,6 +4,50 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Areté v2 — Faster daily flow, forkable skills, sharper memory
+
+A big update. The daily and weekly winddown skills now do all their analysis up front and then come back to you with a short list of curated proposals — each with a reason label — instead of walking you through one item at a time. In practice winddown went from a 30–45 minute slog to roughly half that.
+
+### Winddown does the work, then asks
+
+The winddown skills (and `inbox-triage`, `email-triage`, `slack-digest`, `schedule-meeting`) now follow a "chef" pattern: gather and reconcile everything, then surface a curated set of proposals you approve or decline. Deferred or lower-signal items show up as a sidecar rather than cluttering the main flow. Nothing is auto-executed — every action is a numbered proposal.
+
+### Fork a skill, keep your edits across updates
+
+Areté skills now live in two places. The **managed** versions ship in `.arete/skills/` and get refreshed on `arete update`. When you want to customize one, fork it:
+
+```bash
+arete skill fork daily-plan     # copy into .agents/skills/, yours to edit
+arete skill diff daily-plan     # after `arete update`, see what changed upstream
+arete skill merge daily-plan    # pull those changes into your fork
+```
+
+Your fork wins at runtime, and `arete update` never overwrites it. `arete update` migrates any pre-existing customized skills into the new layout automatically.
+
+### `arete brief` is now typed
+
+`arete brief` takes one of four typed modes or free-text:
+
+```bash
+arete brief --person lindsay-gray        # everything about a person
+arete brief --project checkout-redesign  # a project
+arete brief --area customer-acme         # an area
+arete brief --meeting "Lindsay 1:1"      # a meeting (slug or title)
+arete brief --for "competitive pricing"  # free-text, as before
+```
+
+Output is the full assembled context (no LLM synthesis step). The `--raw` flag still works but is now a no-op — raw is the only mode. This restores the rich, grounded briefs that meeting-agenda prep depends on.
+
+### Sharper memory and commitments
+
+- **Memory grew a summaries layer** — alongside topic pages, Areté now writes source summaries and org-entity pages, so the wiki accumulates "what we know" in more than one shape.
+- **Commitment dedup** — a new `arete dedup` command runs the same near-duplicate detection retroactively across a window (`--dry-run` by default, `--apply` to write, `--explain <id>` to see why two commitments were merged). A background hygiene pass keeps the list clean over time.
+- **Commitment migration** — if you have older commitments, `arete commitments migrate` upgrades them (dry-run first, then `--apply --owner-slug <you>`), and `arete commitments backfill-area` fills in areas. Read the generated diff before applying.
+
+> **Not in this release:** automatic Gmail-based commitment resolution is wired but ships **off** — leave it off for now. Projects-first-class briefs (`arete brief --project` lighting up from a project's area) are planned, not yet shipped.
+
+---
+
 ## Week of April 27, 2026 (release — 0.10.0)
 
 ### Slack Digests Now Feed the Topic Wiki
@@ -671,7 +715,7 @@ Big week for visibility and AI configuration.
 
 The backend runs locally and the dashboard opens in your default browser. All your data stays on your machine.
 
-**Morning intelligence brief.** Run `arete daily` each morning to see what's on your plate: today's calendar, overdue commitments, active projects, recent decisions, and cross-person signal patterns. It's a quick way to orient before diving into work.
+**Morning intelligence brief.** Run `arete daily` each morning to see what's on your plate: today's calendar, overdue commitments, active projects, recent decisions, and cross-person signal patterns. It's a quick way to orient before diving into work. _**Removed in Phase 7b** (2026-05-29) — use the `/daily-plan` skill for morning planning or `arete status` / `arete brief` for the equivalent shell-side surface._
 
 **Momentum tracking.** `arete momentum` shows you commitment momentum (what's hot, stale, or critical) and relationship momentum (who you're actively meeting with vs. relationships that have gone quiet). Useful for weekly reviews and ensuring nothing slips through the cracks.
 

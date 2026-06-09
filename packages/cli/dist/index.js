@@ -14,6 +14,7 @@ import { registerStatusCommand } from './commands/status.js';
 import { registerRouteCommand } from './commands/route.js';
 import { registerContextCommand, registerMemoryCommand, registerResolveCommand, registerBriefCommand, } from './commands/intelligence.js';
 import { registerPeopleCommands } from './commands/people.js';
+import { registerAreasCommands } from './commands/areas.js';
 import { registerTopicCommands } from './commands/topic.js';
 import { registerSkillCommands } from './commands/skill.js';
 import { registerToolCommands } from './commands/tool.js';
@@ -28,7 +29,6 @@ import { registerAvailabilityCommands } from './commands/availability.js';
 import { registerCalendarCommands } from './commands/calendar.js';
 import { registerCommitmentsCommand } from './commands/commitments.js';
 import { registerViewCommand } from './commands/view.js';
-import { registerDailyCommand } from './commands/daily.js';
 import { registerMomentumCommand } from './commands/momentum.js';
 import { registerCredentialsCommand } from './commands/credentials.js';
 import { registerConfigCommand } from './commands/config.js';
@@ -38,6 +38,7 @@ import { registerInboxCommand } from './commands/inbox.js';
 import { registerHygieneCommand } from './commands/hygiene.js';
 import { registerCostCommand } from './commands/cost.js';
 import { registerEventsCommand } from './commands/events.js';
+import { registerDedupCommand } from './commands/dedup.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -58,8 +59,6 @@ ${chalk.bold('Intelligence')}
   search "query"                   Search across workspace (semantic)
   search "query" --scope <scope>   Limit to scope (memory|meetings|context|projects|people)
   search "query" --timeline        Show temporal view with themes
-  search "query" --answer          AI synthesis of results
-  daily                            Morning intelligence brief
   momentum [--person <slug>]       Commitment and relationship momentum
   context --for "query"            ${chalk.dim('[DEPRECATED]')} Use: search "query"
   context --inventory              Show freshness dashboard & coverage gaps
@@ -82,6 +81,10 @@ ${chalk.bold('People')}
   people index                     Regenerate index
   people intelligence digest       Batch people classification suggestions
   people memory refresh            Refresh person memory highlights
+
+${chalk.bold('Areas')}
+  areas list [--json]              List areas with summary fields
+  areas epics [--active] [--slug]  List Jira epic watchlists per area
 
 ${chalk.bold('Inbox')}
   inbox add --title <t> --body <b>   Add text to inbox
@@ -137,6 +140,7 @@ registerMemoryCommand(program);
 registerResolveCommand(program);
 registerBriefCommand(program);
 registerPeopleCommands(program);
+registerAreasCommands(program);
 registerTopicCommands(program);
 registerSkillCommands(program);
 registerToolCommands(program);
@@ -149,7 +153,6 @@ registerAvailabilityCommands(program);
 registerCalendarCommands(program);
 registerCommitmentsCommand(program);
 registerViewCommand(program);
-registerDailyCommand(program);
 registerMomentumCommand(program);
 registerCredentialsCommand(program);
 registerConfigCommand(program);
@@ -159,5 +162,6 @@ registerInboxCommand(program);
 registerHygieneCommand(program);
 registerCostCommand(program);
 registerEventsCommand(program);
+registerDedupCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

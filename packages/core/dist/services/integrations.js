@@ -147,6 +147,26 @@ export class IntegrationService {
         }
         return entries;
     }
+    /**
+     * Returns the keys of integrations that are present in the workspace config
+     * (arete.yaml integrations map + backward-compat configs dir).
+     *
+     * "Configured" means the user has set the integration up at all — it is the
+     * signal used by winddown gather steps (slack-digest, email-triage) to decide
+     * whether to invoke an integration or SKIP it silently. A user who never
+     * configured an integration is in their normal configuration, not a degraded
+     * one, so the absence of a key here is NOT a degraded state.
+     *
+     * An integration counts as configured when it appears in the config with any
+     * status other than 'inactive'/null (i.e. it was set up, even if pull later
+     * fails). Calendar provider aliases are expanded the same way as list().
+     */
+    async listConfigured(workspaceRoot) {
+        const entries = await this.list(workspaceRoot);
+        return entries
+            .filter((entry) => entry.configured !== null && entry.configured !== 'inactive')
+            .map((entry) => entry.name);
+    }
     async configure(workspaceRoot, integration, config) {
         const configPath = getWorkspaceConfigPath(workspaceRoot);
         let existing = { schema: 1 };
@@ -183,6 +203,7 @@ export class IntegrationService {
             ideConfig: join(workspaceRoot, adapter.configDirName),
             rules: join(workspaceRoot, adapter.rulesDir()),
             agentSkills: join(workspaceRoot, '.agents', 'skills'),
+            managedSkills: join(workspaceRoot, '.arete', 'skills'),
             tools: join(workspaceRoot, adapter.toolsDir()),
             integrations: join(workspaceRoot, adapter.integrationsDir()),
             context: join(workspaceRoot, 'context'),

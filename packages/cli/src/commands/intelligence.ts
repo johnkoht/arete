@@ -2,7 +2,18 @@
  * Intelligence commands — context, memory, resolve, brief
  */
 
-import { createServices, PRODUCT_PRIMITIVES, loadConfig, refreshQmdIndex } from '@arete/core';
+import {
+  createServices,
+  PRODUCT_PRIMITIVES,
+  loadConfig,
+  refreshQmdIndex,
+  formatPersonBriefMarkdown,
+  formatProjectBriefMarkdown,
+  formatAreaBriefMarkdown,
+  formatMeetingBriefMarkdown,
+} from '@arete/core';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import type { ProductPrimitive, QmdRefreshResult } from '@arete/core';
@@ -477,18 +488,12 @@ export function registerMemoryCommand(program: Command): void {
 
       const paths = services.workspace.getPaths(root);
 
-      // 1. Refresh area memory (with synthesis if AI configured)
-      const callLLM = services.ai.isConfigured()
-        ? async (prompt: string) => {
-            const result = await services.ai.call('synthesis', prompt);
-            return result.text;
-          }
-        : undefined;
-
+      // 1. Refresh area memory (mechanical-only after Phase 7b — LLM
+      //    synthesis paths removed; use `arete topic refresh --all` for
+      //    topic-page LLM synthesis).
       const areaResult = await services.areaMemory.refreshAllAreaMemory(paths, {
         areaSlug: opts.area,
         dryRun: opts.dryRun,
-        callLLM,
       });
 
       // 2. Refresh person memory (unless targeting a specific area)
@@ -498,31 +503,6 @@ export function registerMemoryCommand(program: Command): void {
           dryRun: opts.dryRun,
           commitments: services.commitments,
         });
-      }
-
-      // 2b. Refresh topic pages (Step 6 wiring — `arete memory refresh` now
-      // transparently refreshes topics when AI is configured, same pattern
-      // as cross-area synthesis). Gated on callLLM presence AND non-area
-      // scope (area-scoped refresh is a targeted operation, not a bulk
-      // memory sweep). Graceful fallback on error: topics stay as-is.
-      let topicResult: { topics: unknown[]; totalIntegrated: number; totalFallback: number; totalSkipped: number } | undefined;
-      if (!opts.area && !opts.dryRun && callLLM !== undefined) {
-        try {
-          topicResult = await services.topicMemory.refreshAllFromSources(paths, {
-            today: new Date().toISOString().slice(0, 10),
-            callLLM,
-            workspaceRoot: root,
-            lockLabel: 'memory refresh',
-          });
-        } catch (err) {
-          // SeedLockHeldError surfaces here if seed or another refresh is
-          // running — friendly message rather than a stack trace.
-          if (err instanceof Error && err.name === 'SeedLockHeldError') {
-            warn(`Topic refresh skipped: ${err.message}`);
-          } else {
-            warn(`Topic refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
-          }
-        }
       }
 
       // 2c. Regenerate CLAUDE.md with Active Topics boot-context
@@ -609,9 +589,7 @@ export function registerMemoryCommand(program: Command): void {
           success: true,
           dryRun: Boolean(opts.dryRun),
           areas: areaResult,
-          synthesis: areaResult.synthesis ?? null,
           people: personResult ?? null,
-          topics: topicResult ?? null,
           bootContext: claudeMdRegen !== undefined
             ? { claudeMd: claudeMdRegen['CLAUDE.md'] ?? 'skipped' }
             : null,
@@ -639,20 +617,6 @@ export function registerMemoryCommand(program: Command): void {
       listItem('Areas scanned', String(areaResult.scannedAreas));
       listItem('Areas skipped', String(areaResult.skipped));
 
-      // Synthesis status
-      if (areaResult.synthesis) {
-        const s = areaResult.synthesis;
-        if (s.updated) {
-          success('Cross-area synthesis: updated');
-        } else if (s.reason?.startsWith('error:')) {
-          warn(`Cross-area synthesis: failed (${s.reason})`);
-        } else if (s.reason === 'no AI configured') {
-          info('Cross-area synthesis: skipped (no AI configured)');
-        } else if (s.reason) {
-          info(`Cross-area synthesis: skipped (${s.reason})`);
-        }
-      }
-
       // Person results
       if (personResult) {
         console.log('');
@@ -663,19 +627,6 @@ export function registerMemoryCommand(program: Command): void {
         }
         listItem('People scanned', String(personResult.scannedPeople));
         listItem('Meetings scanned', String(personResult.scannedMeetings));
-      }
-
-      // Topic results
-      if (topicResult !== undefined) {
-        console.log('');
-        if (topicResult.totalIntegrated > 0) {
-          success(`Integrated ${topicResult.totalIntegrated} source(s) into ${topicResult.topics.length} topic page(s).`);
-        } else {
-          info('Topics: no new sources to integrate.');
-        }
-        if (topicResult.totalFallback > 0) {
-          warn(`Topic refresh: ${topicResult.totalFallback} fallback(s) (LLM errors — re-run when AI stable)`);
-        }
       }
 
       // CLAUDE.md regen status — distinguish updated vs unchanged so
@@ -879,30 +830,134 @@ export function registerResolveCommand(program: Command): void {
     );
 }
 
+/**
+ * Phase 9 AC10c — telemetry: append one line per typed-mode invocation
+ * to `dev/diary/brief-invocations.log`. Best-effort; failures don't block.
+ */
+async function appendBriefInvocationTelemetry(
+  workspaceRoot: string,
+  mode: string,
+  input: string,
+): Promise<void> {
+  try {
+    const dir = join(workspaceRoot, 'dev', 'diary');
+    await fs.mkdir(dir, { recursive: true });
+    const logPath = join(dir, 'brief-invocations.log');
+    const line = `${new Date().toISOString()} ${mode} ${JSON.stringify(input)}\n`;
+    await fs.appendFile(logPath, line, 'utf8');
+  } catch {
+    // best-effort — never block the command
+  }
+}
+
+/** Simple Levenshtein for project-slug typo suggestions (M4). */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const prev = new Array<number>(n + 1);
+  const curr = new Array<number>(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    for (let j = 0; j <= n; j++) prev[j] = curr[j];
+  }
+  return prev[n];
+}
+
+async function closestProjectSlug(
+  workspaceRoot: string,
+  attempted: string,
+): Promise<string | null> {
+  try {
+    const activeDir = join(workspaceRoot, 'projects', 'active');
+    const entries = await fs.readdir(activeDir, { withFileTypes: true });
+    const slugs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    if (slugs.length === 0) return null;
+    let best: { slug: string; dist: number } | null = null;
+    for (const slug of slugs) {
+      const dist = levenshtein(attempted.toLowerCase(), slug.toLowerCase());
+      if (!best || dist < best.dist) best = { slug, dist };
+    }
+    return best && best.dist <= Math.max(2, Math.floor(attempted.length / 2))
+      ? best.slug
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+interface BriefOpts {
+  for?: string;
+  person?: string;
+  project?: string;
+  area?: string;
+  meeting?: string;
+  skill?: string;
+  primitives?: string;
+  raw?: boolean;
+  json?: boolean;
+}
+
 export function registerBriefCommand(program: Command): void {
   program
     .command('brief')
-    .description('Assemble and synthesize a briefing on a topic')
-    .requiredOption('--for <query>', 'Task or topic description')
-    .option('--skill <name>', 'Skill name for the briefing')
-    .option('--primitives <list>', 'Comma-separated primitives')
-    .option('--raw', 'Skip AI synthesis and show raw aggregated context')
+    .description('Assemble structured context — typed modes (--person/--project/--area/--meeting) or free-text (--for)')
+    // Phase 9 AC8: --for demoted from requiredOption to option so mode-count
+    // validation can enforce mutual exclusion across {--for, --person, etc.}.
+    .option('--for <query>', 'Free-text task or topic description (ad-hoc mode)')
+    .option('--person <slug>', 'Typed mode: assemble a brief for a person')
+    .option('--project <slug>', 'Typed mode: assemble a brief for a project (also: override for --meeting)')
+    .option('--area <slug>', 'Typed mode: assemble a brief for an area')
+    .option('--meeting <slug-or-title>', 'Typed mode: assemble a brief for a meeting (slug or free-text title)')
+    .option('--skill <name>', '(--for mode only) Skill name for the briefing')
+    .option('--primitives <list>', '(--for mode only) Comma-separated primitives')
+    // --raw is retained as a hidden no-op for backward compat; raw is now the only mode.
+    .option('--raw', 'Deprecated: raw is now the only mode (flag accepted, no-op)', false)
     .option('--json', 'Output as JSON')
-    .action(async (opts: { for?: string; skill?: string; primitives?: string; raw?: boolean; json?: boolean }) => {
-      const task = opts.for;
-      if (!task?.trim()) {
+    .action(async (opts: BriefOpts) => {
+      // -------------------------------------------------------------------
+      // Phase 9 AC8: mode-count validation.
+      // Exactly ONE of {--for, --person, --project, --area, --meeting}.
+      // --project is special: it ALSO acts as an override on --meeting mode,
+      // so when --meeting is also passed, --project is not counted as a mode.
+      // -------------------------------------------------------------------
+      const modes: Array<keyof BriefOpts> = ['for', 'person', 'project', 'area', 'meeting'];
+      // If --meeting is set, --project is the override, not a mode.
+      const isProjectOverride = !!opts.meeting && !!opts.project;
+      const activeModes = modes.filter((k) => {
+        if (k === 'project' && isProjectOverride) return false;
+        return !!opts[k];
+      });
+
+      if (activeModes.length === 0) {
+        const msg = 'exactly one of --for/--person/--project/--area/--meeting required';
         if (opts.json) {
-          console.log(
-            JSON.stringify({
-              success: false,
-              error: 'Missing --for. Usage: arete brief --for "create PRD"',
-            }),
-          );
+          console.log(JSON.stringify({ success: false, error: msg }));
         } else {
-          error('Missing --for option');
-          info('Usage: arete brief --for "topic" [--raw]');
+          error(msg);
+          info('Usage: arete brief --meeting "John / Lindsay 1:1"');
         }
         process.exit(1);
+      }
+      if (activeModes.length > 1) {
+        const flagList = activeModes.map((k) => `--${k}`).join(', ');
+        const msg = `exactly one of --for/--person/--project/--area/--meeting required (got: ${flagList})`;
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
+      if (opts.raw) {
+        process.stderr.write('(--raw is now the only mode; flag accepted for backward compat)\n');
       }
 
       const services = await createServices(process.cwd());
@@ -917,6 +972,90 @@ export function registerBriefCommand(program: Command): void {
       }
 
       const paths = services.workspace.getPaths(root);
+
+      // ----------------- Typed-mode dispatch -----------------
+
+      if (opts.person) {
+        const brief = await services.intelligence.assembleBriefForPerson(opts.person, paths);
+        await appendBriefInvocationTelemetry(root, '--person', opts.person);
+        if (opts.json) {
+          const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections } = brief;
+          console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections }, null, 2));
+        } else {
+          console.log(formatPersonBriefMarkdown(brief));
+        }
+        return;
+      }
+
+      if (opts.area) {
+        const brief = await services.intelligence.assembleBriefForArea(opts.area, paths);
+        await appendBriefInvocationTelemetry(root, '--area', opts.area);
+        if (opts.json) {
+          const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections } = brief;
+          console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections }, null, 2));
+        } else {
+          console.log(formatAreaBriefMarkdown(brief));
+        }
+        return;
+      }
+
+      if (opts.meeting) {
+        // M4: validate --project override slug if provided.
+        if (opts.project) {
+          const projectDir = join(root, 'projects', 'active', opts.project, 'README.md');
+          try {
+            await fs.access(projectDir);
+          } catch {
+            const closest = await closestProjectSlug(root, opts.project);
+            const hint = closest ? `; did you mean: ${closest}?` : '';
+            const msg = `project '${opts.project}' not found${hint}`;
+            if (opts.json) {
+              console.log(JSON.stringify({ success: false, error: msg }));
+            } else {
+              error(msg);
+            }
+            process.exit(1);
+          }
+        }
+        const brief = await services.intelligence.assembleBriefForMeeting(opts.meeting, paths, {
+          projectOverride: opts.project,
+        });
+        await appendBriefInvocationTelemetry(root, '--meeting', opts.meeting);
+        if (opts.json) {
+          const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections, attendeeMiniBriefs } = brief;
+          console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections, attendeeMiniBriefs }, null, 2));
+        } else {
+          console.log(formatMeetingBriefMarkdown(brief));
+        }
+        return;
+      }
+
+      if (opts.project) {
+        // --project (standalone, not an override) is a typed mode.
+        const brief = await services.intelligence.assembleBriefForProject(opts.project, paths);
+        await appendBriefInvocationTelemetry(root, '--project', opts.project);
+        if (opts.json) {
+          const { metadata, sections, sources, subject, subjectSlug, mode, truncated, truncatedSections } = brief;
+          console.log(JSON.stringify({ mode, subject, subjectSlug, metadata, sections, sources, truncated, truncatedSections }, null, 2));
+        } else {
+          console.log(formatProjectBriefMarkdown(brief));
+        }
+        return;
+      }
+
+      // ----------------- Free-text --for mode (unchanged) -----------------
+      const task = opts.for;
+      if (!task?.trim()) {
+        const msg = 'Missing --for. Usage: arete brief --for "create PRD"';
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error('Missing --for option');
+          info('Usage: arete brief --for "topic"');
+        }
+        process.exit(1);
+      }
+
       const primitives = parsePrimitives(opts.primitives);
       const briefing = await services.intelligence.assembleBriefing({
         task,
@@ -924,27 +1063,6 @@ export function registerBriefCommand(program: Command): void {
         skillName: opts.skill,
         primitives,
       });
-
-      // Determine whether to use AI synthesis
-      const aiConfigured = services.ai.isConfigured();
-      const useAI = aiConfigured && !opts.raw;
-
-      let synthesisText: string | undefined;
-      let synthesized = false;
-      let truncated = false;
-
-      if (useAI) {
-        const result = await services.intelligence.synthesizeBriefing(
-          briefing,
-          task,
-          services.ai,
-        );
-        if (result) {
-          synthesisText = result.synthesis;
-          synthesized = true;
-          truncated = result.truncated;
-        }
-      }
 
       if (opts.json) {
         console.log(
@@ -959,9 +1077,6 @@ export function registerBriefCommand(program: Command): void {
               memoryResults: briefing.memory.total,
               entities: briefing.entities.length,
               gaps: briefing.context.gaps.length,
-              synthesized,
-              truncated,
-              synthesis: synthesisText ?? null,
               raw: briefing.markdown,
             },
             null,
@@ -971,27 +1086,6 @@ export function registerBriefCommand(program: Command): void {
         return;
       }
 
-      // Display output
-      if (synthesized && synthesisText) {
-        // AI-synthesized briefing
-        header(`Briefing: ${task}`);
-        console.log('');
-        console.log(synthesisText);
-        if (truncated) {
-          console.log('');
-          info('Context was truncated before AI synthesis. Use --raw for full context.');
-        }
-      } else {
-        // Raw mode or fallback
-        if (!opts.raw && !aiConfigured) {
-          info('AI synthesis not available. Configure AI with `arete credentials set anthropic` for enhanced briefings.');
-          console.log('');
-        } else if (!opts.raw && aiConfigured) {
-          // AI was configured but synthesis failed
-          warn('AI synthesis failed. Showing raw context.');
-          console.log('');
-        }
-        console.log(briefing.markdown);
-      }
+      console.log(briefing.markdown);
     });
 }

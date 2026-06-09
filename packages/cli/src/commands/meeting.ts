@@ -39,6 +39,13 @@ import {
   batchLLMReview,
   buildSkippedItemFateEvents,
   buildDismissedItemFateEvents,
+  writeMeetingApplyFrontmatter,
+  appendChefSkipLog,
+  writeWithLock,
+  // Phase 10b-min wiring — reactive cross-meeting dedup
+  wireExtractDedup,
+  adaptFilteredItemsForDedup,
+  decorateStagedSectionsWithDupeBadges,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -58,6 +65,7 @@ import type {
   MeetingExtractionBatch,
   ReconciliationResult,
   ReconciliationContext,
+  WireExtractDedupResult,
 } from '@arete/core';
 import { execSync } from 'child_process';
 import type { Command } from 'commander';
@@ -935,6 +943,10 @@ export function registerMeetingCommands(program: Command): void {
       // For --stage: process extraction to get filtered items and metadata
       let stagedSections: string;
       let processed: ReturnType<typeof processMeetingExtraction> | undefined;
+      // Phase 10b-min wiring — cross-meeting dedup outcome, lifted to outer
+      // scope so the response payload + post-stage summary can surface
+      // per-decision counts to the user.
+      let dedupResult: WireExtractDedupResult | undefined;
       // Lifted so the post-merge response can surface counts to the user.
       const silentlyMerged = { decisions: 0, learnings: 0 };
       // Phase 0 instrumentation — snapshots of items that get silently merged
@@ -1053,6 +1065,79 @@ export function registerMeetingCommands(program: Command): void {
           }
         }
 
+        // Phase 10b-min wiring — reactive cross-meeting dedup pipeline.
+        //
+        // Runs AFTER the existing reconciliation passes (so they get first
+        // crack at semantic dedup against memory + last-7d) but BEFORE the
+        // staged sections are formatted and written. Marks definite-dupe
+        // items as `'skipped'` with a `staged_item_skip_reason` whose
+        // `reason = "dupe_of_<canonical-id>"` so the apply-flow's existing
+        // dupe-of-status honors the cross-meeting decision (Phase 10b-min
+        // Step 4 contract).
+        //
+        // Safe to run on every extract:
+        //   - When the filtered set has no action items, returns immediately
+        //     without an LLM call.
+        //   - When commitments.json is empty and no other same-day meetings
+        //     exist, returns new-canonical for every item (no skips).
+        //   - When the LLM is unreachable, the pipeline fail-safes to
+        //     UNCERTAIN (item kept as new canonical, flagged for review).
+        try {
+          const extractedItemsForDedup = adaptFilteredItemsForDedup(
+            processed.filteredItems.map((fi) => ({
+              id: fi.id,
+              text: fi.text,
+              type: fi.type,
+              ownerMeta: fi.ownerMeta,
+            })),
+          );
+          if (extractedItemsForDedup.length > 0) {
+            // Same-tier wrapper as the dedup pipeline — `fast` per AC3a /
+            // eng Q1. Tier promotion to `standard` is the AC11a soak gate.
+            const dedupCallConcurrent = async (
+              prompts: { tier: 'fast' | 'standard' | 'frontier'; prompt: string }[],
+            ) => services.ai.callConcurrent(prompts);
+
+            // Meeting date from frontmatter; default to filename prefix if
+            // missing (preserves the date-filter semantics for items where
+            // the user hasn't filled in the date yet).
+            const meetingDateRaw = typeof frontmatter.date === 'string'
+              ? frontmatter.date.slice(0, 10)
+              : (file.match(/(\d{4}-\d{2}-\d{2})/)?.[1] ?? new Date().toISOString().slice(0, 10));
+            const meetingFilename = meetingPath.split('/').pop() ?? '';
+            const meetingSlug = meetingFilename.replace(/\.md$/, '');
+            const meetingsDir = join(root, paths.resources, 'meetings');
+
+            dedupResult = await wireExtractDedup(
+              { storage: services.storage, commitments: services.commitments },
+              {
+                workspaceRoot: root,
+                meetingsDir,
+                currentMeetingPath: meetingPath,
+                currentMeetingSlug: meetingSlug,
+                meetingDate: meetingDateRaw,
+                extractedItems: extractedItemsForDedup,
+              },
+              dedupCallConcurrent,
+              { tier: 'fast', dryRun },
+            );
+
+            // Apply statusPatch to processed.stagedItemStatus so the
+            // downstream writeWithLock mutator sees `'skipped'` for dupes.
+            // The skipReasonPatch is threaded into the mutator below.
+            for (const [id, status] of Object.entries(dedupResult.statusPatch)) {
+              processed.stagedItemStatus[id] = status;
+            }
+          }
+        } catch (err) {
+          // Pipeline failure should NEVER block the extract. Surface as a
+          // warning; staged items proceed as new canonicals.
+          if (!opts.json) {
+            const msg = err instanceof Error ? err.message : String(err);
+            warn(`Cross-meeting dedup skipped due to error: ${msg}`);
+          }
+        }
+
         // Format body sections from filtered items (IDs in body match IDs in metadata).
         // Task 10: thread `core` and `could_include` (from Task 7's wiki-aware
         // extraction) so the formatter emits `## Core` + `## Could include`
@@ -1063,31 +1148,125 @@ export function registerMeetingCommands(program: Command): void {
           extractionResult.intelligence.summary,
           extractionResult.intelligence.core,
           extractionResult.intelligence.could_include,
+          extractionResult.validationWarnings,
         );
 
+        // Phase 10b-min wiring — decorate staged sections with `↪ canonical
+        // in <slug>` badges (definite-dupe) and `↪ possibly merges with
+        // <slug>` flags (possibly-mergeable). Idempotent against re-extract.
+        if (dedupResult && dedupResult.decisions.length > 0) {
+          stagedSections = decorateStagedSectionsWithDupeBadges(
+            stagedSections,
+            dedupResult.decisions,
+          );
+        }
+
         if (!dryRun) {
-          // Clone frontmatter before mutating (pre-mortem mitigation: caching/mutation)
-          const fm = { ...frontmatter };
+          // Topics + counts + status via unified writer (phase-3-5-followup-5
+          // AC1). Pre-AC1, path 3 (`extract --stage`) silently omitted
+          // `topics`/counts — the chef-orchestrator regression caught by the
+          // 2026-05-27 wiki-discoverability investigation. Alias/merge uses the
+          // 'synthesis' tier to match path 1/2.
+          const stageStatus = effectiveImportance === 'light' ? 'approved' : 'processed';
+          const aliasCallLLM = services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1'
+            ? async (prompt: string) => {
+                const r = await services.ai.call('synthesis', prompt);
+                return r.text;
+              }
+            : undefined;
 
-          // Write full metadata (snake_case keys)
-          fm['status'] = effectiveImportance === 'light' ? 'approved' : 'processed';
-          fm['processed_at'] = new Date().toISOString();
-          fm['staged_item_source'] = processed.stagedItemSource;
-          fm['staged_item_confidence'] = processed.stagedItemConfidence;
-          fm['staged_item_status'] = processed.stagedItemStatus;
-          if (Object.keys(processed.stagedItemOwner).length > 0) {
-            fm['staged_item_owner'] = processed.stagedItemOwner;
+          // phase-10-followup-2 HIGH-1: wire extract through `writeWithLock`
+          // so the F2 partial-merge contract protects chef-written sibling
+          // fields (`staged_item_skip_reason`, etc.) from being wholesale-
+          // overwritten. The mutator returns ONLY the keys this path owns —
+          // anything we don't mention survives by definition. mtimeGuard=0
+          // because the extract command is the user-initiated entry point;
+          // the partial-merge contract (not the mtime guard) provides race
+          // safety with chef writes.
+          const proc = processed;
+          const writeResult = await writeWithLock(
+            services.storage,
+            meetingPath,
+            async (current) => {
+              // Build the patch object — start empty so `writeMeetingApplyFrontmatter`
+              // (which mutates the object passed in) only sets the keys it owns.
+              const patch: Record<string, unknown> = {};
+              await writeMeetingApplyFrontmatter(
+                patch,
+                extractionResult.intelligence,
+                { status: stageStatus, processedAt: new Date().toISOString() },
+                {
+                  topicMemory: services.topicMemory,
+                  workspacePaths: paths,
+                  callLLM: aliasCallLLM,
+                  onWarning: (msg) => {
+                    if (!opts.json) warn(msg);
+                  },
+                },
+              );
+
+              // Status map: merge chef-set `'skipped'` (entries with a
+              // `staged_item_skip_reason` whose `setBy ∈ {'chef','chef-proposed'}`)
+              // on top of the extract-produced status so a re-extract cannot
+              // silently demote a chef skip back to `'pending'`. Bare-extract
+              // statuses fall through unchanged.
+              const currentStatus = (current.frontmatter['staged_item_status'] ?? {}) as Record<string, string>;
+              const currentSkipReason = (current.frontmatter['staged_item_skip_reason'] ?? {}) as Record<string, { setBy?: string } | undefined>;
+              const mergedStatus: Record<string, string> = { ...proc.stagedItemStatus };
+              for (const [id, prior] of Object.entries(currentStatus)) {
+                const sr = currentSkipReason[id];
+                const isChefOwned = sr?.setBy === 'chef' || sr?.setBy === 'chef-proposed';
+                if (isChefOwned && prior === 'skipped' && mergedStatus[id] !== 'approved') {
+                  // chef-confirmed skip survives re-extract
+                  mergedStatus[id] = 'skipped';
+                }
+              }
+
+              // Staged-item maps owned by the extract path. `staged_item_skip_reason`
+              // is intentionally NOT mentioned by default — partial-merge
+              // preserves it. Phase 10b-min wiring adds the cross-meeting
+              // dedup entries on top of any existing chef-set entries
+              // (the merge below handles that explicitly).
+              patch['staged_item_source'] = proc.stagedItemSource;
+              patch['staged_item_confidence'] = proc.stagedItemConfidence;
+              patch['staged_item_status'] = mergedStatus;
+              if (Object.keys(proc.stagedItemOwner).length > 0) {
+                patch['staged_item_owner'] = proc.stagedItemOwner;
+              }
+              if (proc.stagedItemMatchedText && Object.keys(proc.stagedItemMatchedText).length > 0) {
+                patch['staged_item_matched_text'] = proc.stagedItemMatchedText;
+              }
+
+              // Phase 10b-min wiring — merge cross-meeting dedup skip_reason
+              // entries on top of any existing entries. We explicitly merge
+              // here (not relying on partial-merge) because adding NEW IDs
+              // requires mentioning the key. Chef-proposed entries on OTHER
+              // IDs (not in our patch) survive via partial-merge of the
+              // existing currentSkipReason map.
+              if (dedupResult && Object.keys(dedupResult.skipReasonPatch).length > 0) {
+                const mergedSkipReason: Record<string, unknown> = {
+                  ...currentSkipReason,
+                  ...dedupResult.skipReasonPatch,
+                };
+                patch['staged_item_skip_reason'] = mergedSkipReason;
+              }
+
+              // Update body with staged sections. `current.body` already
+              // reflects whatever the file held when the lock was acquired;
+              // `updateMeetingContent` rewrites only the staged sections so
+              // user edits to other body regions are preserved.
+              const updatedBody = updateMeetingContent(current.body, stagedSections);
+
+              return { frontmatter: patch, body: updatedBody };
+            },
+            { mtimeGuardSeconds: 0 },
+          );
+          // Fallback: a vanished/raced file makes `writeWithLock` abstain;
+          // surface as warning so the extraction artifacts aren't silently
+          // lost. Backwards-compatible no-throw shape.
+          if (!writeResult.written && !opts.json) {
+            warn(`Extract write abstained: ${writeResult.abstainReason ?? 'unknown'}`);
           }
-          if (processed.stagedItemMatchedText && Object.keys(processed.stagedItemMatchedText).length > 0) {
-            fm['staged_item_matched_text'] = processed.stagedItemMatchedText;
-          }
-
-          // Update body with staged sections
-          const updatedBody = updateMeetingContent(body, stagedSections);
-
-          // Reconstruct file: frontmatter + body
-          const updatedFile = `---\n${stringifyYaml(fm)}---\n\n${updatedBody}`;
-          await services.storage.write(meetingPath, updatedFile);
 
           // Phase 0 instrumentation — emit one item-fate event per skipped
           // staged item and per silently-merged decision/learning. Best
@@ -1146,6 +1325,25 @@ export function registerMeetingCommands(program: Command): void {
           )
         : { reconciled: 0, existingTask: 0, slackResolved: 0 };
 
+      // Phase 10b-min wiring — surface cross-meeting dedup outcome counts
+      // so callers (and the post-stage summary) can see how many items the
+      // pipeline marked as definite dupes vs flagged as possibly-mergeable.
+      const crossMeetingDedup = dedupResult
+        ? {
+            evaluated: dedupResult.decisions.length,
+            definiteDupes: dedupResult.decisions.filter(
+              (d) => d.outcome.kind === 'definite-dupe',
+            ).length,
+            possiblyMergeable: dedupResult.decisions.filter(
+              (d) => d.outcome.kind === 'possibly-mergeable',
+            ).length,
+            newCanonical: dedupResult.decisions.filter(
+              (d) => d.outcome.kind === 'new-canonical',
+            ).length,
+            reverseStamps: dedupResult.reverseStampResults.length,
+          }
+        : { evaluated: 0, definiteDupes: 0, possiblyMergeable: 0, newCanonical: 0, reverseStamps: 0 };
+
       // Build response
       const response: Record<string, unknown> = {
         success: true,
@@ -1159,6 +1357,7 @@ export function registerMeetingCommands(program: Command): void {
         reconciled,
         skippedBySource,
         silentlyMerged,
+        crossMeetingDedup,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 
@@ -1220,6 +1419,18 @@ export function registerMeetingCommands(program: Command): void {
           info(`Merged into committed memory: ${parts.join(', ')}`);
         }
 
+        // Phase 10b-min wiring — cross-meeting dedup summary.
+        if (dedupResult && (crossMeetingDedup.definiteDupes > 0 || crossMeetingDedup.possiblyMergeable > 0)) {
+          const parts: string[] = [];
+          if (crossMeetingDedup.definiteDupes > 0) {
+            parts.push(`${crossMeetingDedup.definiteDupes} dupe${crossMeetingDedup.definiteDupes === 1 ? '' : 's'}`);
+          }
+          if (crossMeetingDedup.possiblyMergeable > 0) {
+            parts.push(`${crossMeetingDedup.possiblyMergeable} possibly-mergeable`);
+          }
+          info(`Cross-meeting dedup: ${parts.join(', ')}`);
+        }
+
         // Display reconciliation details
         if (reconciliationResult) {
           displayReconciliationDetails(reconciliationResult, reconciled);
@@ -1271,7 +1482,18 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       if (extractionResult.validationWarnings.length > 0) {
-        warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
+        const mirrorPairCount = extractionResult.validationWarnings.filter(
+          w => w.reason.startsWith('mirror-pair duplicate'),
+        ).length;
+        if (mirrorPairCount > 0) {
+          warn(
+            `${extractionResult.validationWarnings.length} items rejected during validation ` +
+            `(${mirrorPairCount} mirror-pair duplicate${mirrorPairCount === 1 ? '' : 's'} dropped — ` +
+            `see "## Parser-dropped (mirror-pair duplicates)" section in the meeting file)`,
+          );
+        } else {
+          warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
+        }
       }
     });
 
@@ -1507,6 +1729,9 @@ export function registerMeetingCommands(program: Command): void {
           && (['light', 'normal', 'important', 'skip'] as const).includes(frontmatter['importance'] as 'light' | 'normal' | 'important' | 'skip')
           ? (frontmatter['importance'] as 'light' | 'normal' | 'important' | 'skip')
           : null;
+      // phase-10-followup-2 Step 4 / AC9 — derive meeting slug for audit
+      // log payloads (slug = basename without `.md`).
+      const meetingSlug = meetingPath.replace(/^.*\//, '').replace(/\.md$/, '');
       await commitApprovedItems(services.storage, meetingPath, memoryDir, {
         onApproved: async (item) => {
           try {
@@ -1522,6 +1747,19 @@ export function registerMeetingCommands(program: Command): void {
           } catch {
             // best-effort
           }
+        },
+        onSkipped: async (item) => {
+          // phase-10-followup-2 AC9: APPLY-SKIP audit log line per
+          // skipped item. Best-effort; appendChefSkipLog already
+          // swallows errors internally.
+          await appendChefSkipLog(root, {
+            action: 'APPLY-SKIP',
+            id: item.id,
+            meeting: meetingSlug,
+            ...(item.reason !== null ? { reason: item.reason } : {}),
+            ...(item.evidence !== null ? { evidence: item.evidence } : {}),
+            ...(item.setBy !== null ? { setBy: item.setBy } : {}),
+          });
         },
       });
 
@@ -1674,26 +1912,37 @@ export function registerMeetingCommands(program: Command): void {
 
       // Read final meeting state for response
       const finalContent = await services.storage.read(meetingPath);
-      const { frontmatter: finalFm } = extractFrontmatter(finalContent ?? '');
+      const { frontmatter: finalFm, body: finalBody } = extractFrontmatter(finalContent ?? '');
 
-      // Build response
-      const approvedItems = finalFm['approved_items'] as {
+      // Phase 2 (Areté v2): approved items live in body sections
+      // (## Approved Action Items / Decisions / Learnings) — the
+      // frontmatter.approved_items duplicate is gone. Backward-compat:
+      // fall back to legacy frontmatter when body has no approved
+      // sections (pre-Phase-2 meeting files).
+      const { parseApprovedSection } = await import('@arete/core');
+      const bodyActions = parseApprovedSection(finalBody ?? '', 'Action Items');
+      const bodyDecisions = parseApprovedSection(finalBody ?? '', 'Decisions');
+      const bodyLearnings = parseApprovedSection(finalBody ?? '', 'Learnings');
+
+      const legacyApproved = finalFm['approved_items'] as {
         actionItems?: string[];
         decisions?: string[];
         learnings?: string[];
       } | undefined;
 
+      const approvedItems = {
+        actionItems: bodyActions.length > 0 ? bodyActions : (legacyApproved?.actionItems ?? []),
+        decisions: bodyDecisions.length > 0 ? bodyDecisions : (legacyApproved?.decisions ?? []),
+        learnings: bodyLearnings.length > 0 ? bodyLearnings : (legacyApproved?.learnings ?? []),
+      };
+
       const response = {
         success: true,
         slug,
-        approvedItems: {
-          actionItems: approvedItems?.actionItems ?? [],
-          decisions: approvedItems?.decisions ?? [],
-          learnings: approvedItems?.learnings ?? [],
-        },
+        approvedItems,
         memoryUpdated: {
-          decisions: (approvedItems?.decisions?.length ?? 0) > 0,
-          learnings: (approvedItems?.learnings?.length ?? 0) > 0,
+          decisions: approvedItems.decisions.length > 0,
+          learnings: approvedItems.learnings.length > 0,
         },
         ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
         topicIntegration: topicIntegration ?? null,
@@ -1708,9 +1957,9 @@ export function registerMeetingCommands(program: Command): void {
       // Human-readable output
       success(`Meeting approved: ${slug}`);
 
-      const actionCount = approvedItems?.actionItems?.length ?? 0;
-      const decisionCount = approvedItems?.decisions?.length ?? 0;
-      const learningCount = approvedItems?.learnings?.length ?? 0;
+      const actionCount = approvedItems.actionItems.length;
+      const decisionCount = approvedItems.decisions.length;
+      const learningCount = approvedItems.learnings.length;
 
       if (actionCount > 0) {
         const goalNote = selectedGoalSlug ? ` (linked to ${selectedGoalSlug})` : '';

@@ -41,6 +41,7 @@ import {
   applyReconciliationDecision,
   FileStorageAdapter,
   TopicMemoryService,
+  writeMeetingApplyFrontmatter,
   type ExtractionMode,
   type MeetingExtractionBatch,
   type ReconciliationContext,
@@ -463,13 +464,9 @@ export async function runProcessingSessionTestable(
     const updatedContent = updateMeetingContent(content, stagedSections);
 
     // 12. Update frontmatter with status, sources, confidence, owner, and item status
-    // Note: Core returns camelCase; backend frontmatter uses snake_case
-    fm['status'] = 'processed';
-    fm['processed_at'] = new Date().toISOString();
-
-    // Topics + item counts — mirror meeting-apply.ts:229-264 so backend
-    // processing populates the same agent-facing frontmatter the CLI does.
-    // Hook 1 (alias/merge) runs when topicMemory is reachable; otherwise
+    // Topics + item counts via unified writer (phase-3-5-followup-5 AC1) so
+    // backend processing populates the same agent-facing frontmatter the CLI
+    // does. Hook 1 (alias/merge) runs when topicMemory is reachable; otherwise
     // topics are written verbatim. Failure is non-fatal: keep proposed slugs
     // and surface a warning event.
     //
@@ -477,37 +474,21 @@ export async function runProcessingSessionTestable(
     // not the 'extraction' tier — synthesis is for short-form structured
     // judgment (slug-vs-slug "same topic?"), extraction is for the heavy
     // meeting-content pass that already ran above.
-    const proposedTopics = coreResult.intelligence.topics ?? [];
-    let normalizedTopics = proposedTopics;
-    if (
-      proposedTopics.length > 0 &&
-      deps.topicMemory !== undefined &&
-      deps.workspacePaths !== undefined
-    ) {
-      try {
-        const aliasCallLLM = async (prompt: string): Promise<string> => {
-          const result = await deps.aiService.call('synthesis', prompt);
-          return result.text;
-        };
-        const { topics: existingPages } = await deps.topicMemory.listAll(deps.workspacePaths);
-        const existingIdentities = TopicMemoryService.toIdentities(existingPages);
-        const aliasResults = await deps.topicMemory.aliasAndMerge(
-          proposedTopics,
-          existingIdentities,
-          { callLLM: aliasCallLLM },
-        );
-        normalizedTopics = aliasResults.map((r) => r.resolved);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'unknown';
-        jobs.appendEvent(jobId, `Warning: topic alias/merge failed (non-fatal): ${msg}`);
-      }
-    }
-    fm['topics'] = normalizedTopics;
-    fm['open_action_items'] = coreResult.intelligence.actionItems.length;
-    fm['my_commitments'] = coreResult.intelligence.actionItems.filter(i => i.direction === 'i_owe_them').length;
-    fm['their_commitments'] = coreResult.intelligence.actionItems.filter(i => i.direction === 'they_owe_me').length;
-    fm['decisions_count'] = coreResult.intelligence.decisions.length;
-    fm['learnings_count'] = coreResult.intelligence.learnings.length;
+    const aliasCallLLM = async (prompt: string): Promise<string> => {
+      const result = await deps.aiService.call('synthesis', prompt);
+      return result.text;
+    };
+    await writeMeetingApplyFrontmatter(
+      fm,
+      coreResult.intelligence,
+      { status: 'processed', processedAt: new Date().toISOString() },
+      {
+        topicMemory: deps.topicMemory,
+        workspacePaths: deps.workspacePaths,
+        callLLM: aliasCallLLM,
+        onWarning: (msg) => jobs.appendEvent(jobId, `Warning: ${msg}`),
+      },
+    );
 
     fm['staged_item_source'] = processed.stagedItemSource;
     fm['staged_item_confidence'] = processed.stagedItemConfidence;

@@ -7,14 +7,22 @@
  * intentionally kept as a local replica to avoid a service-layer circular dependency.
  * Both use: sha256(normalized text + personSlug + direction).
  */
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { mkdir, writeFile, access } from 'node:fs/promises';
+import { lock as lockfileLock } from 'proper-lockfile';
 import { jaccardSimilarity } from '../utils/similarity.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 const COMMITMENTS_FILE = '.arete/commitments.json';
 const PRUNE_DAYS = 30;
+/**
+ * Hard ceiling — commitments older than this always prune regardless of
+ * task references. Prevents sticky-open `[ ]` task lines from holding
+ * stale commitments alive indefinitely. See FU2.
+ */
+const PRUNE_HARD_CEILING_DAYS = 90;
 // Action verbs that indicate specific, actionable commitments
 const ACTION_VERBS = [
     'send',
@@ -132,12 +140,17 @@ export function computeCommitmentPriority(input) {
  *
  * Must produce the same hash as computeActionItemHash() in person-signals.ts —
  * same algorithm, separate implementation to avoid circular deps.
+ *
+ * EXPORTED for the hash-invariance gate test (phase-8-followup-8 AC5/C2,
+ * pre-mortem R3): the test must call the real function directly to detect
+ * regressions where `area` (or other metadata) accidentally leaks into the
+ * hash inputs. Production code paths still go through sync()/create().
  */
 // NOTE: The `personSlug` in the hash means the same commitment text creates
 // different hashes for "ours" vs "theirs" direction. Cross-person dedup in
 // EntityService.refreshPersonMemory() suppresses owner self-reminder copies
 // when a bilateral entry already exists under the counterparty's slug.
-function computeCommitmentHash(text, personSlug, direction) {
+export function computeCommitmentHash(text, personSlug, direction) {
     const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
     return createHash('sha256')
         .update(`${normalized}${personSlug}${direction}`)
@@ -174,6 +187,157 @@ function normalize(text) {
 }
 // jaccardSimilarity imported from ../utils/similarity.js
 const JACCARD_THRESHOLD = 0.6;
+/**
+ * Extract the set of counterparty slugs to use for Rule 4 set-overlap.
+ *
+ * Read order (AC0a dual-shape):
+ *  1. `stakeholders[]` if present → all non-self slugs (M2 fix)
+ *  2. otherwise → singleton `[personSlug]` (v1 fallback)
+ *  3. neither present → empty set (overlap is always 0)
+ *
+ * Returns a deduplicated array (Set semantics, array shape for ergonomic
+ * consumption). Slug order is preserved from the source for stable
+ * test snapshots.
+ */
+export function getCommitmentCounterpartySlugs(c) {
+    if (c.stakeholders && c.stakeholders.length > 0) {
+        const seen = new Set();
+        const out = [];
+        for (const s of c.stakeholders) {
+            // M2 mitigation: self-reminders must not bleed into overlap.
+            if (s.role === 'self')
+                continue;
+            if (!s.slug || seen.has(s.slug))
+                continue;
+            seen.add(s.slug);
+            out.push(s.slug);
+        }
+        return out;
+    }
+    if (c.personSlug)
+        return [c.personSlug];
+    return [];
+}
+/**
+ * Compute set-overlap count between a commitment's counterparties and a
+ * meeting's attendees. Used by Phase 8 Rule 4 (daily-winddown SKILL.md
+ * §"Rule 4 — Intent → already-tracked open commitment").
+ *
+ * Returns the count of common slugs after the AC0a dual-shape read.
+ * A return of 0 means R4's counterparty gate does NOT fire (no overlap,
+ * candidate is NOT a collapse target).
+ *
+ * Example:
+ *   commitment.stakeholders = [{slug:'dave'}, {slug:'lindsay', role:'mentioned'}]
+ *   meeting.attendees      = ['dave', 'jamie']
+ *   → overlap = 1 (dave)
+ *
+ * Example (self-exclusion per M2):
+ *   commitment.stakeholders = [{slug:'john-koht', role:'self'}]
+ *   meeting.attendees      = ['john-koht', 'lindsay']
+ *   → overlap = 0 (self excluded from numerator)
+ *
+ * Example (v1 fallback):
+ *   commitment.personSlug = 'dave'   (no stakeholders[] field)
+ *   meeting.attendees    = ['dave']
+ *   → overlap = 1
+ */
+export function computeCounterpartyOverlap(commitment, meetingAttendeeSlugs) {
+    const slugs = getCommitmentCounterpartySlugs(commitment);
+    if (slugs.length === 0 || meetingAttendeeSlugs.length === 0)
+        return 0;
+    const attendeeSet = new Set(meetingAttendeeSlugs);
+    let overlap = 0;
+    for (const slug of slugs) {
+        if (attendeeSet.has(slug))
+            overlap += 1;
+    }
+    return overlap;
+}
+// ---------------------------------------------------------------------------
+// File-locking helpers (phase-10a-pre F5 mitigation, R12)
+// ---------------------------------------------------------------------------
+/**
+ * Lock acquisition timeout — proper-lockfile considers a lock STALE after
+ * this many ms WITHOUT a heartbeat refresh from the holder. PID check runs
+ * before steal so a live holder's lock is never harvested out from under
+ * them. 30s aligns with the Phase 10 plan §"R12 mitigation" specification.
+ */
+const LOCK_STALE_MS = 30_000;
+/**
+ * Retry budget for lock acquisition. The lockfile contention pattern in
+ * extract/winddown is brief (sub-second saves); a few short retries cover
+ * the common case without making concurrent operations hang.
+ */
+const LOCK_RETRIES = {
+    retries: 10,
+    factor: 1.5,
+    minTimeout: 50,
+    maxTimeout: 1_000,
+    randomize: true,
+};
+const LOCK_OPTIONS = {
+    stale: LOCK_STALE_MS,
+    // Skip realpath to support test workspaces with symlinked tmp dirs.
+    realpath: false,
+    // Don't crash the process if the lock is compromised mid-flight; surface
+    // as the operation's own error.
+    onCompromised: (err) => {
+        throw new Error(`commitments.json lock was compromised: ${err.message}`);
+    },
+    retries: LOCK_RETRIES,
+};
+/**
+ * Thrown when `ensureLockTarget` cannot bootstrap the lock target file
+ * (typically because the parent directory cannot be created — e.g. a unit
+ * test using a virtual-path mock storage adapter like `/workspace/...`).
+ *
+ * The earlier behavior was to silently fall back to no-op locking; that
+ * violated the plan's "abstain, never silent corruption" contract, so we
+ * now surface the failure to the caller. Production code paths today
+ * always succeed (FileStorageAdapter has filesystem semantics); this
+ * defends the boundary so future StorageAdapter shapes (remote / S3 /
+ * SQLite) cannot silently degrade cross-process locking.
+ */
+export class LockBootstrapError extends Error {
+    constructor(filePath, cause) {
+        const causeMsg = cause instanceof Error ? cause.message : String(cause);
+        super(`Cannot bootstrap lock target at ${filePath}: ${causeMsg}. ` +
+            `proper-lockfile requires a real filesystem; abstaining rather than ` +
+            `silently bypassing the lock.`);
+        this.name = 'LockBootstrapError';
+    }
+}
+/**
+ * Ensure a file exists at `path` so `proper-lockfile` has a target to lock.
+ *
+ * `proper-lockfile.lock()` requires the target file to exist (it derives
+ * `<path>.lock` as the sentinel directory and asserts the parent file is
+ * present). For a fresh workspace where commitments.json hasn't been
+ * written yet, we touch an empty {"commitments":[]} file first.
+ *
+ * Throws `LockBootstrapError` if the parent directory can't be created
+ * (e.g. virtual/mock paths that lack real filesystem semantics). Callers
+ * MUST propagate or handle the error — silent fallback to no-op locking
+ * was the prior behavior and is no longer permitted (plan §"abstain,
+ * never silent corruption").
+ */
+async function ensureLockTarget(filePath) {
+    try {
+        await access(filePath);
+        return;
+    }
+    catch {
+        // File doesn't exist — try to bootstrap it.
+        try {
+            await mkdir(dirname(filePath), { recursive: true });
+            await writeFile(filePath, '{"commitments":[]}\n', 'utf8');
+        }
+        catch (bootstrapErr) {
+            throw new LockBootstrapError(filePath, bootstrapErr);
+        }
+    }
+}
 // ---------------------------------------------------------------------------
 // CommitmentsService
 // ---------------------------------------------------------------------------
@@ -181,6 +345,8 @@ export class CommitmentsService {
     storage;
     filePath;
     createTaskFn;
+    completeTaskFromCommitmentFn;
+    hasOpenTaskReferencesFn;
     constructor(storage, workspaceRoot) {
         this.storage = storage;
         this.filePath = join(workspaceRoot, COMMITMENTS_FILE);
@@ -191,6 +357,24 @@ export class CommitmentsService {
      */
     setCreateTaskFn(fn) {
         this.createTaskFn = fn;
+    }
+    /**
+     * Set the back-propagation function that marks linked tasks complete
+     * when a commitment is resolved. Called by factory after TaskService
+     * is created. Without this injection, resolve() still works but the
+     * linked tasks in week.md / tasks.md remain unchecked — the orphan
+     * class that motivated F1.
+     */
+    setCompleteTaskFromCommitmentFn(fn) {
+        this.completeTaskFromCommitmentFn = fn;
+    }
+    /**
+     * Set the batched open-task-reference checker that save() consults
+     * before auto-pruning resolved commitments. Without this injection,
+     * save() falls back to pure age-based pruning (current behavior).
+     */
+    setHasOpenTaskReferencesFn(fn) {
+        this.hasOpenTaskReferencesFn = fn;
     }
     // -------------------------------------------------------------------------
     // Private I/O
@@ -210,11 +394,152 @@ export class CommitmentsService {
     /**
      * Write commitments to disk, applying pruning first.
      * ⚠️ Pruning uses `resolvedAt`, never `date`. Open items are never pruned.
+     *
+     * F2: when `hasOpenTaskReferencesFn` is injected, commitments still
+     * referenced by an OPEN task in week.md / tasks.md are NOT pruned,
+     * preventing the dangling-`@from(commitment:xxx)` orphan class. Tasks
+     * already marked complete (with stale refs) are prune-OK.
+     *
+     * FU2: a commitment older than `PRUNE_HARD_CEILING_DAYS` is pruned
+     * regardless of task references. Prevents unbounded commitments.json
+     * growth from sticky-open tasks that hold otherwise-stale commitments
+     * alive forever.
+     *
+     * FU3: prefix lookup runs ONCE per save() via the batched injection
+     * signature, not once per prune-candidate.
      */
     async save(commitments) {
-        const pruned = commitments.filter((c) => !shouldPrune(c));
-        const file = { commitments: pruned };
-        await this.storage.write(this.filePath, JSON.stringify(file, null, 2));
+        // File lock (phase-10a-pre, F5/R12 mitigation): serialize concurrent
+        // writes so two extracts running in parallel can't last-writer-wins
+        // each other. Held only for the duration of THIS save's pruning +
+        // write — sub-second under load.
+        //
+        // Re-entrant: when invoked from inside a `withLock(fn)` callback,
+        // `holdsLock` is true and save() skips its own lock acquisition (the
+        // outer scope already holds it). This lets callers compose atomic
+        // read-modify-write without deadlocking on their own save().
+        await this.runUnderLock(async () => {
+            const ageCandidates = commitments.filter((c) => shouldPrune(c));
+            let prunable;
+            if (this.hasOpenTaskReferencesFn && ageCandidates.length > 0) {
+                // Hard-ceiling override: anything older than the ceiling always
+                // prunes regardless of task references.
+                const now = new Date();
+                const ceilingForced = new Set(ageCandidates
+                    .filter((c) => shouldPrune(c, now, PRUNE_HARD_CEILING_DAYS))
+                    .map((c) => c.id));
+                const checkable = ageCandidates.filter((c) => !ceilingForced.has(c.id));
+                const checkPrefixes = checkable.map((c) => c.id.slice(0, 8));
+                const referencedPrefixes = checkPrefixes.length > 0
+                    ? await this.hasOpenTaskReferencesFn(checkPrefixes)
+                    : new Set();
+                prunable = new Set([
+                    ...ceilingForced,
+                    ...checkable
+                        .filter((c) => !referencedPrefixes.has(c.id.slice(0, 8)))
+                        .map((c) => c.id),
+                ]);
+            }
+            else {
+                prunable = new Set(ageCandidates.map((c) => c.id));
+            }
+            const pruned = commitments.filter((c) => !prunable.has(c.id));
+            const file = { commitments: pruned };
+            await this.storage.write(this.filePath, JSON.stringify(file, null, 2));
+        });
+    }
+    /**
+     * Run `fn` while holding the exclusive file lock on commitments.json.
+     *
+     * Phase 10 plan §10a-pre + pre-mortem F5 mitigation. Use this to wrap any
+     * read-modify-write that must be atomic across processes — e.g. the
+     * Phase 10 cross-meeting dedup pass:
+     *
+     *   await commitments.withLock(async () => {
+     *     const open = await commitments.listOpen();
+     *     const next = applyDedupDecisions(open, candidates);
+     *     await commitments.sync(next);
+     *   });
+     *
+     * Properties:
+     *  - **Cross-process safe** via `proper-lockfile` (uses a sidecar
+     *    `.lock` directory; mkdir is atomic on POSIX + Windows).
+     *  - **Stale-lock TTL** = 30s; the holder heartbeat refreshes the lock
+     *    before that window, so a long-running winddown won't lose the
+     *    lock to its own slowness.
+     *  - **PID check**: a stale lock whose holder PID is still alive is
+     *    NOT stolen — the contender retries until the holder releases.
+     *  - **Re-entrant within instance**: nested `withLock` calls or inner
+     *    `save()` calls on the SAME `CommitmentsService` instance reuse
+     *    the outer lock (tracked via instance-local `holdsLock` flag).
+     *    Cross-process / cross-instance contention still flows through
+     *    proper-lockfile and the OS-level lock directory.
+     *
+     * The lock is released even if `fn` throws; the error propagates.
+     */
+    async withLock(fn) {
+        return this.runUnderLock(fn);
+    }
+    /** Instance-local flag: true when the current async task is inside an
+     * acquired lock scope. Used to make `withLock`/`save()` re-entrant
+     * within the same service instance without deadlocking on a recursive
+     * lockfile acquire. */
+    holdsLock = false;
+    /**
+     * Internal lock runner shared by `save()` and `withLock()`. If the
+     * instance already holds the lock (re-entrant case), runs `fn`
+     * directly; otherwise acquires the proper-lockfile lock, runs, and
+     * releases.
+     */
+    async runUnderLock(fn) {
+        if (this.holdsLock) {
+            // Already inside an outer lock scope on this instance — skip
+            // re-acquisition to avoid self-deadlock.
+            return fn();
+        }
+        // Bootstrap the lock target. If this throws LockBootstrapError, the
+        // caller MUST handle/propagate — silent fallback to no-op locking is
+        // no longer allowed (plan: "abstain, never silent corruption").
+        //
+        // Test escape hatch: ARETE_LOCK_BYPASS_MOCK=1 catches the bootstrap
+        // error and runs `fn` without a lock — used ONLY by mock-storage
+        // unit tests under a virtual root (`/workspace/...`). The flag is
+        // unset in production; FileStorageAdapter always satisfies the
+        // bootstrap. If a future StorageAdapter shape (remote / S3 / SQLite)
+        // ships without filesystem semantics, leaving this flag unset
+        // surfaces the gap loudly via LockBootstrapError rather than
+        // silently degrading cross-process safety.
+        try {
+            await ensureLockTarget(this.filePath);
+        }
+        catch (err) {
+            if (err instanceof LockBootstrapError && process.env.ARETE_LOCK_BYPASS_MOCK === '1') {
+                this.holdsLock = true;
+                try {
+                    return await fn();
+                }
+                finally {
+                    this.holdsLock = false;
+                }
+            }
+            throw err;
+        }
+        const release = await lockfileLock(this.filePath, LOCK_OPTIONS);
+        this.holdsLock = true;
+        try {
+            return await fn();
+        }
+        finally {
+            this.holdsLock = false;
+            try {
+                await release();
+            }
+            catch {
+                // Releasing a compromised/stolen lock surfaces here. Don't shadow
+                // the operation's own error — swallow the release miss and trust
+                // proper-lockfile's stale-lock TTL to recover.
+            }
+        }
     }
     // -------------------------------------------------------------------------
     // Public API
@@ -266,6 +591,20 @@ export class CommitmentsService {
         const updated = { ...target, status, resolvedAt };
         const next = all.map((c) => (c.id === target.id ? updated : c));
         await this.save(next);
+        // F1: back-propagate to linked task(s) in week.md / tasks.md so
+        // resolution shows up on the user's working surface, not just in
+        // commitments.json. Silent on failure — task may have been
+        // hand-completed already, or the workspace may not have a task
+        // linked to this commitment. The commitment write above is the
+        // source of truth either way.
+        if (this.completeTaskFromCommitmentFn) {
+            try {
+                await this.completeTaskFromCommitmentFn(target.id.slice(0, 8));
+            }
+            catch {
+                // Silent — back-prop is best-effort, mirrors tasks.ts:507-517.
+            }
+        }
         return updated;
     }
     /**
@@ -310,6 +649,7 @@ export class CommitmentsService {
                     personName: nameMap?.get(personSlug) ?? personSlug,
                     source: item.source,
                     date: item.date,
+                    createdAt: new Date().toISOString(),
                     status: 'open',
                     resolvedAt: null,
                     // Copy goalSlug if present on the action item
@@ -394,6 +734,7 @@ export class CommitmentsService {
             personName,
             source: options?.source ?? 'manual',
             date: dateStr,
+            createdAt: new Date().toISOString(),
             status: 'open',
             resolvedAt: null,
             ...(options?.goalSlug ? { goalSlug: options.goalSlug } : {}),
@@ -457,6 +798,72 @@ export class CommitmentsService {
     async exists(hashPrefix) {
         const all = await this.load();
         return all.some((c) => c.id === hashPrefix || c.id.startsWith(hashPrefix));
+    }
+    // -------------------------------------------------------------------------
+    // Backfill (phase-8-followup-8 AC3)
+    // -------------------------------------------------------------------------
+    /**
+     * Backfill `area` on commitments missing it.
+     *
+     * For each commitment where `area` is absent, calls the caller-supplied
+     * resolver with the commitment's source filename. If the resolver returns
+     * an area slug, the commitment is updated with `area` AND a
+     * `areaSetBy: 'backfill'` provenance marker (so `resetBackfilledAreas`
+     * can selectively undo).
+     *
+     * Returns a preview/apply report. When `apply` is false (default), no
+     * writes occur — caller can inspect proposed changes safely.
+     *
+     * Hash invariance: area is metadata only and is NOT part of the dedup
+     * hash (see `computeCommitmentHash`). Commitment IDs are preserved.
+     */
+    async backfillArea(resolveArea, options = {}) {
+        const all = await this.load();
+        const candidates = all.filter((c) => !c.area);
+        const proposals = [];
+        const updatedById = new Map();
+        for (const c of candidates) {
+            if (!c.source || c.source === 'manual')
+                continue;
+            const area = await resolveArea(c.source);
+            if (!area)
+                continue;
+            proposals.push({ id: c.id, source: c.source, area });
+            updatedById.set(c.id, { ...c, area, areaSetBy: 'backfill' });
+        }
+        if (options.apply && updatedById.size > 0) {
+            const next = all.map((c) => updatedById.get(c.id) ?? c);
+            await this.save(next);
+        }
+        return {
+            candidates: candidates.length,
+            matched: proposals.length,
+            proposals,
+            applied: Boolean(options.apply && updatedById.size > 0),
+        };
+    }
+    /**
+     * Reset `area` to undefined for every commitment carrying the
+     * `areaSetBy: 'backfill'` provenance marker.
+     *
+     * Does NOT touch commitments where area was set at creation (Path A
+     * meeting approval, Path C `commitments create --area`) or by sync()
+     * (Path B extract-time AC1/AC2) — those lack the marker.
+     */
+    async resetBackfilledAreas() {
+        const all = await this.load();
+        let reset = 0;
+        const next = all.map((c) => {
+            if (c.areaSetBy === 'backfill') {
+                reset += 1;
+                const { area: _area, areaSetBy: _by, ...rest } = c;
+                return rest;
+            }
+            return c;
+        });
+        if (reset > 0)
+            await this.save(next);
+        return { reset };
     }
 }
 //# sourceMappingURL=commitments.js.map

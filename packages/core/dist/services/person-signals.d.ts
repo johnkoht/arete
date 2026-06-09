@@ -13,13 +13,14 @@
  */
 export type LLMCallFn = (prompt: string) => Promise<string>;
 /** Direction of a person's stance on a topic. */
-export type StanceDirection = 'supports' | 'opposes' | 'concerned' | 'neutral';
+export type StanceDirection = 'supports' | 'opposes' | 'concerned';
 /** A stance extracted from meeting content for a specific person. */
 export type PersonStance = {
     topic: string;
     direction: StanceDirection;
     summary: string;
     evidenceQuote: string;
+    justification: string;
     source: string;
     date: string;
 };

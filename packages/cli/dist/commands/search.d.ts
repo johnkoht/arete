@@ -89,24 +89,6 @@ export interface TimelineOutput {
         end: string;
     };
 }
-/** Answer output schema (--answer flag) */
-export interface AnswerOutput {
-    success: boolean;
-    query: string;
-    scope: QmdScope;
-    results: SearchResultItem[];
-    /** AI-synthesized answer, null if AI not configured or synthesis failed */
-    answer: string | null;
-    /** Derived intent passed to QMD (if any) */
-    intent?: string;
-    /** Error message if synthesis failed */
-    error?: string;
-}
-/**
- * Derive intent from query patterns.
- * Used to pass --intent to QMD for better semantic matching.
- */
-export declare function deriveIntent(query: string): string | undefined;
 /** Parse QMD CLI JSON output into SearchResultItem[]. */
 export declare function parseQmdResults(stdout: string): SearchResultItem[];
 /** Person resolution result for dependency injection */
@@ -152,7 +134,6 @@ export declare function runSearch(query: string, opts: {
     person?: string;
     timeline?: boolean;
     days?: string;
-    answer?: boolean;
 }, deps?: SearchDeps): Promise<void>;
 export declare function registerSearchCommand(program: Command): void;
 //# sourceMappingURL=search.d.ts.map

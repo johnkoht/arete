@@ -8,11 +8,14 @@
  * Used by `arete meeting apply <file>` CLI command.
  */
 
-import { resolve, dirname, join } from 'path';
+import { resolve, dirname, join, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { MeetingIntelligence, MeetingExtractionResult } from './meeting-extraction.js';
 import { formatStagedSections, updateMeetingContent } from './meeting-extraction.js';
+import { writeMeetingSummary, type MeetingSummaryInput } from './summary-writer.js';
+import { refreshOrgs } from './org-entity.js';
+import { writeMeetingApplyFrontmatter } from './meeting-frontmatter.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +37,19 @@ export interface ApplyMeetingOptions {
    * be fast and will run `arete memory refresh` later.
    */
   skipTopicAlias?: boolean;
+  /**
+   * Skip the post-apply summary writer (Phase 1 wiki expansion §a.1).
+   * Use during reprocessing where the source body hasn't changed and
+   * the existing summary is fresh; the writer also self-skips on
+   * content_hash match, so this flag is mostly a fast-path.
+   */
+  skipSummary?: boolean;
+  /**
+   * Skip the post-apply org-entity auto-detection refresh (Phase 1
+   * wiki expansion §b). When set, no `.arete/memory/entities/orgs/`
+   * pages are written from this apply.
+   */
+  skipOrgEntities?: boolean;
 }
 
 /**
@@ -50,6 +66,23 @@ export interface ApplyMeetingResult {
   learningsStaged: number;
   /** Path to the archived agenda (if any). */
   agendaArchived: string | null;
+  /**
+   * Path to the per-meeting summary file (Phase 1 §a.1) when one was
+   * written or already-fresh; null when no LLM was provided / writer
+   * was skipped / write failed.
+   */
+  summaryPath: string | null;
+  /**
+   * Whether the summary was written this invocation. False for
+   * already-fresh / no-llm / skip-summary paths.
+   */
+  summaryWritten: boolean;
+  /**
+   * Slugs of org-entity pages refreshed this invocation. Empty when
+   * skipOrgEntities is set, when no orgs qualified, or when the
+   * detection scan was skipped (e.g., no workspacePaths).
+   */
+  orgsRefreshed: string[];
   /** Warnings during processing. */
   warnings: string[];
 }
@@ -107,6 +140,16 @@ function parseFrontmatter(content: string): FrontmatterResult {
 function serializeFrontmatter(data: Record<string, unknown>, body: string): string {
   const fm = stringifyYaml(data).trimEnd();
   return `---\n${fm}\n---\n\n${body.replace(/^\n+/, '')}`;
+}
+
+/**
+ * Extract YYYY-MM-DD from a meeting filename, e.g.,
+ * `2026-04-22-cover-whale.md` → `2026-04-22`. Returns null if no
+ * date prefix is present.
+ */
+function extractDateFromFilename(absPath: string): string | null {
+  const m = basename(absPath).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -224,11 +267,7 @@ export async function applyMeetingIntelligence(
   // 5. Update meeting content with staged sections
   const updatedBody = updateMeetingContent(body, stagedSections);
 
-  // 6. Update frontmatter
-  data['status'] = 'processed';
-  data['processed_at'] = new Date().toISOString();
-
-  // Write topics + item counts for agent-facing frontmatter.
+  // 6. Update frontmatter — unified writer (phase-3-5-followup-5 AC1).
   //
   // Alias/merge pass (Phase A #1 of topic-wiki-memory): coerce LLM-proposed
   // slugs against existing topic pages so near-duplicates (e.g.,
@@ -236,34 +275,18 @@ export async function applyMeetingIntelligence(
   // one canonical slug instead of sprawling into two topic pages on next
   // refresh. Skipped when `options.skipTopicAlias` or when dependencies
   // aren't provided (pre-topic-wiki-memory behavior).
-  const proposedTopics = intelligence.topics ?? [];
-  let normalizedTopics = proposedTopics;
-  if (
-    !options.skipTopicAlias &&
-    deps.topicMemory !== undefined &&
-    deps.workspacePaths !== undefined &&
-    proposedTopics.length > 0
-  ) {
-    try {
-      const { TopicMemoryService } = await import('./topic-memory.js');
-      const { topics: existingPages } = await deps.topicMemory.listAll(deps.workspacePaths);
-      const existingIdentities = TopicMemoryService.toIdentities(existingPages);
-      const aliasResults = await deps.topicMemory.aliasAndMerge(
-        proposedTopics,
-        existingIdentities,
-        { callLLM: deps.callLLM },
-      );
-      normalizedTopics = aliasResults.map((r) => r.resolved);
-    } catch (err) {
-      warnings.push(`topic alias/merge failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
-    }
-  }
-  data['topics'] = normalizedTopics;
-  data['open_action_items'] = intelligence.actionItems.length;
-  data['my_commitments'] = intelligence.actionItems.filter(i => i.direction === 'i_owe_them').length;
-  data['their_commitments'] = intelligence.actionItems.filter(i => i.direction === 'they_owe_me').length;
-  data['decisions_count'] = intelligence.decisions.length;
-  data['learnings_count'] = intelligence.learnings.length;
+  await writeMeetingApplyFrontmatter(
+    data,
+    intelligence,
+    { status: 'processed', processedAt: new Date().toISOString() },
+    {
+      topicMemory: deps.topicMemory,
+      workspacePaths: deps.workspacePaths,
+      callLLM: deps.callLLM,
+      skipTopicAlias: options.skipTopicAlias,
+      onWarning: (msg) => warnings.push(msg),
+    },
+  );
 
   // 7. Write meeting file
   const updatedContent = serializeFrontmatter(data, updatedBody);
@@ -291,12 +314,132 @@ export async function applyMeetingIntelligence(
     }
   }
 
+  // 9. Write per-meeting summary file (Phase 1 §a.1).
+  //
+  // Hook lives AFTER frontmatter is finalized (so the summary inherits
+  // resolved topics, importance, participants) and AFTER the meeting
+  // file is written (so summary parses the same body the user reads).
+  // The writer is idempotent on body content_hash — reprocessing the
+  // same meeting is a no-op against an unchanged body.
+  let summaryPath: string | null = null;
+  let summaryWritten = false;
+  if (!options.skipSummary) {
+    try {
+      const dateRaw = data['date'];
+      const meetingDate = typeof dateRaw === 'string'
+        ? dateRaw.slice(0, 10)
+        : extractDateFromFilename(absPath);
+      if (meetingDate !== null) {
+        // Workspace-relative source_path for portability.
+        const wsRel = absPath.startsWith(workspaceRoot)
+          ? absPath.slice(workspaceRoot.length).replace(/^[/\\]+/, '')
+          : absPath;
+
+        // Canonical taxonomy lives in `packages/core/src/integrations/meetings.ts`
+        // (`Importance = 'skip' | 'light' | 'normal' | 'important'`). The
+        // chef orchestrator gates on `importance: important`; coercing
+        // 'normal'/'important' to undefined here silently defeats the gate
+        // (phase-8-followup-5 amendment).
+        const importanceRaw = data['importance'];
+        const importance: import('../integrations/meetings.js').Importance | undefined =
+          importanceRaw === 'skip' ||
+          importanceRaw === 'light' ||
+          importanceRaw === 'normal' ||
+          importanceRaw === 'important'
+            ? importanceRaw
+            : undefined;
+
+        const areaRaw = data['area'];
+        const area = typeof areaRaw === 'string' ? areaRaw : undefined;
+
+        const attendeesRaw = data['attendees'];
+        const participants: string[] | undefined = Array.isArray(attendeesRaw)
+          ? attendeesRaw
+              .map((a) => (typeof a === 'string' ? a : (a as { name?: string })?.name))
+              .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+          : typeof attendeesRaw === 'string'
+            ? attendeesRaw.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+            : undefined;
+
+        // Hash on body alone, mirroring topic-memory.hashMeetingSource —
+        // frontmatter changes (status bumps, item counts) don't bust dedup.
+        // Phase 1: pass `could_include` headlines through so the summary
+        // writer's `## FYI` section can surface them — the body-block
+        // rendering on the meeting source file was removed.
+        // Read the post-write topics from `data` — the unified writer
+        // mutated `data.topics` with the alias-coerced result (or proposed
+        // slugs as fallback). This keeps the summary writer's topics field
+        // consistent with what was just written to meeting frontmatter.
+        const writtenTopics = Array.isArray(data['topics'])
+          ? (data['topics'] as unknown[]).filter((t): t is string => typeof t === 'string')
+          : undefined;
+        const summaryInput: MeetingSummaryInput = {
+          sourcePath: wsRel,
+          date: meetingDate,
+          sourceBody: updatedBody,
+          area,
+          importance,
+          topics: writtenTopics,
+          participants,
+          couldInclude: intelligence.could_include,
+        };
+
+        const summaryResult = await writeMeetingSummary(summaryInput, {
+          storage,
+          workspaceRoot,
+          callLLM: deps.callLLM,
+        });
+        summaryPath = summaryResult.summaryPath;
+        summaryWritten = summaryResult.written;
+        for (const w of summaryResult.warnings) warnings.push(w);
+      }
+    } catch (err) {
+      // Summary is non-fatal; meeting apply succeeded.
+      warnings.push(
+        `summary writer failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`,
+      );
+    }
+  }
+
+  // 10. Refresh org-entity pages (Phase 1 §b).
+  //
+  // Auto-detection scans recent meetings for non-internal email domains
+  // and writes/updates pages under .arete/memory/entities/orgs/. The
+  // scan runs on every meeting apply because:
+  //   - Detection threshold (≥2 distinct meetings in 90d) is cheap to
+  //     re-evaluate; expensive part is only triggered when an org
+  //     newly qualifies.
+  //   - Existing pages are byte-equal-skipped when content hasn't
+  //     changed.
+  // Caller can disable via `options.skipOrgEntities`. No LLM cost; runs
+  // independently of `deps.callLLM`.
+  let orgsRefreshed: string[] = [];
+  if (!options.skipOrgEntities && deps.workspacePaths !== undefined) {
+    try {
+      const result = await refreshOrgs(deps.workspacePaths, storage, {
+        // Pass `today` from the meeting apply so detection windows are
+        // deterministic relative to the meeting being processed (not
+        // wall-clock at write time).
+        today: new Date().toISOString().slice(0, 10),
+      });
+      orgsRefreshed = result.written;
+      for (const w of result.warnings) warnings.push(w);
+    } catch (err) {
+      warnings.push(
+        `org-entity refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`,
+      );
+    }
+  }
+
   return {
     meetingPath: absPath,
     actionItemsStaged: intelligence.actionItems.length,
     decisionsStaged: intelligence.decisions.length,
     learningsStaged: intelligence.learnings.length,
     agendaArchived,
+    summaryPath,
+    summaryWritten,
+    orgsRefreshed,
     warnings,
   };
 }

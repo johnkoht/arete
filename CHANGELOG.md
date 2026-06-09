@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased] — Areté v2 (chef-orchestrator)
+
+Cumulative v2 effort (Phases 1–12). Large feature merge: the daily flow moves from step-by-step CLI/approve loops to a "chef" pattern (do-all-work-then-engage, curate-with-reason-labels, propose-with-MCP-action), the skills system splits into a managed + user layer, the memory system grows a summaries/wiki leg, and commitments get a v2 substrate with dedup. See `dev/work/plans/arete-v2-chef-orchestrator/POST-MORTEM.md` for the full program retro.
+
+### Added
+- **Chef-orchestrator skill pattern** — skills do all their analysis up front, then engage the user with curated proposals carrying reason labels, surfacing deferred work as a sidecar. Codified in `packages/runtime/skills/PATTERNS.md`; applied to the five Phase-2 daily-flow skills and propagated to `inbox-triage`, `email-triage`, `slack-digest`, `schedule-meeting` (Phase 4). (Phase 2's `ARETE_LEGACY_SKILL_PROSE` runtime rollback flag was sunset in Phase 3 — rollback is now a surgical per-skill `git revert` of the rewrite commit.) Lived daily-winddown median dropped from a 30–45 min baseline to ~21 min.
+- **Two-tier skills split** — managed skills now live in `.arete/skills/` (refreshed by `arete update`) and user forks live in `.agents/skills/` (preserved). New `arete skill fork <name>` / `arete skill diff <name>` / `arete skill merge <name>` verbs let users fork a managed skill, see upstream changes after an update, and merge them. Adapter resolution prefers the user fork at agent-load time. `arete update` migrates pre-Phase-3 `.agents/skills/` copies into `.arete/skills/` (byte-equal) and preserves forks. Core: `services/skill-fork.ts`, `services/skill-resolver.ts`, `services/skills-local.ts`.
+- **Wiki / summaries memory leg** — source-summary writers, org-entity pages, and summary-driven topic integration give the memory system the "raw → summaries + entities + concepts" Karpathy shape it lacked. Core: `services/summary-writer.ts`, `services/org-entity.ts`, `services/memory-summary-loader.ts`; models `source-summary.ts`, `org-entity.ts`, `memory-summary.ts`. Phase 3.5 added wiki discoverability surface.
+- **Daily-winddown cross-skill reconciler** — the winddown orchestrator runs a shared per-day reconciliation surface; the chef mutates staged item status with reason labels rather than forcing one-by-one approvals (Phase 10).
+- **Typed `arete brief` modes** — `arete brief` now takes exactly one of `--person`, `--project`, `--area`, `--meeting` (typed assemblers) or `--for` (free-text), restoring the pure-aggregator briefing that `prepare-meeting-agenda` regressed on after earlier over-stripping. `--raw` is retained as a no-op (raw is now the only mode; no LLM synthesis). Core: `services/brief-assemblers.ts`, `services/brief-formatters.ts` (Phase 9).
+- **Commitment v2 + dedup** — v2 commitment substrate with counterparty parsing and a content hash (`commitments-hash-v2.ts`, `commitments-counterparty-parser.ts`), a reactive dedup pipeline reused retroactively via the new `arete dedup` command (`--dry-run` default, `--apply` under lock, `--explain <id>` for provenance), and a background dedup hygiene pass. Core: `services/background-dedup.ts`, `services/commitment-dedup-pipeline.ts`, `services/dedup-decisions-log.ts`, `services/dedup-explain.ts`, `services/extract-dedup-wiring.ts`.
+- **Commitment migrations & backfill** — `arete commitments migrate` (v1→v2, dry-run by default, `--apply --owner-slug`, 24h quiet-window guard, pre-migration snapshot), `arete commitments backfill-area` (preview by default, `--apply`), `arete commitments restore --from <path>`, and `arete events backfill item-fates`. Core: `services/migrations/migrate-to-v2.ts`.
+- **Topic detection as a first-class core service** — `services/topic-detection.ts` extracted as the shared lexical detector behind meeting + slack topic tagging.
+- **Phase 11 external commitment resolution (ships gated OFF)** — Gmail-evidence auto-resolution (`arete commitments resolve-from-gmail`) is wired but dormant behind `PHASE_11_AUTO_RESOLVE_ENABLED=false`. Even when enabled it only *proposes*, never writes. The golden-set precision number is a hand-written oracle, not a real run — leave the gate false. `COMMITMENTS_V2_ACTIVE` also ships false (no downstream readers yet). Core: `services/commitment-resolution-pipeline.ts`, `services/resolution-decisions-log.ts`, `services/resolution-directives.ts`, `services/resolution-ordering.ts`.
+
+### Changed
+- **Phase-4 skill demotions** — 12 skill directories removed; several skill behaviors collapsed into CLI verbs / the chef pattern rather than standalone prose skills. The adds-vs-removes ledger went negative at Phase 4 (~+13 → ~+1 cumulative).
+
+### Notes
+- **Phase 12 (projects-first-class) is plan-only** — not built in this merge. It would derive a project's `area` so `arete brief --project` lights up, add a system-owned `topics:` cache, and ship `/project` + `/update-project` flows.
+- **Ledger regrowth in Phases 9–12** — restoring `brief` and adding the Commitment-v2 + external-resolution substrate is net **+~13.3k production LOC**. Defensible per-item (regressed-capability restore + net-new substrate) but the "no add without a remove" rule was not enforced for these late phases; recorded as an eyes-open accepted exception.
+
 ## [0.10.1] - 2026-05-01
 
 ### Removed

@@ -1,6 +1,6 @@
 ---
 name: week-plan
-description: Plan the week and set weekly priorities. Use when the user wants to plan the week or set top weekly outcomes linked to quarter goals.
+description: Plan the week — agent does all gather + carryover work upfront, then engages twice (priorities confirm → plan draft) per the chef-orchestrator two-engage variant.
 triggers:
   - weekly plan
   - plan my week
@@ -20,380 +20,403 @@ intelligence:
   - memory_retrieval
 ---
 
-# Week Plan Skill
+# Week Plan — chef-orchestrator (two-engage variant)
 
-Guide the PM to define the top 3-5 weekly priorities. Read current quarter goals, last week file, active projects, and commitments. Output is `now/week.md`.
+This skill applies the four chef-orchestrator patterns from
+`PATTERNS.md` with the **two-engage variant** of Pattern 1
+(`do-all-work-then-engage`).
+
+Pattern names applied here:
+
+- Pattern 1 — `do-all-work-then-engage` (two-engage variant —
+  priorities → plan draft).
+- Pattern 2 — `curate-with-reason-labels` (every suggested
+  priority and every staged task carries a reason).
+- Pattern 3 — `propose-with-mcp-action` (action proposals at
+  end of the plan-draft engage).
+- Pattern 4 — `surface-deferred-as-sidecar` (pruning candidates
+  the user accepts roll to the shared
+  `now/archive/week-plan/deferred-week-YYYY-WNN.md` sidecar).
+
+Two engages are warranted because:
+
+- **The midway decision is the user's call** — weekly priorities are
+  not something the agent can reasonably infer.
+- **The work after that decision changes meaningfully** — the plan
+  draft depends entirely on which priorities the user confirms.
+
+Engagement points:
+
+1. **Engage 1** — Priorities. Agent surfaces last week's carryovers,
+   quarter goals, recent themes, and suggested top-3-to-5
+   priorities. User confirms / edits.
+2. **Engage 2** — Plan draft. Agent uses confirmed priorities + wiki
+   + commitments + calendar to draft the full week plan. User
+   approves / edits.
+
+Patterns 2 (reason labels), 3 (action proposals), and 4 (sidecar)
+apply at both engages where relevant.
+
+**Read first** (if exists): `.arete/skills-local/week-plan.md`.
 
 ## When to Use
 
-- "plan the week"
-- "set weekly priorities"
-- "what should I focus on this week?"
-- "week planning"
+- "Plan the week" / "set weekly priorities"
+- "What should I focus on this week?" / "Week planning"
+- Best run Sunday evening or Monday morning. Friday 4pm+ rolls into
+  next week automatically.
 
-## Workflow
+## Workflow — two-engage chef pattern
 
-### 1. Gather Context
-
-**Timing-aware opening**: Before gathering context, detect timing and set expectations:
-- If Friday 4pm or later, or weekend: "Let's plan next week (Week of [next Monday date])"
-- Otherwise: "Let's plan the rest of this week (Week of [this Monday date])"
-
-**Gather silently** (no user interaction needed):
-
-- **Quarter goals**: Read `goals/quarter.md`. Goals are markdown headings (`## Goal Title`) with `Area`, `Success`, and `Status` fields. Filter to `Status: Active`.
-- **Areas**: Read `areas/*.md` (excluding `_template.md`). Extract slug and display name from each. Build a list of available areas for Step 1.5.
-- **Last week**: Read `now/week.md` for carry-over items and continuity.
-- **Projects**: Scan `projects/active/` README files for active work.
-- **Scratchpad**: Read `now/scratchpad.md` for ad-hoc items.
-- **Commitments**: Run `arete commitments list --json` to get open commitments.
-- **Calendar** (if configured): Run `arete pull calendar --days 7 --json`. If successful, use events for meeting context. If not configured, skip.
-
-### 1.5. Scope by Area
-
-**Purpose**: Focus the week around specific work domains instead of showing all work undifferentiated.
-
-**When to run this step**: Only if 2 or more areas exist. Skip entirely if 0 or 1 area found.
-
-**Single area**: If exactly 1 area exists, auto-select it silently (no prompt). Note: "Scoping to [Area Name]."
-
-**Multiple areas** (2+): Present a numbered list and ask:
-
-> "Which areas are you focusing on this week?
-> 1. Glance Communications
-> 2. Product Platform
-> 3. Team Operations
->
-> Enter numbers (e.g., '1 3') or 'all' to include everything:"
-
-**After user responds**:
-- Store the selected area slugs as `focusedAreas`
-- When presenting goals in Step 2: group by area — selected areas first, unscoped goals last
-- When presenting projects in Step 2: filter to selected areas' projects (show others in a collapsed "Other projects" note)
-- Commitments: shown unfiltered (area tagging is partial — don't hide commitments by area)
-- Tasks in Step 3: shown unfiltered (task area tags may be incomplete — show all)
-
-**Graceful degradation**:
-- If no areas exist: skip this step entirely. Proceed to Step 2 showing all goals together.
-- If user says 'all': treat same as no area filter (show everything).
-- If user says 'skip': treat same as 'all'.
-
-### 2. Shape Priorities
-
-**Phase 1: Open-ended ask**
-
-Present goals grouped by focus area (from Step 1.5):
-
-```
-Goals — [Area Name]:
-  [Q1-1] Ship onboarding v2
-  [Q1-3] Complete discovery for X
-
-Goals — [Other Area]:
-  [Q1-2] Compliance milestone
-
-Unscoped goals (no area):
-  [Q1-4] Internal tooling
-```
-
-Then ask:
-
-> "Based on your calendar and goals, what are your top 3-5 priorities this week? Just tell me in your own words."
-
-Wait for user response. **Capture their exact wording**.
-
-**Phase 2: Confirm and link**
-
-For each priority:
-- Preserve user's wording
-- Link to quarter goal ID if relevant (e.g., `[Q1-2]`)
-- Note area if linked (e.g., `[glance-communications]`)
-- Clarify "what done looks like" if ambiguous
-
-Present the numbered list back for confirmation.
-
-> **Exchange budget**: Target ≤5 exchanges before file is written.
-
-### 2.5. Surface Key Meetings
-
-**Purpose**: Meeting titles and attendees are inputs for memory search — confirm which meetings matter before searching memory for related decisions.
-
-**Parse calendar JSON** from Step 1 (`arete pull calendar --days 7 --json`). Each event contains:
-- `importance`: "light" | "normal" | "important"
-- `hasAgenda`: boolean (agenda file exists in `now/agendas/`)
-- `organizer`: `{ name, email, self }` or null
-- `attendees`: `[{ name, email, personSlug? }]`
-
-**Classify meetings into two groups**:
-
-🔴 **High priority** — `importance === "important"`
-- 1:1s (2 attendees total)
-- You organized (organizer.self === true)
-
-🟡 **Prep-worthy** — `importance === "normal"` AND one of:
-- `hasAgenda === true`
-- Has external attendee (email domain differs from organizer's domain)
-
-**Determine "why flagged"** for each meeting:
-- `(1:1)` — exactly 2 attendees
-- `(you organized)` — organizer.self === true
-- `(has agenda)` — hasAgenda === true
-- `(external: @domain.com)` — attendee domain differs from organizer domain
-
-**Fallback**: If `importance` field is missing (older calendar output), use title matching:
-- QBR, quarterly, customer, client → important
-- 1:1, one-on-one, sync → important
-- Leadership, exec, board → important
-
-**Hide `light` importance meetings** unless user explicitly asks to see them.
-
-**Present grouped list**:
-> "Key meetings this week:
->
-> 🔴 **High priority**
-> - Wed 2:00pm: Sarah Chen 1:1 (1:1)
-> - Thu 10:00am: CoverWhale QBR (you organized)
->
-> 🟡 **Prep-worthy**
-> - Tue 3:00pm: UK Roadmap Review (external: @acme.com)
-> - Fri 11:00am: Product Sync (has agenda)
->
-> Add, remove, or skip any? (Enter numbers to remove, + to add, or press Enter to confirm)"
-
-**User confirms/modifies** the list using quick selection (preserve existing UX pattern).
-
-**⚠️ Keep this confirmed list for Step 4 output** — the Key Meetings section will include exactly these meetings with their flags.
-
-### 2.6. Memory-Informed Context
-
-Use the **contextual_memory_search** pattern (see [PATTERNS.md](../PATTERNS.md)).
-
-**Gather search terms** from:
-1. User's priority keywords (from Step 2)
-2. Confirmed meeting titles (from Step 2.5)
-3. Key attendees (resolved from meetings)
-
-**Run searches** (batch, keep concise). Use both atomic L2 items AND
-synthesized L3 topic pages — topic pages provide the narrative
-thread across the week's priorities that individual decisions can't.
-See `topic_page_retrieval` in `PATTERNS.md`.
+### Step 0 — Read APPEND, log start (if Phase 0 weekly event added)
 
 ```bash
-# Atomic memory items (decisions, learnings)
-arete search "<priority keyword>" --scope memory --limit 2
-arete search "<meeting topic>" --scope memory --limit 2
-arete search "<key attendee>" --scope memory --limit 2
-
-# Synthesized topic-page narrative (skip if `searchBackend: 'none'`)
-arete topic find "<priority keyword>" --limit 1 --budget 300 --json
+arete skill resolve week-plan
+cat .arete/skills-local/week-plan.md 2>/dev/null || echo "(no APPEND file)"
 ```
 
-**Surface relevant items** (max 5 total, only if genuinely useful):
-> "A few things from memory:
-> - **Decision** [3/15]: CoverWhale needs legal sign-off before compliance
-> - **Learning** [3/10]: Sarah prefers data-driven QBR agendas
-> - **Decision** [3/12]: UK roadmap should prioritize enterprise features
+**Timing detection** (one-line heuristic):
+- Friday 4pm+ or weekend → "Let's plan next week (Week of <next Monday>)"
+- Otherwise → "Let's plan the rest of this week (Week of <this Monday>)"
+
+This message can be a single line at the start of Engage 1; not a
+separate engagement.
+
+### Step 0.5 — Prerequisite check: weekly-winddown ran for this week
+
+**Phase 8-followup-3 — planning-chain hygiene.** Before gathering for
+the plan, check whether `/weekly-winddown` ran recently. A solid week
+plan depends on a fresh weekly retrospective; without it, the plan
+inherits stale context.
+
+```bash
+# Most recent weekly-winddown file (sorted by mtime; the filename
+# carries the date the winddown was run).
+recent_ww=$(ls -t now/archive/weekly-winddown/weekly-winddown-*.md 2>/dev/null | head -n 1)
+```
+
+**Detection logic** (agent applies):
+- If no file exists at all → strong nudge (winddown never run)
+- If file exists but its dated filename (`weekly-winddown-YYYY-MM-DD.md`)
+  is **>8 days old** → nudge (likely no winddown for the most recent
+  completed ISO week)
+- If file dated within last 8 days → silent skip (winddown ran recently)
+
+The 8-day window handles Mon-Sun planning robustly: it catches the
+Fri/Sat/Sun of the most recent completed ISO week regardless of which
+day this skill is invoked.
+
+**Nudge format** (surface this BEFORE Engage 1, as a one-line prompt):
+
+> Looks like `/weekly-winddown` didn't run for the most recent ISO
+> week. A weekly retrospective sharpens the plan with what shipped,
+> what slipped, and what to carry forward.
 >
-> Anything here that changes your priorities?"
+> - Run `/weekly-winddown` first (recommended), then come back with
+>   `/week-plan`
+> - Or type `skip` and I'll plan without a fresh winddown
 
-**Empty results**: If no relevant memory found, note briefly: "No directly relevant past decisions found." Proceed without delay — don't ask the "anything here" question.
+The user types `skip` to proceed, or runs `/weekly-winddown` in the
+SAME terminal/session (no need to exit) and re-invokes `/week-plan`.
+The agent context persists across the chain.
 
-### 3. Build Tasks List (Pull from Task Store)
+**Best-effort**: if the file-check fails (e.g., `now/archive/weekly-winddown/`
+doesn't exist yet because winddown was never run), surface the nudge
+and continue if user `skip`s. Never block the skill on this check.
 
-Rather than creating tasks from scratch, pull existing tasks from the workspace:
+### Step 1 — Gather (parallelize)
 
-#### 3.1 Gather Candidates
+**Run in parallel** (one agent turn, concurrent tool calls):
 
-Read from three sources:
+```bash
+# 1a. Quarter goals
+cat goals/quarter.md
+ls goals/2026-Q*.md 2>/dev/null  # individual goal files (post-migration)
 
-1. **Task Backlog**: Read `now/tasks.md` `## Anytime` section
-2. **Open Commitments**: Run `arete commitments list --json`, filter to:
-   - `direction: i_owe_them` only
-   - Check both `now/tasks.md` and `now/week.md` for existing tasks with `@from(commitment:HASH)` matching this commitment's ID
-   - If a linked task already exists: show it with label **(already a task: "task text")** and skip auto-create
-   - WITHOUT existing linked tasks (no `@from(commitment:)` match in tasks.md or week.md)
-3. **Last Week Carryover**: Read `now/week.md` Tasks section, filter to incomplete (`- [ ]`) items
+# 1b. Areas
+ls areas/
 
-#### 3.2 Present Grouped Candidates
+# 1c. Last week's plan
+cat now/week.md
 
-Present candidates in a numbered list grouped by source:
+# 1d. Active projects
+ls projects/active/
+# (read each README briefly)
+
+# 1e. Scratchpad / carryovers
+cat now/scratchpad.md 2>/dev/null
+
+# 1f. Open commitments (full set)
+arete commitments list --json
+
+# 1g. Upcoming calendar (next 7 days)
+arete pull calendar --days 7 --json 2>/dev/null
+
+# 1h. Recent meeting summaries (last 7 days, for theme detection)
+ls .arete/memory/summaries/meetings/2026-W* 2>/dev/null
+# Or scan resources/meetings/<recent dates>.md frontmatter for
+# importance + topics
+
+# 1i. Recent topic activity (compounding themes)
+arete topic list --active --slugs --json 2>/dev/null
+```
+
+### Step 2 — Apply judgment for Engage 1 (priorities)
+
+Decide what to surface as **suggested priorities** for the user to
+confirm:
+
+- **Carryovers from last week** — incomplete must/should from
+  `now/week.md`. Reason: "carried from last week" or "stalled — N
+  days, decision still owed."
+- **Goal traction** — quarter goals where progress is overdue or
+  where this week is the natural next step. Reason: "Q3 goal,
+  milestone-week."
+- **Theme momentum** — topics that compounded across last week's
+  meetings. Reason: "3 meetings touched this last week."
+- **High-importance commitments** — open `i_owe_them` commitments
+  >7d to important counterparties. Reason: "open commitment to
+  @person, 9d old."
+- **Calendar pressure** — major meetings this week (customer / leadership)
+  that need prep. Reason: "customer review on Wed."
+
+Cap suggested priorities at **5 max** (3-5 sweet spot per the
+"top-3-to-5 priorities" pattern). Items beyond that go to a
+"Could surface" tier; user can pull back.
+
+### Step 3 — Persist + Engage 1 (priorities conversation)
+
+**Persist the curated priorities view to disk BEFORE engaging.** Write
+the full Engage-1 output verbatim to `now/archive/week-plan/week-plan-YYYY-MM-DD.md`
+(date is the planning date — typically Sunday or Monday). This is
+the audit trail — without it the priorities-tier curated view is lost
+when the conversation scrolls. AC10/AC11 soak evaluation needs it.
+
+```bash
+mkdir -p now/archive/week-plan
+cat > "now/archive/week-plan/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
+{full Engage-1 priorities view}
+EOF
+```
+
+Engage 2 (Step 5 below) appends a `## Engage 2 — Plan draft` divider
+and the draft to the same file. Re-runs within the same day add a
+`## Re-run at HH:MM` divider rather than overwriting earlier history.
 
 ```markdown
-## From Task Backlog (Anytime)
-1. Review Q1 metrics @project(analytics)
-2. Update onboarding docs @area(product)
-3. Research competitor pricing @project(pricing)
+## Week Plan — {Week of YYYY-MM-DD}
 
-## From Open Commitments (Not Yet Tasks)
-4. Send API specs to Sarah @person(sarah-chen)
-5. Review contract draft @person(jamie)
+{1 sentence framing — "Last week you wrapped X; the calendar this
+week is Y; here's what I think you should focus on."}
 
-## Carried from Last Week (Incomplete)
-6. Finalize compliance checklist
-7. Schedule design review
+## Suggested priorities (pick 3-5)
+
+1. **Ship Cover Whale launch** — Q3 milestone-week, 4 stalled
+   commitments tie here (Pattern 2: reason)
+2. **Push Q3 churn pushback to Lauren** — carried from last week,
+   customer-touching
+3. **Resolve LEAP UK onboarding decision** — Wed customer review,
+   needs prep
+
+## Could surface
+
+4. Anthony auto-attachments comms — long-running thread
+5. Glance metrics ping to Lindsay — uncertain, possibly resolved
+
+## Uncertain — your call
+
+- [ ] Q3 OKR retrospective scheduling — 2 mentions in week, no clear owner. Make a priority or defer?
+
+## Carryovers worth knowing
+
+- Stale must from last week: "Send Rippling rollout plan" — 11d, drop?
+- Calendar this week: 3 customer meetings (Tue, Wed, Thu)
+
+## Quarter goals snapshot
+
+| Goal | Status | This week's contribution |
+|---|---|---|
+| Glance 2.0 launch | active | Cover Whale launch is the milestone |
+| LEAP rollout | active | UK onboarding decision Wed |
+
+What's your call? Confirm 3-5 priorities (numbers from suggested + could),
+edit text, or substitute. I'll draft the plan once we agree.
 ```
 
-> "Here are your candidate tasks for this week. Which ones should be on your plate?"
+Wait for user response. Acceptable shapes:
+- `1, 2, 3` → take suggested 1, 2, 3 as priorities
+- `1, 2, 4 — replace 4 text with "Anthony comms — finalize Wed"` →
+  same with edits
+- `1, 2, my own: "Reset MA1 onboarding flow"` → free-form additions
+- Free-form pushback / question → engage normally; loop until
+  priorities are agreed
 
-#### 3.3 User Selects Destinations (Numbered List)
+### Step 4 — Apply judgment for Engage 2 (draft the plan)
 
-Prompt user with numbered selection:
+With confirmed priorities, build the full week plan:
 
-> "Which tasks for this week? Enter numbers for each bucket:
-> - **Must** (critical this week): 
-> - **Should** (important, not blocking): 
-> - **Could** (nice to have): "
+- **Tasks per priority** — derived from open commitments tied to
+  priority + carryovers + calendar prep. Each task with reason
+  label.
+- **Tasks beyond priorities** — fold into Should / Could tiers
+  rather than Must.
+- **Daily allocation** — light scaffold based on calendar (Tue/Wed
+  customer-heavy; Thu/Fri reflective work).
+- **Meetings to prep** — flag customer / 1:1 / leadership meetings
+  for `meeting-prep` skill.
 
-Example user response: "Must: 1, 4. Should: 2, 6. Could: 3"
+### Step 5 — Persist + Engage 2 (plan draft)
 
-#### 3.4 Move Selected Tasks
+**Append the plan draft to `now/archive/week-plan/week-plan-YYYY-MM-DD.md` BEFORE
+engaging.** Use a `## Engage 2 — Plan draft` divider to separate from
+the priorities view written at Step 3.
 
-For selected tasks from **Task Backlog (Anytime)**:
-- **MOVE** (not copy): Remove from `now/tasks.md` `## Anytime`, add to `now/week.md` appropriate section
-- Preserve all metadata (`@area()`, `@project()`, `@person()`, `@due()`, `@from()`)
+```bash
+cat >> "now/archive/week-plan/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
 
-For selected tasks from **Open Commitments**:
-- Create new task in `now/week.md` with `@from(commitment:id)` link
-- Include `@person()` from commitment counterparty
+## Engage 2 — Plan draft
 
-For **Carryover** items:
-- Already in week.md — move to appropriate section (Must/Should/Could) if in wrong section
-
-**Deduplication**: Before adding to week.md, check if task text already exists in Tasks section:
-- If duplicate found: Skip with note: "Skipped 'Review Q1 metrics' — already in week.md"
-- Compare normalized text (lowercase, trimmed, ignore metadata tags)
-
-#### 3.5 Handle Remaining Anytime Items
-
-After selections, if Anytime tasks remain unselected:
-
-> "These tasks remain in your Anytime backlog:
-> - Research competitor pricing @project(pricing)
-> - Clean up Jira labels @area(product)
->
-> Would you like to move any to **Someday** (parking lot for later)? Enter numbers, or press Enter to keep in Anytime."
-
-If user provides numbers, move those tasks from `## Anytime` to `## Someday` in `now/tasks.md`.
-
-#### Summary: Task Destinations
-
-| Source | Selected | Not Selected |
-|--------|----------|--------------|
-| Anytime (tasks.md) | → week.md (Must/Should/Could) | Ask: Anytime or Someday? |
-| Open Commitments | → week.md + @from(commitment:) | Stays uncommitted |
-| Carryover (week.md) | → appropriate section | Stays in current section |
-
-### 4. Write Week File
-
-**File**: `now/week.md`
-
-**Template**: Resolve via:
-```
-arete template resolve --skill week-plan --variant week-priorities
+{full Engage-2 plan draft view}
+EOF
 ```
 
-**Sections**:
-- **Weekly Priorities** — Simple numbered list (1-5 items, formerly "Outcomes")
-- **Key Meetings** — Confirmed prep-worthy meetings from Step 2.5 (optional, omit if empty)
-- **Today** — Placeholder for daily-plan (Focus, Meetings)
-- **Inbox** — Quick capture area for daily winddown (no metadata required)
-- **Notes** — Empty, user's working scratchpad
-- **Tasks** — Must/Should/Could subsections populated from commitments
-- **Waiting On** — What others owe you (they_owe_me commitments)
-- **Carried from last week** — Incomplete items
-- **Daily Progress** — Empty, populated by daily-plan
-
-**Key Meetings format** (from confirmed list in Step 2.5):
 ```markdown
-## Key Meetings
-- [ ] Wed 2:00pm: Sarah Chen 1:1 (Sarah Chen) — prep: needs prep
-- [ ] Thu 10:00am: CoverWhale QBR (Sarah, Jamie, Alex) — prep: [CoverWhale QBR](now/agendas/coverwhale-qbr.md)
-- [ ] Fri 11:00am: Product Sync (Product team) — prep: needs prep
-```
+## Week Plan — Week of {Monday YYYY-MM-DD}
 
-**Empty state**: If no high-priority or prep-worthy meetings, write:
-```markdown
-## Key Meetings
-No high-priority meetings this week — light calendar!
-```
+### Priorities (confirmed)
+1. Ship Cover Whale launch
+2. Push Q3 churn pushback to Lauren
+3. Resolve LEAP UK onboarding decision
 
-**Format example**:
-```markdown
-# Week — Mon Mar 24, 2026
-
-## Weekly Priorities
-1. POP ready for 3/31 launch
-2. CoverWhale through compliance
-3. UK priorities finalized
-
-## Key Meetings
-- [ ] Wed 2:00pm: Sarah Chen 1:1 (Sarah Chen) — prep: needs prep
-- [ ] Thu 10:00am: CoverWhale QBR (Sarah, Jamie, Alex) — prep: [CoverWhale QBR](now/agendas/coverwhale-qbr.md)
-
-## Today — Mon Mar 24
-**Focus**: Week kickoff and planning.
-
-**Meetings**:
-- 10:00 Team standup
-- 14:00 PM sync
-
-## Inbox
-
-## Notes
-
-## Tasks
 ### Must complete
-- [ ] Monitor POP ticket velocity
-- [ ] Get CoverWhale templates through compliance
+- [ ] Send compliance sign-off to CW team — priority 1; @from(commitment:cw_signoff)
+- [ ] Draft churn pushback message for Lauren — priority 2; due Wed
+- [ ] Prep for LEAP UK Wed call — priority 3; review existing onboarding doc
 
 ### Should complete
-- [ ] Review UK roadmap draft
-- [ ] Prep for Thursday QBR
+- [ ] Anthony auto-attachments rollout test — could-priority 4; if Tim ready
+- [ ] Update Glance 2.0 stakes Notion — week-summary maintenance
 
 ### Could complete
-- [ ] Clean up Jira backlog
+- [ ] Q3 OKR retrospective scheduling — uncertain item, only if time
 
-## Waiting On
-- [ ] Sarah: Legal sign-off on CoverWhale templates @person(sarah-chen) @from(commitment:abc123)
+### Daily scaffold
+- Mon: kick off CW launch; review LEAP UK onboarding doc
+- Tue: focus block (CW launch); customer meeting prep
+- Wed: LEAP UK call; Lauren pushback delivery
+- Thu: 1:1 cadence (Lindsay, Anthony); roadmap slack
+- Fri: weekly winddown + retro
 
-## Carried from last week
-- [ ] Finalize Q2 OKRs
+### Meetings to prep this week
+- Wed 10am — LEAP UK customer review (run meeting-prep)
+- Thu 11am — Lindsay 1:1 (run meeting-prep)
+- Thu 3pm — Anthony 1:1 (run meeting-prep)
 
-## Daily Progress
+### Carryovers from last week (deferred)
+- 4 stale items pruned — see ./deferred-week-2026-WNN.md
+  (≥4 deferred items always write a sidecar per Pattern 4; ≤3 surface
+  inline without a file)
+
+## Proposed actions
+
+[1] arete.commitments_create text="Send Rippling rollout plan to Lindsay" target_person=lindsay due=2026-05-23
+[2] (draft) jira.create_ticket project=GLANCE type=Task summary="LEAP UK onboarding plan" labels=[uk,leap]
+[3] arete.inbox_add source=manual "Q3 OKR retrospective — book a slot if not already"
+
+What's your call? Approve to write to `now/week.md`, or edit specific tasks.
 ```
 
-### 5. Confirm and Close
+Wait for user response.
 
-- Summarize the week's focus
-- Mention that **daily-plan** will update the Today section each day
-- Suggest **week-review** at end of week
+### Step 6 — Write the plan + execute approved actions
 
-## Template Variables
+After approval:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `{week_start_date}` | Monday of the week | Mon Mar 24, 2026 |
-| `{day_date}` | Current day | Mon Mar 24 |
+```bash
+# Write plan to now/week.md (preserves any user-edited
+# template structure; uses templates/plans/week-priorities.md if
+# customized)
+# Run approved actions.
+# Re-index.
+arete index
+```
+
+## Sidecar conventions
+
+- File: `now/archive/week-plan/deferred-week-YYYY-WNN.md` (same convention as
+  weekly-winddown — they share the file when run consecutively;
+  weekly-winddown writes first, week-plan reads + augments).
+- Pruning candidates from week-plan that the user accepts get
+  appended to that sidecar, not a separate file.
+
+## Action verbs this skill may propose
+
+| Verb | Mode | When |
+|---|---|---|
+| `calendar.create_event` | executable | Schedule meetings derived from priorities |
+| `slack.send_dm` / `slack.send_channel` | executable | "Send pushback to @person", "post weekly focus" |
+| `jira.create_ticket` | draft-only | Themes warranting tracked work |
+| `notion.update_page` | executable | "Update Glance 2.0 stakes doc" type updates |
+| `arete.commitments_create` / `_resolve` | executable | New commitments, resolve completed ones |
+| `arete.inbox_add` | executable | "Capture this for triage" type captures |
+
+## Reason taxonomy (skill-specific extensions)
+
+- **Carryover** — `carried from last week, stalled Nd`
+- **Goal traction** — `Q3 milestone-week`
+- **Customer pressure** — `customer review on Wed`
+- **Theme momentum** — `3 meetings touched this last week`
+
+## Uncertain-tier judgment (when in doubt, surface)
+
+Week-plan's "Could surface" tier is the natural home for ambiguous
+priority candidates. Bias toward surfacing — the user can pull back
+in the priorities engage if it's not worth the slot.
+
+**Category-level rule — these defer reasons are LOW-confidence
+auto-defers; surface to Uncertain (or "Could surface") instead unless
+the chef can articulate a specific, confident defer reason** (already
+a confirmed priority; explicitly out of scope per APPEND; carryover
+that user already declined last week):
+
+- **"needs verification"** — a claim about ownership, status, or
+  scope that the user might want to confirm before committing the
+  week. Don't auto-defer; surface as "Verify before locking in or
+  skip?"
+- **"interesting future"** — a forward-looking idea that may or may
+  not earn a slot this week. Don't auto-defer; surface as "Make a
+  priority, hold for later, or skip?"
+- **"covered elsewhere"** — chef thinks the item is already covered
+  by an existing priority or open commitment — but the overlap is
+  fuzzy. Don't auto-defer; surface with the cover-by reference for
+  the user to confirm.
 
 ## References
 
-- **Quarter goals**: `goals/quarter.md`
-- **Areas**: `areas/*.md` (used for Step 1.5 area scoping)
-- **Last week**: `now/week.md`
-- **Output**: `now/week.md`
-- **Template**: `packages/runtime/skills/week-plan/templates/week-priorities.md`
-- **Commitments**: `arete commitments list --json`
-- **Calendar**: `arete pull calendar --days 7 --json`
+- **PATTERNS.md** — chef-orchestrator patterns (two-engage variant
+  documented in Pattern 1).
+- **APPEND** — `.arete/skills-local/week-plan.md`.
+- **Templates** — `templates/plans/week-priorities.md` (user-editable
+  via `arete template resolve`).
+- **CLI primitives** — `arete commitments list`, `arete topic list
+  --active --slugs --json`, `arete pull calendar --days 7 --json`.
+- **Local files** — `now/week.md`, `goals/quarter.md`,
+  `now/scratchpad.md`, `projects/active/*/README.md`, `areas/*.md`.
+- **Sidecar** — `now/archive/week-plan/deferred-week-YYYY-WNN.md` (shared with
+  weekly-winddown).
+- **Related skills**: `weekly-winddown` (produces "stage for next
+  week" inputs that this skill consumes), `daily-plan` (daily-level
+  tactical follow-up), `meeting-prep`.
 
-## Notes
+## Rollback
 
-- **Today section**: Placeholder for daily-plan. When daily-plan runs, it updates Focus and Meetings, and archives previous day to Daily Progress.
-- **Notes section**: User's working scratchpad. Preserved across all updates — never moved or overwritten.
-- **Tasks vs Outcomes**: Outcomes are high-level goals ("CoverWhale through compliance"). Tasks are specific action items ("Get templates through compliance review").
-- **Area context**: Goals and commitments may have `area:` field linking to areas. Step 1.5 scopes the planning session to selected areas — goals are grouped by area, projects filtered. Tasks and commitments shown unfiltered (area tagging may be incomplete).
-- **Area scoping graceful degradation**: If no areas exist, Step 1.5 is skipped entirely — all goals shown together without grouping.
+If this rewrite degrades week-plan quality, revert the Phase 2
+week-plan rewrite commit (per-skill commit; surgical revert):
 
-## Error Handling
+```bash
+git log --oneline packages/runtime/skills/week-plan/SKILL.md
+git revert <phase-2 week-plan rewrite commit>
+```
 
-- If no quarter goals exist, create week file anyway; suggest **quarter-plan**.
-- If >5 priorities, suggest ranking and deferring extras to next week.
+The user fork can also be restored from a `.fork-base/` snapshot if the
+user has run `arete skill fork week-plan`.

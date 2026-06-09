@@ -23,6 +23,7 @@ import {
   listItem,
   formatPath,
 } from '../formatters.js';
+import { detectRunningBackend, formatBackendWarning } from '../lib/backend-detect.js';
 
 export function registerInstallCommand(program: Command): void {
   program
@@ -113,6 +114,15 @@ export function registerInstallCommand(program: Command): void {
           guide: basePaths.guide,
           updates: basePaths.updates,
         };
+
+        // Phase 3.5 E1 — warn before install when a backend is
+        // detected. Stale backends silently bypass new event writers
+        // / migration paths until restart.
+        const backendBeforeCreate = await detectRunningBackend(targetDir);
+        if (backendBeforeCreate.running && !opts.json) {
+          warn(formatBackendWarning(backendBeforeCreate));
+          console.log('');
+        }
 
         const result = await services.workspace.create(targetDir, {
           ideTarget: ide,

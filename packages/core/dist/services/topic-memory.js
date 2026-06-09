@@ -44,11 +44,77 @@ export const AMBIGUOUS_LOW_THRESHOLD = 0.4;
 // Pure helpers (testable without storage)
 // ---------------------------------------------------------------------------
 /**
+ * Stop-word / connector tokens filtered before Jaccard tokenization
+ * (AC3, phase-3-5-followup-5). Stems like `belongings-vs-property-claims`
+ * shouldn't include `vs` in the token set — it's a connector, not a
+ * meaningful slug component.
+ */
+const TOKENIZE_STOP_WORDS = new Set(['vs', 'and', 'or']);
+/**
+ * Singularize a single token (AC3, phase-3-5-followup-5).
+ *
+ * Rule: strip trailing `s` if and only if
+ *   - token length ≥ 4 AND
+ *   - second-to-last char is NOT `s` (preserves `-ss` endings like
+ *     `process`, `address`, `business`, `class`).
+ *
+ * Known accepted edge cases (documented per pre-mortem R1):
+ *   - `status` → `statu` (ends `-us`; benign — unlikely real slug clash)
+ *   - `news` → `new` (ends `-ws`; benign — unlikely real slug clash)
+ *
+ * The rule deliberately stops at "drop trailing `s`": no Porter-style
+ * suffix stripping. The goal is to collapse `templates`/`template`,
+ * `decisions`/`decision`, `learnings`/`learning`, `meetings`/`meeting` —
+ * the four high-traffic plural/singular pairs in observed slug drift.
+ */
+export function singularizeToken(token) {
+    if (token.length < 4)
+        return token;
+    if (!token.endsWith('s'))
+        return token;
+    // Preserve -ss endings (process, address, business, class).
+    if (token.charAt(token.length - 2) === 's')
+        return token;
+    return token.slice(0, -1);
+}
+/**
+ * Singularize a list of tokens using {@link singularizeToken}.
+ *
+ * Exported so the lexical topic detector can singularize the
+ * **transcript** token set symmetrically with how `tokenizeSlug`
+ * singularizes the **slug** side. Without this, `templates` (transcript)
+ * and `template` (slug) live in different token spaces and never
+ * intersect — silently breaking plural/alias topic detection
+ * (phase-3-5-followup-5 regression).
+ */
+export function singularizeTokens(tokens) {
+    return tokens.map(singularizeToken);
+}
+/**
  * Tokenize a slug for Jaccard comparison.
- * `cover-whale-templates` → `['cover', 'whale', 'templates']`.
+ * `cover-whale-templates` → `['cover', 'whale', 'template']`.
+ *
+ * Post-AC3 (phase-3-5-followup-5):
+ *   - Stop-word filter: drops `vs`, `and`, `or` before tokenization
+ *     (so `belongings-vs-property-claims` tokenizes without `vs`).
+ *   - Singularize-or-stem: strips trailing `s` on tokens of length ≥4
+ *     when the second-to-last char isn't `s`. Closes the
+ *     `templates`/`template`, `decisions`/`decision`,
+ *     `learnings`/`learning`, `meetings`/`meeting` clash in tokenizeSlug.
+ *
+ * Edge cases preserved: `process`, `address`, `business`, `class` (all
+ * `-ss` endings). Accepted edge cases: `status` → `statu`, `news` →
+ * `new` (benign; see `singularizeToken` doc).
  */
 export function tokenizeSlug(slug) {
-    return normalizeForJaccard(slug.replace(/-/g, ' '));
+    const rawTokens = normalizeForJaccard(slug.replace(/-/g, ' '));
+    const out = [];
+    for (const t of rawTokens) {
+        if (TOKENIZE_STOP_WORDS.has(t))
+            continue;
+        out.push(singularizeToken(t));
+    }
+    return out;
 }
 /**
  * Compute the best Jaccard score of a candidate against all identity
@@ -568,6 +634,45 @@ Constraints:
 import { join as pathJoin, basename as pathBasename, isAbsolute as pathIsAbsolute, resolve as pathResolve } from 'node:path';
 import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
 import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
+import { summaryPathForMeeting } from './summary-writer.js';
+import { parseSourceSummary, MEETING_SECTION_NAMES } from '../models/source-summary.js';
+/**
+ * Load the body of a per-meeting summary file (Phase 1 §c). Returns
+ * null when no summary exists, parsing fails, or the parsed file is
+ * not a meeting summary. Used by `refreshAllFromSources` to swap
+ * curated summary content for raw transcript at LLM time, while
+ * keeping the source-body hash stable for idempotency.
+ *
+ * The body returned is a concatenation of recognized sections in
+ * canonical order — the same shape `renderSourceSummary` produces but
+ * without the frontmatter and outer title.
+ */
+async function loadMeetingSummaryBody(workspaceRoot, storage, meetingPath, date) {
+    // Build summary path. The meetingPath we get here is workspace-
+    // relative or absolute; summaryPathForMeeting handles both.
+    const summaryPath = summaryPathForMeeting(workspaceRoot, {
+        sourcePath: meetingPath,
+        date,
+    });
+    const content = await storage.read(summaryPath);
+    if (content === null)
+        return null;
+    const parsed = parseSourceSummary(content);
+    if (parsed === null || parsed.frontmatter.source_type !== 'meeting')
+        return null;
+    const lines = [];
+    for (const name of MEETING_SECTION_NAMES) {
+        const body = parsed.sections[name];
+        if (body === undefined || body.trim().length === 0)
+            continue;
+        lines.push(`## ${name}`);
+        lines.push('');
+        lines.push(body.trim());
+        lines.push('');
+    }
+    const out = lines.join('\n').trim();
+    return out.length > 0 ? out : null;
+}
 // ---------------------------------------------------------------------------
 // Step 2 (slack-digest-topic-wiki) — source discovery
 //
@@ -744,10 +849,28 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
             let fallback = 0;
             let skipped = 0;
             const matching = [];
+            // AC2 (phase-3-5-followup-5) — alias-aware integration filter.
+            //
+            // Pre-AC2: only sources tagged with the canonical `targetSlug`
+            // integrated; sources tagged with an alias (e.g.,
+            // `default-email-template` while canonical is `email-templates`)
+            // were orphaned forever, even after a user added `aliases:` to the
+            // topic page.
+            //
+            // Post-AC2: a source integrates when ANY of its `topics:` matches
+            // the canonical slug OR one of the topic page's declared aliases.
+            // `page` is undefined when the target slug is a newly-discovered
+            // slug-only target (no page yet) — in that case `aliases ?? []` is
+            // empty, so the filter degrades to the canonical-only check (the
+            // exact pre-AC2 behavior). Nil-safe by construction.
+            const aliasSet = new Set([
+                targetSlug,
+                ...(page?.frontmatter.aliases ?? []),
+            ]);
             for (const src of allSources) {
-                if (!src.topics.includes(targetSlug))
+                if (!src.topics.some((t) => aliasSet.has(t)))
                     continue;
-                matching.push({ path: src.path, date: src.date, content: src.content });
+                matching.push({ path: src.path, date: src.date, content: src.content, type: src.type });
             }
             // `allSources` is already sorted by date asc; the filter preserves
             // that order, so no re-sort needed.
@@ -768,7 +891,36 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
                 continue;
             }
             for (const src of matching) {
-                const result = await this.integrateSource(targetSlug, page, src, { today: options.today, callLLM: options.callLLM });
+                // Phase 1 §c: when the source is a meeting AND a per-meeting
+                // summary exists at `.arete/memory/summaries/meetings/<date>-
+                // <slug>.md`, feed the summary body to the integration LLM
+                // instead of the raw transcript. Curated input → better synthesis,
+                // ≥30% input-token reduction on a typical day (see AC1.4).
+                //
+                // Idempotency hash STILL uses the source body (transcript) — that
+                // way reprocessing-with-summary doesn't bust dedup, and the
+                // backfill window (some meetings have summaries, some don't)
+                // works without thrashing the topic page's
+                // `sources_integrated[].hash` field.
+                let llmContent;
+                if (src.type === 'meeting') {
+                    try {
+                        const summaryBody = await loadMeetingSummaryBody(paths.root, storage, src.path, src.date);
+                        if (summaryBody !== null)
+                            llmContent = summaryBody;
+                    }
+                    catch {
+                        // Defensive: any read/parse failure → silent fall back to
+                        // transcript. Logging here would spam during the backfill
+                        // window where many meetings legitimately don't have
+                        // summaries yet.
+                    }
+                }
+                const result = await this.integrateSource(targetSlug, page, src, {
+                    today: options.today,
+                    callLLM: options.callLLM,
+                    llmContent,
+                });
                 if (result.decision === 'integrated')
                     integrated++;
                 else if (result.decision === 'fallback')
@@ -873,7 +1025,17 @@ TopicMemoryService.prototype.integrateSource = async function (topicSlug, existi
             reason: 'no-llm',
         };
     }
-    const prompt = buildIntegratePrompt(topicSlug, existingPage, newSource, options.relevantL2 ?? '');
+    // Phase 1 §c: when llmContent is provided (summary body), feed that
+    // to the LLM instead of newSource.content (transcript). Hash above
+    // STILL uses newSource.content so idempotency stays anchored on the
+    // source body, not the summary body — this prevents thrash during
+    // the backfill window and lets a summary-rewrite trigger
+    // re-integration only when the underlying transcript actually
+    // changes.
+    const llmSource = options.llmContent !== undefined
+        ? { ...newSource, content: options.llmContent }
+        : newSource;
+    const prompt = buildIntegratePrompt(topicSlug, existingPage, llmSource, options.relevantL2 ?? '');
     let response;
     try {
         response = await options.callLLM(prompt);

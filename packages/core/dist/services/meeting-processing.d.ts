@@ -10,7 +10,7 @@
  *   - Auto-approval logic (high confidence → approved, dedup → approved)
  *   - Metadata maps for staged items (status, confidence, source, owner)
  */
-import type { MeetingExtractionResult, PriorItem } from './meeting-extraction.js';
+import type { MeetingExtractionResult, PriorItem, ValidationWarning } from './meeting-extraction.js';
 import type { Importance } from '../integrations/meetings.js';
 export type { ItemSource } from '../models/common.js';
 import type { ItemSource } from '../models/common.js';
@@ -167,18 +167,29 @@ export declare function clearApprovedSections(content: string): string;
  * Takes FilteredItem[] from processMeetingExtraction() and original summary.
  *
  * Lead-prose section: emits `## Core` when `core` is provided non-empty,
- * otherwise falls back to `## Summary` for backward compat. Optional
- * `couldInclude` renders as a `## Could include` bullet list when non-empty.
+ * otherwise falls back to `## Summary` for backward compat.
  * (Task 8 / Decision #7 — historical files keep ## Summary; new wiki-aware
  * meetings get ## Core.)
+ *
+ * `## Could include` body-block rendering was removed in Phase 1 wiki
+ * expansion. The `couldInclude` parameter is preserved (callers still
+ * pass it) but is no longer rendered onto the meeting source file —
+ * the same items surface under `## FYI` in the summary file at
+ * `.arete/memory/summaries/meetings/<date>-<slug>.md`. The parameter
+ * is kept so callers don't need to change shape; the summary writer
+ * receives the data through `MeetingSummaryInput.couldInclude`.
  *
  * @param filteredItems - Items from processMeetingExtraction()
  * @param summary - The meeting summary text (used as fallback when `core` absent)
  * @param core - Optional lead-prose from wiki-aware extraction
- * @param couldInclude - Optional headlines for side-thread items
- * @returns Markdown string with lead + Could-include + Staged sections
+ * @param couldInclude - Accepted for API stability; no longer rendered on the meeting file
+ * @param validationWarnings - Optional. When provided, mirror-pair drop warnings
+ *                             (Phase 8 followup-6) render as a `## Parser-dropped`
+ *                             section so the user sees what was suppressed at
+ *                             curate-time (review-1 C3 visibility AC).
+ * @returns Markdown string with lead + Staged sections
  */
-export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string, core?: string, couldInclude?: string[]): string;
+export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string, core?: string, couldInclude?: string[], validationWarnings?: ValidationWarning[]): string;
 /**
  * Calculate the speaking ratio for a meeting owner based on transcript speaker labels.
  *

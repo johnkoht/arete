@@ -142,6 +142,39 @@ export async function createServices(
     return { id: task.id, text: task.text };
   });
 
+  // F1: back-propagate commitment resolve → task [x] in week.md / tasks.md.
+  // Same injection pattern as setCreateTaskFn above.
+  commitments.setCompleteTaskFromCommitmentFn((prefix) =>
+    tasks.completeTaskByCommitmentId(prefix),
+  );
+
+  // F2 + FU3: refuse to auto-prune commitments still referenced by an
+  // OPEN task — prevents the dangling-@from(commitment:xxx) orphan
+  // class. Batched: one file read per save() regardless of candidate
+  // count.
+  commitments.setHasOpenTaskReferencesFn((prefixes) =>
+    tasks.hasOpenTaskReferencesToCommitments(prefixes),
+  );
+
+  // phase-8-followup-8 AC2: inject AreaParserService for inference fallback
+  // during EntityService.refreshPersonMemory. When a meeting has no
+  // `area:` frontmatter, suggestAreaForMeeting() resolves an area at ≥0.7
+  // confidence and stamps it onto extracted action items / commitments.
+  entity.setAreaParser(areaParser);
+
+  // Phase 9 — typed-mode brief assembler dependencies. Pure aggregator
+  // dependency set: storage, commitments, topicMemory, areaMemory,
+  // areaParser, optional searchProvider. NO AIService — `arete brief`
+  // never embeds LLM calls.
+  intelligence.setBriefDependencies({
+    commitments,
+    topicMemory,
+    areaMemory,
+    areaParser,
+    storage,
+    searchProvider: search,
+  });
+
   // AI service (depends on config)
   const ai = new AIService(config);
 

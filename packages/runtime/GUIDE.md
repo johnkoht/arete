@@ -88,7 +88,10 @@ your-workspace/
 ├── .arete/                  # System-managed (don't edit directly)
 │   ├── memory/              # Institutional knowledge
 │   │   ├── items/           # Atomic facts (decisions, learnings)
-│   │   └── summaries/       # Synthesized context
+│   │   ├── areas/           # L3 area snapshots (computed)
+│   │   ├── topics/          # Topic wiki pages (computed)
+│   │   └── summaries/       # Synthesized context (source summaries, collaboration)
+│   ├── skills/              # Managed skills (refreshed by `arete update`)
 │   └── activity/            # Activity log
 
 ├── people/                  # People tracking
@@ -99,7 +102,7 @@ your-workspace/
 ├── templates/               # Your template customization space (see templates/README.md)
 │   └── inputs/              # Integration-driven templates (meeting imports)
 
-├── .agents/skills/          # PM workflows (discovery, PRD, etc.)
+├── .agents/skills/          # Your skill forks + custom skills (override managed skills)
 ├── .cursor/ or .claude/     # IDE config (depends on install)
 └── GUIDE.md                 # This file
 ```
@@ -128,7 +131,7 @@ Areté supports Cursor and Claude Code. Your IDE choice determines which directo
 | Cursor | `.cursor/` | `.mdc` |
 | Claude Code | `.claude/` | `.md` |
 
-Skills live in `.agents/skills/` for both IDEs (shared).
+Managed skills live in `.arete/skills/`; your forks/custom skills live in `.agents/skills/`. Both are shared across IDEs.
 
 ---
 
@@ -414,15 +417,6 @@ User: "Capture this conversation" (with Slack/Teams/email text pasted)
 - Presents for conversational review before saving
 - Saves to `resources/conversations/` — discoverable via `arete context`
 
-**Save a Meeting** - `save-meeting` skill
-```
-User: "Save this meeting" (with notes pasted or in context)
-```
-- Creates structured meeting file in `resources/meetings/`
-- Extracts: title, date, attendees, summary, key points, action items, decisions
-- Updates meetings index
-- Next step: Run `process-meetings` to propagate
-
 **Process Meetings** - `process-meetings` skill
 ```
 User: "Process my meetings"
@@ -516,46 +510,49 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 
 ### Default Skills
 
-Areté ships with default skills for core PM workflows. They live in `.agents/skills/` after install.
+Areté ships with default ("managed") skills for core PM workflows. They live in `.arete/skills/` after install and are refreshed by `arete update`. When you customize one, your fork lives in `.agents/skills/` and wins at runtime (see [Customizing Skills](#customizing-skills)).
 
 | Area | Skills |
 |------|--------|
-| **Setup** | getting-started, rapid-context-dump |
-| **Planning** | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
-| **Discovery & Definition** | discovery, create-prd, competitive-analysis, construct-roadmap, general-project |
-| **Execution** | capture-conversation, meeting-prep, prepare-meeting-agenda, save-meeting, process-meetings, sync, synthesize |
-| **Intelligence** | people-intelligence |
-| **Operations** | finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
+| **Setup** | getting-started, workspace-tour, rapid-context-dump |
+| **Planning** | quarter-plan, week-plan, daily-plan, goals-alignment |
+| **Discovery & Definition** | discovery, create-prd, competitive-analysis, construct-roadmap, general-project, generate-prototype-prompt |
+| **Execution** | capture-conversation, meeting-prep, prepare-meeting-agenda, process-meetings, synthesize |
+| **Async & Inbox** | slack-digest, inbox-triage, email-triage |
+| **Winddown** | daily-winddown, weekly-winddown |
+| **Scheduling** | schedule-meeting |
+| **Operations** | finalize-project, periodic-review |
 
-Run `arete skill list` to see all available skills.
+Run `arete skill list` to see all available skills (this list is illustrative — the command is the source of truth).
 
 ### Customizing Skills
 
-**Customize a skill** (make your own version):
+Managed skills live in `.arete/skills/` and are refreshed by `arete update`. To customize one, **fork** it — the fork lands in `.agents/skills/`, wins at runtime, and is never overwritten by `arete update`.
 
-1. Edit files directly in `.agents/skills/<name>/`
-2. Protect your changes by adding to `arete.yaml`:
-   ```yaml
-   skills:
-     overrides:
-       - daily-plan
-       - create-prd
-   ```
-3. Run `arete update` safely — your customized skills are preserved
+**Fork → edit → keep your edits across updates**:
+
+```bash
+arete skill fork daily-plan     # copy the managed skill into .agents/skills/ (records a fork-base)
+# ...edit .agents/skills/daily-plan/SKILL.md however you like...
+
+# Later, after `arete update` ships new upstream changes:
+arete skill diff daily-plan     # section-level diff: what changed in the managed version since you forked
+arete skill merge daily-plan    # integrate those upstream changes into your fork
+```
+
+The fork is resolved ahead of the managed copy at agent-load time, so your edits take effect immediately.
 
 **Important**:
-- `skills.defaults` (from `arete skill set-default ... --for <role>`) changes routing preference only.
-- It does **not** freeze native skill files.
-- `arete update` still refreshes native core skills unless they are listed in `skills.overrides`.
+- `skills.defaults` (from `arete skill set-default ... --for <role>`) changes routing preference only — it does not fork or freeze a skill.
+- `arete update` refreshes managed skills in `.arete/skills/` but never touches your forks in `.agents/skills/`.
 
 **Reset to default**:
-1. Remove the skill name from `skills.overrides` in `arete.yaml`
-2. Delete the skill folder: `rm -rf .agents/skills/<name>`
-3. Run `arete update` to restore the default version
+1. Delete your fork: `rm -rf .agents/skills/<name>`
+2. The managed version in `.arete/skills/` takes over again immediately.
 
 **Track your changes**:
 - Use `git diff` if your workspace is version controlled
-- Or keep a backup in `.agents/skills/<name>.backup/` before editing
+- `arete skill diff <name>` shows how the managed version has moved since you forked
 
 ### Installing Third-Party Skills
 
@@ -740,7 +737,6 @@ arete search "user onboarding"                    # Search everywhere
 arete search "pricing" --scope memory             # Search decisions/learnings only
 arete search "API" --timeline --days 30           # Recent timeline of API discussions
 arete search "jane" --person jane-doe             # Results about Jane
-arete search "roadmap" --answer                   # AI synthesis of roadmap context
 ```
 
 See [CLI Reference > Search](#search) for all flags and options.
@@ -798,16 +794,22 @@ Returns matching person files, meeting references, project mentions.
 
 ### Briefing Assembly
 
-**Command**: `arete brief --for "query"`
+**Command**: `arete brief` — exactly one of `--person`, `--project`, `--area`, `--meeting` (typed modes) or `--for "query"` (free-text)
 
-**Purpose**: Combine all services into a comprehensive briefing with context files, memory search results, resolved entities, entity relationships, and temporal signals (recency of topic discussions).
+**Purpose**: Combine all services into a comprehensive raw briefing with context files, memory search results, resolved entities, entity relationships, and temporal signals (recency of topic discussions). The output is raw assembled context — downstream consumers (skills, agents) apply judgment. No LLM synthesis is performed.
 
-**Example**:
+**Typed modes** assemble a focused brief for a specific entity; **`--for`** is the ad-hoc, free-text mode. (`--raw` is accepted but is now a no-op — raw is the only mode.)
+
+**Examples**:
 ```bash
-arete brief --for "redesign checkout flow"
+arete brief --person lindsay-gray              # person brief
+arete brief --project checkout-redesign        # project brief
+arete brief --area customer-acme               # area brief
+arete brief --meeting "John / Lindsay 1:1"     # meeting brief (slug or title)
+arete brief --for "redesign checkout flow"     # free-text
 ```
 
-Used internally by skills that set `requires_briefing: true`.
+Used internally by skills that set `requires_briefing: true` (e.g. `prepare-meeting-agenda`).
 
 ### Routing
 
@@ -941,7 +943,6 @@ arete search "query" --scope people               # Search only people profiles
 arete search "query" --timeline                   # Show results chronologically with themes
 arete search "query" --timeline --days 30         # Limit timeline to last 30 days
 arete search "query" --person "jane"              # Filter results by person
-arete search "query" --answer                     # AI synthesis of results (requires AI config)
 arete search "query" --limit 10                   # Limit number of results (default: 15)
 arete search "query" --json                       # Output as JSON
 ```
@@ -954,7 +955,6 @@ arete search "query" --json                       # Output as JSON
 | `--timeline` | Show results chronologically with recurring themes |
 | `--days <n>` | With `--timeline`, limit to last N days |
 | `--person <name>` | Filter results by person (name or slug) |
-| `--answer` | Synthesize AI-powered answer from results (requires AI configuration) |
 | `--limit <n>` | Maximum results to return (default: 15) |
 | `--json` | Output in JSON format |
 
@@ -973,9 +973,6 @@ arete search "API" --timeline --days 30
 # Find everything related to a person
 arete search "roadmap" --person jane-doe
 
-# Get an AI-synthesized answer
-arete search "what did we decide about auth?" --answer
-
 # Combine flags
 arete search "Q1 goals" --scope context --json
 ```
@@ -992,14 +989,17 @@ arete search "Q1 goals" --scope context --json
 
 arete context --inventory             # Freshness dashboard & coverage gaps (still supported)
 arete resolve "reference"             # Resolve entity
-arete brief --for "query"             # Assemble briefing (context + memory + entities + relationships + temporal)
+arete brief --person <slug>           # Typed briefing (person / project / area / meeting)
+arete brief --project <slug>          #   exactly one typed mode...
+arete brief --area <slug>             #   ...or use --for for free-text
+arete brief --meeting <slug-or-title>
+arete brief --for "query"             # Free-text briefing (context + memory + entities + relationships + temporal)
 arete route "query" [--json]          # Route to skill/tool with model suggestion
 ```
 
 ### Daily Intelligence
 
 ```bash
-arete daily                           # Morning brief: calendar, commitments, projects, decisions, patterns
 arete momentum                        # Commitment momentum (hot/stale/critical) + relationship health
 arete view [--port N]                 # Open web dashboard in browser (launches backend server)
 ```
@@ -1011,6 +1011,13 @@ arete commitments list                        # List all open commitments
 arete commitments list --person <slug>        # Commitments for one person
 arete commitments list --direction i-owe-them # Filter by direction
 arete commitments resolve <id> [--yes]        # Mark commitment as resolved
+arete commitments create <text>               # Manually add a commitment
+
+# Maintenance / migration (read the dry-run output before applying):
+arete commitments migrate                     # v1→v2 commitment migration (dry-run; --apply --owner-slug <you>)
+arete commitments backfill-area               # Infer area for commitments (preview; --apply)
+arete commitments restore --from <path>       # Roll back from a snapshot
+arete dedup --scope commitments [--explain <id>]  # Background near-duplicate hygiene (--dry-run default; --apply)
 ```
 
 ### AI Configuration
@@ -1033,6 +1040,9 @@ arete skill list [--verbose]          # List available skills (--verbose shows p
 arete skill route "query"             # Route query to skill
 arete skill install <source>          # Install skill (skills.sh or path)
 arete skill add <source>              # Install skill (alias for install)
+arete skill fork <name>               # Fork a managed skill into .agents/skills/ to customize
+arete skill diff <name>               # Show upstream changes to a forked skill since you forked
+arete skill merge <name>              # Merge upstream changes into your fork
 arete skill set-default <skill> --for <role>  # Set preferred skill for role
 arete skill defaults                  # Show role defaults
 arete skill unset-default <role>      # Restore Areté default for role
@@ -1285,7 +1295,7 @@ Areté supports Cursor and Claude Code. Your `ide_target` in `arete.yaml` determ
 | `cursor` | `.cursor/` | `.mdc` | None |
 | `claude` | `.claude/` | `.md` | `CLAUDE.md` (mandatory routing) |
 
-Skills in `.agents/skills/` work for both IDEs.
+Managed skills (`.arete/skills/`) and your forks (`.agents/skills/`) work for both IDEs.
 
 **Switching IDEs**: Set `ide_target` in `arete.yaml`, then run `arete update` to regenerate rules.
 

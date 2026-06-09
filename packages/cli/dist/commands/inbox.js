@@ -4,7 +4,7 @@
  * Lightweight helper for adding content to the workspace inbox.
  * Items can also arrive via web clippers, manual file drops, or agent chat.
  */
-import { createServices, loadConfig, refreshQmdIndex, slugify, } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, slugify, writeInboxSummary, } from '@arete/core';
 import { join, basename, extname } from 'node:path';
 import { readFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { success, error, info, listItem, } from '../formatters.js';
@@ -212,6 +212,35 @@ export async function runInboxAdd(opts, deps = getDefaultDeps()) {
     const mdPath = join(inboxDir, `${fileSlug}.md`);
     const markdown = buildInboxMarkdown({ title, source, body, type: itemType });
     await services.storage.write(mdPath, markdown);
+    // Per Phase 1 §a.2: write a per-inbox-doc summary alongside the file.
+    // Source-agnostic: same summary shape for URL/file/manual/text inputs.
+    // Best-effort — failures land in warnings; never block the inbox add.
+    let summaryPath = null;
+    let summaryWritten = false;
+    if (services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
+        try {
+            const callLLM = async (prompt) => {
+                const r = await services.ai.call('summary', prompt);
+                return r.text;
+            };
+            const today = new Date().toISOString().slice(0, 10);
+            const result = await writeInboxSummary({
+                sourcePath: `inbox/${fileSlug}.md`,
+                date: today,
+                sourceBody: body,
+                title,
+            }, {
+                storage: services.storage,
+                workspaceRoot: root,
+                callLLM,
+            });
+            summaryPath = result.summaryPath;
+            summaryWritten = result.written;
+        }
+        catch {
+            // Summary is best-effort; inbox add already succeeded.
+        }
+    }
     // Refresh QMD index
     let qmdResult;
     if (!opts.skipQmd) {
@@ -228,6 +257,8 @@ export async function runInboxAdd(opts, deps = getDefaultDeps()) {
             path: `inbox/${fileSlug}.md`,
             title,
             source,
+            summaryPath,
+            summaryWritten,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         }, null, 2));
         return;
@@ -238,6 +269,12 @@ export async function runInboxAdd(opts, deps = getDefaultDeps()) {
     listItem('Title', title);
     listItem('Path', relativePath);
     listItem('Source', source);
+    if (summaryWritten && summaryPath !== null) {
+        const wsRel = summaryPath.startsWith(root)
+            ? summaryPath.slice(root.length).replace(/^[/\\]+/, '')
+            : summaryPath;
+        listItem('Summary', wsRel);
+    }
     displayQmdResult(qmdResult);
     console.log('');
 }

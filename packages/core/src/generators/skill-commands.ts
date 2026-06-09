@@ -17,11 +17,16 @@ export function generateSkillCommand(skill: SkillDefinition): string {
   lines.push('');
 
   if (skill.requiresBriefing) {
-    lines.push('First, run the briefing:');
+    // Emits a command that returns raw assembled context (no LLM synthesis).
+    // Phase 8 followup-2: `arete brief --for` is a context-assembly call, not a
+    // synthesis call. The skill (this command's body, executed by the agent
+    // reading SKILL.md) applies its own judgment downstream — read what's
+    // relevant to the skill's purpose, ignore the rest.
+    lines.push('First, run the briefing to gather raw context:');
     lines.push('```bash');
     lines.push(`arete brief --for "$ARGUMENTS" --skill ${skill.id} --json`);
     lines.push('```');
-    lines.push('Present the briefing results, then proceed with the skill workflow.');
+    lines.push('Use the raw context to inform the skill workflow; filter to what the skill needs.');
     lines.push('');
   }
 

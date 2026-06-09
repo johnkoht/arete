@@ -128,7 +128,8 @@ resources/    → Raw inputs (meetings, notes)
 inbox/        → URLs, files, notes pending triage
 people/       → Colleagues, customers, users
 topics/       → Topic wiki — recurring themes that build up over time
-.arete/       → System memory (decisions, learnings)
+.arete/       → System memory (decisions, learnings) + managed skills
+.agents/      → Your skill forks (customized copies of managed skills)
 ```
 
 ---
@@ -136,7 +137,7 @@ topics/       → Topic wiki — recurring themes that build up over time
 ## Next Steps
 
 - [ ] Read **SETUP.md** for comprehensive setup (QMD, calendar, MCP integrations)
-- [ ] Explore **`.agents/skills/`** to see available workflows
+- [ ] Run **`arete skill list`** to see available workflows (managed skills live in `.arete/skills/`; your forks live in `.agents/skills/`)
 - [ ] Check **`README.md`** for full feature list
 
 ---

@@ -10,8 +10,76 @@ import type { ItemSource } from './common.js';
 // Staged item types (meeting triage)
 // ---------------------------------------------------------------------------
 
-/** Status of an individual staged item — pending until the user acts on it */
+/**
+ * Status of an individual staged item — pending until the user acts on it.
+ *
+ * Producer set (R6): `'skipped'` is written by multiple producers across the
+ * codebase:
+ * - extract pipeline (`meeting-processing.ts`) writes `'skipped'` for
+ *   extract-time existing-task matches, silent-merge reconciler decisions,
+ *   etc. These extract-time writes do NOT populate `staged_item_skip_reason`.
+ * - chef (winddown, phase-10 followup-2) writes `'skipped'` when cross-source
+ *   evidence shows the item is already fulfilled. ALWAYS populates
+ *   `staged_item_skip_reason[id]` with `setBy: 'chef'` (post-week-1) or
+ *   `setBy: 'chef-proposed'` (week-1 gate, stays `'pending'`).
+ * - user overrides via direct frontmatter edit OR `[[unskip]]` /
+ *   `[[confirm-skip]]` directives populate `setBy: 'user'`.
+ *
+ * The consumer (`commitApprovedItems` filter) is shape-agnostic — only
+ * cares that status !== 'approved'. The discriminator for provenance is
+ * the presence + `setBy` value of `staged_item_skip_reason[id]`. See
+ * `StagedItemSkipReason` JSDoc for the discriminator table.
+ */
 export type StagedItemStatus = Record<string, 'approved' | 'skipped' | 'pending'>;
+
+/**
+ * Reason metadata for a chef-skipped or chef-proposed staged item.
+ *
+ * Sibling-field shape mirrors `StagedItemEdits` / `StagedItemOwner` / etc.
+ * Each entry corresponds to an item ID in `StagedItemStatus`; the presence
+ * of an entry here disambiguates extract-time vs chef provenance of a
+ * `'pending'` or `'skipped'` status.
+ *
+ * Discriminator table (M2 from phase-10-followup-2 plan v3):
+ *
+ *   | Producer                 | status     | skip_reason.setBy   |
+ *   |--------------------------|------------|---------------------|
+ *   | extract default          | 'pending'  | (undefined)         |
+ *   | chef-proposed (week-1)   | 'pending'  | 'chef-proposed'     |
+ *   | chef confirmed (week-2+) | 'skipped'  | 'chef'              |
+ *   | user override [[unskip]] | 'pending'  | (deleted)           |
+ *   | extract-time skip        | 'skipped'  | (undefined)         |
+ *
+ * SKILL.md winddown prose MUST filter the "Chef proposes skipping" section
+ * by `staged_item_skip_reason[id]?.setBy === 'chef-proposed'`. Bare-pending
+ * items (extract default) must NOT be surfaced in that section.
+ */
+export type StagedItemSkipReasonMeta = {
+  /** Human-readable reason — e.g. "already fulfilled via slack-dm". */
+  reason: string;
+  /** Free-form evidence reference — e.g. "Slack DM → Jamie Burk, 2026-06-04". */
+  evidence: string;
+  /**
+   * Provenance of the skip:
+   * - `'chef'`: chef wrote the skip with confirmed/post-week-1 semantics.
+   *   `staged_item_status[id] === 'skipped'`; apply drops the item.
+   * - `'chef-proposed'`: chef proposed the skip in week-1 mode (first 7 days
+   *   post-ship). `staged_item_status[id]` stays `'pending'`; user can
+   *   confirm via `[[confirm-skip]]` (flips to `'skipped'` + `setBy: 'chef'`)
+   *   or omit and let it lapse (item stages normally on apply).
+   * - `'user'`: user override via `[[unskip]]` directive deletes the entry
+   *   entirely rather than setting `setBy: 'user'` — this value exists as
+   *   a placeholder for future direct frontmatter edits where the user
+   *   wants to record a manual skip with provenance.
+   */
+  setBy: 'chef' | 'chef-proposed' | 'user';
+  /** ISO 8601 timestamp when the entry was last written. Idempotent
+   * re-writes update this on each call. */
+  setAt: string;
+};
+
+/** Map of itemId → skip reason metadata (set by chef OR user). */
+export type StagedItemSkipReason = Record<string, StagedItemSkipReasonMeta>;
 
 /** Map of itemId → edited text (only present when the user edits the default text) */
 export type StagedItemEdits = Record<string, string>;

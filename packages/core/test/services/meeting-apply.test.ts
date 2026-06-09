@@ -752,4 +752,216 @@ Hello world.
         'pre-topic-wiki-memory callers (no topicMemory dep) are unaffected');
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Phase 1 §a.1 — meeting summary writer hook
+  // ---------------------------------------------------------------------
+
+  describe('summary writer hook', () => {
+    const VALID_SUMMARY_RESPONSE = JSON.stringify({
+      'What happened': 'Standup-style sync about test meeting.',
+      'What was decided': '- Approved next steps',
+      "What's next": '- John: schedule kickoff',
+      'Open questions': '',
+      FYI: '',
+      'Things mentioned but not actioned': '',
+    });
+
+    it('writes summary file under .arete/memory/summaries/meetings/ when callLLM provided', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+        status: 'synced',
+      }, '# Test Meeting\n\n## Transcript\nSpeaker: Hello.\n');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      // Use a callLLM that returns the summary JSON for the summary
+      // prompt and an empty topic-alias response otherwise.
+      const callLLM = async (prompt: string) => {
+        if (prompt.includes('summarizing a meeting')) return VALID_SUMMARY_RESPONSE;
+        return '{}';
+      };
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+      );
+
+      assert.equal(result.summaryWritten, true);
+      assert.notEqual(result.summaryPath, null);
+      assert.match(result.summaryPath!, /\.arete\/memory\/summaries\/meetings\/2026-04-22-test\.md$/);
+
+      const summaryContent = readFileSync(result.summaryPath!, 'utf8');
+      assert.match(summaryContent, /source_type: meeting/);
+      assert.match(summaryContent, /## What happened/);
+      assert.match(summaryContent, /Standup-style sync/);
+    });
+
+    it('skips summary write when callLLM is missing', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+      }, '# Test\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir },
+      );
+      assert.equal(result.summaryWritten, false);
+      assert.notEqual(result.summaryPath, null);
+      // Path is computed even when not written (so callers know where it would land).
+    });
+
+    it('skipSummary: true bypasses the writer entirely', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+      }, '# Test\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      let summaryCalls = 0;
+      const callLLM = async (prompt: string) => {
+        if (prompt.includes('summarizing a meeting')) summaryCalls++;
+        return VALID_SUMMARY_RESPONSE;
+      };
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+        { skipSummary: true },
+      );
+      assert.equal(result.summaryWritten, false);
+      assert.equal(result.summaryPath, null);
+      assert.equal(summaryCalls, 0);
+    });
+
+    it('refreshes org-entity pages from attendee domains (Phase 1 §b wire-in)', async () => {
+      // Two prior meetings tagged with cover-whale.com attendees so the
+      // detection threshold (≥2 in window) is met.
+      writeMeetingFile(tmpDir, '2026-04-01-cw1.md', {
+        title: 'CW 1',
+        date: '2026-04-01',
+        attendees: [{ name: 'Anthony', email: 'anthony@cover-whale.com' }],
+      }, '# CW 1\n');
+      writeMeetingFile(tmpDir, '2026-04-15-cw2.md', {
+        title: 'CW 2',
+        date: '2026-04-15',
+        attendees: [{ name: 'Carla', email: 'carla@cover-whale.com' }],
+      }, '# CW 2\n');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-cw2.md');
+      const { WorkspaceService } = await import('../../src/services/workspace.js');
+      const workspacePaths = new WorkspaceService(storage).getPaths(tmpDir);
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, workspacePaths },
+      );
+
+      assert.deepEqual(result.orgsRefreshed, ['cover-whale']);
+      const orgPath = join(tmpDir, '.arete', 'memory', 'entities', 'orgs', 'cover-whale.md');
+      assert.ok(readFileSync(orgPath, 'utf8').includes('org_slug: cover-whale'));
+    });
+
+    it('skipOrgEntities: bypasses org refresh', async () => {
+      writeMeetingFile(tmpDir, '2026-04-01-cw1.md', {
+        date: '2026-04-01',
+        attendees: [{ name: 'A', email: 'a@cover-whale.com' }],
+      }, '# CW 1\n');
+      writeMeetingFile(tmpDir, '2026-04-15-cw2.md', {
+        date: '2026-04-15',
+        attendees: [{ name: 'B', email: 'b@cover-whale.com' }],
+      }, '# CW 2\n');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-cw2.md');
+      const { WorkspaceService } = await import('../../src/services/workspace.js');
+      const workspacePaths = new WorkspaceService(storage).getPaths(tmpDir);
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, workspacePaths },
+        { skipOrgEntities: true },
+      );
+
+      assert.deepEqual(result.orgsRefreshed, []);
+    });
+
+    // phase-8-followup-5 Item B amendment — taxonomy alignment.
+    //
+    // Pre-fix bug: meeting-apply's predicate gated on 'standard'/'heavy'
+    // (the wrong taxonomy), so meetings written with the canonical
+    // 'important' (set by `inferMeetingImportance`) had their importance
+    // coerced to `undefined` and dropped from the source-summary
+    // frontmatter. This defeated the chef orchestrator's prose gate
+    // ("only act on `importance: important`"), because the field was
+    // never written.
+    it('propagates canonical importance from meeting frontmatter to written summary', async () => {
+      for (const value of ['light', 'normal', 'important'] as const) {
+        writeMeetingFile(tmpDir, `2026-04-22-${value}.md`, {
+          title: `${value} meeting`,
+          date: '2026-04-22',
+          status: 'synced',
+          importance: value,
+        }, '# Meeting\n\n## Transcript\nSpeaker: Hello.\n');
+
+        const meetingPath = join(tmpDir, 'resources', 'meetings', `2026-04-22-${value}.md`);
+
+        const callLLM = async (prompt: string) => {
+          if (prompt.includes('summarizing a meeting')) return VALID_SUMMARY_RESPONSE;
+          return '{}';
+        };
+
+        const result = await applyMeetingIntelligence(
+          meetingPath,
+          sampleIntelligence,
+          { storage, workspaceRoot: tmpDir, callLLM },
+        );
+
+        assert.equal(result.summaryWritten, true, `summary should be written for importance: ${value}`);
+        const summaryContent = readFileSync(result.summaryPath!, 'utf8');
+        assert.match(
+          summaryContent,
+          new RegExp(`^importance:\\s+${value}\\s*$`, 'm'),
+          `summary frontmatter must carry importance: ${value} verbatim (pre-fix dropped 'normal'/'important' to undefined)`,
+        );
+      }
+    });
+
+    it('idempotent: second apply with same body does not re-call LLM', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+      }, '# Test\n\n## Transcript\nA: hi\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      let summaryCalls = 0;
+      const callLLM = async (prompt: string) => {
+        if (prompt.includes('summarizing a meeting')) summaryCalls++;
+        return VALID_SUMMARY_RESPONSE;
+      };
+
+      const first = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+      );
+      assert.equal(first.summaryWritten, true);
+      assert.equal(summaryCalls, 1);
+
+      const second = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+      );
+      assert.equal(second.summaryWritten, false);
+      assert.equal(summaryCalls, 1, 'idempotency: same body → no second LLM call');
+    });
+  });
 });

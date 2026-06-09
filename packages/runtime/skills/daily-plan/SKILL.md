@@ -25,6 +25,11 @@ Build a daily plan: today's focus from week priorities, meeting list with contex
 - "Daily plan"
 - "Today's focus"
 
+**Phase 0 instrumentation** — at skill start, run
+`arete events log daily-plan --event start`. At the end (after the
+plan is written to week.md), run `arete events log daily-plan --event end`.
+Best-effort; do not block the workflow on logging failures.
+
 ## Workflow
 
 ### 1. Check Timing
@@ -33,11 +38,82 @@ Build a daily plan: today's focus from week priorities, meeting list with contex
   - Confirm: "Planning for tomorrow (Wed 3/19)? [Y/n]"
   - Use confirmed date for calendar pull and section content
 
-### 2. Check Week Plan Exists
+### 2. Check Week Plan Exists (Phase 8-followup-3: planning-chain hygiene)
 
-- **If `now/week.md` does not exist**:
+Two prerequisite checks before gathering context. Both surface as nudges
+with a skip option; neither blocks the skill.
+
+**2a. Check `/week-plan` ran for current ISO week**:
+
+```bash
+# Most recent week-plan file (sorted by mtime).
+recent_wp=$(ls -t now/archive/week-plan/week-plan-*.md 2>/dev/null | head -n 1)
+```
+
+- If no file exists at all OR the most recent file's dated filename
+  (`week-plan-YYYY-MM-DD.md`) is **>8 days old** → nudge:
+
+  > Looks like `/week-plan` didn't run for this week. Daily planning
+  > leans on the week's priorities + Outcomes; without a fresh
+  > week-plan, today's focus is best-guess.
+  >
+  > - Run `/week-plan` first (recommended), then come back with
+  >   `/daily-plan`
+  > - Or type `skip` and I'll plan today against whatever's in
+  >   `now/week.md` directly
+
+- If file dated within last 8 days → silent skip (week-plan ran
+  recently; proceed)
+
+**Backward compat**: if `now/week.md` exists but no
+`now/archive/week-plan/` files (e.g., user is on a workspace that
+predates the chef-pattern week-plan), treat as "skip silently and
+proceed" — the user has a hand-maintained week.md that's intentional.
+
+**2b. Check `/daily-winddown` ran for prior day**:
+
+```bash
+# Check if winddown file exists for yesterday.
+yesterday=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d "yesterday" +%Y-%m-%d)
+[ -f "now/archive/daily-winddown/winddown-${yesterday}.md" ] && echo "yes" || echo "no"
+```
+
+- If no winddown file for yesterday → nudge:
+
+  > Looks like `/daily-winddown` didn't run for yesterday
+  > (${yesterday}). The previous day's winddown surfaces carryovers
+  > and unfinished commitments today's plan should pick up.
+  >
+  > - Run `/daily-winddown` first (recommended; surfaces what to
+  >   carry forward), then come back with `/daily-plan`
+  > - Or type `skip` and I'll plan today without the prior-day wrap
+
+- If winddown file exists for yesterday → silent skip (proceed)
+
+**Weekend handling**: on Monday morning, "yesterday" is Sunday — if
+no Sunday winddown exists, check Friday instead. If user wraps
+Fri/Sat/Sun in a single winddown, the Friday/Saturday/Sunday file
+covers the chain.
+
+```bash
+# Monday fallback: check Friday if Sunday winddown missing.
+if [ "$(date +%u)" = "1" ] && [ ! -f "now/archive/daily-winddown/winddown-${yesterday}.md" ]; then
+  friday=$(date -v-3d +%Y-%m-%d 2>/dev/null || date -d "3 days ago" +%Y-%m-%d)
+  [ -f "now/archive/daily-winddown/winddown-${friday}.md" ] && echo "Friday winddown found" || echo "no"
+fi
+```
+
+**Best-effort**: never block. If both checks fail and user skips both,
+proceed with whatever context is available.
+
+### 2.5. (Legacy) Check `now/week.md` baseline exists
+
+- **If `now/week.md` does not exist** (workspace never bootstrapped):
   - Prompt: "No week plan found. Run week-plan first, or continue with minimal plan?"
   - If continue: Create minimal `now/week.md` with the new template structure
+
+This is a deeper-than-prerequisite check: 2a nudges about freshness;
+2.5 catches the case where the file structure isn't even bootstrapped.
 
 ### 3. Gather Context
 

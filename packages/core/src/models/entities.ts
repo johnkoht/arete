@@ -206,8 +206,63 @@ export type CommitmentStatus = 'open' | 'resolved' | 'dropped';
  *
  * Defined here in models (parallel to ActionItemDirection in services) to
  * avoid circular imports between models and services.
+ *
+ * Phase 10a (v2) introduces `'self'` for self-reminder commitments — these
+ * carry no counterparty and the only stakeholder is the workspace owner.
+ * Migration's owner-as-personSlug parser routes the "note to self" /
+ * "remember to" / etc. patterns to this direction. Pre-Phase-10 code paths
+ * NEVER emit `'self'` — old shape (only `'i_owe_them' | 'they_owe_me'`)
+ * remains the v1 read path until `COMMITMENTS_V2_ACTIVE` is flipped.
  */
-export type CommitmentDirection = 'i_owe_them' | 'they_owe_me';
+export type CommitmentDirection = 'i_owe_them' | 'they_owe_me' | 'self';
+
+/**
+ * Role a Stakeholder plays on a Commitment (Phase 10a v2 — PM G6).
+ *
+ *  - `recipient`: outbound — the user owes / will deliver TO this person.
+ *  - `sender`:    inbound  — this person owes / will deliver TO the user.
+ *  - `mentioned`: appears in the text as context, but isn't the counterparty.
+ *  - `self`:      self-reminder; the only stakeholder is the workspace owner.
+ *
+ * The role distinction matters for downstream gates (Phase 8 R4 set-overlap
+ * EXCLUDES role='self' so a self-reminder doesn't match a recurring-meeting
+ * attendee just because the owner is on the attendee list — see
+ * `getCommitmentCounterpartySlugs` in commitments.ts).
+ */
+export type StakeholderRole = 'recipient' | 'sender' | 'mentioned' | 'self';
+
+/**
+ * Stakeholder on a commitment (Phase 10a v2 data model).
+ *
+ * Replaces v1's single `personSlug` field. A commitment may carry multiple
+ * stakeholders with distinct roles (e.g., "Send Lindsay the deck and CC
+ * Anthony" → recipient=lindsay, mentioned=anthony).
+ */
+export type Stakeholder = {
+  /** Person slug (matches a file in people/<category>/<slug>.md). */
+  slug: string;
+  /** Role this person plays on the commitment. */
+  role: StakeholderRole;
+};
+
+/**
+ * External source for a commitment (Phase 11 — RESERVED in v2).
+ *
+ * In Phase 10a v2 this is always an empty array on persisted entries;
+ * Phase 11 will populate it from Slack / Gmail / Jira cross-references.
+ * The shape is committed up front so v2 dry-run reads emit a stable JSON
+ * key layout — adding the field later would shift diffs unnecessarily.
+ */
+export type ExternalSource = {
+  kind: 'slack' | 'gmail' | 'jira';
+  /** Optional permalink. Phase 11 fills this when the integration provides it. */
+  url?: string;
+  /** Free-form reference (channel/ts, message-id, ticket key). */
+  ref: string;
+};
+
+/** Hard cap on `Commitment.textVariants` (PM Q3 / Phase 10a v2 spec). */
+export const COMMITMENT_TEXT_VARIANTS_MAX = 5;
 
 /**
  * A tracked commitment between the user and another person.
@@ -217,6 +272,15 @@ export type CommitmentDirection = 'i_owe_them' | 'they_owe_me';
  *   Null means the commitment is still open and must NOT be pruned.
  *   A commitment from months ago resolved yesterday will have a recent `resolvedAt`
  *   and must be retained; pruning logic must use `resolvedAt`, never `date`.
+ *
+ * **v1 → v2 coexistence** (Phase 10a, AC0a / AC1c): the v1 fields
+ * (`personSlug`, `personName`, `source`) remain REQUIRED so the v1 read path
+ * keeps working during the 3-5 day dry-run window between
+ * `arete commitments migrate --to-v2 --dry-run` and `--apply`. The v2 fields
+ * (`stakeholders`, `source_meetings`, `source_external`, `textVariants`) are
+ * OPTIONAL on read — code that needs them defaults sensibly when absent (see
+ * `getCommitmentCounterpartySlugs` for the canonical dual-shape pattern).
+ * After `--apply` runs, all rows carry both shapes.
  */
 export type Commitment = {
   id: string;
@@ -226,6 +290,16 @@ export type Commitment = {
   personName: string;
   source: string;
   date: string;
+  /**
+   * ISO 8601 wall-clock timestamp of first creation. Preserved across merges
+   * (Phase 10 dedup) and used as a secondary sort key when `date` ties.
+   *
+   * Added in phase-10a-pre. For pre-existing entries the migration script at
+   * `services/migrations/add-created-at.ts` backfills this with the `date`
+   * field value (sentinel — date-only, no time component); entries created
+   * after the migration use `new Date().toISOString()`.
+   */
+  createdAt: string;
   status: CommitmentStatus;
   resolvedAt: string | null;
   /** Optional project association — inherited from meeting's projectSlug */
@@ -234,6 +308,137 @@ export type Commitment = {
   goalSlug?: string;
   /** Optional area association — domain scoping for commitment. Metadata only, NOT part of dedup hash. */
   area?: string;
+  /**
+   * Provenance marker for `area` (phase-8-followup-8 AC3).
+   *
+   * Set to `'backfill'` ONLY when the area was populated by
+   * `arete commitments backfill-area --apply`. Used by `--reset` to
+   * selectively clear backfill-set areas while leaving Path A (meeting
+   * approval) and Path B (extract-time) areas intact.
+   *
+   * Absent when area was set at creation time or by sync(); also absent
+   * when area itself is absent.
+   */
+  areaSetBy?: 'backfill';
+
+  // -------------------------------------------------------------------------
+  // Phase 10a v2 shape — counterparty → stakeholders[] migration
+  // -------------------------------------------------------------------------
+
+  /**
+   * Stakeholders on this commitment (Phase 10a v2).
+   *
+   * Replaces v1's single `personSlug` semantically. v1 `personSlug` remains
+   * populated for backward compat; readers MUST prefer `stakeholders` when
+   * present (see `getCommitmentCounterpartySlugs`). Migration's owner-as-
+   * personSlug parser rewrites v1 rows by extracting counterparties from
+   * the commitment text (arrow notation + natural language) so the workspace
+   * owner does not appear as a fake recipient.
+   */
+  stakeholders?: Stakeholder[];
+
+  /**
+   * Meeting slugs that surfaced this commitment (Phase 10a v2).
+   *
+   * Replaces v1's single `source` field semantically. v1 `source` remains
+   * populated for backward compat (the canonical meeting that minted the row);
+   * `source_meetings` carries the union across all dedup merges — same
+   * commitment voiced in three meetings has three entries here.
+   */
+  source_meetings?: string[];
+
+  /**
+   * External cross-references (Phase 11 — RESERVED in v2).
+   *
+   * Phase 10a writes this as `[]` on every v2 row for shape stability.
+   * Phase 11 populates from Slack/Gmail/Jira providers.
+   */
+  source_external?: ExternalSource[];
+
+  /**
+   * Observed wordings of the commitment text (Phase 10a v2).
+   *
+   * Cap = `COMMITMENT_TEXT_VARIANTS_MAX` (5). Eviction is oldest-first when
+   * full. Phase 10b's semantic dedup pipeline appends to this when an
+   * extracted item lands on an existing canonical with non-identical text.
+   * The migration seeds this with `[text]` so every v2 row has at least
+   * one variant on disk.
+   */
+  textVariants?: string[];
+
+  // -------------------------------------------------------------------------
+  // Phase 11 11a — Gmail Sent auto-resolution fields
+  // -------------------------------------------------------------------------
+
+  /**
+   * Who/what resolved this commitment (Phase 11 11a).
+   *
+   * Phase 10 had implicit `'user'` semantics (any `resolve()` call). Phase 11
+   * adds `'auto-gmail'` for Gmail-Sent-evidence auto-resolutions. The union is
+   * load-bearing for:
+   *  - the audit trail (`arete resolve --explain`),
+   *  - the `[[unresolve]]` filter (only `'auto-gmail'` + week-1-staged are
+   *    `[[unresolve]]`-eligible; `'user'`-resolved use `arete commitments
+   *    reopen` or `[[unconfirm]]` within 24h),
+   *  - the `--revert-all` mass-unresolve (AC13).
+   *
+   * Absent on open commitments and on pre-Phase-11 resolutions.
+   */
+  resolvedBy?: 'user' | 'auto-gmail';
+
+  /**
+   * Gmail thread URL (or other external evidence permalink) that fulfilled
+   * the commitment (Phase 11 11a). Clickable in winddown output. Preserved
+   * across `[[unresolve]]` as part of the audit trail (only `resolvedBy` /
+   * `resolvedConfidence` / `resolvedAt` clear; `resolvedEvidence` +
+   * `source_external[]` stay for forensics).
+   */
+  resolvedEvidence?: string;
+
+  /**
+   * Confidence of the auto-resolution (Phase 11 11a).
+   *
+   * Only `'HIGH'` ever writes to disk — MEDIUM is a winddown-surface-only
+   * "possibly done, confirm?" signal and never mutates a commitment (Q6).
+   * `[[confirm]]` on a MEDIUM-flagged item writes `'HIGH'` (user adjudicated).
+   */
+  resolvedConfidence?: 'HIGH' | 'MEDIUM';
+
+  /**
+   * Suppress-until marker for `[[unresolve]]` (Phase 11 11a, G5 structured).
+   *
+   * Set to `now + 14d` when the user `[[unresolve]]`s an auto-resolution.
+   * The auto-resolve pipeline checks this field BEFORE firing (Step 2a) and
+   * skips the commitment while `now < unresolveSuppressedUntil`. This is a
+   * STRUCTURED field, NOT a log-grep (G5) — the pre-check is a direct field
+   * comparison.
+   *
+   * Sentinel `'2100-01-01T00:00:00.000Z'` = permanent suppress
+   * (`[[unresolve <id> --permanent]]`, M4 / AC6c) — pipeline treats far-future
+   * identically to 14d.
+   */
+  unresolveSuppressedUntil?: string;
+
+  /**
+   * First-week confirm-gate marker (Phase 11 11a, F2 / AC2a).
+   *
+   * During days 1-7 post-ship, a HIGH-confidence match STAGES the resolve by
+   * setting this field WITHOUT mutating `status` — the commitment stays
+   * `'open'` and is surfaced under "Staged for confirm" with full inline
+   * evidence. Cleared on `[[confirm]]` (converts to user-resolve) or
+   * `[[unresolve]]` (rejects + 14d suppress).
+   */
+  resolveStagedAt?: string;
+
+  /**
+   * `[[unconfirm]]` 24h-recovery marker (Phase 11 11a, F2 / AC2b).
+   *
+   * Set to `now` when a `[[confirm]]` writes a user-resolve. Within 24h, an
+   * `[[unconfirm <id>]]` directive can flip the resolution back to staged
+   * (re-evaluation). Outside the 24h window, `[[unconfirm]]` is a no-op and
+   * the user must use `arete commitments reopen` / `[[unresolve]]`.
+   */
+  confirmedAt?: string;
 };
 
 /** Persisted commitments file structure */
@@ -271,6 +476,14 @@ export type AreaFrontmatter = {
     attendees?: string[];
     frequency?: string;
   }>;
+  /**
+   * Optional Jira epic watchlist for this area (Phase 7a AC4).
+   * Strings — typically Jira ticket keys (e.g., "PLAT-11014"). Free-form;
+   * no validation today (no Jira MCP wired). Phase 8 reconciler reads
+   * the watchlist to prompt user for current state per epic.
+   * Missing or empty = no epics tracked for this area.
+   */
+  jira_epics?: string[];
 };
 
 /**
@@ -327,6 +540,12 @@ export type AreaContext = {
   status: string;
   /** Recurring meetings associated with this area */
   recurringMeetings: RecurringMeeting[];
+  /**
+   * Jira epic watchlist for this area (Phase 7a AC4).
+   * Defaults to empty array when frontmatter `jira_epics:` is missing.
+   * Malformed entries (non-strings) are dropped at parse time.
+   */
+  jiraEpics: string[];
   /** Path to the area file */
   filePath: string;
   /** Parsed markdown sections */

@@ -50,13 +50,14 @@ describe('buildStancePrompt', () => {
 
   it('includes omission instruction for uncertain stances', () => {
     const prompt = buildStancePrompt('content', 'Bob');
-    assert.ok(prompt.toLowerCase().includes('if uncertain'));
-    assert.ok(prompt.toLowerCase().includes('omit'));
+    // Proposal C uses "When in doubt, SKIP" rather than the older "if uncertain, omit" phrasing
+    assert.ok(prompt.toLowerCase().includes('when in doubt'));
+    assert.ok(prompt.toLowerCase().includes('skip'));
   });
 
   it('instructs to extract only for the named person', () => {
     const prompt = buildStancePrompt('content', 'Alice');
-    assert.ok(prompt.includes('Extract stances ONLY for: Alice'));
+    assert.ok(prompt.includes('Extract stances ONLY for Alice'));
   });
 
   it('requests JSON output without code fences', () => {
@@ -79,6 +80,7 @@ describe('parseStanceResponse', () => {
           direction: 'supports',
           summary: 'Advocates for using React over Vue.',
           evidence_quote: 'I think React is the better choice for our team.',
+          _justification: 'Considered SKIP (feature-endorsement) — ruled out because the position is a framework philosophy, not approval of a specific component.',
         },
       ],
     });
@@ -89,6 +91,7 @@ describe('parseStanceResponse', () => {
     assert.equal(result[0].direction, 'supports');
     assert.equal(result[0].summary, 'Advocates for using React over Vue.');
     assert.equal(result[0].evidenceQuote, 'I think React is the better choice for our team.');
+    assert.equal(result[0].justification, 'Considered SKIP (feature-endorsement) — ruled out because the position is a framework philosophy, not approval of a specific component.');
     assert.equal(result[0].source, '');
     assert.equal(result[0].date, '');
   });
@@ -101,12 +104,14 @@ describe('parseStanceResponse', () => {
           direction: 'supports',
           summary: 'Wants microservices.',
           evidence_quote: 'We should go with microservices.',
+          _justification: 'Architectural philosophy that transfers to any service-design decision; not feature-endorsement.',
         },
         {
           topic: 'Monolith',
           direction: 'opposes',
           summary: 'Against monolith.',
           evidence_quote: 'The monolith approach will slow us down.',
+          _justification: 'Position on architectural pattern, contestable and transfers; not a project-specific opinion.',
         },
       ],
     });
@@ -138,21 +143,21 @@ describe('parseStanceResponse', () => {
   });
 
   it('strips markdown code fences (json label)', () => {
-    const response = '```json\n{"stances": [{"topic": "Testing", "direction": "supports", "summary": "Likes tests.", "evidence_quote": "We need more tests."}]}\n```';
+    const response = '```json\n{"stances": [{"topic": "Testing", "direction": "supports", "summary": "Likes tests.", "evidence_quote": "We need more tests.", "_justification": "Methodology stance, transfers across projects."}]}\n```';
     const result = parseStanceResponse(response);
     assert.equal(result.length, 1);
     assert.equal(result[0].topic, 'Testing');
   });
 
   it('strips code fences without json label', () => {
-    const response = '```\n{"stances": [{"topic": "CI", "direction": "supports", "summary": "Wants CI.", "evidence_quote": "Let us set up CI."}]}\n```';
+    const response = '```\n{"stances": [{"topic": "CI", "direction": "supports", "summary": "Wants CI.", "evidence_quote": "Let us set up CI.", "_justification": "Engineering practice position, not project-specific."}]}\n```';
     const result = parseStanceResponse(response);
     assert.equal(result.length, 1);
     assert.equal(result[0].topic, 'CI');
   });
 
   it('extracts JSON from surrounding text', () => {
-    const response = 'Here are the stances:\n{"stances": [{"topic": "API", "direction": "concerned", "summary": "Worried about API.", "evidence_quote": "The API concerns me."}]}\nDone.';
+    const response = 'Here are the stances:\n{"stances": [{"topic": "API", "direction": "concerned", "summary": "Worried about API.", "evidence_quote": "The API concerns me.", "_justification": "Persistent concern about a class of integration, not a one-off observation."}]}\nDone.';
     const result = parseStanceResponse(response);
     assert.equal(result.length, 1);
     assert.equal(result[0].direction, 'concerned');
@@ -161,8 +166,8 @@ describe('parseStanceResponse', () => {
   it('skips stances with missing required fields', () => {
     const response = JSON.stringify({
       stances: [
-        { direction: 'supports', summary: 'No topic.', evidence_quote: 'Quote.' },
-        { topic: 'Valid', direction: 'supports', summary: 'Has topic.', evidence_quote: 'Quote.' },
+        { direction: 'supports', summary: 'No topic.', evidence_quote: 'Quote.', _justification: 'has justification but missing topic.' },
+        { topic: 'Valid', direction: 'supports', summary: 'Has topic.', evidence_quote: 'Quote.', _justification: 'Considered PAIR 1 SKIP, ruled out because it transfers.' },
       ],
     });
 
@@ -197,6 +202,7 @@ describe('parseStanceResponse', () => {
           direction: '  supports  ',
           summary: '  Likes React.  ',
           evidence_quote: '  React is great.  ',
+          _justification: '  Framework philosophy stance.  ',
         },
       ],
     });
@@ -207,11 +213,12 @@ describe('parseStanceResponse', () => {
     assert.equal(result[0].direction, 'supports');
     assert.equal(result[0].summary, 'Likes React.');
     assert.equal(result[0].evidenceQuote, 'React is great.');
+    assert.equal(result[0].justification, 'Framework philosophy stance.');
   });
 
   it('handles non-object items in stances array', () => {
     const response = JSON.stringify({
-      stances: [null, 'not an object', 42, { topic: 'Valid', direction: 'supports', summary: 'OK.', evidence_quote: 'Quote.' }],
+      stances: [null, 'not an object', 42, { topic: 'Valid', direction: 'supports', summary: 'OK.', evidence_quote: 'Quote.', _justification: 'A real position on methodology, not project-endorsement.' }],
     });
 
     const result = parseStanceResponse(response);
@@ -222,13 +229,194 @@ describe('parseStanceResponse', () => {
   it('normalizes direction to lowercase', () => {
     const response = JSON.stringify({
       stances: [
-        { topic: 'Testing', direction: 'Supports', summary: 'Likes it.', evidence_quote: 'Quote.' },
+        { topic: 'Testing', direction: 'Supports', summary: 'Likes it.', evidence_quote: 'Quote.', _justification: 'Engineering-practice philosophy, transfers.' },
       ],
     });
 
     const result = parseStanceResponse(response);
     assert.equal(result.length, 1);
     assert.equal(result[0].direction, 'supports');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseStanceResponse — Proposal C invariants
+//
+// Proposal C tightens the parser to enforce three invariants:
+//   1. `neutral` is not a valid direction — drop any stance that uses it.
+//   2. `_justification` is required (audit-trail) — drop missing/empty.
+//   3. Hard-cap of 5 stances at parser exit (belt-and-suspenders with
+//      the prompt's max-5 instruction; raised from 3 in Phase 9
+//      followup-6 — was too aggressive, depressing yield to ~13 per
+//      297-meeting backfill). Validation runs first, then slice.
+// ---------------------------------------------------------------------------
+
+describe('parseStanceResponse — Proposal C invariants', () => {
+  it('drops stances with direction "neutral" (no longer a valid direction)', () => {
+    const response = JSON.stringify({
+      stances: [
+        {
+          topic: 'Languages',
+          direction: 'neutral',
+          summary: 'No strong opinion on Go vs Rust.',
+          evidence_quote: 'Either Go or Rust is fine.',
+          _justification: 'Author thought this was a stance but it has no direction.',
+        },
+        {
+          topic: 'Type systems',
+          direction: 'supports',
+          summary: 'Prefers strong static typing.',
+          evidence_quote: 'Static types catch real bugs.',
+          _justification: 'Persistent language-design philosophy, contestable and transfers.',
+        },
+      ],
+    });
+
+    const result = parseStanceResponse(response);
+    // Only the supports stance survives — neutral is dropped because it's
+    // not in VALID_DIRECTIONS.
+    assert.equal(result.length, 1);
+    assert.equal(result[0].direction, 'supports');
+    assert.equal(result[0].topic, 'Type systems');
+  });
+
+  it('drops stances missing _justification entirely (audit-trail required)', () => {
+    const response = JSON.stringify({
+      stances: [
+        {
+          topic: 'Microservices',
+          direction: 'supports',
+          summary: 'Wants microservices.',
+          evidence_quote: 'We should go with microservices.',
+          // _justification absent — must be dropped
+        },
+        {
+          topic: 'Monolith',
+          direction: 'opposes',
+          summary: 'Against monolith.',
+          evidence_quote: 'The monolith approach will slow us down.',
+          _justification: 'Architectural philosophy, transfers across decisions.',
+        },
+      ],
+    });
+
+    const result = parseStanceResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].topic, 'Monolith');
+  });
+
+  it('drops stances with empty-string _justification', () => {
+    const response = JSON.stringify({
+      stances: [
+        {
+          topic: 'Testing',
+          direction: 'supports',
+          summary: 'Likes tests.',
+          evidence_quote: 'We need more tests.',
+          _justification: '',
+        },
+      ],
+    });
+
+    const result = parseStanceResponse(response);
+    assert.deepEqual(result, []);
+  });
+
+  it('drops stances with whitespace-only _justification', () => {
+    const response = JSON.stringify({
+      stances: [
+        {
+          topic: 'Testing',
+          direction: 'supports',
+          summary: 'Likes tests.',
+          evidence_quote: 'We need more tests.',
+          _justification: '   \n\t  ',
+        },
+      ],
+    });
+
+    const result = parseStanceResponse(response);
+    assert.deepEqual(result, []);
+  });
+
+  it('hard-caps output at 5 stances even when LLM returns 7', () => {
+    // Phase 9 followup-6 raised the per-meeting cap from 3 → 5.
+    const response = JSON.stringify({
+      stances: [
+        { topic: 't1', direction: 'supports', summary: 's1', evidence_quote: 'q1', _justification: 'j1 — first most-distinctive position.' },
+        { topic: 't2', direction: 'opposes', summary: 's2', evidence_quote: 'q2', _justification: 'j2 — second most-distinctive.' },
+        { topic: 't3', direction: 'concerned', summary: 's3', evidence_quote: 'q3', _justification: 'j3 — third most-distinctive.' },
+        { topic: 't4', direction: 'supports', summary: 's4', evidence_quote: 'q4', _justification: 'j4 — fourth most-distinctive.' },
+        { topic: 't5', direction: 'opposes', summary: 's5', evidence_quote: 'q5', _justification: 'j5 — fifth most-distinctive.' },
+        { topic: 't6', direction: 'supports', summary: 's6', evidence_quote: 'q6', _justification: 'j6 — would be dropped by cap.' },
+        { topic: 't7', direction: 'opposes', summary: 's7', evidence_quote: 'q7', _justification: 'j7 — would be dropped by cap.' },
+      ],
+    });
+
+    const result = parseStanceResponse(response);
+    // Hard-cap of 5 enforced regardless of how many the LLM emitted.
+    assert.equal(result.length, 5);
+    // Order is preserved: model emits most-distinctive first per prompt.
+    assert.equal(result[0].topic, 't1');
+    assert.equal(result[1].topic, 't2');
+    assert.equal(result[2].topic, 't3');
+    assert.equal(result[3].topic, 't4');
+    assert.equal(result[4].topic, 't5');
+  });
+
+  it('validation runs before slice: dropped stances do not count toward the cap', () => {
+    // If validation ran AFTER slice, the first 5 (3 invalid + 2 valid) would
+    // be sliced first and the 3 invalid dropped, leaving only 2 valid stances.
+    // Proposal C invariant: validation first, then slice. So the 5 valid
+    // stances at positions 3-7 survive (cap of 5 still applies — valid-6
+    // would be dropped at slice time).
+    const response = JSON.stringify({
+      stances: [
+        { topic: 'neutral-stance', direction: 'neutral', summary: 's', evidence_quote: 'q', _justification: 'should drop on direction.' },
+        { topic: 'missing-just', direction: 'supports', summary: 's', evidence_quote: 'q' },
+        { topic: 'empty-just', direction: 'supports', summary: 's', evidence_quote: 'q', _justification: '' },
+        { topic: 'valid-1', direction: 'supports', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-2', direction: 'opposes', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-3', direction: 'concerned', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-4', direction: 'supports', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-5', direction: 'opposes', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance.' },
+        { topic: 'valid-6', direction: 'supports', summary: 's', evidence_quote: 'q', _justification: 'a real defended stance — would be dropped by cap of 5.' },
+      ],
+    });
+
+    const result = parseStanceResponse(response);
+    assert.equal(result.length, 5);
+    assert.equal(result[0].topic, 'valid-1');
+    assert.equal(result[1].topic, 'valid-2');
+    assert.equal(result[2].topic, 'valid-3');
+    assert.equal(result[3].topic, 'valid-4');
+    assert.equal(result[4].topic, 'valid-5');
+  });
+
+  it('schema-pass: well-formed stance with all required fields is accepted', () => {
+    const response = JSON.stringify({
+      stances: [
+        {
+          topic: 'change-management as a distinct org function',
+          direction: 'supports',
+          summary: 'Lindsay supports a dedicated change-management role because product adoption was unaccountable without it.',
+          evidence_quote: 'We need someone whose only job is making sure features get used.',
+          _justification: 'Considered PAIR 5 SKIP (vague exhortation) — ruled out because the position is specific (a role should exist) with concrete reasoning. Contestable: some orgs assign adoption to PMs. Transfers.',
+        },
+      ],
+    });
+
+    const result = parseStanceResponse(response);
+    assert.equal(result.length, 1);
+    const stance = result[0];
+    assert.equal(stance.topic, 'change-management as a distinct org function');
+    assert.equal(stance.direction, 'supports');
+    assert.ok(stance.summary.startsWith('Lindsay supports a dedicated'));
+    assert.equal(stance.evidenceQuote, 'We need someone whose only job is making sure features get used.');
+    assert.ok(stance.justification.includes('PAIR 5'));
+    // source and date stay empty at parser output — populated downstream by the caller.
+    assert.equal(stance.source, '');
+    assert.equal(stance.date, '');
   });
 });
 
@@ -246,6 +434,7 @@ describe('extractStancesForPerson', () => {
             direction: 'supports',
             summary: 'Advocates for K8s migration.',
             evidence_quote: 'We should move to Kubernetes this quarter.',
+            _justification: 'Infrastructure philosophy stance, not a schedule commitment.',
           },
         ],
       });
@@ -303,7 +492,7 @@ describe('extractStancesForPerson', () => {
 
   it('handles LLM returning code-fenced JSON', async () => {
     const mockLLM: LLMCallFn = async () =>
-      '```json\n{"stances": [{"topic": "TypeScript", "direction": "supports", "summary": "Prefers TS.", "evidence_quote": "TypeScript catches bugs early."}]}\n```';
+      '```json\n{"stances": [{"topic": "TypeScript", "direction": "supports", "summary": "Prefers TS.", "evidence_quote": "TypeScript catches bugs early.", "_justification": "Language-choice philosophy, contestable and transfers."}]}\n```';
 
     const result = await extractStancesForPerson('Content.', 'Bob', mockLLM);
     assert.equal(result.length, 1);
@@ -326,9 +515,9 @@ describe('extractStancesForPerson', () => {
     const mockLLM: LLMCallFn = async () =>
       JSON.stringify({
         stances: [
-          { topic: 'Remote work', direction: 'supports', summary: 'Prefers remote.', evidence_quote: 'I work better from home.' },
-          { topic: 'Open offices', direction: 'opposes', summary: 'Dislikes open offices.', evidence_quote: 'Open offices are too noisy.' },
-          { topic: 'Budget cuts', direction: 'concerned', summary: 'Worried about budget.', evidence_quote: 'The budget cuts concern me.' },
+          { topic: 'Remote work', direction: 'supports', summary: 'Prefers remote.', evidence_quote: 'I work better from home.', _justification: 'Persistent workplace philosophy, transfers.' },
+          { topic: 'Open offices', direction: 'opposes', summary: 'Dislikes open offices.', evidence_quote: 'Open offices are too noisy.', _justification: 'Position on office design that transfers across companies.' },
+          { topic: 'Budget cuts', direction: 'concerned', summary: 'Worried about budget.', evidence_quote: 'The budget cuts concern me.', _justification: 'Pattern-level concern about resourcing, not a current-sprint observation.' },
         ],
       });
 
@@ -346,6 +535,7 @@ describe('extractStancesForPerson', () => {
       direction: 'supports' as StanceDirection,
       summary: 'test',
       evidenceQuote: 'test',
+      justification: 'test justification',
       source: 'test.md',
       date: '2026-01-01',
     };

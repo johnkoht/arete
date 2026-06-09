@@ -11,4 +11,5 @@ export { generateIntegrationSection, injectIntegrationSection, deriveIntegration
 export { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems, getOpenTasks } from './agenda.js';
 export { extractAttendeeSlugs } from './attendees.js';
 export { jaccardSimilarity, normalizeForJaccard } from './similarity.js';
+export { parseMarkdownSections, diffMarkdownSections, formatMarkdownDiff, threeWayMergeSections, renderSections, SYNTHETIC_FRONTMATTER_HEADING, SYNTHETIC_PREAMBLE_HEADING, } from './markdown-diff.js';
 //# sourceMappingURL=index.js.map

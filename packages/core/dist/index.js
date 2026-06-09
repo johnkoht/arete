@@ -28,7 +28,7 @@ export { getPackageRoot } from './package-root.js';
 export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
 export { getCalendarProvider, } from './integrations/calendar/index.js';
 export { saveMeetingFile, meetingFilename, findMatchingAgenda, findMatchingAgendaPath, findMatchingCalendarEvent, inferMeetingImportance, } from './integrations/meetings.js';
-export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
+export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, parseStagedItemSkipReason, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
 export { saveConversationFile, conversationFilename, updateConversationFrontmatter, parseConversation, extractInsights, } from './integrations/conversations/index.js';
 // Service container factory
 export { createServices } from './factory.js';
@@ -44,6 +44,15 @@ export { acquireSeedLock, readSeedLock, breakSeedLock, SeedLockHeldError, } from
 export { formatEvent as formatMemoryLogEvent, parseEvent as parseMemoryLogEvent, parseLog as parseMemoryLog, appendEvent as appendMemoryLogEvent, nowIsoSeconds, } from './utils/memory-log.js';
 // Meeting parsing helper
 export { parseMeetingFile } from './services/meeting-context.js';
+// Phase 3.5 followup-5 — unified meeting-frontmatter writer (AC1).
+// Shared across CLI `meeting apply` / `meeting extract --stage` and
+// backend `/process`. Closes the path-3 regression where extract --stage
+// silently dropped topics + counts.
+export { writeMeetingApplyFrontmatter } from './services/meeting-frontmatter.js';
+// Phase 3.5 D4 — backfill CLI needs to scan approved meeting bodies
+// for staged-then-approved items. `parseApprovedSection` is the
+// minimal pure helper exposed for that purpose.
+export { parseApprovedSection } from './services/meeting-reconciliation.js';
 // Google Calendar integration
 export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';
 export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCredentials } from './integrations/calendar/google-auth.js';
@@ -51,7 +60,7 @@ export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCre
 export { KrispMcpClient } from './integrations/krisp/client.js';
 export { loadKrispCredentials, saveKrispCredentials, } from './integrations/krisp/config.js';
 // Google Workspace (gws CLI) integration
-export { detectGws, gwsExec, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider, GmailProvider, getGmailProvider, GwsDriveProvider, getGwsDriveProvider, GwsDocsProvider, getGwsDocsProvider, GwsSheetsProvider, getGwsSheetsProvider, GwsDirectoryProvider, getGwsDirectoryProvider, GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, } from './integrations/gws/index.js';
+export { detectGws, gwsExec, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider, GmailProvider, getGmailProvider, GwsDriveProvider, getGwsDriveProvider, GwsDocsProvider, getGwsDocsProvider, GwsSheetsProvider, getGwsSheetsProvider, GwsDirectoryProvider, getGwsDirectoryProvider, GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, GMAIL_SENT_CACHE_VERSION, normalizeEmail, gmailSentCachePath, buildRecipientIndex, writeGmailSentCache, readGmailSentCache, deleteGmailSentCache, } from './integrations/gws/index.js';
 // Notion integration
 export { pullNotionPages } from './integrations/notion/index.js';
 export { loadNotionApiKey } from './integrations/notion/config.js';

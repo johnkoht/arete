@@ -14,6 +14,7 @@ export type {
   GwsExecOptions,
   GwsDeps,
   EmailThread,
+  GmailSentCache,
   DriveFile,
   DocMetadata,
   SheetRange,
@@ -30,11 +31,21 @@ export {
   GwsAuthError,
   GwsTimeoutError,
   GwsExecError,
+  GMAIL_SENT_CACHE_VERSION,
+  normalizeEmail,
 } from './types.js';
 
 export { detectGws } from './detection.js';
 export { gwsExec } from './client.js';
 export { GmailProvider, getGmailProvider } from './gmail.js';
+export {
+  gmailSentCachePath,
+  buildRecipientIndex,
+  writeGmailSentCache,
+  readGmailSentCache,
+  deleteGmailSentCache,
+} from './gmail-sent-cache.js';
+export type { WriteCacheOpts, ReadCacheResult } from './gmail-sent-cache.js';
 export { GwsDriveProvider, getGwsDriveProvider } from './drive.js';
 export { GwsDocsProvider, getGwsDocsProvider } from './docs.js';
 export { GwsSheetsProvider, getGwsSheetsProvider } from './sheets.js';

@@ -106,6 +106,88 @@ function fuzzyScore(reference: string, candidate: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Stance dedup (Jaccard token similarity)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tokenize stance topic text for Jaccard comparison.
+ * Lowercase, replace non-alphanumeric with space, split, drop tokens of length <= 2
+ * (filters stopwords-ish noise like "a", "an", "by", "of", "on").
+ *
+ * Exported for unit testing.
+ */
+export function normalizeStanceTokens(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 2),
+  );
+}
+
+/**
+ * Compute Jaccard similarity between two token sets.
+ * Returns 0–1 where 1 is identical and 0 is completely disjoint.
+ *
+ * Exported for unit testing.
+ */
+export function stanceJaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0;
+  let intersection = 0;
+  for (const t of a) {
+    if (b.has(t)) intersection += 1;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/** Jaccard threshold above which two stances with the same direction are considered duplicates. */
+export const STANCE_JACCARD_DEDUP_THRESHOLD = 0.7;
+
+/**
+ * Dedup a list of stances by Jaccard token similarity on `topic`, scoped per `direction`.
+ *
+ * For each new stance:
+ * - Compute its token set on `topic`.
+ * - Compare against already-kept stances with the same `direction`.
+ * - If any has Jaccard ≥ STANCE_JACCARD_DEDUP_THRESHOLD → drop the new one.
+ * - Otherwise → keep it.
+ *
+ * Order is preserved: the first occurrence (earliest meeting in input order) wins,
+ * preserving provenance.
+ *
+ * Exported for unit testing.
+ */
+export function dedupeStancesByJaccard(
+  stances: readonly PersonStance[],
+  threshold: number = STANCE_JACCARD_DEDUP_THRESHOLD,
+): PersonStance[] {
+  const kept: PersonStance[] = [];
+  // Cache token sets per kept stance, scoped by direction for fast lookup.
+  const tokensByDirection = new Map<string, Set<string>[]>();
+
+  for (const stance of stances) {
+    const tokens = normalizeStanceTokens(stance.topic);
+    const existing = tokensByDirection.get(stance.direction) ?? [];
+    let isDuplicate = false;
+    for (const existingTokens of existing) {
+      if (stanceJaccardSimilarity(tokens, existingTokens) >= threshold) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    if (!isDuplicate) {
+      kept.push(stance);
+      existing.push(tokens);
+      tokensByDirection.set(stance.direction, existing);
+    }
+  }
+
+  return kept;
+}
+
+// ---------------------------------------------------------------------------
 // Frontmatter parsing
 // ---------------------------------------------------------------------------
 
@@ -445,6 +527,165 @@ async function readPersonFile(
   };
 }
 
+/**
+ * Channel-style fields recognized by Phase 7a AC5 convention. Only
+ * populated fields are returned; missing fields are simply absent
+ * from the returned object (so `Object.keys(channels).length` is the
+ * "populated count" for audit purposes).
+ *
+ * Schema convention: see `dev/conventions/person-frontmatter.md`.
+ */
+export type PersonChannels = {
+  email?: string;
+  alt_emails?: string[];
+  slack_user_id?: string;
+  slack_handle?: string;
+  phone?: string;
+};
+
+/**
+ * Extract populated channel-style fields from a person file's
+ * frontmatter. Tolerant: missing fields are simply absent from the
+ * returned object; malformed entries (wrong type) are dropped.
+ *
+ * Returns null only when the file doesn't exist or has no frontmatter
+ * (matching the readPersonFile null contract).
+ */
+export async function readPersonChannels(
+  storage: StorageAdapter,
+  filePath: string,
+): Promise<PersonChannels | null> {
+  const exists = await storage.exists(filePath);
+  if (!exists) return null;
+
+  const content = await storage.read(filePath);
+  if (content == null) return null;
+
+  const parsed = parseFrontmatterPeople(content);
+  if (!parsed) return null;
+
+  const { frontmatter } = parsed;
+  const channels: PersonChannels = {};
+
+  if (typeof frontmatter.email === 'string' && frontmatter.email.trim()) {
+    channels.email = frontmatter.email.trim();
+  }
+  if (Array.isArray(frontmatter.alt_emails)) {
+    const filtered = frontmatter.alt_emails.filter(
+      (e): e is string => typeof e === 'string' && e.trim().length > 0,
+    );
+    if (filtered.length > 0) channels.alt_emails = filtered;
+  }
+  if (
+    typeof frontmatter.slack_user_id === 'string' &&
+    frontmatter.slack_user_id.trim()
+  ) {
+    channels.slack_user_id = frontmatter.slack_user_id.trim();
+  }
+  if (
+    typeof frontmatter.slack_handle === 'string' &&
+    frontmatter.slack_handle.trim()
+  ) {
+    channels.slack_handle = frontmatter.slack_handle.trim();
+  }
+  if (frontmatter.phone != null) {
+    const phone = String(frontmatter.phone).trim();
+    if (phone.length > 0) channels.phone = phone;
+  }
+
+  return channels;
+}
+
+/**
+ * Phase 7a AC5c — audit result for channel-field population across
+ * the workspace. Surfaces what's populated so a reconciler (Phase 8)
+ * can degrade gracefully when channel fields are missing.
+ */
+export type ChannelsAuditEntry = {
+  slug: string;
+  category: PersonCategory;
+  populated: string[];
+  missing: string[];
+};
+
+export type ChannelsAuditResult = {
+  total: number;
+  with_email: number;
+  with_alt_emails: number;
+  with_slack_user_id: number;
+  with_slack_handle: number;
+  with_phone: number;
+  /** People that have NO channel fields populated (not even email). */
+  no_channels: number;
+  /**
+   * Per-person gap detail — only people missing at least one channel
+   * field. Sorted alphabetically by slug for stable output.
+   */
+  gaps: ChannelsAuditEntry[];
+};
+
+const CHANNEL_FIELD_NAMES = [
+  'email',
+  'alt_emails',
+  'slack_user_id',
+  'slack_handle',
+  'phone',
+] as const;
+
+/**
+ * Compute the channels-audit result given a per-person channels map.
+ * Pure function — easy to unit-test without filesystem.
+ */
+export function computeChannelsAudit(
+  perPerson: Array<{ slug: string; category: PersonCategory; channels: PersonChannels }>,
+): ChannelsAuditResult {
+  let withEmail = 0;
+  let withAltEmails = 0;
+  let withSlackUserId = 0;
+  let withSlackHandle = 0;
+  let withPhone = 0;
+  let noChannels = 0;
+  const gaps: ChannelsAuditEntry[] = [];
+
+  for (const entry of perPerson) {
+    const populated: string[] = [];
+    const missing: string[] = [];
+
+    if (entry.channels.email) { populated.push('email'); withEmail++; } else { missing.push('email'); }
+    if (entry.channels.alt_emails && entry.channels.alt_emails.length > 0) { populated.push('alt_emails'); withAltEmails++; } else { missing.push('alt_emails'); }
+    if (entry.channels.slack_user_id) { populated.push('slack_user_id'); withSlackUserId++; } else { missing.push('slack_user_id'); }
+    if (entry.channels.slack_handle) { populated.push('slack_handle'); withSlackHandle++; } else { missing.push('slack_handle'); }
+    if (entry.channels.phone) { populated.push('phone'); withPhone++; } else { missing.push('phone'); }
+
+    if (populated.length === 0) noChannels++;
+    if (missing.length > 0) {
+      gaps.push({
+        slug: entry.slug,
+        category: entry.category,
+        populated,
+        missing,
+      });
+    }
+  }
+
+  gaps.sort((a, b) => a.slug.localeCompare(b.slug));
+
+  return {
+    total: perPerson.length,
+    with_email: withEmail,
+    with_alt_emails: withAltEmails,
+    with_slack_user_id: withSlackUserId,
+    with_slack_handle: withSlackHandle,
+    with_phone: withPhone,
+    no_channels: noChannels,
+    gaps,
+  };
+}
+
+// Export the channel field-name list for callers that need the
+// canonical ordering.
+export { CHANNEL_FIELD_NAMES };
+
 async function listPersonFilesInCategory(
   storage: StorageAdapter,
   peopleDir: string,
@@ -490,6 +731,7 @@ import {
   capActionItems,
 } from './person-signals.js';
 import { parseActionItemsFromMeeting } from './meeting-parser.js';
+import type { AreaParserService } from './area-parser.js';
 import type {
   LLMCallFn,
   PersonStance,
@@ -648,6 +890,7 @@ function buildRationale(
 
 export class EntityService {
   private directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null;
+  private areaParser?: AreaParserService;
 
   constructor(
     private storage: StorageAdapter,
@@ -655,6 +898,21 @@ export class EntityService {
     directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null,
   ) {
     this.directoryProvider = directoryProvider;
+  }
+
+  /**
+   * Inject AreaParserService for area-inference fallback during refreshPersonMemory
+   * (phase-8-followup-8 AC2). Called by the service factory after both services exist.
+   *
+   * When set, refreshPersonMemory falls back to `suggestAreaForMeeting()` when a
+   * meeting has no `area:` in its frontmatter, applying the match at a 0.7
+   * confidence floor (recurring + area-name matches; rejects weak keyword overlap).
+   *
+   * Without this injection, area inference is silently skipped — Path B still
+   * propagates `area:` when the meeting has it in frontmatter, just no fallback.
+   */
+  setAreaParser(parser: AreaParserService): void {
+    this.areaParser = parser;
   }
 
   async resolve(
@@ -1085,6 +1343,13 @@ export class EntityService {
     // came from storage.list() (absolute) or SearchProvider (possibly relative).
     const meetingContentCache = new Map<string, string | null>();
 
+    // Area inference cache (phase-8-followup-8 AC2) — keyed by normalized
+    // absolute meeting path. Stores the resolved area slug for the meeting,
+    // or `null` when no area is set in frontmatter AND inference returned no
+    // ≥0.7 confidence match. Prevents repeated AreaParserService.listAreas()
+    // calls when the same meeting is scanned for multiple people.
+    const meetingAreaCache = new Map<string, string | null>();
+
     // Pre-compute per-person meeting file candidates (SearchProvider pre-filter).
     // CRITICAL invariant: if SearchProvider returns 0 results for a person,
     // fall back to the full meetingFiles list — never skip scanning entirely.
@@ -1191,8 +1456,48 @@ export class EntityService {
         // Action item extraction: parse structured ## Action Items section.
         // If section exists → use parseActionItemsFromMeeting()
         // If section missing → returns empty array (preserves existing commitments via sync path)
+        //
+        // Area resolution (phase-8-followup-8 AC1 + AC2):
+        //   1. Read `area` from meeting frontmatter (preferred — explicit user/Path-A signal)
+        //   2. If absent AND AreaParserService is injected, fall back to inference via
+        //      suggestAreaForMeeting({title, summary, transcript}) at ≥0.7 confidence.
+        //   3. If neither resolves, area stays undefined (item created without area; current behavior).
+        //
+        // Per-meeting cache prevents repeated inference calls when multiple people are
+        // scanned against the same meeting.
+        let meetingArea: string | undefined;
+        if (meetingAreaCache.has(normalizedPath)) {
+          meetingArea = meetingAreaCache.get(normalizedPath) ?? undefined;
+        } else {
+          const fmArea = typeof parsed?.frontmatter.area === 'string'
+            ? parsed.frontmatter.area
+            : undefined;
+          if (fmArea) {
+            meetingArea = fmArea;
+          } else if (this.areaParser && parsed?.frontmatter.title) {
+            // C1 fix: use suggestAreaForMeeting (rich inference) instead of
+            // getAreaForMeeting (recurring-title-only). Pass summary + transcript
+            // for keyword overlap; truncation is handled inside suggestAreaForMeeting.
+            const title = String(parsed.frontmatter.title);
+            const summary = typeof parsed.frontmatter.summary === 'string'
+              ? parsed.frontmatter.summary
+              : undefined;
+            // Use the meeting body (sans frontmatter) as transcript proxy.
+            // suggestAreaForMeeting truncates to TRANSCRIPT_MAX_CHARS internally.
+            const transcript = parsed?.body;
+            try {
+              const match = await this.areaParser.suggestAreaForMeeting({ title, summary, transcript });
+              if (match && match.confidence >= 0.7) {
+                meetingArea = match.areaSlug;
+              }
+            } catch {
+              // Inference failure is non-fatal — silently fall back to undefined.
+            }
+          }
+          meetingAreaCache.set(normalizedPath, meetingArea ?? null);
+        }
         const actionItems = ownerSlug
-          ? parseActionItemsFromMeeting(content, person.slug, ownerSlug, source)
+          ? parseActionItemsFromMeeting(content, person.slug, ownerSlug, source, meetingArea)
           : [];
         const personActionItemList = personActionItems.get(person.slug);
         if (personActionItemList) {
@@ -1240,17 +1545,13 @@ export class EntityService {
     let totalItemsAgedOut = 0;
 
     for (const person of refreshablePeople) {
-      // Stance dedup: keep first occurrence per topic+direction
+      // Stance dedup (Phase 9 followup-6): Jaccard token similarity on topic,
+      // scoped per direction. Threshold STANCE_JACCARD_DEDUP_THRESHOLD (0.7).
+      // First occurrence wins → preserves provenance from the earliest meeting.
+      // Replaces the prior exact `topic.toLowerCase():direction` key, which
+      // missed semantically-equivalent re-wordings across meetings.
       const rawStances = personStances.get(person.slug) ?? [];
-      const seenStanceKeys = new Set<string>();
-      const dedupedStances: PersonStance[] = [];
-      for (const stance of rawStances) {
-        const key = `${stance.topic.toLowerCase()}:${stance.direction}`;
-        if (!seenStanceKeys.has(key)) {
-          seenStanceKeys.add(key);
-          dedupedStances.push(stance);
-        }
-      }
+      const dedupedStances = dedupeStancesByJaccard(rawStances);
       personStances.set(person.slug, dedupedStances);
       totalStances += dedupedStances.length;
 
@@ -1475,6 +1776,68 @@ export class EntityService {
       }
     }
     return null;
+  }
+
+  /**
+   * Phase 7a AC5b — read channel-style fields for one person by slug.
+   * Only populated fields are returned. Returns null if person file
+   * not found or has no frontmatter.
+   */
+  async getPersonChannels(
+    workspacePaths: WorkspacePaths | null,
+    category: PersonCategory,
+    slug: string,
+  ): Promise<PersonChannels | null> {
+    if (!workspacePaths?.people) return null;
+    const filePath = join(workspacePaths.people, category, `${slug}.md`);
+    return readPersonChannels(this.storage, filePath);
+  }
+
+  /**
+   * Phase 7a AC5c — workspace-wide audit of channel-field population.
+   * Walks all `people/{internal,users,customers}/*.md`, counts which
+   * channel fields are populated per person, and returns aggregate
+   * health + per-person gap detail.
+   */
+  async auditPeopleChannels(
+    workspacePaths: WorkspacePaths | null,
+  ): Promise<ChannelsAuditResult> {
+    const empty: ChannelsAuditResult = {
+      total: 0,
+      with_email: 0,
+      with_alt_emails: 0,
+      with_slack_user_id: 0,
+      with_slack_handle: 0,
+      with_phone: 0,
+      no_channels: 0,
+      gaps: [],
+    };
+    if (!workspacePaths?.people) return empty;
+    const exists = await this.storage.exists(workspacePaths.people);
+    if (!exists) return empty;
+
+    const perPerson: Array<{
+      slug: string;
+      category: PersonCategory;
+      channels: PersonChannels;
+    }> = [];
+
+    for (const category of PEOPLE_CATEGORIES) {
+      const slugs = await listPersonFilesInCategory(
+        this.storage,
+        workspacePaths.people,
+        category,
+      );
+      for (const slug of slugs) {
+        const filePath = join(workspacePaths.people, category, `${slug}.md`);
+        const channels = await readPersonChannels(this.storage, filePath);
+        if (channels !== null) {
+          perPerson.push({ slug, category, channels });
+        }
+      }
+    }
+
+    return computeChannelsAudit(perPerson);
   }
 
   async loadPeopleIntelligencePolicy(

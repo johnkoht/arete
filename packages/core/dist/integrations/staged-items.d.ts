@@ -5,8 +5,8 @@
  * in meeting markdown files. All file I/O uses StorageAdapter.
  */
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemStatus, StagedSections } from '../models/index.js';
-export type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemStatus, StagedSections };
+import type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemSkipReason, StagedItemSkipReasonMeta, StagedItemStatus, StagedSections } from '../models/index.js';
+export type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemSkipReason, StagedItemSkipReasonMeta, StagedItemStatus, StagedSections, };
 /**
  * Generate a staged item ID.
  *
@@ -38,6 +38,23 @@ export declare function parseStagedItemEdits(content: string): StagedItemEdits;
  * Returns a map of item IDs to owner metadata (ownerSlug, direction, counterpartySlug).
  */
 export declare function parseStagedItemOwner(content: string): StagedItemOwner;
+/**
+ * Parse the `staged_item_skip_reason` frontmatter field from raw markdown content.
+ * Returns a map of item IDs to skip-reason metadata.
+ *
+ * Phase 10 followup-2: chef may write a skip reason as a STRUCTURAL marker
+ * that `commitApprovedItems` honors (via the `'skipped'` status filter on
+ * the sibling `staged_item_status` field). The setBy union discriminates
+ * provenance — see `StagedItemSkipReasonMeta` JSDoc.
+ *
+ * Backward compat: returns `{}` for meeting files with no
+ * `staged_item_skip_reason` field (M3 first-ship — every pre-existing
+ * meeting has no skip_reason).
+ *
+ * Malformed entries (missing required fields, wrong setBy union value)
+ * drop silently. The `commitApprovedItems` consumer is shape-tolerant.
+ */
+export declare function parseStagedItemSkipReason(content: string): StagedItemSkipReason;
 export type WriteItemStatusOptions = {
     /** New status to set on the item */
     status: 'approved' | 'skipped' | 'pending';
@@ -87,9 +104,36 @@ export interface ApprovedItemRecord {
     /** Recorded confidence at extraction time, when known. */
     confidence: number | null;
 }
+/**
+ * Per-skipped-item callback invoked once per skipped item AFTER the meeting
+ * file is written. Phase 10 followup-2 AC9 / PM C3 instrumentation hook —
+ * callers wire this to `appendChefSkipLog(..., { action: 'APPLY-SKIP', ... })`
+ * to record the apply-time honoring of chef's skip signal.
+ *
+ * Errors thrown from the callback are caught internally; the commit always
+ * completes normally even if instrumentation fails.
+ */
+export type SkippedItemObserver = (item: SkippedItemRecord) => Promise<void>;
+export interface SkippedItemRecord {
+    /** Frontmatter id (e.g. `ai_001`). */
+    id: string;
+    /** Skip reason text, if `staged_item_skip_reason[id]` was populated. */
+    reason: string | null;
+    /** Evidence reference, if `staged_item_skip_reason[id]` was populated. */
+    evidence: string | null;
+    /** Provenance, if `staged_item_skip_reason[id]` was populated. */
+    setBy: 'chef' | 'chef-proposed' | 'user' | null;
+}
 export interface CommitApprovedItemsOptions {
     /** Phase 0 instrumentation. */
     onApproved?: ApprovedItemObserver;
+    /**
+     * Phase 10 followup-2 AC9: per-skipped-item callback. Receives one
+     * SkippedItemRecord per `'skipped'`-status item dropped by the apply
+     * filter. Callers typically wire this to `appendChefSkipLog` with
+     * `action: 'APPLY-SKIP'`.
+     */
+    onSkipped?: SkippedItemObserver;
 }
 /**
  * Commit all approved staged items:

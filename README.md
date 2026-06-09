@@ -282,7 +282,7 @@ Areté is organized as a monorepo:
 - **Temporal Intelligence** — Timeline queries, recency signals ("when was X last discussed?")
 - **Proactive Context** — Automatic deep source search across all workspace content with freshness tracking
 - **Entity Relationships** — Track who works on what, attended where, mentioned where
-- **Briefing Assembly** — Combine context + memory + entities + relationships into comprehensive briefings, with AI synthesis
+- **Briefing Assembly** — Combine context + memory + entities + relationships into comprehensive briefings, by entity type (person / project / area / meeting) or free-text
 
 ---
 
@@ -295,7 +295,7 @@ Areté provides intelligence that powers any workflow:
 - **Unified Search** — Find relevant files across context, memory, areas, projects, meetings, people — with freshness tracking and temporal views
 - **Entity Resolution** — Match ambiguous names to people, meetings, projects
 - **Entity Relationships** — Track works_on, attended, mentioned_in relationships
-- **Briefing Assembly** — Gather context, memory, entities, and relationships before complex work, AI-synthesized into 5 sections (Status, Decisions, People, Activity, Open Questions)
+- **Briefing Assembly** — Gather context, memory, entities, and relationships before complex work; typed modes (`--person` / `--project` / `--area` / `--meeting`) or free-text (`--for`)
 - **Temporal Intelligence** — Timeline queries showing how topics evolve over time
 - **Routing** — `arete route "<query>"` picks the best skill and model tier for what you're trying to do
 - **Daily / Momentum Briefs** — `arete daily` and `arete momentum` surface what's hot, stale, or critical across commitments and relationships
@@ -308,8 +308,8 @@ arete search "mobile app redesign" --inventory          # freshness dashboard
 arete search "pricing decisions" --scope memory
 arete search "onboarding" --timeline --days 90          # temporal view
 arete resolve "Jane"
-arete brief --for "competitive analysis"                # AI-synthesized briefing
-arete brief --for "competitive analysis" --raw         # raw context dump
+arete brief --meeting "John / Lindsay 1:1"              # typed briefing (person/project/area/meeting)
+arete brief --for "competitive analysis"               # free-text briefing
 arete route "what should I do about the Acme renewal?"  # pick the right skill
 arete daily                                             # morning brief
 arete momentum                                          # commitment + relationship momentum
@@ -325,7 +325,7 @@ Customize workflows to match your team:
 
 - **Meeting Agendas** - 5 default templates (leadership, customer, dev-team, 1:1, other)
 - **Project Templates** - Customize discovery, PRD, analysis templates
-- **Custom Skills** - Install third-party skills or write your own
+- **Custom Skills** - Install third-party skills or write your own. Managed skills live in `.arete/skills/` (refreshed on `arete update`); fork one into `.agents/skills/` with `arete skill fork <name>` to customize, then `arete skill diff`/`merge` to pull upstream changes without losing edits.
 
 See GUIDE.md § Templates for customization details.
 

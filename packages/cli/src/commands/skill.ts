@@ -513,6 +513,310 @@ export function registerSkillCommands(program: Command): void {
         success(`Restored Areté default for role: ${role}`);
       }
     });
+
+  // Skill prose resolver (Phase 3 two-tier dirs).
+  //
+  // Resolution order:
+  //   1. `.agents/skills/<slug>/SKILL.md` (user fork / community).
+  //   2. `.arete/skills/<slug>/SKILL.md`  (managed/shipped).
+  //
+  // Phase 3 Step 9 / MC5 sunset removed the Phase 2
+  // `ARETE_LEGACY_SKILL_PROSE` routing — chef-orchestrator skills no
+  // longer ship a SKILL.legacy.md companion; recovery is via
+  // `git revert` of the Phase 2 rewrite commits.
+  skillCmd
+    .command('resolve <slug>')
+    .description('Resolve which SKILL.md to load (.agents wins over .arete)')
+    .option('--json', 'Output as JSON')
+    .action(async (slug: string, opts: { json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const { resolveSkillFileTwoTier } = await import('@arete/core');
+      const result = await resolveSkillFileTwoTier(
+        root,
+        slug,
+        (p: string) => existsSync(p),
+      );
+
+      if (result.tier === 'missing') {
+        if (opts.json) {
+          console.log(
+            JSON.stringify({
+              success: false,
+              error: `Skill not installed: ${slug}`,
+              path: null,
+              tier: 'missing',
+              userDir: result.userDir,
+              managedDir: result.managedDir,
+            }),
+          );
+        } else {
+          error(`Skill not installed: ${slug}`);
+          info(`Looked at: ${formatPath(result.userDir)}`);
+          info(`         : ${formatPath(result.managedDir)}`);
+        }
+        process.exit(1);
+      }
+
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              slug,
+              path: result.path,
+              tier: result.tier,
+              userDir: result.userDir,
+              managedDir: result.managedDir,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      // Human output: print the path on stdout for shell-substitution use.
+      console.log(result.path);
+    });
+
+  // Phase 3 Step 3 — `arete skill fork <name>`
+  //
+  // Copy `.arete/skills/<name>/` (managed) into `.agents/skills/<name>/`
+  // and snapshot the managed content into the fork's `.fork-base/`. The
+  // fork wins at agent-load time; subsequent `arete update` will not
+  // overwrite it. Idempotent: re-running on an existing fork prints a
+  // warning unless `--force` is passed.
+  skillCmd
+    .command('fork <slug>')
+    .description('Copy a managed skill into .agents/skills/ for editing (Phase 3)')
+    .option('--force', 'Re-record .fork-base from current managed content (overwrites recorded base, NOT the fork SKILL.md)')
+    .option('--json', 'Output as JSON')
+    .action(async (slug: string, opts: { force?: boolean; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+      const { forkSkill } = await import('@arete/core');
+      const result = await forkSkill(services.storage, {
+        workspaceRoot: root,
+        name: slug,
+        force: opts.force,
+      });
+      if (!result.ok) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: result.error }));
+        } else {
+          error(result.error ?? 'Fork failed');
+        }
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              slug,
+              forkPath: result.forkPath,
+              managedPath: result.managedPath,
+              alreadyExisted: result.alreadyExisted,
+              baseHash: result.baseHash ?? null,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      if (result.alreadyExisted) {
+        warn(`Fork already exists at ${formatPath(result.forkPath)}`);
+        info('Pass --force to refresh the recorded fork base from current managed content.');
+        info('(--force does NOT overwrite your fork SKILL.md.)');
+        return;
+      }
+      success(`Forked ${slug} → ${formatPath(result.forkPath)}`);
+      listItem('Managed source', formatPath(result.managedPath));
+      if (result.baseHash) listItem('Base SKILL.md sha256', result.baseHash.slice(0, 16) + '…');
+      console.log('');
+      info(`Run \`arete skill diff ${slug}\` after \`arete update\` to see upstream changes.`);
+      info(`Run \`arete skill merge ${slug}\` to integrate them.`);
+    });
+
+  // Phase 3 Step 5 — `arete skill diff <name>`
+  //
+  // Section-level markdown diff between the user fork's recorded
+  // `.fork-base/SKILL.md` and the current `.arete/skills/<name>/SKILL.md`.
+  // Shows what upstream has changed since the user forked. Pure
+  // computation — no LLM, no fancy ranking.
+  skillCmd
+    .command('diff <slug>')
+    .description('Show upstream changes since fork base (markdown sections; deterministic)')
+    .option('--json', 'Output as JSON')
+    .action(async (slug: string, opts: { json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+      const { diffSkill, formatMarkdownDiff } = await import('@arete/core');
+      const result = await diffSkill(services.storage, root, slug);
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              slug,
+              upToDate: result.upToDate,
+              baseMissing: result.baseMissing,
+              forkPath: result.forkPath,
+              managedPath: result.managedPath,
+              basePath: result.basePath,
+              diff: result.diff,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      header(`Skill diff: ${slug}`);
+      if (result.baseMissing) {
+        warn('No fork base recorded for this skill.');
+        info(`Run \`arete skill fork ${slug} --force\` to record the current managed content as the base.`);
+        info('Until then, diff cannot show "what changed since you forked" — use `git diff` against your last commit instead.');
+        return;
+      }
+      if (result.upToDate) {
+        success(`No upstream changes since fork base.`);
+        return;
+      }
+      console.log(formatMarkdownDiff(result.diff));
+      info(`Run \`arete skill merge ${slug}\` to integrate (or \`--interactive\` to walk hunks).`);
+    });
+
+  // Phase 3 Step 6 — `arete skill merge <name> [--interactive]`
+  //
+  // Three-way merge of base + user fork + new managed content. Non-
+  // conflicting hunks apply automatically; conflicts land as git-style
+  // markers in the user fork's SKILL.md. The user resolves manually
+  // and re-runs `arete skill merge` to advance the fork base. With
+  // `--interactive`, prompt per-hunk for accept / keep-local /
+  // take-incoming / skip.
+  skillCmd
+    .command('merge <slug>')
+    .description('Integrate upstream changes into your fork (conflicts land as git-style markers)')
+    .option('--interactive', 'Prompt per hunk: y/n/keep-local/take-incoming')
+    .option('--json', 'Output as JSON')
+    .action(async (slug: string, opts: { interactive?: boolean; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+      const { mergeSkill } = await import('@arete/core');
+
+      // Build the per-hunk callback for --interactive mode.
+      let onHunk: undefined | ((hunk: { heading: string; kind: string }) => Promise<'accept' | 'keep-local' | 'take-incoming' | 'skip'>);
+      let rl: ReturnType<typeof createInterface> | undefined;
+      if (opts.interactive && !opts.json) {
+        rl = createInterface({ input, output });
+        onHunk = async (hunk) => {
+          // Skip prompting on trivially clean hunks — the auto result
+          // is already what the user wants. Prompt only on changes
+          // that touch managed-side updates or conflicts.
+          if (
+            hunk.kind === 'unchanged' ||
+            hunk.kind === 'local-only' ||
+            hunk.kind === 'local-add' ||
+            hunk.kind === 'both-agree' ||
+            hunk.kind === 'local-keep-removed'
+          ) {
+            return 'accept';
+          }
+          console.log('');
+          console.log(chalk.bold(`Hunk: ${hunk.heading}`));
+          console.log(chalk.dim(`Kind: ${hunk.kind}`));
+          const ans = (await rl!.question('  [a]ccept / [k]eep-local / [t]ake-incoming / [s]kip? '))
+            .trim()
+            .toLowerCase();
+          if (ans.startsWith('k')) return 'keep-local';
+          if (ans.startsWith('t')) return 'take-incoming';
+          if (ans.startsWith('s')) return 'skip';
+          return 'accept';
+        };
+      }
+
+      const result = await mergeSkill(services.storage, {
+        workspaceRoot: root,
+        name: slug,
+        onHunk,
+      });
+      if (rl) rl.close();
+
+      if (!result.ran) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: result.error }));
+        } else {
+          error(result.error ?? 'Merge could not run');
+        }
+        process.exit(1);
+      }
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              slug,
+              clean: result.clean,
+              conflicts: result.conflicts,
+              hunks: result.hunks,
+              baseUpdated: result.baseUpdated,
+              baseHash: result.baseHash ?? null,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      if (result.clean) {
+        success(`Merged upstream into ${slug} (no conflicts).`);
+        if (result.baseUpdated && result.baseHash) {
+          listItem('New base', result.baseHash.slice(0, 16) + '…');
+        }
+      } else {
+        warn(`${result.conflicts.length} conflict(s) in ${slug}:`);
+        for (const heading of result.conflicts) {
+          listItem('Conflict in', heading);
+        }
+        info('The fork SKILL.md now contains git-style markers. Resolve manually, then re-run `arete skill merge` to advance the fork base.');
+      }
+    });
 }
 
 async function setSkillDefault(

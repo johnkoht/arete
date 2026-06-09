@@ -74,8 +74,49 @@ export interface TopicIdentity {
     lastRefreshed?: string;
 }
 /**
+ * Singularize a single token (AC3, phase-3-5-followup-5).
+ *
+ * Rule: strip trailing `s` if and only if
+ *   - token length ≥ 4 AND
+ *   - second-to-last char is NOT `s` (preserves `-ss` endings like
+ *     `process`, `address`, `business`, `class`).
+ *
+ * Known accepted edge cases (documented per pre-mortem R1):
+ *   - `status` → `statu` (ends `-us`; benign — unlikely real slug clash)
+ *   - `news` → `new` (ends `-ws`; benign — unlikely real slug clash)
+ *
+ * The rule deliberately stops at "drop trailing `s`": no Porter-style
+ * suffix stripping. The goal is to collapse `templates`/`template`,
+ * `decisions`/`decision`, `learnings`/`learning`, `meetings`/`meeting` —
+ * the four high-traffic plural/singular pairs in observed slug drift.
+ */
+export declare function singularizeToken(token: string): string;
+/**
+ * Singularize a list of tokens using {@link singularizeToken}.
+ *
+ * Exported so the lexical topic detector can singularize the
+ * **transcript** token set symmetrically with how `tokenizeSlug`
+ * singularizes the **slug** side. Without this, `templates` (transcript)
+ * and `template` (slug) live in different token spaces and never
+ * intersect — silently breaking plural/alias topic detection
+ * (phase-3-5-followup-5 regression).
+ */
+export declare function singularizeTokens(tokens: string[]): string[];
+/**
  * Tokenize a slug for Jaccard comparison.
- * `cover-whale-templates` → `['cover', 'whale', 'templates']`.
+ * `cover-whale-templates` → `['cover', 'whale', 'template']`.
+ *
+ * Post-AC3 (phase-3-5-followup-5):
+ *   - Stop-word filter: drops `vs`, `and`, `or` before tokenization
+ *     (so `belongings-vs-property-claims` tokenizes without `vs`).
+ *   - Singularize-or-stem: strips trailing `s` on tokens of length ≥4
+ *     when the second-to-last char isn't `s`. Closes the
+ *     `templates`/`template`, `decisions`/`decision`,
+ *     `learnings`/`learning`, `meetings`/`meeting` clash in tokenizeSlug.
+ *
+ * Edge cases preserved: `process`, `address`, `business`, `class` (all
+ * `-ss` endings). Accepted edge cases: `status` → `statu`, `news` →
+ * `new` (benign; see `singularizeToken` doc).
  */
 export declare function tokenizeSlug(slug: string): string[];
 /**
@@ -253,6 +294,23 @@ export interface IntegrateSourceOptions {
     callLLM?: LLMCallFn;
     relevantL2?: string;
     today: string;
+    /**
+     * Optional override of the content fed to the LLM prompt. When set,
+     * the LLM sees this string instead of `newSource.content`.
+     *
+     * Used by Phase 1 §c (wiki expansion): when a per-meeting summary
+     * exists at `.arete/memory/summaries/meetings/<date>-<slug>.md`,
+     * the caller passes the summary body here so the LLM synthesizes
+     * against curated input instead of the raw transcript.
+     *
+     * The idempotency hash is STILL computed against `newSource.content`
+     * (the source body) so summary-vs-transcript swap doesn't bust dedup
+     * on the topic page's `sources_integrated[].hash`. This keeps the
+     * "did we already integrate this source?" check stable across the
+     * Phase 1 backfill window where some meetings have summaries and
+     * others don't.
+     */
+    llmContent?: string;
 }
 export interface IntegrateResult {
     page: TopicPage;

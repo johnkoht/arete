@@ -101,6 +101,40 @@ export declare class TaskService {
      */
     completeTask(taskId: string): Promise<CompleteTaskResult>;
     /**
+     * F1: mark open tasks complete by linked commitment id prefix.
+     *
+     * Used by CommitmentsService.resolve() to back-propagate commitment
+     * resolution onto the working surface (week.md / tasks.md) so the
+     * user's task checkboxes match commitments.json. Without this, a
+     * resolved commitment leaves its linked task open — the Cover Whale
+     * orphan class.
+     *
+     * Iterates both files, finds tasks with `@from(commitment:<prefix>)`,
+     * marks `[x]` + `@completedAt`. Does NOT call commitments.resolve();
+     * the caller (commitments.resolve itself) has already updated
+     * commitments.json. Already-completed tasks are skipped.
+     *
+     * Returns list of tasks that were marked complete (empty if none).
+     */
+    completeTaskByCommitmentId(commitmentIdPrefix: string): Promise<{
+        id: string;
+        text: string;
+    }[]>;
+    /**
+     * F2 + FU3: returns the subset of `commitmentIdPrefixes` that are
+     * referenced by at least one OPEN task via `@from(commitment:<prefix>)`.
+     * Used by CommitmentsService.save() to refuse pruning commitments
+     * with live task references. Completed tasks with stale references
+     * are intentionally NOT counted — those references are historical
+     * and pruning the commitment leaves only a harmless dangling
+     * reference in a checked-off line.
+     *
+     * Batched (FU3): reads both task files ONCE regardless of how many
+     * prefixes are queried. Caller (save()) consults this once per write
+     * rather than once per prune-candidate.
+     */
+    hasOpenTaskReferencesToCommitments(commitmentIdPrefixes: string[]): Promise<Set<string>>;
+    /**
      * Uncomplete a task — change [x] back to [ ] and remove @completedAt.
      */
     uncompleteTask(taskId: string): Promise<WorkspaceTask>;

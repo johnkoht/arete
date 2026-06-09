@@ -70,25 +70,6 @@ function extractTitle(snippet, path) {
     const filename = path.split('/').pop() || path;
     return filename.replace(/\.md$/, '').replace(/-/g, ' ');
 }
-/**
- * Derive intent from query patterns.
- * Used to pass --intent to QMD for better semantic matching.
- */
-export function deriveIntent(query) {
-    if (/what did we decide/i.test(query))
-        return 'past decisions and rationale';
-    if (/who should I talk to/i.test(query))
-        return 'finding people or contacts';
-    if (/why did we/i.test(query))
-        return 'historical context and reasoning';
-    if (/when did we/i.test(query))
-        return 'timeline and dates of events';
-    if (/what (is|are)/i.test(query))
-        return 'definitions and explanations';
-    if (/how do we/i.test(query))
-        return 'processes and procedures';
-    return undefined;
-}
 /** Parse QMD CLI JSON output into SearchResultItem[]. */
 export function parseQmdResults(stdout) {
     const trimmed = stdout.trim();
@@ -295,20 +276,6 @@ export async function runSearch(query, opts, deps = getDefaultDeps()) {
         }
         process.exit(1);
     }
-    // Check for mutually exclusive flags
-    if (opts.timeline && opts.answer) {
-        if (opts.json) {
-            console.log(JSON.stringify({
-                success: false,
-                error: '--timeline and --answer are mutually exclusive',
-                code: 'INVALID_FLAGS',
-            }));
-        }
-        else {
-            error('--timeline and --answer are mutually exclusive');
-        }
-        process.exit(1);
-    }
     // Validate --days flag
     if (opts.days) {
         const parsedDays = parseInt(opts.days, 10);
@@ -493,11 +460,6 @@ export async function runSearch(query, opts, deps = getDefaultDeps()) {
     if (scope !== 'all') {
         args.push('-c', collectionName);
     }
-    // Derive intent from query patterns for --answer mode
-    const intent = opts.answer ? deriveIntent(query) : undefined;
-    if (intent) {
-        args.push('--intent', intent);
-    }
     // Execute QMD query
     let results = [];
     try {
@@ -527,119 +489,7 @@ export async function runSearch(query, opts, deps = getDefaultDeps()) {
                 snippetLower.includes(slugLower));
         });
     }
-    // Handle --answer mode: AI synthesis
-    if (opts.answer) {
-        const aiService = deps.ai ?? services.ai;
-        // Check if AI is configured
-        if (!aiService.isConfigured()) {
-            // Warn but still return results
-            if (opts.json) {
-                console.log(JSON.stringify({
-                    success: true,
-                    query,
-                    scope,
-                    results,
-                    answer: null,
-                    intent,
-                    error: 'AI not configured. Run `arete credentials configure` to enable --answer.',
-                }, null, 2));
-            }
-            else {
-                warn('AI not configured. Run `arete credentials configure` to enable --answer.');
-                header('Search Results');
-                console.log(chalk.dim(`  Query: "${query}"`));
-                console.log(chalk.dim(`  Scope: ${scope}`));
-                console.log(chalk.dim(`  Found: ${results.length} result(s)`));
-                console.log('');
-                for (const item of results) {
-                    const scoreStr = chalk.dim(`(${(item.score * 100).toFixed(0)}%)`);
-                    console.log(`  ${chalk.bold(item.title)} ${scoreStr}`);
-                    console.log(chalk.dim(`    ${item.path}`));
-                    const snippetPreview = item.snippet.slice(0, 120).replace(/\n/g, ' ');
-                    if (snippetPreview) {
-                        console.log(chalk.dim(`    ${snippetPreview}...`));
-                    }
-                    console.log('');
-                }
-            }
-            return;
-        }
-        // Synthesize answer from results
-        let synthesizedAnswer = null;
-        let synthesisError;
-        if (results.length > 0) {
-            try {
-                // Build context from search results
-                const resultsContext = results
-                    .slice(0, 10) // Limit to top 10 for prompt
-                    .map((r, i) => `[${i + 1}] ${r.title}\n${r.snippet}`)
-                    .join('\n\n');
-                const prompt = `Based on these search results for "${query}", provide a concise, helpful answer. Cite sources by number when relevant.
-
-${resultsContext}
-
-Provide a synthesized answer:`;
-                const response = await aiService.call('summary', prompt);
-                synthesizedAnswer = response.text;
-            }
-            catch (err) {
-                synthesisError = err instanceof Error ? err.message : 'AI synthesis failed';
-                if (!opts.json) {
-                    warn(`AI synthesis failed: ${synthesisError}`);
-                }
-            }
-        }
-        // Output with answer
-        if (opts.json) {
-            const output = {
-                success: true,
-                query,
-                scope,
-                results,
-                answer: synthesizedAnswer,
-            };
-            if (intent) {
-                output.intent = intent;
-            }
-            if (synthesisError) {
-                output.error = synthesisError;
-            }
-            console.log(JSON.stringify(output, null, 2));
-        }
-        else {
-            header('Search Results');
-            console.log(chalk.dim(`  Query: "${query}"`));
-            console.log(chalk.dim(`  Scope: ${scope}`));
-            console.log(chalk.dim(`  Found: ${results.length} result(s)`));
-            console.log('');
-            // Show answer first if available
-            if (synthesizedAnswer) {
-                console.log(chalk.bold('  Answer:'));
-                console.log(`  ${synthesizedAnswer.replace(/\n/g, '\n  ')}`);
-                console.log('');
-                console.log(chalk.dim('  ---'));
-                console.log('');
-            }
-            // Show results
-            if (results.length === 0) {
-                info('No matching results found');
-            }
-            else {
-                for (const item of results) {
-                    const scoreStr = chalk.dim(`(${(item.score * 100).toFixed(0)}%)`);
-                    console.log(`  ${chalk.bold(item.title)} ${scoreStr}`);
-                    console.log(chalk.dim(`    ${item.path}`));
-                    const snippetPreview = item.snippet.slice(0, 120).replace(/\n/g, ' ');
-                    if (snippetPreview) {
-                        console.log(chalk.dim(`    ${snippetPreview}...`));
-                    }
-                    console.log('');
-                }
-            }
-        }
-        return;
-    }
-    // Standard output (no --answer)
+    // Standard output
     if (opts.json) {
         console.log(JSON.stringify({
             success: true,
@@ -681,7 +531,6 @@ export function registerSearchCommand(program) {
         .option('--person <name>', 'Filter by person (name or slug) (Note: filtering happens after limit, so fewer results may be returned)')
         .option('--timeline', 'Show results chronologically with themes')
         .option('--days <n>', 'Limit to last N days (with --timeline)')
-        .option('--answer', 'Synthesize AI-powered answer from results')
         .option('--json', 'Output JSON')
         .action(async (query, opts) => {
         await runSearch(query, opts);

@@ -20,6 +20,8 @@ export const BASE_WORKSPACE_DIRS = [
     '.arete/memory/summaries',
     '.arete/activity',
     '.arete/config',
+    '.arete/skills',
+    '.arete/skills-local',
     '.arete/templates/meeting-agendas',
     'projects',
     'projects/active',
@@ -201,7 +203,18 @@ fathom:
 `,
     '.gitignore': `# Areté
 .credentials/credentials.yaml
-.agents/
+
+# Skills directory split (Phase 3): the managed tier
+# (.arete/skills/) and user fork tier (.agents/skills/) are both
+# content-as-data — refreshed by \`arete update\` from the package,
+# not the user's workspace history. .arete/skills-local/ IS tracked:
+# it carries user-customization APPEND files that must survive
+# \`arete update\`.
+.arete/skills/
+.agents/skills/
+
+# IDE adapter caches (profiles, slash-command outputs).
+.agents/profiles/
 `,
     'areas/_template.md': `---
 area: {name}

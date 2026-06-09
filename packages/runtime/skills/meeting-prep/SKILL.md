@@ -1,6 +1,6 @@
 ---
 name: meeting-prep
-description: Build a prep brief for an upcoming (or past) meeting. Use when the user wants to prepare for a meeting, get context before a call, or refresh after a meeting.
+description: Build a prep brief for an upcoming meeting — agent gathers all context upfront (attendees, recent meetings, commitments, area state, threads), applies relationship judgment, and engages once with a curated brief + optional pre-meeting actions.
 triggers:
   - meeting prep
   - prep for meeting
@@ -19,318 +19,332 @@ intelligence:
   - area_context
 ---
 
-# Meeting Prep Skill
+# Meeting Prep — chef-orchestrator pattern
 
-Build a prep brief for a meeting: attendee details, recent meetings, related projects, open action items, and suggested talking points. Uses the **get_meeting_context**, **get_area_context**, and **relationship_intelligence** patterns.
+This skill applies the four chef-orchestrator patterns from
+`PATTERNS.md` to pre-meeting briefing. Pattern names:
 
-## Agent Instructions
+- Pattern 1 — `do-all-work-then-engage` (gather + judge across all
+  context sources, then engage once with the brief).
+- Pattern 2 — `curate-with-reason-labels` (relationship signals,
+  open commitments, recent meetings — each with a reason).
+- Pattern 3 — `propose-with-mcp-action` (pre-meeting actions:
+  drafted DMs, commitment status, captures).
+- Pattern 4 — `surface-deferred-as-sidecar` (rare for meeting-prep
+  — used only when historical context is large).
 
-**When the user asks for meeting prep** (e.g. "prep me for my meeting with Jane", "call with Acme"):
+The agent gathers **all** context upfront (attendees, recent
+meetings, commitments, area state, recent threads) using existing
+patterns (`get_meeting_context`, `get_area_context`,
+`relationship_intelligence`, `topic_page_retrieval`,
+`contextual_memory_search`), applies relationship + topic judgment,
+and engages the user **once** with a curated brief.
 
-1. **Use this skill** — Execute this workflow. Do not substitute ad-hoc grep/read only; use the get_meeting_context and get_area_context patterns.
-2. **Use QMD when available** — Run `qmd query "..."` to find related decisions/learnings; incorporate into the brief (step 6 of the pattern).
-3. **If the user asks what you used** — Report: "I used the **meeting-prep** skill (get_meeting_context + get_area_context patterns), person/meeting/project reads, and QMD for related context."
-4. **Area context enrichment** — For recurring meetings like "CoverWhale Sync", automatically look up and include area context (Focus, Goals, Horizon) from the matched area file.
+When the meeting maps to known counterparties or commitments, the
+agent proposes pre-meeting actions ("you committed to send Lauren
+the doc — want me to draft the message now?").
+
+**Read first** (if exists): `.arete/skills-local/meeting-prep.md`.
 
 ## When to Use
 
 - "Prep for my meeting with Jane"
 - "I have a call with Acme in 30 minutes"
 - "Meeting prep for Product Review"
-- Before or after a meeting to refresh context
-
-## Gather Context
-
-Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Inputs: meeting title (optional), attendee names or slugs. Outputs: attendee details, recent meetings, related projects, outstanding action items, and person memory highlights (if present). Include QMD queries (step 6) for decisions/learnings involving the attendee or topic.
-
-**Commitments**: Commitments appear inline in the person's memory section — no separate CLI call needed. The existing `arete people show <slug> --memory` call already surfaces them.
-
-## Workflow
-
-### 1. Identify Meeting
-
-- User provides: meeting title and/or attendee names.
-- If meeting identity is ambiguous, try calendar first:
-  - Run `arete pull calendar --today --json`.
-  - If events are available, present a concise selectable list (time + title + attendees if present).
-  - Ask user to pick one meeting to prep.
-- If no calendar data or calendar is unavailable, ask: "Which meeting? Please share the title and/or attendee names."
-
-### 2. Area Context Lookup
-
-Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to identify if this meeting belongs to a persistent work area:
-
-1. **Match meeting to area** — Call `AreaParserService.getAreaForMeeting(meetingTitle)`:
-   - Uses case-insensitive substring matching against `recurring_meetings[].title` in area files
-   - Returns `AreaMatch | null`: `{ areaSlug: string; matchType: 'recurring' | 'inferred'; confidence: number }`
-
-2. **When area found** — Call `AreaParserService.getAreaContext(areaSlug)` to retrieve:
-   - `focus` — Current priorities and active work streams
-   - `goal` — Linked goals for this area
-   - `horizon` — Upcoming work and future priorities
-   - Store these for inclusion in the brief (Step 6)
-
-3. **When area not found** — For recurring meetings (detected by title pattern or user indication):
-   - Prompt user: "This appears to be a recurring meeting. Would you like to associate it with an area?"
-   - If yes, offer to either:
-     - Select from existing areas: list `areas/*.md` files
-     - Create a new area: `arete create area <slug>`
-   - For one-off meetings, proceed without area context (no prompt needed)
-
-**Example**: Meeting title "CoverWhale Sync" → matches `areas/glance-communications.md` → auto-pulls Glance Communications context (Focus, Goals, Horizon).
-
-### 3. Lazy Refresh Person Memory (stale-aware)
-
-After attendee slugs are resolved, refresh only if stale/missing:
-
-- For each attendee, run:
-  - `arete people memory refresh --person <slug> --if-stale-days 3`
-- If many attendees (e.g. 5+), ask before refreshing all: "Refresh person memory highlights now?"
-- If refresh fails, continue prep with existing person context (fail-open).
-
-### 4. Gather Context
-
-Run **get_meeting_context** (see [PATTERNS.md](../PATTERNS.md)). Use the outputs to build the brief.
-
-### 4.5. Search Related Memory
-
-Gather both atomic L2 items (decisions, learnings) and synthesized
-L3 topic pages related to this meeting. See `topic_page_retrieval`
-and `context_bundle_assembly` in `PATTERNS.md` for the full contract.
-
-1. **Extract search terms**:
-   - Meeting topic keywords (e.g., "CoverWhale compliance", "roadmap review")
-   - Each key attendee name
-
-2. **Run searches** (split the ~1000-word memory budget: ~600w atomic,
-   ~400w topic-page narrative):
-   ```bash
-   # Atomic L2 items — decisions, learnings, observations
-   arete search "<meeting topic>" --scope memory --limit 3
-   arete search "<attendee name>" --scope memory --limit 2
-
-   # Synthesized L3 topic pages — narrative that compounds with each meeting
-   arete topic find "<meeting topic>" --limit 1 --budget 400 --json
-   ```
-   Run attendee searches for up to 3 key attendees (cap at 3 to avoid noise).
-   `arete topic find` returns `{ results, searchBackend }`. If
-   `searchBackend: 'none'`, no search provider is configured — note
-   the degraded-capability signal instead of treating it as "no topics."
-
-3. **Filter for relevance**:
-   - Keep only items that directly inform this meeting
-   - Prioritize recent decisions (last 30 days) and topic pages with
-     `status: active`
-   - Skip generic matches that don't add prep value
-
-4. **Include in prep brief**:
-   - Atomic items → "Related Memory" section (see Step 6), 2-4 items max
-   - Topic-page `bodyForContext` → inline narrative quote, 1-2 sentences
-     per topic max; link out to `[[topic-slug]]` for the full page
-
-5. **Empty results**: If no relevant memory found, omit the "Related Memory" section entirely. Don't say "nothing found."
-
-### 4.7. Email Context (Optional — requires Google Workspace)
-
-If Google Workspace integration is active, enrich the prep brief with recent email context for each attendee.
-
-1. **Check integration status**:
-   ```bash
-   arete integration list --json
-   ```
-   Look for `google-workspace` with `status: 'active'`. If not active, skip this step entirely — meeting-prep works without it.
-
-2. **Search for attendee email threads**:
-   For each attendee with a known email address (from their person profile), search for recent threads:
-   ```bash
-   arete pull gmail --query "from:<email> OR to:<email>" --days 14 --json
-   ```
-   Cap at 3 attendees to avoid excessive API calls.
-
-3. **Filter for relevance**:
-   - Keep only threads that appear related to the meeting topic (match subject or snippet against meeting title/keywords)
-   - Discard automated notifications, newsletters, or unrelated threads
-   - Keep at most 3-5 threads per attendee
-
-4. **Include in prep brief**:
-   Add a `## Recent Email Context` section (see Step 6) with relevant threads grouped by attendee:
-   ```markdown
-   ### Recent Email Context
-   _Sourced from Gmail — last 14 days_
-
-   **Jane Smith** (jane@example.com):
-   - 2026-04-01 — **Re: Roadmap Q2** — "Here's the updated timeline..."
-   - 2026-03-28 — **Budget Approval** — "Approved the $50k allocation for..."
-
-   **Alex Rivera** (alex@example.com):
-   - 2026-03-30 — **Sprint Review Notes** — "Key decisions from Friday's review..."
-   ```
-
-5. **Empty results**: If no relevant email threads are found for any attendee, omit the section entirely. Do not mention that email was checked.
-
-### 4.8. Drive Context (Optional — requires Google Workspace)
-
-If Google Workspace integration is active, enrich the prep brief with related Google Drive documents.
-
-1. **Check integration status**:
-   ```bash
-   arete integration list --json
-   ```
-   Look for `google-workspace` with `status: 'active'`. If not active, skip this step entirely — meeting-prep works without it.
-
-2. **Check for event attachments or linked docs**:
-   If the calendar event has attachments or linked documents (from event metadata), note them directly.
-
-3. **Search Drive for related docs**:
-   For each attendee with a known email address (from their person profile), search for recently shared/modified docs:
-   ```bash
-   arete pull drive --query "owner:<email>" --days 14 --json
-   ```
-   Cap at 3 attendees to avoid excessive API calls.
-
-4. **Filter for relevance**:
-   - Keep only files that appear related to the meeting topic (match name against meeting title/keywords)
-   - Prioritize Google Docs and Slides over other file types
-   - Keep at most 3-5 files per attendee
-
-5. **Include in prep brief**:
-   Add a `## Related Documents` section (see Step 6) with relevant files grouped by owner:
-   ```markdown
-   ### Related Documents
-   _Sourced from Google Drive — last 14 days_
-
-   **Jane Smith** (jane@example.com):
-   - [Q2 Roadmap Draft](https://docs.google.com/...) — Doc, modified 2026-04-02
-   - [Sprint Planning Notes](https://docs.google.com/...) — Doc, modified 2026-03-30
-
-   **Alex Rivera** (alex@example.com):
-   - [Budget Spreadsheet 2026](https://docs.google.com/...) — Sheet, modified 2026-03-28
-   ```
-
-6. **Empty results**: If no relevant documents are found for any attendee, omit the section entirely. Do not mention that Drive was checked.
-
-### 5. Relationship Intelligence Analysis
-
-Using the person profiles and context already gathered by **get_meeting_context** (do NOT re-run `arete people show`), apply the **relationship_intelligence** pattern from PATTERNS.md for each attendee who has a person profile:
-
-1. **Review known relationship state** — Note current stances (strength/direction), open items, relationship health score, last interaction date from the people context already in hand.
-2. **Compare against recent meeting content** — Identify new or shifted stances, resolved items, and positive/negative health signals since the last recorded interaction.
-3. **Assess trajectory** — Is the relationship strengthening, stable, or weakening? Are concerns accumulating?
-4. **Generate prep recommendations** — Topics to address proactively, wins to acknowledge, questions to ask, and recommended approach (direct vs. exploratory) for each key attendee.
-
-Collect the resulting intelligence insights; they populate the **Intelligence Insights** section of the brief.
-
-### 6. Build Prep Brief
-
-Output markdown:
-
-```markdown
-## Prep: [Meeting Title]
-
-### Area Context
-_Include this section only when an area was matched in Step 2._
-
-**Area**: [Area Name] (areas/[slug].md)
-
-**Focus**:
-[Summary from area's Focus section — 2-3 key priorities and active work streams]
-
-**Goals**:
-- [Goal name](link) — one-liner
-_(Show goals from the area)_
-
-**Horizon**:
-- [Upcoming work or next phase]
-_(Show upcoming work from the area)_
-
-### Attendees
-- **Name** — Role, Company | Last met: YYYY-MM-DD (or "No prior meetings")
-- **Memory highlight** — Repeated asks/concerns from prior meetings (if available)
-
-### Recent Meetings
-- YYYY-MM-DD — [Meeting title] — Brief summary
-
-### Related Projects
-- [Project name] — Brief status / link
-
-### Open Action Items
-- [ ] Item from meeting with [attendee]
-- [ ] ...
-
-### Related Memory
-_Include only when relevant items were found in Step 4.5. Omit section if empty._
-
-- **Decision** [YYYY-MM-DD]: [Relevant decision for this meeting]
-- **Learning** [YYYY-MM-DD]: [Relevant learning for this meeting]
-
-### Recent Email Context
-_Include only when GWS is active and relevant threads were found in Step 4.7. Omit section if empty._
-
-**[Attendee Name]** ([email]):
-- YYYY-MM-DD — **[Subject]** — "[snippet]"
-
-### Related Documents
-_Include only when GWS is active and relevant docs were found in Step 4.8. Omit section if empty._
-
-**[Attendee Name]** ([email]):
-- [Document Title](link) — Type, modified YYYY-MM-DD
-
-### Stances
-For each attendee with person intelligence (via `arete people show <slug> --memory`):
-
-- **[Name]**: [stance direction] on [topic] — _Source: [meeting date/title]_
-- Example: "**Sarah**: Skeptical of timeline estimates — _Source: 2026-02-15 Sprint Review_"
-
-### Open Items
-Split by ownership:
-
-**I owe them:**
-- [ ] [Item description] — _Source: [meeting date/title]_
-
-**They owe me:**
-- [ ] [Item description] — _Source: [meeting date/title]_
-
-### Relationship Health
-For each key attendee:
-
-- **[Name]**: [health indicator: strong/neutral/at-risk] | Last met: YYYY-MM-DD | Frequency: [weekly/biweekly/monthly/sporadic] | Open loops: N
-
-### Suggested Talking Points
-Generate from person intelligence and meeting history:
-
-- Follow up on [open item from "I owe them" or "They owe me"]
-- Be aware: [person] [stance] (e.g. "Be aware: Sarah is skeptical of timeline estimates")
-- Share update on [Y]
-- Ask about [Z]
-
-### Intelligence Insights
-Derived from the **relationship_intelligence** pattern (Step 4). One entry per attendee with a person profile:
-
-- **Relationship changes since last meeting** — trajectory direction (strengthening / stable / weakening) and key evidence (e.g., "Architecture doc still overdue → health declining")
-- **Topics needing proactive attention** — unresolved concerns or accumulating issues the builder should raise first
-- **Recommended approach per attendee** — direct vs. exploratory, what to lead with, what to acknowledge, what to leverage
-
-Example:
-
-- **Sarah Chen** — WEAKENING (doc delay + workarounds). Lead with concrete architecture doc ETA. Acknowledge the block. Use webhook enthusiasm to rebuild goodwill.
-- **Alex Rivera** — STABLE. No open items. Ask about Q2 planning to surface new priorities.
+- "Call with @person" / "Meeting prep for X"
+- Before a meeting to load context; after a meeting fast-recall is
+  better served by the meeting file itself or `process-meetings`.
+
+## Workflow — chef-orchestrator pattern
+
+### Step 0 — Read APPEND, identify meeting
+
+```bash
+arete skill resolve meeting-prep
+cat .arete/skills-local/meeting-prep.md 2>/dev/null || echo "(no APPEND file)"
+
+# Identify the meeting from user input. Three paths:
+# (a) User mentioned a person or company → infer the meeting
+#     from upcoming calendar
+# (b) User mentioned a meeting title → fuzzy match against
+#     recent meetings + upcoming calendar
+# (c) User passed a file path or slug → use directly
 ```
 
-Keep it concise and prep-focused.
+If meeting is ambiguous (e.g., user said "prep for Anthony" and
+multiple Anthony meetings exist this week), surface to the
+`## Uncertain — your call` tier in Step 3 — don't guess.
 
-### 7. Close
+### Step 1 — Gather (parallelize)
 
-- Offer to save the brief to a note or scratchpad if useful.
-- Suggest **process-meetings** after the meeting to propagate attendees and extract decisions.
-- If an area was associated, remind user that decisions/learnings from this meeting can be routed to the area via process-meetings.
+**Run in parallel** for the identified meeting:
+
+```bash
+# 1a. Attendee resolution + person profiles
+# Use get_meeting_context pattern (PATTERNS.md upper section)
+# - Match attendee names to people/ slugs
+# - Read each person file
+# - Read enriched person memory:
+arete people show <slug> --memory
+# (Stances, open items, relationship health)
+
+# 1b. Recent meetings with same attendees / topic
+# Scan resources/meetings/index.md or fuzzy-search recent files
+# Take 1-3 most recent
+
+# 1c. Area context (if meeting matches a recurring area)
+# Use get_area_context pattern
+# AreaParserService.getAreaForMeeting(title) → AreaContext
+
+# 1d. Open commitments with attendees
+arete commitments list --person <slug>  # for each attendee
+# (Both directions: i_owe_them + they_owe_me)
+
+# 1e. Topic page retrieval for meeting subject
+arete topic find "<meeting title or topic>" --area <slug-if-known> --limit 2 --budget 600 --json
+
+# 1f. Context bundle (existing pattern)
+arete search "<topic>" --scope context --limit 3
+arete search "<topic>" --scope memory --limit 3
+
+# 1g. Past meeting summaries for this attendee/topic (Phase 1 layer)
+ls .arete/memory/summaries/meetings/ 2>/dev/null
+# Filter for files that mention attendee or topic
+```
+
+### Step 2 — Apply judgment
+
+For each gathered signal, decide whether and how to surface:
+
+- **Attendee-specific signals** (stances, open items, relationship
+  health) — surface verbatim with reason labels.
+- **Recent meetings** — top 1-3 most relevant; include 1-line
+  summary + carryover items (unaddressed asks / questions).
+- **Open commitments** — list both directions:
+  - `i_owe_them` (overdue or due-soon) → surface with urgency reason
+  - `they_owe_me` → surface as "remind to ask about X"
+- **Topic context** — pull `bodyForContext` from top topic page; cite
+  inline.
+- **Relationship trajectory** — apply `relationship_intelligence`
+  pattern (PATTERNS.md upper). Health weakening? Stances
+  strengthening?
+
+**Importance signals** for the meeting itself:
+- 1:1 with leadership / customer → surface more context, propose
+  pre-meeting prep actions.
+- Routine standup → surface compressed brief; many items defer to
+  sidecar.
+- Customer review → surface stances + open issues prominently.
+
+### Step 3 — Compose the curated prep brief
+
+```markdown
+## Meeting Prep — {Title}
+
+**When**: {time / date}
+**Where**: {video / room}
+**Attendees**: {list with role + company}
+
+### Brief context
+
+{1-2 sentences: what's the meeting about, what's the trajectory.}
+
+### Attendees — what to know
+
+#### {Attendee 1, e.g., Sarah Chen — Engineering Lead at Acme}
+- **Health**: 7/10 — stable but architecture doc delay is a risk
+  (last meeting: 2026-04-12)
+- **Recent stances**:
+  - "API docs are our biggest gap" (strong, 3 mentions) — open issue
+  - "Prefer async communication" (moderate)
+- **Open items**:
+  - Architecture doc owed by us — 2 weeks overdue
+- **Recent activity**: Last meeting 2026-04-12 — committed to send
+  spec by Friday (not yet delivered)
+
+### Recent meetings touching this topic / these attendees
+
+- 2026-04-12 — Sarah / John 1:1 (key decision: JWT auth)
+- 2026-04-08 — Acme leadership review (Sarah present, raised docs concern)
+
+### Open commitments (both directions)
+
+#### I owe them
+- [ ] Send architecture doc to Sarah — 14d overdue, due priority
+
+#### They owe me
+- Sarah → confirm webhook system feedback (mentioned 4d ago)
+
+### Topic context
+
+**API docs gap** ([[topic-slug]]):
+{bodyForContext snippet — current state + open questions, ~200 words}
+
+### Talking points (suggested)
+
+1. **Lead with**: Architecture doc status. Have a concrete delivery date.
+2. **Acknowledge**: The 2-week delay impact on Sarah's team.
+3. **Leverage**: Sarah's webhook excitement (last meeting) to rebuild engagement.
+4. **Ask**: What other areas is your team working around? Hidden friction.
+
+### Uncertain — your call
+
+- [ ] Sarah mentioned she might bring the docs concern back up — do
+  we want to preemptively show our roadmap, or let her raise it?
+
+### Proposed pre-meeting actions
+
+[1] arete.commitments_resolve id=cmt_arch_doc resolution="sent today before meeting"
+    (only if you've sent it; otherwise skip)
+[2] slack.send_dm to @sarah: "Quick heads up — sending the architecture doc
+    in the next hour, would love your eyes on the auth section before our 2pm"
+[3] notion.update_page page_id="acme-account-status" content="Architecture
+    doc delivery: 2026-05-15 — pre-meeting commitment honored"
+[4] (draft) jira.create_ticket project=DOCS type=Task summary="API docs gap
+    — customer-validated by Sarah" labels=[docs,customer-feedback]
+
+### Related context
+
+- {1-2 line carryovers from agenda files matching this meeting}
+- {Strategy / goal alignment if relevant}
+
+What's your call? Approve actions before the meeting, or just take the brief.
+```
+
+### Step 4 — Persist the curated brief + engage user once
+
+**Persist the prep brief to disk BEFORE engaging the user.** Write
+the full Step-3 brief verbatim to
+`now/archive/meeting-prep/meeting-prep-{meeting-slug}.md` (the slug is the meeting's slug,
+not a date — meeting-prep maps to a single upcoming meeting). This is
+the audit trail and gives the user a hand-readable artifact they can
+glance at on a separate device before the meeting.
+
+```bash
+mkdir -p now/archive/meeting-prep
+cat > "now/archive/meeting-prep/meeting-prep-{meeting-slug}.md" <<'EOF'
+{full Step-3 prep brief}
+EOF
+```
+
+Re-runs (e.g., refreshing the brief 30 min before the meeting) append
+a `## Re-run at HH:MM` divider rather than overwriting earlier
+history.
+
+After persisting, send brief. Wait for response. Standard response
+format.
+
+### Step 5 — Execute approved pre-meeting actions
+
+After approval:
+
+```bash
+# Run approved actions (executable)
+# (draft) actions: confirm acknowledgment
+
+# Optionally drop a copy of the brief into now/agendas/<meeting-slug>.md
+# so daily-winddown will merge it into the meeting file post-call.
+```
+
+## Sidecar conventions
+
+Meeting-prep usually doesn't need a sidecar — the prep brief itself
+is the curated view, and "deferred" context simply isn't surfaced.
+If the meeting has a lot of historical context (e.g., 10+ recent
+meetings, 5+ topic pages), surface a short tier ("12 prior meetings
+on this topic — see now/archive/meeting-prep/deferred-{meeting-slug}.md").
+
+## Action verbs this skill may propose
+
+| Verb | Mode | When |
+|---|---|---|
+| `slack.send_dm` | executable | Pre-meeting heads-up to attendee |
+| `calendar.create_event` | executable | Schedule follow-up before main meeting |
+| `notion.update_page` | executable | Update account / customer doc with prep notes |
+| `jira.create_ticket` | draft-only | File ticket from upcoming meeting topic |
+| `arete.commitments_resolve` | executable | Mark a pre-meeting deliverable done |
+| `arete.commitments_create` | executable | Capture new "I owe them" pre-meeting promise |
+| `arete.inbox_add` | executable | Capture a thought to handle post-meeting |
+
+## Reason taxonomy (skill-specific extensions)
+
+In addition to PATTERNS.md standard taxonomy:
+
+- **Pre-meeting prep** — `committed deliverable due before this meeting`
+- **Health weakening** — `relationship trajectory: 7/10 → 6/10 est.`
+- **Stance match** — `confirms Sarah's "API docs are biggest gap" stance`
+- **Carryover from agenda** — `unaddressed in last meeting agenda`
+- **Customer-touching** — `customer in attendees`
+- **Cold attendee** — `no recent 1:1; suggest icebreaker context`
+
+## Uncertain-tier judgment (when in doubt, surface)
+
+Pre-meeting context is high-stakes — surfacing a stale claim or
+mis-calibrated relationship signal is worse than surfacing one
+extra ambiguous item. Bias toward Uncertain.
+
+**Category-level rule — these defer reasons are LOW-confidence
+auto-defers; surface to Uncertain instead unless the chef can
+articulate a specific, confident defer reason** (already in
+the talking points; explicitly out of scope per APPEND;
+superseded-by-recent-decision):
+
+- **"needs verification"** — a claim about commitments, customer
+  status, or stance that may have shifted since last meeting. Don't
+  auto-defer; surface as "Confirm before the meeting or skip?"
+- **"interesting future"** — a forward-looking observation that may
+  or may not be worth raising in the meeting. Don't auto-defer;
+  surface as "Mention preemptively or hold?"
+- **"covered elsewhere"** — chef thinks another talking point or
+  recent meeting already covers this — but the overlap is fuzzy.
+  Don't auto-defer; surface with the cover-by reference for the
+  user to confirm.
+
+## Existing patterns this skill reuses
+
+From PATTERNS.md upper section (do not reinvent):
+
+- `get_meeting_context` — attendees, recent meetings, projects,
+  open action items.
+- `get_area_context` — area state for recurring meetings.
+- `enrich_meeting_attendees` — calendar cross-reference for
+  email-only attendees.
+- `context_bundle_assembly` — strategy + memory + people context.
+- `topic_page_retrieval` — topic-page narrative pull.
+- `contextual_memory_search` — lightweight memory retrieval.
+- `relationship_intelligence` — trajectory assessment +
+  prep-recommendations.
+
+The chef-orchestrator wrapper around these patterns is what's new
+in Phase 2; the patterns themselves stay.
 
 ## References
 
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_area_context
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — relationship_intelligence
-- **People**: `people/` (internal, customers, users)
-- **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `attendees`)
-- **Projects**: `projects/active/` READMEs (`stakeholders`)
-- **Areas**: `areas/*.md` (recurring meeting mappings, area context)
-- **Related**: process-meetings, daily-plan
+- **PATTERNS.md** — chef-orchestrator patterns 1–4 + the existing
+  context patterns above.
+- **APPEND** — `.arete/skills-local/meeting-prep.md`.
+- **CLI primitives** — `arete people show --memory`,
+  `arete commitments list --person`, `arete search`,
+  `arete topic find`, `arete pull calendar --json`.
+- **Local files** — `people/`, `resources/meetings/`,
+  `.arete/memory/topics/`, `.arete/memory/summaries/meetings/`,
+  `areas/`, `now/agendas/`, `goals/quarter.md`.
+- **Sidecar** (rarely): `now/archive/meeting-prep/deferred-{meeting-slug}.md`.
+- **Related skills**: `process-meetings` (post-meeting sister
+  skill), `prepare-meeting-agenda` (creates the agenda this skill
+  reads), `daily-winddown` (post-meeting consumer).
+
+## Rollback
+
+If this rewrite degrades meeting-prep quality, revert the Phase 2
+meeting-prep rewrite commit (per-skill commit; surgical revert):
+
+```bash
+git log --oneline packages/runtime/skills/meeting-prep/SKILL.md
+git revert <phase-2 meeting-prep rewrite commit>
+```
+
+Note: meeting-prep is heavily used; if the chef brief feels worse
+than the pre-Phase-2 step-by-step, revert this first. The user fork
+can also be restored from a `.fork-base/` snapshot if the user has run
+`arete skill fork meeting-prep`.

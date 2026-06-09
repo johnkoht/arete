@@ -2,17 +2,65 @@
  * Services barrel export.
  */
 export { ContextService } from './context.js';
-export { MemoryService, getMemoryItemsForTopics } from './memory.js';
+export { MemoryService, getMemoryItemsForTopics, parseMemorySections } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
+// Phase 9 — typed-mode brief markdown formatters
+export { formatPersonBriefMarkdown, formatProjectBriefMarkdown, formatAreaBriefMarkdown, formatMeetingBriefMarkdown, } from './brief-formatters.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
+export { seedSkillsLocal, renderSkillsLocalTemplate, PHASE_2_CHEF_ORCHESTRATOR_SKILLS, PHASE_4_CHEF_ORCHESTRATOR_SKILLS, CHEF_ORCHESTRATOR_SKILLS, } from './skills-local.js';
+export { resolveSkillDirTwoTier, resolveSkillFileTwoTier, } from './skill-resolver.js';
+export { forkSkill, diffSkill, mergeSkill, summarizeUpstreamChanges, migratePreSplitAgentSkills, } from './skill-fork.js';
 export { IntegrationService } from './integrations.js';
 // Workspace tool discovery — pure functions, no service class.
 // (Skill discovery is the parallel concern; see services/skills.ts.)
 export { listTools, getTool } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
-export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
+// Phase 7a AC5 — person channels convention helpers.
+export { readPersonChannels, computeChannelsAudit, CHANNEL_FIELD_NAMES, } from './entity.js';
+export { CommitmentsService, computeCommitmentPriority, computeCounterpartyOverlap, getCommitmentCounterpartySlugs, LockBootstrapError, } from './commitments.js';
+export { writeWithLock } from './meeting-lock.js';
+export { appendChefSkipLog } from './chef-skip-log.js';
+export { parseChefSkipDirectives, resolveChefSkipDirective, formatDirectiveStatusMessage, } from './chef-skip-directives.js';
+// Migrations (phase-10a-pre and onward)
+export { applyAddCreatedAt, migrateAddCreatedAt, parseCommitmentsFile, serializeCommitmentsFile, } from './migrations/add-created-at.js';
+// Phase 10a v2 — commitment hash + text normalization (Step 2)
+export { normalizeCommitmentTextV2, computeCommitmentHashV2, } from './commitments-hash-v2.js';
+// Phase 10a v2 — counterparty parser (Step 3)
+export { extractCounterpartiesFromText, buildPersonDirectory, } from './commitments-counterparty-parser.js';
+// Phase 10b-min — reactive cross-meeting dedup pipeline (Step 1)
+export { findDedupCandidates, runLLMCrossCheck, applyDedupDecisions, runDedupPipeline, commitmentToDedupInput, buildCrossCheckPrompt, parseCrossCheckResponse, tokenizeForJaccard, jaccardSimilarity as dedupJaccardSimilarity, extractSlugMentions, buildPersonSlugSet, DEDUP_JACCARD_THRESHOLD, DEDUP_CANDIDATE_CAP, } from './commitment-dedup-pipeline.js';
+// Phase 11 11a — Gmail Sent external-resolution detection pipeline (Step 2)
+export { findResolutionEvidence, runResolutionCrossCheck, applyResolutionDecisions, runResolutionPipeline, commitmentToResolutionInput, peopleDirectoryFromMap, buildResolutionPrompt, parseResolutionResponse, isSuppressed, computeSuppressUntil, inTemporalWindow, extractArtifactNouns, checkArtifactMatch, tokenize as resolutionTokenize, jaccard as resolutionJaccard, PERMANENT_SUPPRESS_SENTINEL, UNRESOLVE_SUPPRESS_DAYS, TEMPORAL_WINDOW_FORWARD_DAYS, RESOLUTION_JACCARD_THRESHOLD, RESOLUTION_CANDIDATE_CAP, ARTIFACT_NOUNS, } from './commitment-resolution-pipeline.js';
+// Phase 11 11a — resolution-decisions audit log (Step 5, F1/M2)
+export { appendResolutionDecisionLog, renderResolutionDecisionLine, sanitizeReasoning as sanitizeResolutionReasoning, parseResolutionLog, hasPriorUnresolveForEvidence, RESOLUTION_LOG_PHASE, } from './resolution-decisions-log.js';
+// Phase 11 11a — resolution directive parser + mutators (Steps 3+4, F2/M4)
+export { parseResolutionDirectives, stageResolve, autoResolve, applyConfirm, applyUnconfirm, applyUnresolve, evaluatePromotionGate, UNCONFIRM_WINDOW_HOURS, PROMOTION_WINDOW_DAYS, } from './resolution-directives.js';
+// Phase 11 11a — auto-resolve vs followup-2 ordering guard (Step 6, G1/AC8/M2)
+export { decideResolutionOrdering } from './resolution-ordering.js';
+// Phase 10b-min — extract-time dedup orchestration (Step 2)
+export { runExtractDedup, filterSameDayOpenCommitments, decorateStagedSectionsWithDupeBadges, buildDupeSkipReasonEntries, buildDupeStatusEntries, } from './commitment-dedup-extract.js';
+// Phase 10b-min — reverse-stamp on canonical's meeting (Step 5)
+export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampIntoBody, applyReverseStamp, } from './commitment-dedup-reverse-stamp.js';
+// Phase 10b-min — dedup-decisions audit log writer (Step 6, AC9)
+export { sanitizeReasoning, renderDedupDecisionLine, payloadFromExtractDecision, appendDedupDecisionLog, appendDedupDecisionLogBatch, } from './dedup-decisions-log.js';
+// Phase 10b-aux — `arete dedup --explain <id>` provenance (Step 1, AC7)
+export { parseDedupLog, filterLogForCommitment, lookupCommitmentById, formatExplainReport, } from './dedup-explain.js';
+// Phase 10b-aux — [[unmerge]] directive parser + resolver (Step 2, AC8)
+export { parseUnmergeDirectives, resolveUnmerge, } from './unmerge-directives.js';
+// Phase 10b-aux — dedup decision surfacing in winddown (Step 3, AC8a/AC4a)
+export { filterLogByDate, formatDedupedTodaySection, formatPossiblyMergeableSection, formatDedupWinddownSections, } from './dedup-winddown-surface.js';
+// Phase 10e — background dedup hygiene engine
+export { runBackgroundDedup, applyCommitmentsDedup, formatBackgroundDedupDiff, BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR, BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR, } from './background-dedup.js';
+// Phase 10b-min wiring — CLI-facing glue that bridges meeting.ts and
+// the pure pipeline modules above. See extract-dedup-wiring.ts for the
+// flow (lock → load same-day → orchestrator → reverse-stamp → log).
+export { wireExtractDedup, loadSameDayStagedItems, resolveMeetingSlugToPath, adaptFilteredItemsForDedup, } from './extract-dedup-wiring.js';
+// Phase 10a v2 — migration engine (Step 4)
+export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
+// Phase 10a v2 — feature flag for v2 read path (Step 5)
+export { isCommitmentsV2Active, isCommitmentsV2ActiveFromConfig, } from './commitments-v2-flag.js';
 export { AIService, parseModelSpec } from './ai.js';
 // Similarity utilities (shared Jaccard computation)
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
@@ -23,7 +71,7 @@ export { parseActionItemsFromMeeting } from './meeting-parser.js';
 // Meeting processing
 export { processMeetingExtraction, applyReconciliationDecision, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, buildSkippedItemFateEvents, buildDismissedItemFateEvents, } from './meeting-processing.js';
 // Meeting reconciliation
-export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview } from './meeting-reconciliation.js';
+export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview, parseApprovedSection } from './meeting-reconciliation.js';
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 // Momentum analysis
@@ -46,11 +94,17 @@ export { generateMeetingManifest } from './meeting-manifest.js';
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 // Area memory (L3 computed summaries)
-export { AreaMemoryService, isAreaMemoryStale, buildSynthesisPrompt } from './area-memory.js';
+export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
 // Hygiene (workspace entropy scanning and cleanup)
 export { HygieneService } from './hygiene.js';
 // Task management
 export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 // Task scoring
 export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';
+// Slack-thread substantial heuristic (Phase 1 §a.3 / MC3)
+export { evaluateSlackThread, formatSlackEvalLogLine, slackSummariesEnabled, DEFAULT_SLACK_MESSAGE_THRESHOLD, DEFAULT_SLACK_PARTICIPANT_THRESHOLD, } from './slack-heuristic.js';
+// Org entity auto-detection + refresh (Phase 1 §b)
+export { detectOrgsFromMeetings, refreshOrgs, createOrgEntityManual, renderOrgAutoSection, slugifyDomain, DEFAULT_INTERNAL_DOMAINS, DEFAULT_DETECTION_WINDOW_DAYS, DEFAULT_DETECTION_MIN_MEETINGS, } from './org-entity.js';
+// Summary writers (Phase 1 wiki expansion)
+export { writeMeetingSummary, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
 //# sourceMappingURL=index.js.map

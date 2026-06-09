@@ -163,6 +163,11 @@ export class AreaParserService {
                 }
             }
         }
+        // Phase 7a AC4 — extract optional jira_epics watchlist. Tolerate
+        // missing field (defaults to empty array). Drop non-string entries.
+        const jiraEpics = Array.isArray(frontmatter.jira_epics)
+            ? frontmatter.jira_epics.filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
+            : [];
         // Extract markdown sections
         const goal = extractSection(body, 'Goal');
         const focus = extractSection(body, 'Focus');
@@ -178,6 +183,7 @@ export class AreaParserService {
             name: typeof frontmatter.area === 'string' ? frontmatter.area : slug,
             status: typeof frontmatter.status === 'string' ? frontmatter.status : 'active',
             recurringMeetings,
+            jiraEpics,
             filePath,
             sections: {
                 goal,

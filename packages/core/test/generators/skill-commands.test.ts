@@ -40,7 +40,10 @@ describe('generateSkillCommand', () => {
     const skill = makeSkill({ requiresBriefing: true });
     const output = generateSkillCommand(skill);
     assert.ok(output.includes('arete brief --for "$ARGUMENTS" --skill week-plan --json'));
-    assert.ok(output.includes('First, run the briefing:'));
+    assert.ok(output.includes('First, run the briefing to gather raw context:'));
+    // Phase 8 followup-2: brief returns raw context; the emitted comment
+    // tells the skill to filter to what it needs.
+    assert.ok(output.includes('filter to what the skill needs'));
   });
 
   it('does not add arete brief when requiresBriefing is falsy', () => {

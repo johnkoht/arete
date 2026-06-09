@@ -98,6 +98,7 @@ export {
   parseStagedItemStatus,
   parseStagedItemEdits,
   parseStagedItemOwner,
+  parseStagedItemSkipReason,
   writeItemStatusToFile,
   commitApprovedItems,
 } from './integrations/staged-items.js';
@@ -106,6 +107,8 @@ export type {
   ApprovedItemRecord,
   ApprovedItemObserver,
   CommitApprovedItemsOptions,
+  SkippedItemRecord,
+  SkippedItemObserver,
 } from './integrations/staged-items.js';
 export {
   saveConversationFile,
@@ -212,6 +215,19 @@ export type { LogEvent as MemoryLogEvent } from './utils/memory-log.js';
 
 // Meeting parsing helper
 export { parseMeetingFile } from './services/meeting-context.js';
+// Phase 3.5 followup-5 — unified meeting-frontmatter writer (AC1).
+// Shared across CLI `meeting apply` / `meeting extract --stage` and
+// backend `/process`. Closes the path-3 regression where extract --stage
+// silently dropped topics + counts.
+export { writeMeetingApplyFrontmatter } from './services/meeting-frontmatter.js';
+export type {
+  MeetingApplyStatus,
+  MeetingApplyAliasDeps,
+} from './services/meeting-frontmatter.js';
+// Phase 3.5 D4 — backfill CLI needs to scan approved meeting bodies
+// for staged-then-approved items. `parseApprovedSection` is the
+// minimal pure helper exposed for that purpose.
+export { parseApprovedSection } from './services/meeting-reconciliation.js';
 
 // Google Calendar integration
 export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';
@@ -249,12 +265,20 @@ export {
   GwsAuthError,
   GwsTimeoutError,
   GwsExecError,
+  GMAIL_SENT_CACHE_VERSION,
+  normalizeEmail,
+  gmailSentCachePath,
+  buildRecipientIndex,
+  writeGmailSentCache,
+  readGmailSentCache,
+  deleteGmailSentCache,
 } from './integrations/gws/index.js';
 export type {
   GwsDetectionResult,
   GwsExecOptions,
   GwsDeps,
   EmailThread,
+  GmailSentCache,
   DriveFile,
   DocMetadata,
   SheetRange,

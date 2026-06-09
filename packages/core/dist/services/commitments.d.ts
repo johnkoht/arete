@@ -42,6 +42,77 @@ export type CommitmentPriorityResult = {
  */
 export declare function computeCommitmentPriority(input: CommitmentPriorityInput): CommitmentPriorityResult;
 /**
+ * Content-normalized dedup hash: sha256(normalized text + personSlug + direction).
+ *
+ * Must produce the same hash as computeActionItemHash() in person-signals.ts —
+ * same algorithm, separate implementation to avoid circular deps.
+ *
+ * EXPORTED for the hash-invariance gate test (phase-8-followup-8 AC5/C2,
+ * pre-mortem R3): the test must call the real function directly to detect
+ * regressions where `area` (or other metadata) accidentally leaks into the
+ * hash inputs. Production code paths still go through sync()/create().
+ */
+export declare function computeCommitmentHash(text: string, personSlug: string, direction: CommitmentDirection): string;
+/**
+ * Minimal counterparty-bearing shape used by Rule 4's set-overlap math.
+ *
+ * Phase 10 will extend the canonical Commitment with a `stakeholders[]`
+ * field; until that lands, R4 reads `personSlug` directly. This type
+ * captures BOTH shapes so a single helper serves the dry-run window.
+ */
+export type CommitmentLike = {
+    /** v1 shape: single counterparty slug. */
+    personSlug?: string;
+    /**
+     * v2 shape (Phase 10 10a): stakeholders with role distinction.
+     * When present, this is the authoritative counterparty source —
+     * `personSlug` is ignored (it may carry the owner slug under the
+     * "owner-as-personSlug" pattern that Phase 10 migration repairs).
+     */
+    stakeholders?: ReadonlyArray<{
+        slug: string;
+        role?: string;
+    }>;
+};
+/**
+ * Extract the set of counterparty slugs to use for Rule 4 set-overlap.
+ *
+ * Read order (AC0a dual-shape):
+ *  1. `stakeholders[]` if present → all non-self slugs (M2 fix)
+ *  2. otherwise → singleton `[personSlug]` (v1 fallback)
+ *  3. neither present → empty set (overlap is always 0)
+ *
+ * Returns a deduplicated array (Set semantics, array shape for ergonomic
+ * consumption). Slug order is preserved from the source for stable
+ * test snapshots.
+ */
+export declare function getCommitmentCounterpartySlugs(c: CommitmentLike): string[];
+/**
+ * Compute set-overlap count between a commitment's counterparties and a
+ * meeting's attendees. Used by Phase 8 Rule 4 (daily-winddown SKILL.md
+ * §"Rule 4 — Intent → already-tracked open commitment").
+ *
+ * Returns the count of common slugs after the AC0a dual-shape read.
+ * A return of 0 means R4's counterparty gate does NOT fire (no overlap,
+ * candidate is NOT a collapse target).
+ *
+ * Example:
+ *   commitment.stakeholders = [{slug:'dave'}, {slug:'lindsay', role:'mentioned'}]
+ *   meeting.attendees      = ['dave', 'jamie']
+ *   → overlap = 1 (dave)
+ *
+ * Example (self-exclusion per M2):
+ *   commitment.stakeholders = [{slug:'john-koht', role:'self'}]
+ *   meeting.attendees      = ['john-koht', 'lindsay']
+ *   → overlap = 0 (self excluded from numerator)
+ *
+ * Example (v1 fallback):
+ *   commitment.personSlug = 'dave'   (no stakeholders[] field)
+ *   meeting.attendees    = ['dave']
+ *   → overlap = 1
+ */
+export declare function computeCounterpartyOverlap(commitment: CommitmentLike, meetingAttendeeSlugs: ReadonlyArray<string>): number;
+/**
  * Options for creating a commitment.
  */
 export type CreateCommitmentOptions = {
@@ -81,22 +152,132 @@ export type CreateTaskFn = (text: string, metadata: {
     id: string;
     text: string;
 }>;
+/**
+ * Function to mark linked tasks complete given a commitment id prefix.
+ * Returns the list of tasks that were marked complete (empty if none found).
+ * Injected by factory to avoid circular dep.
+ */
+export type CompleteTaskFromCommitmentFn = (commitmentIdPrefix: string) => Promise<{
+    id: string;
+    text: string;
+}[]>;
+/**
+ * Function returning the subset of commitment-id prefixes that are
+ * referenced by an OPEN task via `@from(commitment:<prefix>)`. Used by
+ * save() to refuse pruning commitments that still have live task
+ * references. Completed tasks with stale references are prune-OK and
+ * intentionally not counted here.
+ *
+ * Batched signature (FU3): one call per save() reads task files once,
+ * regardless of how many prune-candidates exist. Replaces the earlier
+ * per-prefix `HasOpenTaskReferenceFn` so a sync() processing K
+ * candidates doesn't multiply the file-read cost.
+ *
+ * Injected by factory to avoid circular dep.
+ */
+export type HasOpenTaskReferencesFn = (commitmentIdPrefixes: string[]) => Promise<Set<string>>;
+/**
+ * Thrown when `ensureLockTarget` cannot bootstrap the lock target file
+ * (typically because the parent directory cannot be created — e.g. a unit
+ * test using a virtual-path mock storage adapter like `/workspace/...`).
+ *
+ * The earlier behavior was to silently fall back to no-op locking; that
+ * violated the plan's "abstain, never silent corruption" contract, so we
+ * now surface the failure to the caller. Production code paths today
+ * always succeed (FileStorageAdapter has filesystem semantics); this
+ * defends the boundary so future StorageAdapter shapes (remote / S3 /
+ * SQLite) cannot silently degrade cross-process locking.
+ */
+export declare class LockBootstrapError extends Error {
+    constructor(filePath: string, cause: unknown);
+}
 export declare class CommitmentsService {
     private readonly storage;
     private readonly filePath;
     private createTaskFn?;
+    private completeTaskFromCommitmentFn?;
+    private hasOpenTaskReferencesFn?;
     constructor(storage: StorageAdapter, workspaceRoot: string);
     /**
      * Set the task creation function. Called by factory after TaskService is created.
      * Avoids circular dependency.
      */
     setCreateTaskFn(fn: CreateTaskFn): void;
+    /**
+     * Set the back-propagation function that marks linked tasks complete
+     * when a commitment is resolved. Called by factory after TaskService
+     * is created. Without this injection, resolve() still works but the
+     * linked tasks in week.md / tasks.md remain unchecked — the orphan
+     * class that motivated F1.
+     */
+    setCompleteTaskFromCommitmentFn(fn: CompleteTaskFromCommitmentFn): void;
+    /**
+     * Set the batched open-task-reference checker that save() consults
+     * before auto-pruning resolved commitments. Without this injection,
+     * save() falls back to pure age-based pruning (current behavior).
+     */
+    setHasOpenTaskReferencesFn(fn: HasOpenTaskReferencesFn): void;
     private load;
     /**
      * Write commitments to disk, applying pruning first.
      * ⚠️ Pruning uses `resolvedAt`, never `date`. Open items are never pruned.
+     *
+     * F2: when `hasOpenTaskReferencesFn` is injected, commitments still
+     * referenced by an OPEN task in week.md / tasks.md are NOT pruned,
+     * preventing the dangling-`@from(commitment:xxx)` orphan class. Tasks
+     * already marked complete (with stale refs) are prune-OK.
+     *
+     * FU2: a commitment older than `PRUNE_HARD_CEILING_DAYS` is pruned
+     * regardless of task references. Prevents unbounded commitments.json
+     * growth from sticky-open tasks that hold otherwise-stale commitments
+     * alive forever.
+     *
+     * FU3: prefix lookup runs ONCE per save() via the batched injection
+     * signature, not once per prune-candidate.
      */
     private save;
+    /**
+     * Run `fn` while holding the exclusive file lock on commitments.json.
+     *
+     * Phase 10 plan §10a-pre + pre-mortem F5 mitigation. Use this to wrap any
+     * read-modify-write that must be atomic across processes — e.g. the
+     * Phase 10 cross-meeting dedup pass:
+     *
+     *   await commitments.withLock(async () => {
+     *     const open = await commitments.listOpen();
+     *     const next = applyDedupDecisions(open, candidates);
+     *     await commitments.sync(next);
+     *   });
+     *
+     * Properties:
+     *  - **Cross-process safe** via `proper-lockfile` (uses a sidecar
+     *    `.lock` directory; mkdir is atomic on POSIX + Windows).
+     *  - **Stale-lock TTL** = 30s; the holder heartbeat refreshes the lock
+     *    before that window, so a long-running winddown won't lose the
+     *    lock to its own slowness.
+     *  - **PID check**: a stale lock whose holder PID is still alive is
+     *    NOT stolen — the contender retries until the holder releases.
+     *  - **Re-entrant within instance**: nested `withLock` calls or inner
+     *    `save()` calls on the SAME `CommitmentsService` instance reuse
+     *    the outer lock (tracked via instance-local `holdsLock` flag).
+     *    Cross-process / cross-instance contention still flows through
+     *    proper-lockfile and the OS-level lock directory.
+     *
+     * The lock is released even if `fn` throws; the error propagates.
+     */
+    withLock<T>(fn: () => Promise<T>): Promise<T>;
+    /** Instance-local flag: true when the current async task is inside an
+     * acquired lock scope. Used to make `withLock`/`save()` re-entrant
+     * within the same service instance without deadlocking on a recursive
+     * lockfile acquire. */
+    private holdsLock;
+    /**
+     * Internal lock runner shared by `save()` and `withLock()`. If the
+     * instance already holds the lock (re-entrant case), runs `fn`
+     * directly; otherwise acquires the proper-lockfile lock, runs, and
+     * releases.
+     */
+    private runUnderLock;
     /**
      * List open commitments, optionally filtered by direction, person slugs, and/or area.
      */
@@ -187,5 +368,43 @@ export declare class CommitmentsService {
      * Check if a commitment exists by hash prefix.
      */
     exists(hashPrefix: string): Promise<boolean>;
+    /**
+     * Backfill `area` on commitments missing it.
+     *
+     * For each commitment where `area` is absent, calls the caller-supplied
+     * resolver with the commitment's source filename. If the resolver returns
+     * an area slug, the commitment is updated with `area` AND a
+     * `areaSetBy: 'backfill'` provenance marker (so `resetBackfilledAreas`
+     * can selectively undo).
+     *
+     * Returns a preview/apply report. When `apply` is false (default), no
+     * writes occur — caller can inspect proposed changes safely.
+     *
+     * Hash invariance: area is metadata only and is NOT part of the dedup
+     * hash (see `computeCommitmentHash`). Commitment IDs are preserved.
+     */
+    backfillArea(resolveArea: (source: string) => Promise<string | null>, options?: {
+        apply?: boolean;
+    }): Promise<{
+        candidates: number;
+        matched: number;
+        proposals: Array<{
+            id: string;
+            source: string;
+            area: string;
+        }>;
+        applied: boolean;
+    }>;
+    /**
+     * Reset `area` to undefined for every commitment carrying the
+     * `areaSetBy: 'backfill'` provenance marker.
+     *
+     * Does NOT touch commitments where area was set at creation (Path A
+     * meeting approval, Path C `commitments create --area`) or by sync()
+     * (Path B extract-time AC1/AC2) — those lack the marker.
+     */
+    resetBackfilledAreas(): Promise<{
+        reset: number;
+    }>;
 }
 //# sourceMappingURL=commitments.d.ts.map

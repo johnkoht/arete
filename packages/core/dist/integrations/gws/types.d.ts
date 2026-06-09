@@ -28,6 +28,19 @@ export type GwsDeps = {
         stderr: string;
     }>;
 };
+/**
+ * EmailThread — extended in Phase 11-pre (F4) for Sent-folder extraction.
+ *
+ * The 11-pre additions (`to/cc/bcc/body/attachments/sentAt`) are OPTIONAL
+ * to preserve backward compatibility with pre-11-pre callers. They are
+ * populated by the Gmail provider's `fetchSent` (and `searchThreads(..., {
+ * fetchBody: true })`) modes. When `fetchBody=false`, body+attachments stay
+ * absent / empty.
+ *
+ * `cacheVersion` is a per-thread marker (default 2). Cache readers also
+ * verify the envelope `version: 2` field on `GmailSentCache`; v1 (envelope
+ * `version` missing OR !== 2) is rejected and refetched.
+ */
 export type EmailThread = {
     id: string;
     subject: string;
@@ -36,7 +49,36 @@ export type EmailThread = {
     date: string;
     labels: string[];
     unread: boolean;
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+    body?: string;
+    attachments?: {
+        filename: string;
+        mimeType: string;
+        sizeBytes: number;
+    }[];
+    sentAt?: string;
+    cacheVersion?: number;
 };
+/**
+ * Gmail Sent-folder cache envelope (Phase 11-pre, F4).
+ *
+ * Written to `.arete/cache/gmail-sent-YYYY-MM-DD.json`. Readers reject any
+ * envelope where `version !== 2` with a clear error (and invalidate the
+ * cache so the next call refetches).
+ */
+export type GmailSentCache = {
+    version: 2;
+    pulledAt: string;
+    daysCovered: number;
+    threads: EmailThread[];
+    recipientIndex: Record<string, string[]>;
+};
+/**
+ * Current cache envelope version. Bump if EmailThread shape changes.
+ */
+export declare const GMAIL_SENT_CACHE_VERSION = 2;
 export type DriveFile = {
     id: string;
     name: string;
@@ -62,7 +104,32 @@ export interface EmailProvider {
     getImportantUnread(options?: {
         maxResults?: number;
     }): Promise<EmailThread[]>;
+    /**
+     * Fetch Sent-folder messages (Phase 11-pre, F4).
+     *
+     * Optional on the interface for backward compatibility with non-Gmail
+     * stubs / mocks. Real providers (GmailProvider) implement it.
+     *
+     * Returns extended EmailThread shape — when `fetchBody=true`, includes
+     * `to/cc/body/attachments/sentAt`. When `fetchBody=false` (default),
+     * skips body extraction (faster, smaller payload).
+     */
+    fetchSent?(opts: {
+        query?: string;
+        sinceDate?: string;
+        fetchBody?: boolean;
+        limit?: number;
+    }): Promise<EmailThread[]>;
 }
+/**
+ * Normalize an email address for indexing/matching (Phase 11-pre, eng MC1).
+ *
+ * - Strips whitespace.
+ * - Extracts the address from `"Name" <email>` form.
+ * - Lowercases.
+ * - Returns '' for unparseable input.
+ */
+export declare function normalizeEmail(raw: string | undefined | null): string;
 export interface DriveProvider {
     name: string;
     isAvailable(): Promise<boolean>;

@@ -18,7 +18,9 @@ export type AITask =
   | 'significance_analysis'
   | 'reconciliation'
   | 'synthesis'
-  | 'brief';
+  | 'brief'
+  /** Phase 11 11a — Gmail Sent auto-resolution cross-check (fast tier, eng MC2). */
+  | 'external_resolution';
 
 /** AI tier levels */
 export type AITier = 'fast' | 'standard' | 'frontier';
@@ -109,8 +111,23 @@ export type WorkspacePaths = {
   manifest: string;
   ideConfig: string;
   rules: string;
-  /** Single skills location: .agents/skills (last-in-wins) */
+  /**
+   * User-customization skills directory: `.agents/skills`. Skills the user
+   * has forked or hand-authored live here. Takes precedence at agent-load
+   * time over `managedSkills`. Survives `arete update`.
+   *
+   * Pre-Phase-3 workspaces also had shipped skills written here on install
+   * + update; the migration treats unforked legacy entries as
+   * "user-tracked-upstream" rather than forks (see `skill-resolver` two-tier
+   * resolver).
+   */
   agentSkills: string;
+  /**
+   * Managed skills directory: `.arete/skills`. Areté's shipped skills are
+   * written here on `arete install` and refreshed on `arete update`. Treated
+   * as read-only by convention. Phase 3 Step 1.
+   */
+  managedSkills: string;
   tools: string;
   integrations: string;
   context: string;
@@ -162,6 +179,20 @@ export type UpdateResult = {
   updated: string[];
   preserved: string[];
   removed: string[];
+  /**
+   * Phase 3.5 A2/A3/A4/B1 — opportunistic cleanups during
+   * `migratePreSplitAgentSkills`: stale `SKILL.legacy.md` files
+   * removed (A2), byte-equal aux files dedup'd from
+   * `.agents/skills/<name>/` (A3), empty user-skill dirs pruned (A4),
+   * and `.fork-base/` auto-recorded from git history (B1). Each entry
+   * is a per-cleanup record so the CLI can surface counts in the
+   * update summary.
+   */
+  cleaned?: Array<{
+    name: string;
+    kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir' | 'auto_fork_base';
+    path: string;
+  }>;
 };
 
 /** Options for workspace update */

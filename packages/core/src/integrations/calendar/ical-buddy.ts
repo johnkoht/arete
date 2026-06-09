@@ -140,10 +140,15 @@ export function getIcalBuddyProvider(): CalendarProvider {
       days: number,
       options?: CalendarOptions
     ): Promise<CalendarEvent[]> {
+      // Negative days = backward window; positive = forward. Phase 8
+      // reconciler's Rule 3 (action moot, event passed) uses negative.
       const today = new Date();
       const endDate = new Date(today);
       endDate.setDate(endDate.getDate() + days);
       const formatDate = (d: Date) => d.toISOString().split('T')[0];
+      const [fromArg, toArg] = days < 0
+        ? [`eventsFrom:${formatDate(endDate)}`, `to:${formatDate(today)}`]
+        : ['eventsFrom:today', `to:${formatDate(endDate)}`];
       const args = [
         '-b', '',
         '-nc',
@@ -151,8 +156,8 @@ export function getIcalBuddyProvider(): CalendarProvider {
         '-ea',
         '-df', '%Y-%m-%d',
         '-tf', '%H:%M',
-        'eventsFrom:today',
-        `to:${formatDate(endDate)}`,
+        fromArg,
+        toArg,
       ];
       if (options?.calendars?.length) {
         args.push('-ic', options.calendars.join(','));

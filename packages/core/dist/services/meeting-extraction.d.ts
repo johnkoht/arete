@@ -133,6 +133,18 @@ export declare const THOROUGH_LIMITS: {
 };
 /** Type for category limits. */
 export type CategoryLimits = typeof CATEGORY_LIMITS;
+/**
+ * Jaccard threshold for mirror-pair detection (Phase 8 followup-6).
+ *
+ * Tighter than the general dedup threshold because mirror-pair pathology is
+ * "identical or near-identical" (the LLM is emitting the SAME compound sentence
+ * split into two opposite-direction rows — observed Jaccard ≥0.95 in the
+ * structural-failure case). 0.90 is the post-review-1 revision (was 0.85);
+ * tighter threshold = fewer false-positives on legitimate bilateral pairs at
+ * minimal catch-rate cost. If AC5 eval reveals <100% catch at 0.90, ratchet
+ * down with logged rationale.
+ */
+export declare const MIRROR_PAIR_JACCARD_THRESHOLD = 0.9;
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 /**
  * Check if a decision matches trivial patterns.
@@ -143,6 +155,56 @@ export declare function isTrivialDecision(text: string): string | null;
  * Check if a learning matches trivial patterns.
  */
 export declare function isTrivialLearning(text: string): string | null;
+/**
+ * Detect and drop mirror-pair duplicate action items (Phase 8 followup-6).
+ *
+ * A "mirror pair" is the LLM emitting TWO `action_items[]` entries from a
+ * single compound transcript sentence — one `i_owe_them` and one
+ * `they_owe_me`, identical or near-identical `description`, different
+ * `owner_slug`. The extraction prompt now has Pattern 4 to prevent this
+ * upstream (AC1), but this deterministic post-LLM pass catches anything that
+ * leaks through. See plan: phase-8-followup-6-direction-parser/plan.md.
+ *
+ * Pair detection criteria (ALL must hold):
+ *   1. `a.direction !== b.direction` (opposite directions),
+ *   2. `a.ownerSlug !== b.ownerSlug` (different owners — same-owner same-text
+ *      same-direction is handled by `deduplicateItems`),
+ *   3. `jaccardSimilarity(normalize(a.description), normalize(b.description))
+ *       >= MIRROR_PAIR_JACCARD_THRESHOLD` (0.90).
+ *
+ * Canonical selection (run in order — first match wins, per pre-mortem R5):
+ *   a. **Verbatim-actor heuristic.** If exactly one item's description begins
+ *      with the owner's slug-stem (e.g., "john-koht" → /^john\b/i), that item
+ *      is canonical. This aligns with Areté's verbatim-action prompt
+ *      convention ("<Owner> to ..." / "<Owner> will ..."). Most reliable
+ *      signal when both slugs are non-owner.
+ *   b. **Workspace-owner-match.** If exactly one of the two slugs equals the
+ *      workspace `ownerSlug`, keep that item — it represents the user's
+ *      direct commitment. (When the owner has direction `i_owe_them`, this
+ *      is the user's actionable commitment; when `they_owe_me`, it's still
+ *      the user's tracked expectation.)
+ *   c. **Arbitrary (keep `a`).** Ambiguous — neither verbatim-actor nor
+ *      owner-match can pick. Keep the first occurrence; both items get
+ *      logged to `validationWarnings` so the user can review.
+ *
+ * Every drop is logged to `validationWarnings[]` with
+ * `reason: 'mirror-pair duplicate (kept canonical)'` so the user sees what
+ * was suppressed in the chef-curated view (pre-mortem R1 mitigation).
+ *
+ * Pure function; no I/O. O(n^2) over `items` — fine for n ≤ ~20.
+ *
+ * @param items - Action items to dedup (typically post-validation, pre-`deduplicateItems`)
+ * @param ownerSlug - Workspace owner slug for owner-match heuristic (optional)
+ * @returns Kept items + dropped pair-mates with reasons
+ */
+export declare function dedupMirrorPairs(items: ActionItem[], ownerSlug?: string): {
+    kept: ActionItem[];
+    dropped: Array<{
+        item: ActionItem;
+        reason: string;
+        canonicalDescription: string;
+    }>;
+};
 /**
  * Char budget for the rendered topic-wiki context block.
  *
@@ -284,8 +346,11 @@ export declare function buildLightExtractionPrompt(transcript: string): string;
  *
  * @param response - Raw LLM response text
  * @param limits - Optional category limits (defaults to CATEGORY_LIMITS for normal mode)
+ * @param ownerSlug - Optional workspace owner slug; used by the mirror-pair
+ *                    dedup pass (Phase 8 followup-6) to break ties between
+ *                    candidate canonical items.
  */
-export declare function parseMeetingExtractionResponse(response: string, limits?: CategoryLimits): MeetingExtractionResult;
+export declare function parseMeetingExtractionResponse(response: string, limits?: CategoryLimits, ownerSlug?: string): MeetingExtractionResult;
 /**
  * Extract meeting intelligence from a transcript using an LLM.
  *

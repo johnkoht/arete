@@ -5,7 +5,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'path';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { parse as parseYaml } from 'yaml';
 
 import { runCli, createTmpDir, cleanupTmpDir } from '../helpers.js';
@@ -54,9 +54,16 @@ describe('install command', () => {
 
         assert.ok(parsed.results.skills.length > 0, 'should copy skills on install');
         assert.ok(parsed.results.rules.length > 0, 'should copy rules on install');
+        // Phase 3: shipped skills land in `.arete/skills/` (managed),
+        // not `.agents/skills/`. User customizations go in
+        // `.agents/skills/` only when the user runs `arete skill fork`.
         assert.ok(
-          existsSync(join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md')),
-          'meeting-prep skill should exist in .agents/skills',
+          existsSync(join(tmpDir, '.arete', 'skills', 'meeting-prep', 'SKILL.md')),
+          'meeting-prep skill should exist in .arete/skills (managed tier)',
+        );
+        assert.ok(
+          !existsSync(join(tmpDir, '.agents', 'skills', 'meeting-prep')),
+          'meeting-prep should NOT exist in .agents/skills on a fresh install (Phase 3)',
         );
         assert.ok(
           existsSync(join(tmpDir, '.cursor', 'rules', 'pm-workspace.mdc')),
@@ -137,6 +144,50 @@ describe('install command', () => {
       assert.ok(content.includes('## Someday'), 'should have Someday section');
       assert.ok(content.includes('@area(slug)'), 'should document @area tag');
       assert.ok(content.includes('@from(type:id)'), 'should document @from tag');
+    });
+  });
+
+  // Phase 2 (Areté v2) — APPEND-file convention
+  describe('skills-local APPEND-file seeding', () => {
+    it('seeds .arete/skills-local/ templates for the five chef skills', () => {
+      runCli(['install', tmpDir, '--skip-qmd', '--json']);
+      const slugs = [
+        'daily-winddown',
+        'weekly-winddown',
+        'week-plan',
+        'process-meetings',
+        'meeting-prep',
+      ];
+      for (const slug of slugs) {
+        const path = join(tmpDir, '.arete', 'skills-local', `${slug}.md`);
+        assert.ok(existsSync(path), `${path} should be seeded on install`);
+        const content = readFileSync(path, 'utf8');
+        assert.match(
+          content,
+          /your context/,
+          `${slug}.md should contain the seed template`,
+        );
+      }
+    });
+
+    it('preserves existing user content on update (idempotent)', () => {
+      runCli(['install', tmpDir, '--skip-qmd', '--json']);
+
+      // User edits the daily-winddown APPEND file
+      const dwPath = join(tmpDir, '.arete', 'skills-local', 'daily-winddown.md');
+      const userContent = '# Daily Winddown — your context\n\n## My MCPs\n- Slack MCP\n- GWS Calendar\n';
+      writeFileSync(dwPath, userContent, 'utf8');
+
+      // Run update
+      runCli(['update', '--skip-qmd', '--json'], { cwd: tmpDir });
+
+      // User content preserved verbatim
+      const after = readFileSync(dwPath, 'utf8');
+      assert.equal(
+        after,
+        userContent,
+        'user-edited APPEND file must be preserved on update',
+      );
     });
   });
 });

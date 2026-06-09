@@ -1,18 +1,34 @@
 ---
 title: "Areté v2: chef-orchestrator architecture"
 slug: arete-v2-chef-orchestrator
-status: drafting (revised post-review 2026-05-01)
+status: live (revised 2026-05-28 — cross-skill chef extension)
 size: xlarge
-tags: [v2, architecture, memory, chef-orchestrator, summaries, skills, simplification]
+tags: [v2, architecture, memory, chef-orchestrator, summaries, skills, simplification, cross-skill]
 created: "2026-05-01"
-updated: "2026-05-01 evening — post independent review"
+updated: "2026-05-28 — cross-skill reframe per user spec; Phase 5 subsumed, Phase 7/8/9 added"
 execution: meta-orchestrator (parent) + sub-orchestrators per phase
 has_review: true
 has_pre_mortem: true
 has_prd: false
-phases: 7 (Phase 0–5 + Phase 6 conditional)
-review_verdict: REVISE BEFORE BUILD — addressed in this revision
+phases: 9 (Phase 0–4 shipped; 5 subsumed; 6 conditional; 7–8 new; 9 deferred)
+review_verdict: APPROVE WITH MINOR CONCERNS (review-2 2026-05-01); 2026-05-28 cross-skill extension pending its own phase plans
+inputs:
+  - inputs/daily-winddown-unification-spec.md (user-supplied 2026-05-28; drives Phase 7/8 scope)
 ---
+
+## 2026-05-28 reframe
+
+User design spec (`inputs/daily-winddown-unification-spec.md`) reframes the chef-orchestrator pattern from "one chef per skill" to "one chef across skills." The day is a ledger of *loops* (intent/commitment/question/decision with source, counterparty, timestamp, state). Multiple sources (slack/email/calendar/jira/meetings/commitments) emit loops into one ledger; a reconciliation pass matches intents to fulfilling actions across sources and time before staging anything for user review.
+
+This extends the original v2 thesis. Today's chef ("do all work then engage once") still stops at skill boundaries — slack-digest engages independently, email-triage engages independently, daily-winddown engages independently. Across-skill orchestration is the unfinished promise.
+
+Concrete consequence on the phased rollout:
+
+- **Phase 5 (`meeting extract` decomposition) is subsumed** into the new Phase 7. The decomposition spirit (literal extract + orchestrator-driven judgment) IS the gather-only pattern; rather than decomposing only `meeting extract`, Phase 7 documents gather-only mode as a chef pattern and adds CLI verbs for slack-digest + email-triage in the same shape.
+- **Phase 6 (schema layer) consumer story sharpens.** The loop reconciler is a strong potential consumer of state.json. Phase 6 stays conditional, but the "what consumer needs this?" answer now has a real candidate.
+- **New Phase 7 — Cross-skill foundations (Slice A).** Gather-only CLI verbs; `jira_epics:` area frontmatter + `arete area epics` helper; `arete people show --channels` helper; PATTERNS.md "gather-only composition" sub-mode. Pure additions composable by Phase 8 and beyond.
+- **New Phase 8 — Loop reconciler (Slice B).** Rules 1-3 from the spec (intent→fulfillment, intent→scheduled event, action moot post-event). Daily-winddown becomes the canonical cross-skill orchestrator. "Closed today" narrative section.
+- **Deferred Phase 9 — Item supersede across meetings (Slice C).** Rule 4 from the spec (learning/decision corrected/voided by later meeting). Heaviest judgment; needs Phase 7/8 to soak first.
 
 # Areté v2: chef-orchestrator architecture
 
@@ -33,14 +49,20 @@ Areté has evolved with ups and downs and feels overcomplicated to John (its bui
 
 Four research subagents ran on 2026-04-30 to ground the v2 conversation in data, not vibes. Findings are in the diary. Headlines: the "10 cooks" feeling has a specific source (post-approval topic integration runs N×M Sonnet calls importance-blind); a `grep importance|priority` across the post-commit pipeline returns zero hits (signals captured at extraction, dropped at commit); `meeting extract` smuggles 5 judgment calls into one CLI invocation; storage fan-out has one true duplicate (`frontmatter.approved_items`).
 
-## Vision: chef-orchestrator
+## Vision: chef-orchestrator (with cross-skill extension per 2026-05-28 reframe)
 
 Today's pattern: subagents and CLI commands do extraction + judgment in opaque LLM calls. The orchestrator (chat agent) glues outputs together. The user reviews flat firehoses.
 
-v2 pattern:
+v2 pattern (Phases 0-4 + 3.5 shipped):
 - **CLI primitives**: literal extraction (what was said, decided, committed to), fetch from sources, store to memory, query existing state. Minimal LLM judgment.
 - **Chat agent (the chef)**: applies judgment with full context — priorities, recent dismissal patterns, importance scores, conflicts with stated focus. Stages a curated set of items per source.
 - **User**: reviews exceptions and proposals, not firehoses. Could-include / pruning candidates / deferred surfaces give visibility without burden.
+
+v2 pattern extension (Phases 7-9 per 2026-05-28 reframe):
+- **Gather-only chef pattern**: each chef skill exposes its extractor as a CLI verb (`arete <skill> extract --json`) returning structured loops without engaging the user. Standalone skill prose still works; calling the verb from another orchestrator composes them.
+- **The day as a ledger of loops**: meetings + slack + email + calendar + jira + commitments emit loops (intent/commitment/question/decision with source, counterparty, timestamp, state) into one ledger.
+- **Reconciliation pass before staging**: a chef agent matches intents to fulfilling actions across sources and time, collapsing closed loops into a "Closed today" trace. Survivors reach the user; nothing already resolved does.
+- **One engagement per day, not per source**: daily-winddown becomes the cross-skill chef. Slack-digest/email-triage continue to work standalone; called from winddown they extract-only and feed the ledger.
 
 ## Principles
 
@@ -53,6 +75,8 @@ v2 pattern:
 7. **Substrate sunset rule (added post-review).** Every new substrate (events.jsonl, state.json, .agents/skills, etc.) ships with an explicit "fail to ship" criterion: if N consumers haven't migrated to it within the next 2 phases, the substrate is reverted, not extended.
 8. **Baseline before architecture (added post-review).** No phase that touches code ships before AC10's baseline (median winddown time today) is measured. Otherwise the win condition is unfalsifiable.
 9. **Skeptical-counterweight (added post-review).** Every phase plan includes an "if-I-were-skeptical" section listing the strongest case for *not* shipping that phase. Meta-orchestrator reads it back at /review. This is the structural antidote to the builder-also-being-the-user enthusiasm bias.
+
+10. **Gather-only composition (added 2026-05-28).** Every chef skill exposes its extractor as a CLI verb returning structured output without engaging the user. The standalone skill calls the verb + engages; an orchestrator calls the same verb and composes. Single source of truth = the CLI verb logic. This is what makes cross-skill orchestration tractable without forking extraction logic.
 
 ## Phased rollout (revised twice — post-first-review + post-absorption-principle)
 
@@ -218,59 +242,214 @@ Phase 2 plan must pick one of the following resolutions and document it:
 
 ### Phase 4 — Skills audit + chef-pattern propagation (`phase-4-skills-audit/`)
 
-**Why fifth**: with the chef-pattern proven on the five Phase 2 skills and the directory split in place (Phase 3), audit the remaining shipped runtime skills and apply the chef pattern where it fits. This is also where remaining `pull-from-*` skills get summary writers per the absorption principle (Phase 1's writers covered meetings + inbox + slack; Phase 4 wires the rest).
+**Why fifth**: with the chef-pattern proven on the five Phase 2 skills and the directory split in place (Phase 3), audit the remaining shipped runtime skills, apply the chef pattern where it fits, **demote to CLI commands where the skill is just a wrapper**, drop where it's unused.
 
-**Scope** (per-skill verdicts produced by audit):
-- `slack-digest`, `inbox-triage`, `email-triage`, `email-search` — apply chef pattern; rewrite as customizable templates.
-- PM artifacts (`create-prd`, `discovery`, `pre-mortem`, `review-plan`, `synthesize`, `construct-roadmap`, `competitive-analysis`) — apply chef pattern (do-all-work-then-engage) where the user-felt step-by-step pain exists; otherwise leave as-is.
-- `pull-from-notion`, `pull-from-fathom`, etc. — wire summary writers per Phase 1 absorption table for any source type that should produce a summary.
-- `getting-started`, `workspace-tour`, `rapid-context-dump`, `save-meeting`, `capture-conversation` — likely stay Core-as-shipped (true universal primitives).
-- Skills with no clear chef-pattern fit, no active usage, and no upstream-update story — drop.
+#### Three dispositions per skill (added 2026-05-05 from user input)
 
-**Removes**: per-audit findings; expected to remove 4–8 skills outright that nobody (including John) uses.
+The original Phase 4 framing had two outcomes: apply chef pattern, or drop. User feedback during Phase 2 soak surfaced a missing third disposition:
 
-**Skeptical view**: "Audit phases drift into make-work. Without specific user pain to fix, the audit produces churn." **Counter**: the audit is bounded — produce a verdict per skill in 1–2 days, then apply patterns to the agreed subset over 5–7 days. If the verdict for a skill is "leave alone," that's a valid outcome.
+> Skills earn their existence when (a) they orchestrate multi-step judgment, OR (b) they have user-tunable prose that affects behavior. Skills are bloat when they're 1:1 with a CLI command, when their user-customizable bit is a config file rather than the prose, or when they're shims around external tooling.
 
-**Rollback**: per-skill, since each skill is rewritten independently.
+So Phase 4 produces a per-skill verdict from this disposition table:
 
-### Phase 5 — `meeting extract` decomposition (`phase-5-meeting-extract-decomposition/`)
+| Disposition | When | What happens |
+|---|---|---|
+| **Apply chef pattern** | User-tunable workflow with multi-step judgment | Rewrite as chef-pattern skill following Phase 2 PATTERNS.md envelopes; preserve `SKILL.legacy.md` per Phase 2 MC2 pattern |
+| **Demote to CLI** | 1:1 with an existing CLI verb, or pure wrapper around an integration/MCP, or user-customizable bit lives in a config file (not prose) | Remove the skill; expose the underlying CLI verb as the user surface; if the skill carried policy-as-config, keep the config file alongside the CLI verb |
+| **Drop** | Unused (no John invocation, no other-skill invocation), no upstream-update story | Delete the skill outright |
+| **Leave as-is** | True universal primitive that doesn't benefit from chef pattern | No action |
 
-**Why sixth (was Phase 3b)**: largest blast radius in v2. Decomposes `meeting extract` into literal-content extraction + orchestrator-driven judgment. **Ships only after Phase 2 chef pattern soaks** so the orchestrator-driven judgment surface is stable.
+#### Pre-identified candidates (from 2026-05-05 conversation)
+
+Sub-orch validates each at audit time; this is starting input, not final verdict.
+
+**Demote to CLI:**
+- `pull-from-krisp`, `pull-from-fathom`, `pull-from-notion`, `pull-from-doc`, `pull-from-drive`, `pull-from-email` — pure integration shims; `arete pull <integration>` already exists
+- `save-meeting` — single ingest; becomes `arete meeting save` (or extend existing `meeting add`)
+- `email-search`, `drive-search`, `doc-search` — query primitives
+- `calendar` — `arete calendar create / find / availability` already exists; skill is a wrapper
+- `people-intelligence` — **confirmed by John never invoked directly via `/people-intelligence`** (2026-05-05). Becomes `arete people intelligence digest` (or already is — verify). Policy file at `context/people-intelligence-policy.json` stays as user-tunable config
+
+**Apply chef pattern (already user-customizable workflows):**
+- `inbox-triage` — routing rules + "important" definitions are personal
+- `email-triage` — same
+- `slack-digest` — split: pull-from-slack as CLI; user-tunable digest workflow (with `significance_analyst` rules) as chef-pattern skill
+- `schedule-meeting` — orchestrates calendar primitive + context + communication; user has preferences
+
+**PM artifacts (case-by-case):**
+- `create-prd`, `discovery`, `pre-mortem`, `review-plan`, `synthesize`, `construct-roadmap`, `competitive-analysis` — apply chef pattern where user-felt step-by-step pain exists; otherwise leave as-is
+
+**Leave as-is (true universal primitives):**
+- `getting-started`, `workspace-tour`, `rapid-context-dump`, `capture-conversation`
+
+**Already covered by Phase 2** (skip in Phase 4 audit):
+- `daily-winddown`, `weekly-winddown`, `week-plan`, `process-meetings`, `meeting-prep`
+
+#### Scope notes
+
+- For **Demote to CLI**, the corresponding CLI verb must already exist (or be added in Phase 4). Audit: does `arete pull krisp` actually do what `pull-from-krisp` skill described? If not, gap-fill the CLI before removing the skill.
+- For **Apply chef pattern**, follow Phase 2's MC2 ship gate: per-skill `SKILL.legacy.md` + `ARETE_LEGACY_SKILL_PROSE` flag routing. Same legacy sunset path per MC5.
+- For **Drop**, surface the deletion in the Phase 4 review. If anything in PATTERNS.md or other skills refers to a dropped skill, update the references.
+- The `pull-from-*` skill removals also tie back to Phase 1's absorption principle: when a `pull-from-X` flow becomes a primary-ingest path that should produce a summary, wire the summary writer at the CLI layer (not the skill).
+
+#### Removes
+
+Expected scope of removals (sub-orch validates):
+- 6+ `pull-from-*` skills demoted to existing CLI verbs
+- 4–6 search/query skills demoted to CLI
+- 1–2 wrapper skills (`calendar`, possibly `save-meeting`) dropped
+- 0–4 skills dropped outright as unused
+- Estimated 12–18 skill files removed from `packages/runtime/skills/`
+
+This is a substantial AC8-ledger remove — pulls Phase 1's +8 ledger materially closer to ≤0 across phases.
+
+**Skeptical view**: "Audit phases drift into make-work. Demoting to CLI risks losing useful prose context that the agent benefits from when invoked via `/<name>`." **Counter**: the demotion criterion is specific (1:1 with CLI, config-not-prose customization, integration shim). Where prose is genuinely load-bearing, the disposition is "apply chef pattern," not "demote." Each demotion ships with explicit verification: the corresponding `arete X` CLI invocation actually produces the same outcome the deleted skill prose orchestrated.
+
+**Rollback**: per-skill, since each disposition is independent.
+
+### Phase 5 — `meeting extract` decomposition — **SUBSUMED into Phase 7 (2026-05-28)**
+
+**Status**: subsumed. The 2026-05-28 cross-skill reframe makes "decompose meeting extract" a special case of "gather-only mode for chef skills." Rather than a standalone meeting-only decomposition, Phase 7 documents the gather-only pattern in PATTERNS.md and adds verbs for slack-digest + email-triage + (when relevant) meeting in the same shape.
+
+The original Phase 5 removals (items that should NOT survive once meeting extract is gather-only) carry forward into Phase 7's "Removes" — `meeting-parser.ts` regex, `brief --for` LLM branch, `search --answer` LLM branch, `memory refresh` synthesis pipelines, three context-bundle services collapse, `route` CLI command. Phase 7 plan inherits these.
+
+**What's preserved**: the CLI primitives originally proposed (`arete propose decision|learning|action --target`, `arete diff staged-vs-committed`, `arete commitments history --since`) are recast as gather-only outputs from the new verbs. If they prove load-bearing after Phase 7's gather-only pattern lands, they become Phase 7.5 commits.
+
+**Hygiene reconciliation** (carried forward to Phase 7): `brief --for`, `search --answer`, `daily`, `meeting-parser.ts` confirmed NOT removed by hygiene-pass-1. Phase 7 owns these.
+
+### Phase 7 — Cross-skill foundations / Slice A (`phase-7-cross-skill-foundations/`)
+
+**Why next (added 2026-05-28)**: prerequisite for Phase 8's loop reconciler. Pure additions, no behavior change for the user yet — but other tools can compose them. Also absorbs Phase 5's `meeting extract` decomposition spirit (gather-only mode for chef skills replaces the standalone decomposition framing).
 
 **Scope**:
-- `meeting extract` shrinks to literal-content extraction only. Removes mode-picking, topic-picking, core/could-include separation, and reconciliation from the CLI. (Phase 1's summary writer already replaces the post-call-email and FYI shape; that's a big chunk of what `meeting extract` does today.)
-- New CLI primitives the orchestrator calls explicitly: `arete propose decision|learning|action --target ...`, `arete diff staged-vs-committed`, `arete commitments history --since <window>`.
-- Process-meetings skill (rewritten in Phase 2) updated to call the new primitives instead of the monolithic extract.
+
+**(a) Gather-only CLI verbs for chef skills.** Each chef-pattern skill that today engages the user gets a sibling `extract` verb returning structured loops (or whatever the skill's output unit is) as JSON, without engaging. Standalone skill prose calls the verb + engages; orchestrators call the verb and compose:
+- `arete slack-digest extract --window 1d --json` → returns structured loops + closure-evidence candidates
+- `arete email-triage extract --window 1d --json` → same
+- `arete meeting extract --json` (already exists; gets a `--gather-only` mode that returns loops without staging into frontmatter)
+- `arete calendar pull --created-today --json` AND `arete calendar pull --next 30d --json` (per spec D9 — two queries, different scopes)
+- `arete jira pull --watchlist --json` (consumes the `jira_epics:` watchlist from (b))
+
+**(b) Jira watchlist in area frontmatter.** `areas/<slug>.md` frontmatter gets `jira_epics: [PLAT-11014, PLAT-10025, ...]`. New helper:
+- `arete area epics --active --json` → returns union of jira_epics across `status: active` areas.
+
+Why area frontmatter (per spec Q2 analysis): areas are the operational rollup; epics span multiple projects; multiple chef skills will want this watchlist. Project README is too narrow; winddown APPEND is workspace-private and per-skill.
+
+**(c) Cross-source identity resolution helper.** Extends `arete people show` with a `--channels` flag:
+- `arete people show <slug> --channels --json` → returns `{slug, name, email, alt_emails[], slack_handle, slack_user_id, ...}` from the existing `people/internal/<slug>.md` frontmatter.
+
+Per spec Q3 analysis: `arete resolve` resolves text→slug; reconciler needs the reverse (slug→all known channels). Today the data exists in people frontmatter but no helper exposes it.
+
+**(d) PATTERNS.md "gather-only composition" sub-mode.** New section in `packages/runtime/skills/PATTERNS.md` documenting the gather-only pattern as a chef-orchestrator sub-mode: when to use, how to expose, how callers compose. Becomes the architectural anchor for Phase 8's reconciler.
+
+**(e) Phase 5 absorbed removes.** Phase 5's deletion list survives the subsumption — they're targets for Phase 7 sweep where compatible:
+- `meeting-parser.ts` regex (re-parses what extraction produced)
+- `brief --for` LLM branch
+- `search --answer` LLM branch
+- `daily` CLI command (already deferred per parent-plan note)
+- `memory refresh` synthesis pipelines (split: keep mechanical; drop embedded LLM synthesis)
+- Three context-bundle services collapse to one
+- `route` CLI command pending review
+
+Phase 7 build sub-orch validates each — some may have crept into active use during followups 1-5 and need re-evaluation. Sub-orch surfaces verdict per-item before deletion.
 
 **Removes**:
-- `meeting-parser.ts` regex (re-parses what extraction produced).
-- `brief --for` LLM branch.
-- `search --answer` LLM branch.
-- `daily` CLI command.
-- `memory refresh` synthesis pipelines (split: keep mechanical bits — index, log, byte-equal CLAUDE.md regen — drop embedded LLM synthesis).
-- Three context-bundle services collapse to one (`context.ts`, `meeting-context.ts`, `intelligence.ts`).
-- Backend `/areas` and `/calendar` endpoints (no consumer).
-- `route` CLI command pending review.
+- The "5 separate digests" surface — slack-digest still works standalone, but invoked from winddown it extracts-only (no separate engagement)
+- The above Phase 5 deletion list (where validated)
+- The `meeting extract` monolith's hidden judgment (mode-picking, topic-picking, core/could-include separation) — refactored into gather-only output that the chef judges
 
-**Hygiene reconciliation**: items `brief --for`, `search --answer`, `daily`, `meeting-parser.ts` are confirmed NOT removed by hygiene-pass-1 (verified post-merge 2026-05-01). Phase 5 owns these. `ContextService.getContextForSkill` was removed by hygiene; the three-bundle collapse here addresses what remains.
+**A/B/C answers locked here** (from spec Q1–Q3):
+- Gather-only is documented in PATTERNS.md as Pattern 5
+- Reconciler stays agent-judgment (no new CLI primitive yet) — see Phase 8
+- DRY via shared CLI verbs (the gather-only output IS the shared truth)
+- `jira_epics:` in area frontmatter
+- `arete people show --channels` for identity
 
-**Skeptical view**: "This touches every meeting John processes. Subtle behavior change in extraction quality cascades into bad summaries, bad memory items." **Counter**: 2-week soak after Phase 2; A/B against current pipeline on 5 meetings before declaring acceptable. AC11 hard stop applies. Mitigation: feature flag `ARETE_LEGACY_EXTRACT=1` for emergency revert during soak.
+**Skeptical view**: "Phase 7 ships substrate that has no immediate user-visible win. Standalone skills work the same; the new verbs sit unused until Phase 8 calls them. Could be a phase that ships and then we lose momentum before Phase 8 starts." **Counter**: Phase 7 is the cheapest path to Phase 8 — without gather-only verbs, Phase 8's reconciler has nothing to consume. Splitting the work is the only way Phase 8 stays scoped. Mitigation: Phase 7 and Phase 8 sequence with no buffer between them; ship Phase 7, then immediately scope Phase 8.
 
-**Rollback**: heavier than other phases. Decomposition is reversible only via revert; CLI primitives stay (backward-compat). Phase 5 plan must include explicit rollback steps and the legacy-extract feature flag.
+**Rollback**: pure additions; revert per-commit. No existing behavior changes (standalone skills are untouched).
+
+### Phase 8 — Loop reconciler / Slice B (`phase-8-loop-reconciler/`)
+
+**Why eighth (added 2026-05-28)**: this is where the user-felt win lands per the spec. Daily-winddown becomes the canonical cross-skill chef. Closes the "3 of 5 hand-skipped action items" failure mode the spec documents on `2026-05-28-john-nate-pre-runyon-checkin`.
+
+**Scope** (rules 1-3 from spec; rule 4 deferred to Phase 9):
+
+**(a) New daily-winddown pipeline**:
+```
+GATHER (parallel via Phase 7 gather-only verbs)
+  slack-digest extract · email-triage extract · meeting extract (gather-only)
+  · calendar pull (--created-today + --next 30d) · jira pull --watchlist
+  · commitments list · week.md read
+        ↓
+RECONCILE (the gate — agent judgment in-context, no new CLI primitive)
+  unify identities via `arete people show --channels` cache
+  → order loops by timestamp
+  → apply the three skip rules (below)
+  → conservative collapse: concrete evidence only; fuzzy → Uncertain tier
+        ├── closed/superseded → "Closed today" narrative section (trace source→fulfillment)
+        ├── survivors         → staged into existing meeting-review UI
+        └── fuzzy             → ## Uncertain — your call (chat)
+        ↓
+ENGAGE ONCE
+```
+
+**(b) The three skip rules** (rule 4 deferred to Phase 9):
+1. **Intent → fulfilling action elsewhere.** "Confirm with Lindsay X" + a DM to Lindsay doing exactly that → closed. Bonus: detect her reply.
+2. **Intent → already-scheduled event.** "Meet with Nick & Anthony" + a calendar invite with them already exists → closed; the event IS the fulfillment.
+3. **Action moot — its event already passed.** Prep item for an event that has now occurred → moot. (Cheapest rule — just compare timestamps.)
+
+**(c) "Closed today" narrative section.** Required by spec D2. Every collapsed loop traces source → fulfillment in 1-2 lines:
+> *"You promised Anthony X in the morning Comms WG. Sent via Slack 11:42a ✓"*
+> *"Action item from Nick standup: 'meet with Nick & Anthony to review prototype.' Calendar invite already exists for Fri 2p ✓"*
+
+**(d) Conservative collapse**: only on concrete evidence (real invite/message/ticket; matching counterparty + topic + same-or-later timestamp). Anything fuzzy goes to `## Uncertain` for user judgment.
+
+**(e) Closure detection**: per spec D6, "you acted = done" by default. Fire-and-forget closes on send; blocking question closes on send but drops a light "waiting on \<person\>" only if an answer is needed to unblock. Detect actual reply when present.
+
+**Removes**:
+- The "hand-skip 3 of 5 action items because they're already done" daily user-time drain
+- 4+ separate engagement surfaces (slack, email, meeting-review UI, post-extract review) collapse to one
+
+**Substitution argument for AC8**: this is the keystone "across-skill chef" extension. Adds the reconciler (agent-judgment, not new code substrate) and the new daily-winddown pipeline. Net code LOC change is small (the heavy lifting is prose in SKILL.md + cross-source helpers added in Phase 7). The substitution: chef engages once across all sources, replacing N independent engagements.
+
+**Skeptical view**: "Silent drop of a real obligation is the catastrophic failure mode. The conservative-collapse threshold and Uncertain-tier fallback help, but the agent will be wrong sometimes. Trust takes weeks to earn back if it surfaces as 'I told you that already happened, why didn't you remember?' from the user." **Counter**: D1 (concrete evidence only) + D2 ("Closed today" traces every collapse) are the safety net. Mitigation: AC11 hard stop applies; if closed-today traces show >1 silent drop per week during 2-week soak, revert to non-reconciler winddown.
+
+**Gate-vs-stretch criteria (MC1)**:
+- Rules 1, 2, 3 are gates
+- "Closed today" narrative section is a gate (visibility into what was collapsed — D2 is the safety net)
+- Closure detection (reply detection in slack/email) is stretch — ship rule-1 with "sent" as the closure signal first; reply detection adds nuance if soak warrants
+
+**Rollback**: feature flag `ARETE_LEGACY_DAILY_WINDDOWN=1` reverts to non-reconciler pipeline (pre-Phase-8 prose). Reconciler is agent-judgment so revert is prose-only; per Phase 3.5 followup-4 pattern this is a clean `git revert` path.
+
+### Phase 9 — Item supersede across meetings / Slice C (deferred, `phase-9-item-supersede/`)
+
+**Status**: deferred until Phase 8 soaks. Spec rule 4: "Item superseded by a later item. A learning/decision from meeting 1 corrected or voided by meeting 2 → only the corrected version survives. Applies to ALL item types — tasks, commitments, decisions, AND learnings."
+
+**Why deferred**: judgment-heavy and depends on the wiki being in better shape (the followup-5 work improves this; ongoing). Rules 1-3 in Phase 8 are about *fulfillment* (concrete evidence: invite exists, message sent, event passed). Rule 4 is about *correction* (learning A says X; learning B says ~X) which requires either a strong wiki state for the LLM to compare against, OR a typed schema layer (Phase 6) for explicit conflict detection.
+
+If Phase 8 ships and rule 4 still feels load-bearing after 2 weeks of soak, draft Phase 9. If the wiki + Phase 8 reconciler together feel sufficient, Phase 9 stays deferred indefinitely.
 
 ### Phase 6 — Schema layer (conditional, `phase-6-schema-layer/`)
 
-**Why conditional**: the original parent plan had this as the keystone. The independent review correctly noted that Phase 2/5 can be done by reading markdown directly. Phase 6 ships ONLY IF Phase 2 and Phase 5 retros surface specific consumer-needs the schema layer fills, named explicitly. If those consumers don't materialize, Phase 6 is dropped — that's the substrate sunset rule (Principle 7) in action.
+**Why conditional**: the original parent plan had this as the keystone. The independent review correctly noted that Phase 2/5 can be done by reading markdown directly. Phase 6 ships ONLY IF Phase 2/7/8 retros surface specific consumer-needs the schema layer fills, named explicitly. If those consumers don't materialize, Phase 6 is dropped — that's the substrate sunset rule (Principle 7) in action.
+
+**2026-05-28 update**: Phase 8's loop reconciler is the strongest potential consumer of `state.json` — typed active-loops state would let the reconciler avoid re-parsing markdown sources on every run. If Phase 8 ships with agent-judgment reconciler (per D7) and the agent's judgment proves consistent across 30+ days, that's evidence for OR against Phase 6. Specifically:
+- If agent runs are slow / expensive: Phase 6's typed state.json speeds reconciliation. SHIPS.
+- If agent runs are fast enough but reconciler logic is stable: Phase 6 codifies the stable shape as types. CONDITIONAL.
+- If agent judgment varies run-to-run on the same inputs: schema layer adds rigor. SHIPS.
+- If everything works fine with markdown re-parse: substrate sunset rule says DROP.
 
 **If shipped, scope**:
-- `.arete/memory/state.json` — derived snapshot of current commitments, active topics, week focus, capacity, attention scores. Regenerated from markdown sources + the item-fates.jsonl already produced by Phase 0.
+- `.arete/memory/state.json` — derived snapshot of current commitments, active topics, week focus, capacity, attention scores, **active loops (per Phase 8)**. Regenerated from markdown sources + the item-fates.jsonl already produced by Phase 0.
 - `arete state` CLI primitive.
-- (Possibly) `events.jsonl` if state.json alone isn't enough for the consumer needs Phase 2/5 retros surfaced.
+- (Possibly) `events.jsonl` if state.json alone isn't enough for the consumer needs Phase 2/7/8 retros surfaced.
 
 **Removes** (if shipped):
 - `task-scoring.ts` re-derivation at retrieval — scores live in state.json.
 - Week-priority prose-parsing in `task-scoring.ts:271`.
 - Multiple ad-hoc "what's open with this person" queries — replaced by state.json read.
+- Phase 8's per-run loop-ledger reconstruction — read from state.json instead.
 
 **Skeptical view (required if shipping)**: "What if state.json becomes the third copy of data we feared, and consumers keep falling back to markdown re-parsing because the shape is wrong on first cut?" **Counter**: defined sunset criterion. If the migration checklist ("delete these N consumers when state.json ships") isn't met within Phase 6, state.json is reverted, not extended.
 
@@ -289,7 +468,7 @@ These are the cross-cutting ACs the parent plan owns. Phase plans define impleme
 | **AC1** (revised): The daily winddown primary view is **observably importance-ordered** — high-importance items surface first; low-importance / matched-dismissal-pattern items are auto-deferred to sidecar. | User review on 10 consecutive winddowns; subjective "did the right things surface?" pass on each |
 | **AC2**: Approved decisions/learnings appear in **at most 2 places** (body section + `memory/items/*.md`); `frontmatter.approved_items` is gone | Test + manual inspection of a fresh-meeting commit |
 | **AC3** (revised): Topic-page integration LLM cost drops by ≥60% on **both** a typical day (~4 meetings) **and** a heavy day (≥7 meetings). Both measurements required. | Cost telemetry; A/B against Phase 0 baseline; one of each day type |
-| **AC4** (revised): Daily winddown primary view ≤25 lines AND has reason label on every staged item AND every deferred-tier item AND a non-empty pruning-candidates section on at least 60% of days | Manual review on 10 consecutive days; quality floor not just length cap |
+| **AC4** (revised post-Phase-2 design): Every staged item has a reason label; every deferred item has a reason label; when uncertain, the agent surfaces a small `## Uncertain — your call` tier rather than guessing. **No length cap** — chef judgment determines what surfaces. (Earlier draft had ≤25 line cap; replaced because hard caps are a forcing function inconsistent with judgment-driven curation. The "skim-able" property comes from clear sections + reason labels + APPEND-file context, not artificial caps.) | Manual review on 10 consecutive winddowns; subjective "did the right things surface, with the right reasons?" pass on each |
 | **AC5**: User can `arete skill fork daily-winddown`, edit, and `arete update` (which refreshes `.arete/skills/`) without losing customizations | Integration test + manual upstream-merge dry run |
 | **AC6** (conditional, only if Phase 4 ships): User can `arete state` and get one read of "current state of my workspace" instead of N file parses, AND ≥3 consumers have migrated off ad-hoc parsing | CLI smoke test + grep check of consumer migration |
 | **AC7** (deferred — judgment substrate): N/A in v2 plan as revised; deferred to follow-up plan |
@@ -345,21 +524,27 @@ See `pre-mortem.md` for the full risk catalog. Top concerns at draft time:
 5. **Skills split breaks IDE adapters** — Cursor / Codex AGENTS.md path silently drops user customizations if adapter rendering is wrong. Mitigated by explicit adapter test in Phase 4 (capability probe + signature-level enforcement, same pattern as topic-wiki Step 9).
 6. **`week.md` semantics drift** — derived view vs hand-edited file is a known-hard split. Mitigated by sentinel-bracketed auto-sections (same pattern as person memory) so user edits and machine regen don't collide.
 
-## Phased rollout cadence (revised post-review)
+## Phased rollout cadence (revised 2026-05-28)
 
-Indicative; subject to phase-plan refinement. Phase 5 deferred to follow-up plan.
+Indicative; subject to phase-plan refinement. Actual wall times for shipped phases (recorded in diary) have been DRAMATICALLY shorter than estimates — autonomous meta+sub-orch pattern collapses build into minutes/hours, not days. Estimates below reflect the calendar/soak schedule, not wall-clock build effort.
 
-| Phase | Build | Soak | Total |
-|---|---|---|---|
-| 0 — Instrument + baseline | 1–2 days | 14 days (running data collection) | ~16 days |
-| 1 — Wiki expansion (summaries + entities + integration) | 14–18 days | 7 days | ~21–25 days |
-| 2 — Chef-orchestrator behavior rewrite | 10–14 days | 14 days (long soak — chef behavior is the dream) | ~24–28 days |
-| 3 — Skills directory split | 5–7 days | 5 days | ~12 days |
-| 4 — Skills audit + chef-pattern propagation | 7–10 days | 5 days | ~14 days |
-| 5 — `meeting extract` decomposition | 7–10 days | 14 days | ~24 days |
-| 6 — Schema layer (conditional) | 7–10 days | 7 days | ~17 days |
+| Phase | Status | Build | Soak | Total |
+|---|---|---|---|---|
+| 0 — Instrument + baseline | **shipped** (~64 min build) | actual: 1 hour | 14 days | done |
+| 1 — Wiki expansion | **shipped to parent** (~69 min build) | actual: 1.2 hours | pending main merge | parent-merge done |
+| 2 — Chef-orchestrator behavior rewrite | **shipped to parent** (~43 min build) | actual: 43 min | pending main merge | parent-merge done |
+| 3 — Skills directory split | **shipped to parent** (~41 min build) | actual: 41 min | pending main merge | parent-merge done |
+| 3.5 — Polish + followups 1-5 | **shipped to parent** (5 followups) | actual: spans 2 weeks of incremental commits | pending main merge | parent-merge done |
+| 4 — Skills audit + chef-pattern propagation | **shipped to parent** (~43 min build) | actual: 43 min | pending main merge | parent-merge done |
+| 5 — `meeting extract` decomposition | **SUBSUMED into Phase 7** (2026-05-28 reframe) | — | — | — |
+| 7 — Cross-skill foundations (Slice A) | **not started** | est. 2–4 hrs build | 3–5 day soak | ~5–7 days |
+| 8 — Loop reconciler (Slice B) | **not started; sequences after Phase 7** | est. 3–6 hrs build | 14 days (heavy soak — the user-felt dream) | ~14–16 days |
+| 9 — Item supersede (Slice C) | **deferred indefinitely** | — | — | only if Phase 8 soak shows need |
+| 6 — Schema layer (conditional) | **not started; conditional on Phase 7/8 retros** | est. 1–2 days build | 7 days | ~9 days |
 
-Total ~3.5–4 months end-to-end at sustainable pace. Slightly longer than original (~3) because Phase 1 grew to wiki-expansion-complete and Phase 2 is the orchestration rewrite (the user's dream), but the user-felt win lands earlier (end of Phase 2 ≈ ~Month 2).
+Sequencing rule per 2026-05-28 reframe: **Phase 7 → Phase 8 with no buffer** (Phase 7 is the substrate Phase 8 consumes; gap risks momentum loss). Phase 6 evaluated AFTER Phase 8 ships and soaks.
+
+User-felt cross-skill win lands at end of Phase 8 (the "auto-skip 3 of 5 already-resolved action items" experience from the spec's anchor example).
 
 ## Phase plan requirements (from second-pass review MC1–MC5)
 

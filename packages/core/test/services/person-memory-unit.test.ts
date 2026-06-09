@@ -370,6 +370,7 @@ describe('renderPersonMemorySection', () => {
         direction: 'supports',
         summary: 'Prefers microservices for new features',
         evidenceQuote: 'I think we should use microservices',
+        justification: 'Architectural philosophy, transfers.',
         source: 'weekly-sync.md',
         date: '2026-02-20',
       },
@@ -378,6 +379,7 @@ describe('renderPersonMemorySection', () => {
         direction: 'opposes',
         summary: 'Against monolith approach',
         evidenceQuote: 'Monolith is too risky',
+        justification: 'Position on architectural pattern, contestable.',
         source: 'arch-review.md',
         date: '2026-02-18',
       },
@@ -477,7 +479,7 @@ describe('renderPersonMemorySection', () => {
 
   it('renders all sections within a single AUTO_PERSON_MEMORY block', () => {
     const stances: PersonStance[] = [
-      { topic: 'api', direction: 'supports', summary: 'Likes REST', evidenceQuote: 'REST is great', source: 's.md', date: '2026-01-01' },
+      { topic: 'api', direction: 'supports', summary: 'Likes REST', evidenceQuote: 'REST is great', justification: 'API-design philosophy stance.', source: 's.md', date: '2026-01-01' },
     ];
     const actionItems: PersonActionItem[] = [
       { text: 'Do X', direction: 'i_owe_them', source: 'a.md', date: '2026-01-01', hash: 'h1', stale: false },
@@ -513,7 +515,7 @@ describe('renderPersonMemorySection', () => {
       { topic: 'pricing', count: 2, lastMentioned: '2026-02-10', sources: ['a.md'] },
     ];
     const stances: PersonStance[] = [
-      { topic: 'api', direction: 'concerned', summary: 'Worried about API costs', evidenceQuote: 'costs are high', source: 'sync.md', date: '2026-02-20' },
+      { topic: 'api', direction: 'concerned', summary: 'Worried about API costs', evidenceQuote: 'costs are high', justification: 'Pattern-level cost concern.', source: 'sync.md', date: '2026-02-20' },
     ];
     const health: RelationshipHealth = {
       lastMet: '2026-02-25',

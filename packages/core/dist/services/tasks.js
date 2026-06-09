@@ -418,6 +418,86 @@ export class TaskService {
         return { task: updatedTask, linkedCommitmentId, resolvedCommitment };
     }
     /**
+     * F1: mark open tasks complete by linked commitment id prefix.
+     *
+     * Used by CommitmentsService.resolve() to back-propagate commitment
+     * resolution onto the working surface (week.md / tasks.md) so the
+     * user's task checkboxes match commitments.json. Without this, a
+     * resolved commitment leaves its linked task open — the Cover Whale
+     * orphan class.
+     *
+     * Iterates both files, finds tasks with `@from(commitment:<prefix>)`,
+     * marks `[x]` + `@completedAt`. Does NOT call commitments.resolve();
+     * the caller (commitments.resolve itself) has already updated
+     * commitments.json. Already-completed tasks are skipped.
+     *
+     * Returns list of tasks that were marked complete (empty if none).
+     */
+    async completeTaskByCommitmentId(commitmentIdPrefix) {
+        const openTasks = await this.listTasks({ completed: false });
+        const matches = openTasks.filter((t) => t.metadata.from?.type === 'commitment' &&
+            t.metadata.from.id === commitmentIdPrefix);
+        if (matches.length === 0)
+            return [];
+        const today = new Date().toISOString().split('T')[0];
+        const completed = [];
+        // Group by file so we only read/write each file once even if a
+        // commitment has multiple linked tasks across different sections
+        // of the same file.
+        const byFile = new Map();
+        for (const task of matches) {
+            const arr = byFile.get(task.source.file) ?? [];
+            arr.push(task);
+            byFile.set(task.source.file, arr);
+        }
+        for (const [filePath, tasksInFile] of byFile) {
+            const lines = await this.readFile(filePath);
+            for (const task of tasksInFile) {
+                const section = findSection(lines, task.source.section);
+                if (!section)
+                    continue;
+                for (let i = section.start + 1; i < section.end; i++) {
+                    const parsed = parseTaskLine(lines[i]);
+                    if (parsed && !parsed.completed && computeTaskId(parsed.text) === task.id) {
+                        const newMetadata = { ...parsed.metadata, completedAt: today };
+                        lines[i] = formatTask(parsed.text, newMetadata, true);
+                        completed.push({ id: task.id, text: task.text });
+                        break;
+                    }
+                }
+            }
+            await this.writeFile(filePath, lines);
+        }
+        return completed;
+    }
+    /**
+     * F2 + FU3: returns the subset of `commitmentIdPrefixes` that are
+     * referenced by at least one OPEN task via `@from(commitment:<prefix>)`.
+     * Used by CommitmentsService.save() to refuse pruning commitments
+     * with live task references. Completed tasks with stale references
+     * are intentionally NOT counted — those references are historical
+     * and pruning the commitment leaves only a harmless dangling
+     * reference in a checked-off line.
+     *
+     * Batched (FU3): reads both task files ONCE regardless of how many
+     * prefixes are queried. Caller (save()) consults this once per write
+     * rather than once per prune-candidate.
+     */
+    async hasOpenTaskReferencesToCommitments(commitmentIdPrefixes) {
+        if (commitmentIdPrefixes.length === 0)
+            return new Set();
+        const lookup = new Set(commitmentIdPrefixes);
+        const openTasks = await this.listTasks({ completed: false });
+        const referenced = new Set();
+        for (const t of openTasks) {
+            const from = t.metadata.from;
+            if (from?.type === 'commitment' && lookup.has(from.id)) {
+                referenced.add(from.id);
+            }
+        }
+        return referenced;
+    }
+    /**
      * Uncomplete a task — change [x] back to [ ] and remove @completedAt.
      */
     async uncompleteTask(taskId) {
