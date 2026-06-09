@@ -39,7 +39,7 @@ purpose: Durable log of the autonomous overnight orchestration for John to revie
 | I-0 approach A (prose) | `agenda-synth-a` | dev | ✅ built + self-tested (commit `7b0fdf2f`) |
 | I-0 approach B (scaffold) | `agenda-synth-b` | dev | ✅ built (`24dbe667`/`2a38e922`/`4312af96`) — fixes the discussion-topics data gap via new extractors; **batch==single byte-identical by construction**; scaffolding still needs agent framing pass |
 | #2 planning | `issues-2-plan` | tech-lead | ✅ plan written (`6aabae61`) |
-| #2 Wave A (I-3/I-5/I-4-diag) | `fix-issues2-wave-a` | dev | 🔄 running |
+| #2 Wave A (I-3/I-5/I-4-diag) | `fix-issues2-wave-a` | dev | ✅ built (`bb25b2c1` I-3, `dc79fb6e` I-5) — I-4 diagnostic = working-as-designed (no code). 🔍 in review (scrutinizing I-3's unbounded bias list for token/cost blast) |
 | #2 Wave B (I-1/I-6) | `fix-issues2-wave-b` | dev | 🔄 running |
 
 Pending (spawn as upstreams report): reviewers for each build; I-0 generator+evaluator panel (after B reports); merges to main.
