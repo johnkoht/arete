@@ -13,6 +13,30 @@ export {
   formatAreaBriefMarkdown,
   formatMeetingBriefMarkdown,
 } from './brief-formatters.js';
+// Phase 9 follow-up — discussion-topics / next-focus extractors (qualitative
+// person-file signal the typed brief does not surface) + agenda scaffold.
+export {
+  extractDiscussionTopics,
+  extractNextFocus,
+} from './brief-assemblers.js';
+export type {
+  DiscussionTopicGroup,
+  NextFocusExtract,
+} from './brief-assemblers.js';
+export {
+  assembleAgendaScaffold,
+  renderScaffoldMarkdown,
+  classifySection,
+  splitOwed,
+} from './agenda-scaffold.js';
+export type {
+  AgendaScaffold,
+  ScaffoldSection,
+  ScaffoldCandidate,
+  AttendeeScaffoldInput,
+  TemplateInput,
+  AssembleScaffoldOptions,
+} from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
 export {

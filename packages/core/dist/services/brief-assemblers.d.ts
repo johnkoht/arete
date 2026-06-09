@@ -65,6 +65,34 @@ export declare function meetingsForPerson(index: MeetingIndexEntry[], personSlug
 export declare function meetingsForArea(index: MeetingIndexEntry[], areaSlug: string): MeetingIndexEntry[];
 /** Filter the meeting index by overlap with a group of attendee slugs. */
 export declare function meetingsForGroup(index: MeetingIndexEntry[], groupSlugs: string[], excludePath?: string): MeetingIndexEntry[];
+/** A group of discussion-topic questions under a `### Sub-heading`. */
+export interface DiscussionTopicGroup {
+    /** Sub-heading label, e.g. "Process & how we work together". */
+    label: string;
+    /** Verbatim bullet lines (without the leading "- "). */
+    questions: string[];
+}
+/**
+ * Extract the `## 1:1 Discussion Topics` section of a person file into its
+ * `### sub-heading` groups, each with its verbatim question bullets. Drops
+ * the leading italic helper line (`*Questions and ideas...*`). Returns []
+ * when the section is absent. Pure string op.
+ */
+export declare function extractDiscussionTopics(content: string): DiscussionTopicGroup[];
+/** A "Next 1:1 Focus" extract: the framing prose + the checkbox sweep items. */
+export interface NextFocusExtract {
+    /** First paragraph(s) of framing prose under the heading (capped). */
+    framing?: string;
+    /** Checkbox sweep items, verbatim (without the leading "- [ ] "/"- "). */
+    sweepItems: string[];
+}
+/**
+ * Extract the `## Next 1:1 Focus (...)` section of a person file: a short
+ * framing prose lead-in plus the checkbox "sweep" items (each often carrying a
+ * commitment id like `6a7f160f`). Returns undefined when the section is
+ * absent. Pure string op.
+ */
+export declare function extractNextFocus(content: string): NextFocusExtract | undefined;
 /**
  * Extract bullets from the `## Memory Highlights (Auto)` section of a person
  * file. Returns the bullets per sub-section (Asks/Concerns/Stances/etc.) in

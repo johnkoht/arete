@@ -161,6 +161,92 @@ export function meetingsForGroup(index, groupSlugs, excludePath) {
         return overlap.length >= 2;
     });
 }
+/**
+ * Extract the `## 1:1 Discussion Topics` section of a person file into its
+ * `### sub-heading` groups, each with its verbatim question bullets. Drops
+ * the leading italic helper line (`*Questions and ideas...*`). Returns []
+ * when the section is absent. Pure string op.
+ */
+export function extractDiscussionTopics(content) {
+    // Locate the discussion-topic section. Person files vary the heading:
+    //   "## 1:1 Discussion Topics", "## Standing 1:1 Discussion Prompts",
+    //   "## Discussion Topics/Prompts". Match any "Discussion (Topics|Prompts)".
+    const headingRe = /^##\s+[^\n]*Discussion\s+(?:Topics|Prompts)[^\n]*$/im;
+    const headingMatch = headingRe.exec(content);
+    if (!headingMatch)
+        return [];
+    const headingIdx = headingMatch.index;
+    const rest = content.slice(headingIdx);
+    const nextH2 = rest.slice(3).search(/\n##\s/);
+    const block = nextH2 >= 0 ? rest.slice(0, nextH2 + 3) : rest;
+    const groups = [];
+    // Shape A — `### ` sub-heading groups (Anthony-style). Split on each
+    // sub-heading up to the next `###`/`##` (or end of the bounded block). NOTE:
+    // a `(?=...|$)/gm` lookahead is WRONG — under the `m` flag `$` matches every
+    // line end and truncates the body to its first bullet. Bound on heading only.
+    const subRe = /^###\s+([^\n]+)\n([\s\S]*?)(?=\n###\s|\n##\s|$(?![\r\n]))/gm;
+    let m;
+    while ((m = subRe.exec(block)) !== null) {
+        const label = m[1].trim();
+        const questions = bulletLines(m[2]);
+        if (questions.length > 0)
+            groups.push({ label, questions });
+    }
+    if (groups.length > 0)
+        return groups;
+    // Shape B — flat bullets directly under the section heading, no sub-groups
+    // (Lindsay-style). Collect them into a single "Discussion prompts" group.
+    const bodyAfterHeading = block.replace(/^##[^\n]*\n/, '');
+    const flat = bulletLines(bodyAfterHeading);
+    if (flat.length > 0)
+        return [{ label: 'Discussion prompts', questions: flat }];
+    return [];
+}
+/** Collect "- " bullet text (sans prefix) from a block, dropping blanks. */
+function bulletLines(block) {
+    const out = [];
+    for (const line of block.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('- '))
+            continue;
+        const text = trimmed.slice(2).trim();
+        if (text)
+            out.push(text);
+    }
+    return out;
+}
+/**
+ * Extract the `## Next 1:1 Focus (...)` section of a person file: a short
+ * framing prose lead-in plus the checkbox "sweep" items (each often carrying a
+ * commitment id like `6a7f160f`). Returns undefined when the section is
+ * absent. Pure string op.
+ */
+export function extractNextFocus(content) {
+    const headingIdx = content.search(/^##\s+Next\s+1:1\s+Focus\b/im);
+    if (headingIdx < 0)
+        return undefined;
+    const rest = content.slice(headingIdx);
+    const nextH2 = rest.slice(3).search(/\n##\s/);
+    const block = nextH2 >= 0 ? rest.slice(0, nextH2 + 3) : rest;
+    const lines = block.split('\n').slice(1); // drop the heading line
+    const sweepItems = [];
+    const framingParas = [];
+    for (const raw of lines) {
+        const trimmed = raw.trim();
+        if (!trimmed)
+            continue;
+        const checkbox = trimmed.match(/^-\s*(?:\[[ xX]?\]\s*)?(.+)$/);
+        if (checkbox) {
+            sweepItems.push(checkbox[1].trim());
+        }
+        else if (!trimmed.startsWith('#') && !trimmed.startsWith('>')) {
+            // Treat **bold** lead lines + plain prose as framing.
+            framingParas.push(trimmed);
+        }
+    }
+    const framing = framingParas.length > 0 ? framingParas.join(' ').slice(0, 600) : undefined;
+    return { framing, sweepItems };
+}
 export function extractMemoryHighlights(content) {
     const empty = {
         asks: [],
