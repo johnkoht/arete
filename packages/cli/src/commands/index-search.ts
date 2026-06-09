@@ -100,7 +100,7 @@ export function registerIndexSearchCommand(program: Command): void {
         }
       }
 
-      // Surface created/migrated collections
+      // Surface created/migrated/unverifiable collections
       for (const scope of result.scopes) {
         if (scope.migrated) {
           info(`Collection '${scope.collectionName}' re-created (stale path/pattern migrated)`);
@@ -109,6 +109,11 @@ export function registerIndexSearchCommand(program: Command): void {
         }
         if (scope.warning) {
           warn(scope.warning);
+        }
+        // W5: spec-unverifiable collections are surfaced (info-grade),
+        // not silently assumed OK.
+        if (scope.note) {
+          info(scope.note);
         }
       }
 

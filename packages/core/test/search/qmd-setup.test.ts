@@ -1197,7 +1197,7 @@ describe('ensureQmdCollections — stale collection migration', () => {
     }
   });
 
-  it('treats unparseable `collection show` output as matching (non-destructive)', async () => {
+  it('leaves unparseable `collection show` output alone but surfaces a note (W5)', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const prev = process.env.ARETE_SEARCH_FALLBACK;
     try {
@@ -1216,6 +1216,94 @@ describe('ensureQmdCollections — stale collection migration', () => {
         calls.some((c) => c.args[0] === 'collection' && c.args[1] === 'remove'),
         false,
       );
+      // Non-destructive, but NOT silent: an info-grade note is surfaced.
+      assert.match(memoryScope.note ?? '', /unverifiable/);
+      assert.match(memoryScope.note ?? '', /my-memory/);
+      // A positively-verified collection carries no note (contrast).
+      assert.equal(memoryScope.warning, undefined);
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+
+  it('surfaces a note when `collection show` itself throws (W5 unverifiable)', async () => {
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const base = makeCollectionsDeps({
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+      });
+      const deps: typeof base = {
+        ...base,
+        execFileAsync: async (file, args, opts) => {
+          if (args[0] === 'collection' && args[1] === 'show') {
+            throw new Error('show timed out');
+          }
+          return base.execFileAsync(file, args, opts);
+        },
+      };
+      const result = await ensureQmdCollections('/workspace', { memory: 'my-memory' }, deps);
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.created, false);
+      assert.match(memoryScope.note ?? '', /unverifiable/);
+      // Collection kept in config — still usable, just unverified.
+      assert.equal(result.collections.memory, 'my-memory');
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+
+  it('does NOT set a note when the spec is positively verified', async () => {
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await run({
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+        showOutputs: { 'my-memory': SHOW_CURRENT_MEMORY },
+      });
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.note, undefined);
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+
+  it('surfaces add-failure AFTER remove (migration loses the collection; config must not claim it)', async () => {
+    // wiki-repair W5 follow-up: the migration path removes the stale
+    // collection and re-creates it. If the re-create FAILS, the
+    // collection is GONE — the result must say so loudly (warning +
+    // migrated flag) and the collections map must NOT include the scope
+    // (writing the old name to arete.yaml would point at nothing).
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await run({
+        calls,
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+        showOutputs: { 'my-memory': SHOW_STALE_MEMORY },
+        addFailScopes: new Set(['memory']),
+      });
+
+      // remove ran, add ran and failed
+      assert.ok(calls.some((c) => c.args[0] === 'collection' && c.args[1] === 'remove'));
+      assert.ok(calls.some((c) => c.args[0] === 'collection' && c.args[1] === 'add'));
+
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.created, false);
+      assert.equal(memoryScope.migrated, true, 'migrated flag records the remove happened');
+      assert.match(memoryScope.warning ?? '', /add failed/);
+      // The collection no longer exists — config must not claim it does.
+      assert.equal(result.collections.memory, undefined);
     } finally {
       if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
       else process.env.ARETE_SEARCH_FALLBACK = prev;

@@ -125,6 +125,14 @@ export interface MeetingContextBundle {
       slug: string;
       sections: string;
       l2Excerpts: string[];
+      /**
+       * `last_refreshed` from the topic page frontmatter (wiki-repair
+       * W5): retrieval surfaces must show page age instead of serving a
+       * frozen page as current.
+       */
+      lastRefreshed?: string;
+      /** True when `last_refreshed` is more than 60 days old (or unparseable). */
+      stale?: boolean;
     }>;
   };
 }
@@ -985,7 +993,7 @@ export async function buildMeetingContext(
   };
 
   // 7. Topic-wiki context (delta-only extraction support)
-  const wiki = await buildTopicWikiContext(deps, paths, transcript);
+  const wiki = await buildTopicWikiContext(deps, paths, transcript, options.referenceDate);
   if (wiki.context) bundle.topicWikiContext = wiki.context;
   if (wiki.warning) warnings.push(wiki.warning);
 
@@ -1005,6 +1013,7 @@ async function buildTopicWikiContext(
   deps: MeetingContextDeps,
   paths: WorkspacePaths,
   transcript: string,
+  referenceDate?: Date,
 ): Promise<{ context?: TopicWikiContext; warning?: string }> {
   try {
     const { topics: allTopicPages } = await deps.topicMemory.listAll(paths);
@@ -1024,7 +1033,15 @@ async function buildTopicWikiContext(
     const learningsPath = join(paths.memory, 'items', 'learnings.md');
     const decisionsPath = join(paths.memory, 'items', 'decisions.md');
 
-    const detectedTopics: Array<{ slug: string; sections: string; l2Excerpts: string[] }> = [];
+    const detectedTopics: Array<{
+      slug: string;
+      sections: string;
+      l2Excerpts: string[];
+      lastRefreshed?: string;
+      stale?: boolean;
+    }> = [];
+    const now = referenceDate ?? new Date();
+    const STALE_DAYS = 60; // mirrors listTopicMemoryStatus staleDays default
     for (const slug of detectedSlugs) {
       const page = pageBySlug.get(slug);
       if (!page) continue;
@@ -1039,7 +1056,20 @@ async function buildTopicWikiContext(
         const content = item.content ?? '';
         return `${date}: ${content}`.trim();
       });
-      detectedTopics.push({ slug, sections, l2Excerpts });
+      // W5 staleness: carry last_refreshed so the injected wiki context
+      // shows page age (a 4/24-frozen page must not read as current).
+      const lastRefreshed = page.frontmatter.last_refreshed;
+      const refreshedDate = new Date(lastRefreshed);
+      const daysOld = Number.isNaN(refreshedDate.getTime())
+        ? Infinity
+        : Math.floor((now.getTime() - refreshedDate.getTime()) / (1000 * 60 * 60 * 24));
+      detectedTopics.push({
+        slug,
+        sections,
+        l2Excerpts,
+        lastRefreshed,
+        stale: daysOld > STALE_DAYS,
+      });
     }
 
     if (detectedTopics.length === 0) return {};

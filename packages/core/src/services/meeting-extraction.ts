@@ -691,6 +691,14 @@ export type TopicWikiContext = {
     slug: string;
     sections: string;
     l2Excerpts: string[];
+    /**
+     * `last_refreshed` from the topic page frontmatter (wiki-repair W5).
+     * Rendered under the `### [[slug]]` heading so the extraction LLM —
+     * and anyone reading the prompt — sees page age.
+     */
+    lastRefreshed?: string;
+    /** True when the page is >60 days old (or its date is unparseable). */
+    stale?: boolean;
   }>;
 };
 
@@ -715,7 +723,13 @@ export function buildTopicWikiContextSection(ctx?: TopicWikiContext): string {
 
   const blocks: string[] = [];
   for (const topic of ctx.detectedTopics) {
-    const lines: string[] = [`### [[${topic.slug}]]`, '', topic.sections];
+    // W5 staleness: show page age right under the heading. `(as of
+    // <date> — stale)` past 60 days, matching the brief surfaces.
+    const heading =
+      topic.lastRefreshed !== undefined && topic.lastRefreshed.length > 0
+        ? `### [[${topic.slug}]] (as of ${topic.lastRefreshed}${topic.stale === true ? ' — stale' : ''})`
+        : `### [[${topic.slug}]]`;
+    const lines: string[] = [heading, '', topic.sections];
     if (topic.l2Excerpts.length > 0) {
       lines.push('', 'Prior captured items for this topic:');
       for (const excerpt of topic.l2Excerpts) {
@@ -754,6 +768,8 @@ export function truncateTopicWikiContextToBudget(
       slug: t.slug,
       sections: t.sections,
       l2Excerpts: [...t.l2Excerpts],
+      ...(t.lastRefreshed !== undefined ? { lastRefreshed: t.lastRefreshed } : {}),
+      ...(t.stale !== undefined ? { stale: t.stale } : {}),
     })),
   };
 
