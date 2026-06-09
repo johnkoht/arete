@@ -397,6 +397,51 @@ Legacy-format fallback entry.
   });
 });
 
+describe('project name fallback (W6.3)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'brief-project-name-'));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  async function subjectFor(frontmatter: string): Promise<string> {
+    writeFile(
+      tmpDir,
+      'projects/active/status-letter-automation/README.md',
+      `---\n${frontmatter}\n---\n\n# Project\n\n## Background\nSome background.\n`,
+    );
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('status-letter-automation', paths);
+    return brief.subject;
+  }
+
+  it('prefers name: when present', async () => {
+    assert.equal(await subjectFor('name: Status Letters\ntitle: Other\nstatus: active'), 'Status Letters');
+  });
+
+  it('falls back to title: when name: absent', async () => {
+    assert.equal(await subjectFor('title: Status Letter Automation\nstatus: active'), 'Status Letter Automation');
+  });
+
+  it('falls back to project: when name:/title: absent (live README shape)', async () => {
+    assert.equal(
+      await subjectFor('project: status-letter-automation\ntype: definition\nstatus: active'),
+      'status-letter-automation',
+    );
+  });
+
+  it('falls back to slug when no naming key present', async () => {
+    assert.equal(await subjectFor('status: active'), 'status-letter-automation');
+  });
+});
+
 describe('meetingsForArea (W6.2 topics-union)', () => {
   function entry(overrides: Partial<MeetingIndexEntry>): MeetingIndexEntry {
     return {

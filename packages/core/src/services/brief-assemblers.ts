@@ -847,6 +847,18 @@ interface ActiveProject {
   readmeContent: string;
 }
 
+/**
+ * Project display name from README frontmatter — `name:` → `title:` →
+ * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
+ */
+function projectDisplayName(fm: Record<string, unknown>, slug: string): string {
+  for (const key of ['name', 'title', 'project'] as const) {
+    const value = fm[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return slug;
+}
+
 async function listActiveProjects(
   storage: StorageAdapter,
   paths: WorkspacePaths,
@@ -863,7 +875,7 @@ async function listActiveProjects(
     const parsed = parseFrontmatter(content);
     const fm = parsed?.frontmatter ?? {};
     const slug = basename(dir);
-    const name = typeof fm.name === 'string' ? fm.name : slug;
+    const name = projectDisplayName(fm, slug);
     projects.push({
       slug,
       name,
@@ -889,7 +901,7 @@ async function readProjectBySlug(
   const fm = parsed?.frontmatter ?? {};
   return {
     slug,
-    name: typeof fm.name === 'string' ? fm.name : slug,
+    name: projectDisplayName(fm, slug),
     area: typeof fm.area === 'string' ? fm.area : undefined,
     status: typeof fm.status === 'string' ? fm.status : undefined,
     started: typeof fm.started === 'string' ? fm.started : undefined,
