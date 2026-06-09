@@ -233,6 +233,18 @@ These modules implement the People Intelligence feature and are called by `Entit
 - `registry.ts` — Canonical integration metadata registry
 - `meetings.ts` — Shared meeting processing
 
+### Areté v2 Service Families (Phases 1–12)
+
+The v2 effort added several service clusters. They are not all barrel-exported; check `index.ts` before assuming a symbol is public.
+
+- **Brief assemblers** — `services/brief-assemblers.ts`, `services/brief-formatters.ts`. Back the typed `arete brief --person/--project/--area/--meeting` modes (Phase 9). Pure aggregators — no LLM synthesis. Restored a capability that `prepare-meeting-agenda` regressed on after earlier over-stripping.
+- **Topic detection & wiki** — `services/topic-detection.ts` (shared lexical detector), `services/topic-memory.ts`, plus the summaries leg: `services/summary-writer.ts`, `services/org-entity.ts`, `services/memory-summary-loader.ts` (models `source-summary.ts`, `org-entity.ts`, `memory-summary.ts`). Gives memory the "raw → summaries + entities + concepts" shape.
+- **Area memory** — `services/area-memory.ts`, `services/area-parser.ts`. L3 area snapshots; consumed by `arete memory refresh`.
+- **Commitment v2 + dedup** — `services/commitments.ts`, `services/commitments-hash-v2.ts`, `services/commitments-counterparty-parser.ts`, `services/commitments-v2-flag.ts` (`COMMITMENTS_V2_ACTIVE`, default false). Dedup pipeline: `services/background-dedup.ts`, `services/commitment-dedup-pipeline.ts`, `services/commitment-dedup-extract.ts`, `services/commitment-dedup-reverse-stamp.ts`, `services/dedup-decisions-log.ts`, `services/dedup-explain.ts`, `services/dedup-winddown-surface.ts`, `services/extract-dedup-wiring.ts`. Backs `arete dedup`.
+- **Commitment external resolution (gated OFF)** — `services/commitment-resolution-pipeline.ts`, `services/resolution-decisions-log.ts`, `services/resolution-directives.ts`, `services/resolution-ordering.ts`. Gmail-evidence auto-resolution behind `PHASE_11_AUTO_RESOLVE_ENABLED` (default false). Propose-never-write even when enabled.
+- **Skills split (managed + user fork)** — `services/skills-local.ts` (managed-vs-fork resolution), `services/skill-fork.ts` (`forkSkill`), `services/skill-resolver.ts`. Managed skills in `.arete/skills/`, forks in `.agents/skills/`; fork wins at load time. Backs `arete skill fork/diff/merge`.
+- **Migrations** — `services/migrations/migrate-to-v2.ts` (commitment v1→v2), `services/migrations/add-created-at.ts`, `services/goal-migration.ts` (quarter.md → individual goal files).
+
 ### Compat Layer
 `compat/`
 
