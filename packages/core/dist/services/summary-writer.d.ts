@@ -5,7 +5,6 @@
  * One unit per primary ingest (per the absorption principle):
  *  - meetings → `.arete/memory/summaries/meetings/<date>-<slug>.md`
  *  - inbox docs → `.arete/memory/summaries/inbox/<doc-id>.md`
- *  - slack threads → `.arete/memory/summaries/slack/<thread-id>.md`
  *
  * Pure helpers (`buildMeetingSummaryPrompt`, `parseMeetingSummaryResponse`,
  * `buildInboxSummaryPrompt`, `parseInboxSummaryResponse`) are exported for
@@ -119,14 +118,6 @@ export declare function summaryPathForInbox(workspaceRoot: string, input: {
     sourcePath: string;
 }): string;
 /**
- * Derive the summary filename for a slack thread. Convention:
- * `.arete/memory/summaries/slack/<thread-slug>.md` where thread-slug is
- * a sanitized thread id (channel+ts).
- */
-export declare function summaryPathForSlack(workspaceRoot: string, input: {
-    threadId: string;
-}): string;
-/**
  * Returns `true` if a summary file already exists at `summaryPath` and
  * was generated from the same source content (hash match). Caller skips
  * the LLM call when this returns true.
@@ -146,8 +137,7 @@ export declare function summaryAlreadyFresh(storage: StorageAdapter, summaryPath
  */
 export declare function buildMeetingSummaryPrompt(input: MeetingSummaryInput): string;
 /**
- * Build the inbox-doc summary prompt. Source-agnostic; same shape used
- * for slack threads in Phase 1.5 when `ARETE_SLACK_SUMMARIES=1`.
+ * Build the inbox-doc summary prompt. Source-agnostic.
  */
 export declare function buildInboxSummaryPrompt(input: InboxSummaryInput): string;
 /**

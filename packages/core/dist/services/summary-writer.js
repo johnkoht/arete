@@ -5,7 +5,6 @@
  * One unit per primary ingest (per the absorption principle):
  *  - meetings → `.arete/memory/summaries/meetings/<date>-<slug>.md`
  *  - inbox docs → `.arete/memory/summaries/inbox/<doc-id>.md`
- *  - slack threads → `.arete/memory/summaries/slack/<thread-id>.md`
  *
  * Pure helpers (`buildMeetingSummaryPrompt`, `parseMeetingSummaryResponse`,
  * `buildInboxSummaryPrompt`, `parseInboxSummaryResponse`) are exported for
@@ -73,15 +72,6 @@ export function summaryPathForMeeting(workspaceRoot, input) {
 export function summaryPathForInbox(workspaceRoot, input) {
     const base = basename(input.sourcePath).replace(/\.md$/i, '');
     return join(workspaceRoot, '.arete', 'memory', SUMMARIES_DIR, 'inbox', `${base}.md`);
-}
-/**
- * Derive the summary filename for a slack thread. Convention:
- * `.arete/memory/summaries/slack/<thread-slug>.md` where thread-slug is
- * a sanitized thread id (channel+ts).
- */
-export function summaryPathForSlack(workspaceRoot, input) {
-    const safe = input.threadId.replace(/[^a-zA-Z0-9._-]+/g, '-');
-    return join(workspaceRoot, '.arete', 'memory', SUMMARIES_DIR, 'slack', `${safe}.md`);
 }
 // ---------------------------------------------------------------------------
 // Idempotency check
@@ -158,8 +148,7 @@ Constraints:
 - Prefer concise synthesis over verbatim quoting.`;
 }
 /**
- * Build the inbox-doc summary prompt. Source-agnostic; same shape used
- * for slack threads in Phase 1.5 when `ARETE_SLACK_SUMMARIES=1`.
+ * Build the inbox-doc summary prompt. Source-agnostic.
  */
 export function buildInboxSummaryPrompt(input) {
     const title = input.title ?? '(untitled)';

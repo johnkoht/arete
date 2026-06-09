@@ -101,8 +101,6 @@ export type { CompleteTaskResult } from './tasks.js';
 export type { TaskMetadata, TaskDestination, WorkspaceTask, ParsedTaskLine, ListTasksOptions, } from '../models/tasks.js';
 export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';
 export type { ScoringContext, ScoreBreakdown, ScoredTask, } from './task-scoring.js';
-export { evaluateSlackThread, formatSlackEvalLogLine, slackSummariesEnabled, DEFAULT_SLACK_MESSAGE_THRESHOLD, DEFAULT_SLACK_PARTICIPANT_THRESHOLD, } from './slack-heuristic.js';
-export type { SlackThreadEvalInput, SlackHeuristicTrigger, SlackHeuristicConfig, SlackHeuristicResult, } from './slack-heuristic.js';
 export { writeMeetingSummary, writeMeetingSummaryFromFrontmatter, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
 export type { MeetingSummaryInput, MeetingSummaryFromFrontmatterInput, InboxSummaryInput, WriteSummaryDeps, WriteSummaryResult, } from './summary-writer.js';
 //# sourceMappingURL=index.d.ts.map
