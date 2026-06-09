@@ -1281,7 +1281,7 @@ export class EntityService {
             const rawItems = personActionItems.get(person.slug) ?? [];
             let agedOut = 0;
             for (const item of rawItems) {
-                item.stale = isActionItemStale(item);
+                item.stale = isActionItemStale(item, options.referenceDate);
                 if (item.stale)
                     agedOut += 1;
             }

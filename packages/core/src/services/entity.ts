@@ -761,6 +761,13 @@ export interface RefreshPersonMemoryOptions {
    * Without this option, plain-text action items are rendered (no regression).
    */
   commitments?: CommitmentsService;
+  /**
+   * Pin the "current date" used for action-item staleness aging
+   * (defaults to wall-clock now). Surfaced for deterministic testing so the
+   * staleness window can be anchored relative to fixture dates rather than
+   * `Date.now()`, which otherwise turns fixed-date fixtures into time-bombs.
+   */
+  referenceDate?: Date;
 }
 
 export interface RefreshPersonMemoryResult {
@@ -1559,7 +1566,7 @@ export class EntityService {
       const rawItems = personActionItems.get(person.slug) ?? [];
       let agedOut = 0;
       for (const item of rawItems) {
-        item.stale = isActionItemStale(item);
+        item.stale = isActionItemStale(item, options.referenceDate);
         if (item.stale) agedOut += 1;
       }
       totalItemsAgedOut += agedOut;
