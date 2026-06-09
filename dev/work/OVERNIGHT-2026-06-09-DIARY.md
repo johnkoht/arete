@@ -53,7 +53,17 @@ Pending (spawn as upstreams report): reviewers for each build; I-0 generator+eva
 - **INFRA NOTE (AM):** the full test suite (~15 min) reliably trips the 600s stream-watchdog, killing subagents mid-run. THREE agents died this way tonight (2 Wave-A reviewers + the combine builder — all after committing/doing their real work). Lesson: agents must use TARGETED `tsx --test <file>` only, never the full suite (matches the v2 diary's "npm test is a watchdog killer" rule). I verified merges via targeted tests + direct checks.
 
 ## I-0 combine status
-The combine builder **committed both fixes before stalling on validation** (`2074a980` attendee-scoping + dual-header extractor; `afde807f` A's themed-section ceiling). Orchestrator verified directly: typecheck clean, dist clean (0 drift), `agenda-scaffold.test.ts` 28/28, and on REAL arete-reserv data — **Lindsay's Feedback&Growth now populates her 3 discussion prompts** (was empty in B; dual-header fix works) and **Priorities are attendee-scoped** (Lindsay's IDs ≠ Anthony's; shared IDs are the intentional cross-cutting bucket, not the old identical-8-global bug). One read-only code review in flight before merge.
+The combine builder **committed both fixes before stalling on validation** (`2074a980` attendee-scoping + dual-header extractor; `afde807f` A's themed-section ceiling). Orchestrator verified directly: typecheck clean, dist clean (0 drift), `agenda-scaffold.test.ts` 28/28, and on REAL arete-reserv data — **Lindsay's Feedback&Growth now populates her 3 discussion prompts** (was empty in B; dual-header fix works) and **Priorities are attendee-scoped** (Lindsay's IDs ≠ Anthony's; shared IDs are the intentional cross-cutting bucket, not the old identical-8-global bug). Reviewed by orchestrator (3 reviewer agents died on the watchdog; verified by inspection of both fix commits + 28/28 tests + real-data behavior). **MERGED to main (`a8468b7c`)** — dist `.map` conflict resolved by rebuild; typecheck clean.
+
+## ✅ AM SUMMARY — all 4 workstreams merged to main + pushed
+1. **Bugs BUG-1/2/3** → fixed, suite GREEN. Insight: BUG-1/2 were fixed-date-fixture *time-bombs*, not product bugs. (`e98010cd`)
+2. **#2 Wave A** — I-3 bias un-truncated, I-5 `topic add-aliases` verb, I-4 = working-as-designed. (`f6f59bb9`)
+3. **#2 Wave B** — I-1 dead `areas:` field dropped, I-6 dupe→source mapping persisted (wire-in remains, Phase 11c). (`ffba83e8`)
+4. **I-0 agenda** — bake-off (2 approaches → cold-gen → 2 judges → COMBINE), built + fixed both B flaws, verified on real data (Lindsay's prompts populate, attendee-scoped). (`a8468b7c`)
+
+**Now running:** integrated full-suite gate on main (all 4 together). **Then:** cut 0.11.0.
+
+**Needs your eyes (AM):** (a) release = 0.11.0 minor, cutting after suite-green; (b) the agenda fix reaches arete-reserv only after `arete update` (the `.arete/skills/` override wins); (c) main repo needed `npm install` for `proper-lockfile`; (d) infra: the full suite trips the 600s agent-watchdog — 3 agents died (work intact); (e) small follow-ups: I-3 defensive cap (~200), I-6 unmerge wire-in.
 
 ## Running log
 
