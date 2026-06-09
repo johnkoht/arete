@@ -35,7 +35,7 @@ purpose: Durable log of the autonomous overnight orchestration for John to revie
 
 | Workstream | Worktree | Agent | Status |
 |---|---|---|---|
-| Bugs BUG-1/2/3 | `bugfix-pre-existing` | dev (/hotfix) | 🔄 running |
+| Bugs BUG-1/2/3 | `bugfix-pre-existing` | dev (/hotfix) | ✅ built — **full suite GREEN 4463/0** (`da7a8089`/`8ae76105`/`037b65df`). KEY: BUG-1/2 were NOT product bugs — fixed-date fixtures aged past wall-clock recency/staleness windows (time-bombs); fix = pin `referenceDate` seam. BUG-3 = unref view keep-alive. 🔍 in review (verifying no prod masking / no premature view-exit) |
 | I-0 approach A (prose) | `agenda-synth-a` | dev | ✅ built + self-tested (commit `7b0fdf2f`) |
 | I-0 approach B (scaffold) | `agenda-synth-b` | dev | ✅ built (`24dbe667`/`2a38e922`/`4312af96`) — fixes the discussion-topics data gap via new extractors; **batch==single byte-identical by construction**; scaffolding still needs agent framing pass |
 | #2 planning | `issues-2-plan` | tech-lead | ✅ plan written (`6aabae61`) |
