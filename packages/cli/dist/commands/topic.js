@@ -513,6 +513,96 @@ export function registerTopicCommands(program) {
         }
     });
     // ---------------------------------------------------------------------------
+    // arete topic add-aliases <slug> <alias...>
+    // ---------------------------------------------------------------------------
+    // I-5: no-LLM frontmatter writer. The hard half — alias-aware
+    // re-integration of orphaned sources — already ships in
+    // refreshAllFromSources (AC2). This verb is the missing writer: it appends
+    // aliases to an existing topic page's `aliases:` frontmatter so a
+    // subsequent `arete topic refresh <slug>` rescues sources tagged with the
+    // alias. `--refresh` chains the rescue into one command.
+    topicCmd
+        .command('add-aliases <slug> <aliases...>')
+        .description('Append alias slugs to an existing topic page\'s frontmatter (no LLM). Pairs with `arete topic refresh <slug>` to re-integrate orphaned sources tagged with the alias. Use --refresh to chain the rescue.')
+        .option('--refresh', 'After writing aliases, run `topic refresh <slug>` to re-integrate orphaned sources tagged with the new alias (requires AI configured).')
+        .option('--json', 'Output as JSON')
+        .action(async (slug, aliases, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const paths = services.workspace.getPaths(root);
+        let result;
+        try {
+            result = await services.topicMemory.addAliases(paths, slug, aliases);
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+            return;
+        }
+        // Optional one-step rescue: re-integrate orphaned sources now tagged
+        // by the alias. LLM-gated like `topic refresh`.
+        let refreshed;
+        if (opts.refresh === true) {
+            if (!services.ai.isConfigured() || process.env.ARETE_NO_LLM === '1') {
+                const msg = 'Aliases written, but --refresh needs AI configured (ARETE_NO_LLM unset). Run `arete topic refresh ' + slug + '` once AI is available.';
+                if (opts.json) {
+                    console.log(JSON.stringify({ success: true, ...result, refresh: { skipped: 'no-llm' } }));
+                }
+                else {
+                    success(`Added ${result.added.length} alias(es) to ${slug}.`);
+                    warn(msg);
+                }
+                return;
+            }
+            const callLLM = async (prompt) => {
+                const r = await services.ai.call('synthesis', prompt);
+                return r.text;
+            };
+            const batch = await services.topicMemory.refreshAllFromSources(paths, {
+                slugs: [slug],
+                callLLM,
+                today: today(),
+                workspaceRoot: root,
+                lockLabel: 'topic add-aliases --refresh',
+            });
+            refreshed = batch.topics.find((t) => t.slug === slug) ?? { slug, integrated: 0 };
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({ success: true, ...result, ...(refreshed !== undefined ? { refresh: refreshed } : {}) }, null, 2));
+            return;
+        }
+        header('Add Aliases');
+        if (result.added.length === 0) {
+            info(`No new aliases for ${slug} (all already present).`);
+        }
+        else {
+            success(`Added ${result.added.length} alias(es) to ${slug}: ${result.added.join(', ')}`);
+        }
+        console.log(chalk.dim(`  aliases: ${result.aliases.join(', ')}`));
+        if (refreshed !== undefined) {
+            const r = refreshed;
+            success(`Refreshed ${slug}: ${r.integrated ?? 0} source(s) re-integrated.`);
+        }
+        else if (result.added.length > 0) {
+            info(`Run \`arete topic refresh ${slug}\` to re-integrate orphaned sources tagged with the new alias(es).`);
+        }
+    });
+    // ---------------------------------------------------------------------------
     // arete topic find <query>
     // ---------------------------------------------------------------------------
     topicCmd

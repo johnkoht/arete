@@ -1664,3 +1664,93 @@ TopicMemoryService.prototype.retrieveRelevant = async function (
     searchBackend: backend,
   };
 };
+
+// ---------------------------------------------------------------------------
+// addAliases (I-5) — no-LLM frontmatter writer for topic-page aliases
+// ---------------------------------------------------------------------------
+
+export interface AddAliasesResult {
+  /** The canonical topic slug whose page was edited. */
+  slug: string;
+  /** The full, deduped+sorted alias set after the write. */
+  aliases: string[];
+  /** Aliases that were newly added by this call (already-present ones excluded). */
+  added: string[];
+  /** True if the on-disk page changed (false on a pure no-op re-add). */
+  changed: boolean;
+}
+
+declare module './topic-memory.js' {
+  interface TopicMemoryService {
+    /**
+     * Append `aliases` to an existing topic page's `aliases:` frontmatter
+     * (no LLM). Union + dedup; the canonical slug itself is never recorded
+     * as its own alias. Idempotent: re-adding existing aliases is a no-op.
+     *
+     * Pairs with the AC2 alias-aware re-integration filter
+     * (`refreshAllFromSources`): once a canonical page declares an alias,
+     * `arete topic refresh <slug>` rescues orphaned sources tagged with
+     * that alias. The optional `refresh` chaining is left to the CLI verb.
+     *
+     * Throws if the topic page does not exist.
+     */
+    addAliases(
+      paths: import('../models/workspace.js').WorkspacePaths,
+      canonicalSlug: string,
+      aliases: readonly string[],
+    ): Promise<AddAliasesResult>;
+  }
+}
+
+TopicMemoryService.prototype.addAliases = async function (
+  this: TopicMemoryService,
+  paths,
+  canonicalSlug,
+  aliases,
+): Promise<AddAliasesResult> {
+  const storage = (this as unknown as { storage: StorageAdapter }).storage;
+  const pagePath = pathJoin(paths.memory, 'topics', `${canonicalSlug}.md`);
+
+  const content = await storage.read(pagePath);
+  if (content === null) {
+    throw new Error(`Topic page not found: ${canonicalSlug} (expected at ${pagePath})`);
+  }
+  const page = parseTopicPage(content);
+  if (page === null) {
+    throw new Error(`Topic page is malformed and cannot be parsed: ${canonicalSlug} (${pagePath})`);
+  }
+
+  const existing = new Set<string>(page.frontmatter.aliases ?? []);
+  const added: string[] = [];
+  for (const raw of aliases) {
+    const alias = raw.trim();
+    // Never record the canonical slug as its own alias; skip empties; dedup.
+    if (alias.length === 0 || alias === canonicalSlug || existing.has(alias)) continue;
+    existing.add(alias);
+    added.push(alias);
+  }
+
+  // Sort to match the render-time normalization (topic-page.ts:148-149),
+  // so the stored value and the returned value agree byte-for-byte.
+  const merged = [...existing].sort();
+
+  const updated: TopicPage = {
+    ...page,
+    frontmatter: {
+      ...page.frontmatter,
+      aliases: merged,
+    },
+  };
+
+  const rendered = renderTopicPageExternal(updated);
+  let changed = rendered !== content;
+  if (changed) {
+    if (storage.writeIfChanged !== undefined) {
+      await storage.writeIfChanged(pagePath, rendered);
+    } else {
+      await storage.write(pagePath, rendered);
+    }
+  }
+
+  return { slug: canonicalSlug, aliases: merged, added, changed };
+};
