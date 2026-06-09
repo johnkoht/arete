@@ -49,6 +49,11 @@ Pending (spawn as upstreams report): reviewers for each build; I-0 generator+eva
 ## MERGES TO MAIN (overnight)
 1. **bug-fix (BUG-1/2/3)** — reviewer APPROVE → merged `--no-ff` to local main + pushed. Suite-green gate met (4463/0). **AM note:** the main repo's `node_modules` was stale (missing `proper-lockfile`, a v2 dep from Phase 10a) — I ran `npm install` in the main repo to fix typecheck. Any fresh checkout / the main repo needs `npm install` after pulling v2.
 2. **#2 Wave B (I-1 + I-6)** — reviewer APPROVE (log back-compat PASS) → merged `--no-ff` + pushed (`ffba83e8`). Clean merge (no dist conflict — disjoint files). Typecheck clean.
+3. **#2 Wave A (I-3 + I-5)** — reviewer APPROVE w/ minor (orchestrator finished the review after TWO reviewer agents died on infra/watchdog at the full-suite step). I-3 `POSITIVE_INFINITY` bias is acceptable (bounded by 90-day recency filter; ~249 short slugs; human view keeps 25-cap) — **follow-up: consider a defensive ~200 cap**. I-5 verb guards correct. 29/29 targeted tests, dist clean, no person-memory touch. Merged `--no-ff` + pushed (`f6f59bb9`).
+- **INFRA NOTE (AM):** the full test suite (~15 min) reliably trips the 600s stream-watchdog, killing subagents mid-run. THREE agents died this way tonight (2 Wave-A reviewers + the combine builder — all after committing/doing their real work). Lesson: agents must use TARGETED `tsx --test <file>` only, never the full suite (matches the v2 diary's "npm test is a watchdog killer" rule). I verified merges via targeted tests + direct checks.
+
+## I-0 combine status
+The combine builder **committed both fixes before stalling on validation** (`2074a980` attendee-scoping + dual-header extractor; `afde807f` A's themed-section ceiling). Orchestrator verified directly: typecheck clean, dist clean (0 drift), `agenda-scaffold.test.ts` 28/28, and on REAL arete-reserv data — **Lindsay's Feedback&Growth now populates her 3 discussion prompts** (was empty in B; dual-header fix works) and **Priorities are attendee-scoped** (Lindsay's IDs ≠ Anthony's; shared IDs are the intentional cross-cutting bucket, not the old identical-8-global bug). One read-only code review in flight before merge.
 
 ## Running log
 
