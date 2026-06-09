@@ -1,22 +1,24 @@
-# Areté - Product Management Workspace
+# Areté — Product Builder's Operating System
 
 > **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" - the pursuit of fulfilling one's purpose to the highest degree.
 
-An AI-native workspace for Cursor and Claude Code that helps product managers maintain context, run structured workflows, and build institutional memory.
+An AI-native workspace for Cursor and Claude Code that helps product builders — PMs, founders, and operators — maintain context, run structured workflows, and build institutional memory that compounds across meetings, async conversation, and projects.
 
 ---
 
 ## What It Is
 
-Areté is a Product Management operating system designed for AI-augmented work:
+Areté is an operating system for product builders working alongside AI:
 
-- **Context Management** - Maintain business, product, and customer knowledge as source of truth
-- **Intelligence Services** - Automatically inject relevant context into any workflow
-- **Structured Workflows** - Run discovery, PRDs, competitive analysis, and roadmaps with consistency
-- **Institutional Memory** - Capture decisions and learnings that persist beyond individual projects
-- **Meeting Intelligence** - Prep for meetings, process notes, extract insights
+- **Context Management** — Business, product, and customer knowledge as source of truth
+- **Areas** — Persistent work domains (customers, initiatives, product surfaces) that accumulate intelligence across quarters
+- **Topic Wiki** — Recurring themes (pricing, a vendor, a strategic bet) build up into queryable pages from meetings *and* Slack
+- **Meeting Intelligence** — Pull recordings, extract decisions/commitments/learnings with cross-meeting deduplication, prep for what's next
+- **Async Intelligence** — `slack-digest` processes Slack threads the same way meetings get processed; everything flows into the same memory + topic wiki
+- **Institutional Memory** — Decisions, learnings, and commitments outlast projects and people
+- **Structured Workflows** — Discovery, PRDs, competitive analysis, roadmaps, daily/weekly winddown — all consistent across runs
 
-Built for **Cursor** and **Claude Code** IDEs, optimized for collaboration with AI agents.
+Built for **Cursor** and **Claude Code**, optimized for collaboration with AI agents.
 
 ---
 
@@ -123,12 +125,33 @@ Please be conversational and explain what each step does in plain language. I'm 
 ### Context Management
 
 Your **source of truth** for business context:
-- **Business** - Company overview, market, competitive landscape
-- **Users** - User personas, needs, behaviors
-- **Products** - What you're building and why
-- **Strategy** - Goals, OKRs, strategic initiatives
+- **Business** — Company overview, market, competitive landscape
+- **Users** — User personas, needs, behaviors
+- **Products** — What you're building and why
+- **Strategy** — Goals, OKRs, strategic initiatives
 
 Lives in `context/` directory. AI reads this before starting work.
+
+### Areas — Persistent Work Domains
+
+Areas represent ongoing work that doesn't fit a project lifecycle: customer relationships, long-running initiatives, product surfaces you own. Unlike projects (time-bound, archived when done), areas accumulate intelligence over quarters.
+
+- **Per-area context** in `areas/{slug}.md` + `context/{slug}/`
+- **Recurring meetings** map to areas via frontmatter — meeting prep auto-pulls area context
+- **Decisions and commitments** route to the correct area on processing
+- **Goals and projects** link to areas so weekly planning is area-organized
+
+Start with: `arete create area customer-acme --name "Customer: Acme Corp"`
+
+### Topic Wiki — Themes That Build Up Over Time
+
+Topic pages aggregate everything your workspace knows about a recurring theme — a pricing decision, a vendor evaluation, a strategic bet. Topics are detected lexically from meetings and Slack threads, and the topic wiki feeds back into future meeting extractions so recaps emit *deltas* (new decisions, changed plans) instead of restating what's already on the page.
+
+- **`arete topic list`** — see active topics
+- **`arete topic show <slug>`** — read a topic page
+- **`arete topic refresh <slug>`** — rebuild narrative from sources (meetings + slack-digests)
+- **`arete topic find <query>`** — find topics by keyword
+- **`arete topic lint`** — surface stale, stub, or orphan topics
 
 ### Project Workflows
 
@@ -144,33 +167,58 @@ Structured PM work with consistent quality:
 
 Start with: "Start a discovery project for [topic]" or "Create a PRD for [feature]"
 
-### Meeting Intelligence
+### Meeting & Async Intelligence
 
-Never lose track of what was discussed:
-- **Meeting Prep** - Brief with attendee context, recent meetings, action items
-- **Save Meetings** - Capture notes and transcripts
-- **Process Meetings** - Extract decisions and learnings to memory
-- **Daily Plan** - Today's focus with meeting context
+Never lose track of what was discussed — in meetings *or* in Slack:
+- **Meeting Prep** — Brief with attendee context, recent meetings, action items
+- **Pull Recordings** — Fathom and Krisp integrations import transcripts and summaries
+- **Process Meetings** — Cross-meeting dedup, confidence scoring, wiki-leaning extraction with `## Core` and `## Could include` sections
+- **Slack Digest** — Daily Slack recap that extracts decisions/commitments/topic updates the same way meetings do
+- **Daily / Weekly Winddown** — End-of-day and end-of-week skills that process backlog, surface side threads for promotion, and close out the period
 
-Start with: "Help me prep for my meeting with [person]"
+Start with: "Help me prep for my meeting with [person]" or "Daily winddown"
 
 ### Institutional Memory
 
 Capture knowledge that outlasts projects:
-- **Decisions** - Key decisions with rationale
-- **Learnings** - User insights, market observations, process improvements
-- **Observations** - How you work best with AI
+- **Decisions** — Key decisions with rationale
+- **Learnings** — User insights, market observations, process improvements
+- **Commitments** — What you owe whom (and what they owe you), with momentum scoring
+- **Observations** — How you work best with AI
 
-Memory is searchable and automatically surfaced in relevant contexts.
+Memory is searchable, deduplicated across meetings, and automatically surfaced in relevant contexts.
 
 ### Planning System
 
-Align work from quarter to day:
-- **Quarter Goals** - Set goals aligned to org strategy
-- **Week Outcomes** - Plan week outcomes linked to quarter goals
-- **Daily Focus** - Today's priorities and meeting prep
+Align work from horizon to today:
+- **Goal** — A focused outcome you're driving toward
+- **Focus** — What you're investing energy in this quarter / month
+- **Horizon** — Longer-arc bets and watchlist items
+- **Week** — Outcomes + tasks (Must / Should / Could) + key meetings, organized by area
+- **Daily** — Today's plan with scored tasks, meeting context, and overdue commitments
 
 Start with: "Plan my week" or "What's on my plate today?"
+
+### Inbox — Universal Capture
+
+Drop anything — URLs, files, PDFs, raw notes — and route it later:
+
+```bash
+arete inbox add --title "Note" --body "Content"
+arete inbox add --url https://example.com
+arete inbox add --file ./report.pdf
+```
+
+Then say **"Triage my inbox"** to route items to the right place (week tasks, memory, areas, person files).
+
+### Workspace Hygiene
+
+Clean accumulated entropy with a single command:
+
+```bash
+arete hygiene scan         # detect stale meetings, resolved commitments, bloated logs
+arete hygiene apply        # interactive checkbox approval (tier 1 pre-checked)
+```
 
 ---
 
@@ -178,15 +226,17 @@ Start with: "Plan my week" or "What's on my plate today?"
 
 ### For Users (Product Builders)
 
-- **[GUIDE.md](packages/runtime/GUIDE.md)** - Comprehensive user reference (shipped to workspace)
-- **[SETUP.md](SETUP.md)** - Installation, integrations, troubleshooting
-- **[ONBOARDING.md](ONBOARDING.md)** - First-time setup checklist
+- **[GUIDE.md](packages/runtime/GUIDE.md)** — Comprehensive user reference (shipped to workspace)
+- **[SETUP.md](SETUP.md)** — Installation, integrations, troubleshooting
+- **[ONBOARDING.md](ONBOARDING.md)** — First-time setup checklist
+- **[UPDATES.md](packages/runtime/UPDATES.md)** — What's new, week-by-week (user-facing release notes)
 
 ### For Developers (Areté Maintainers)
 
-- **[DEVELOPER.md](DEVELOPER.md)** - Architecture, systems, contribution guide
-- **[AGENTS.md](AGENTS.md)** - Generated architecture reference for AI agents
-- **dev/** - Build system, PRDs, and change log
+- **[DEVELOPER.md](DEVELOPER.md)** — Architecture, systems, contribution guide
+- **[AGENTS.md](AGENTS.md)** — System awareness reference for build-mode AI agents
+- **[CHANGELOG.md](CHANGELOG.md)** — Build/developer changelog (versioned)
+- **dev/** — Build system, PRDs, and plans
 
 ---
 
@@ -220,11 +270,12 @@ AI: [Searches context + memory, synthesizes answer with sources]
 
 ## Architecture
 
-Areté is organized as a monorepo with three packages:
+Areté is organized as a monorepo:
 
-- **@arete/core** — Intelligence and service layer (context, memory, entity, briefing)
+- **@arete/core** — Intelligence and service layer (context, memory, entity, briefing, topics, integrations)
 - **@arete/cli** — Command-line interface (thin wrapper over core services)
-- **@arete/runtime** — Workspace content (skills, tools, templates, rules)
+- **@arete/runtime** — Workspace content (skills, tools, templates, rules) installed into user workspaces
+- **@arete/apps** — Local web dashboard (`backend` API + `web` React UI) for meeting triage and review
 
 ### Key Intelligence Features
 
@@ -241,25 +292,31 @@ Areté is organized as a monorepo with three packages:
 
 Areté provides intelligence that powers any workflow:
 
-- **Context Injection** - Find relevant files for any task, with freshness tracking
-- **Memory Retrieval** - Search past decisions and learnings, with temporal views
-- **Entity Resolution** - Match ambiguous names to people, meetings, projects
-- **Entity Relationships** - Track works_on, attended, mentioned_in relationships
-- **Briefing Assembly** - Gather context, memory, entities, and relationships before complex work, with optional AI synthesis
-- **Temporal Intelligence** - Timeline queries showing how topics evolve over time
+- **Unified Search** — Find relevant files across context, memory, areas, projects, meetings, people — with freshness tracking and temporal views
+- **Entity Resolution** — Match ambiguous names to people, meetings, projects
+- **Entity Relationships** — Track works_on, attended, mentioned_in relationships
+- **Briefing Assembly** — Gather context, memory, entities, and relationships before complex work, AI-synthesized into 5 sections (Status, Decisions, People, Activity, Open Questions)
+- **Temporal Intelligence** — Timeline queries showing how topics evolve over time
+- **Routing** — `arete route "<query>"` picks the best skill and model tier for what you're trying to do
+- **Daily / Momentum Briefs** — `arete daily` and `arete momentum` surface what's hot, stale, or critical across commitments and relationships
 
-These services run automatically during skills, or manually via CLI:
+These services run automatically inside skills, or manually via CLI:
 
 ```bash
 arete search "mobile app redesign"
 arete search "mobile app redesign" --inventory          # freshness dashboard
 arete search "pricing decisions" --scope memory
-arete search "onboarding" --timeline --days 90           # temporal view
+arete search "onboarding" --timeline --days 90          # temporal view
 arete resolve "Jane"
-arete brief --for "competitive analysis"              # AI-synthesized briefing
-arete brief --for "competitive analysis" --raw        # raw context dump
-arete index                                              # re-index search after manual edits
-arete view                                               # open meeting triage web app
+arete brief --for "competitive analysis"                # AI-synthesized briefing
+arete brief --for "competitive analysis" --raw         # raw context dump
+arete route "what should I do about the Acme renewal?"  # pick the right skill
+arete daily                                             # morning brief
+arete momentum                                          # commitment + relationship momentum
+arete commitments list                                  # open commitments across all relationships
+arete topic list                                        # active topic pages
+arete index                                             # re-index search after manual edits
+arete view                                              # open meeting triage web app
 ```
 
 ### Templates & Customization
@@ -291,11 +348,13 @@ arete install ~/workspace --ide claude
 
 Connect to external tools:
 
-- **Calendar** (macOS) - Pull events for meeting prep and planning
-- **Fathom** - Import meeting recordings and transcripts
-- **Krisp** - Pull meeting recordings, transcripts, summaries, and action items
-- **Google Calendar** - OAuth-based calendar sync for meeting prep and availability
-- (Future: Slack, Linear, Notion)
+- **Calendar (macOS)** — Pull events for meeting prep and planning via `ical-buddy`
+- **Google Calendar** — OAuth-based calendar sync for meeting prep and availability (FreeBusy)
+- **Fathom** — Import meeting recordings and transcripts
+- **Krisp** — Pull meeting recordings, transcripts, summaries, and action items
+- **Slack** — Pull conversation threads via the `slack-digest` skill; threads feed memory and the topic wiki
+- **Notion** — Pull pages into your workspace as searchable markdown (`arete pull notion`)
+- (Future: Linear, Figma)
 
 See SETUP.md for configuration.
 

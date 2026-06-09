@@ -103,9 +103,14 @@ Once you're set up, here's what you can do:
 | **Prep for a meeting** | "Prep for my meeting with [person]" |
 | **Start work** | "Start a discovery project for [topic]"<br>"Create a PRD for [feature]" |
 | **Process meetings** | "Process my meetings" (updates people & memory) |
-| **Quick capture** | Add notes to `now/scratchpad.md` |
+| **End-of-day review** | "Daily winddown" (process meetings, surface side threads, close out the day) |
+| **End-of-week review** | "Weekly winddown" (review week, plan next) |
+| **Process Slack** | "Slack digest" (extract decisions, commitments, and topic updates from today's threads) |
+| **Triage inbox** | "Triage my inbox" (route URLs/notes/files to the right place) |
+| **Quick capture** | Add notes to `now/scratchpad.md`, or `arete inbox add --url ...` / `--file ...` |
 | **Find past work** | "What do we know about [topic]?" |
 | **Plan your time** | "What's on my plate today?"<br>"Plan my week" |
+| **Workspace hygiene** | `arete hygiene scan` then `arete hygiene apply` (archive stale meetings, compact memory) |
 
 ---
 
@@ -114,12 +119,15 @@ Once you're set up, here's what you can do:
 Quick reference for the workspace structure:
 
 ```
-now/          → Current focus, scratchpad, today's plan
+now/          → Current focus, scratchpad, today's plan, week tasks
 goals/        → Strategy, quarter goals, initiatives
 context/      → Business context (source of truth)
+areas/        → Persistent work domains (customers, initiatives, products)
 projects/     → Active and archived PM work
 resources/    → Raw inputs (meetings, notes)
+inbox/        → URLs, files, notes pending triage
 people/       → Colleagues, customers, users
+topics/       → Topic wiki — recurring themes that build up over time
 .arete/       → System memory (decisions, learnings)
 ```
 
