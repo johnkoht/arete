@@ -80,7 +80,8 @@ arete agenda scaffold --meeting "Anthony / John Weekly"
 
 Your job is **CURATE + FRAME, not synthesize from an empty template**:
 - Read the scaffold top-to-bottom. The framing block (carried from `## Next 1:1 Focus`) is your meeting lead-in — use it.
-- For each section: keep/cut/merge the candidate bullets into specific talking points, add a one-line framing lead-in, and **strip the `[source]` tags**. Where a `## 1:1 Discussion Topics` question fits a theme, weave it in verbatim.
+- For each section: keep/cut/merge the candidate bullets into specific talking points, add a one-line framing lead-in, and **strip the `[source]` tags**. Where a `## 1:1 Discussion Topics` / `## Standing 1:1 Discussion Prompts` question fits a theme, weave it in verbatim.
+- **The `## Cross-cutting / touches their lane` block is the OWNER's own/global ledger, not this person's owed-items.** It is context, not the primary agenda. Pull an item up into a themed section ONLY when it needs THIS person's input or a handoff. Do NOT paste the whole block into Priorities — that is the regression this bucket exists to prevent.
 - **Route the `## Unrouted signal` block**: place each candidate into a section above or drop it deliberately — never silently ignore it.
 - **An `_EMPTY — ...` line is an explicit FAILURE STATE, not acceptable output.** When a section is empty, either synthesize from the brief signal or replace the line with a one-line honest reason it is empty. Never ship a section whose only content is the EMPTY placeholder.
 
@@ -90,25 +91,45 @@ If you want richer person memory before composing, run `arete people memory refr
 
 **Critical: scaffold/brief section names map to agenda sections, but candidate bullets are RAW signal, not finished agenda lines.** Frame them. The target shape: themed sections with short framing prose, specific bullets citing commitment IDs / meeting dates / wiki pages, and an "ask" or "decision needed" line where appropriate.
 
-Example agenda quality bar: `resources/meetings/2026-04-29-john-lindsay-11.md` lines 88-158. Themed sections ("Glance 2.0 Roadmap — Start the Conversation (20min)", "Discovery Process Update (10min)"), specific commitment IDs ("commitment 45ef9b64"), prior-conversation callbacks ("Per our 4/22 conversation, past misfires came from leadership defining the experience before adjuster-driven research"). That's the target shape — the scaffold hands you the raw materials; you frame them to this bar.
+Example agenda quality bar: `resources/meetings/2026-04-29-john-lindsay-11.md` lines 88-158 and `resources/meetings/2026-04-28-anthony-john-weekly.md` lines 57-105. Themed time-boxed sections ("Glance 2.0 Roadmap — Start the Conversation (20min)", "Discovery Process Update (10min)", "Status Letters — Lock the TDD (12min)"), specific commitment IDs ("commitment 45ef9b64"), discussion-topic questions woven in verbatim, prior-conversation callbacks ("Per our 4/22 conversation, past misfires came from leadership defining the experience before adjuster-driven research"). That is the target shape — the scaffold hands you the raw materials; you frame them to this bar. Match its depth.
 
 Do not reimplement calendar or context logic; use existing commands and patterns only.
 
-### 5. Build Agenda
+### 4b. Batch mode — anti-degradation rule (LOAD-BEARING)
 
-- **Start from the scaffold output (step 4), not the bare template.** The scaffold already carries the template's `## ` sections + time-boxes + pre-seeded candidates. Edit it in place: frame each section, curate candidates, strip `[source]` tags, drop the SCAFFOLD guardrail blockquote.
-- Keep the frontmatter the scaffold emitted (`meeting_title`, `date`, `type`, `attendees`) — it enables auto-linking.
-- Output format (see below): `# Meeting Agenda: [Title]`, metadata, ## sections with optional (Xmin), bullets and checkboxes.
+If you are preparing agendas for **more than one meeting in this run** (a batch), this is the confirmed failure mode (F3): the cheap section (Priorities) gets filled and the expensive qualitative synthesis (Feedback/Growth, themed sections, callbacks) gets skeletoned for all of them. **Do NOT let this happen.**
 
-### 5a. Self-check before saving (AC1 gate — non-skippable)
+Treat each agenda as a fully independent task:
+- Run steps 4 → 5 → 5a (self-check) **per meeting, start to finish, before moving to the next meeting.** Do not scaffold all meetings first and then mass-produce skeletons.
+- There is NO shared shortcut, no "same template for all," no "Priorities-only" batch output. Every agenda in the batch gets the full per-agenda curation + framing pass and must independently pass the step-5a self-check.
+- The quality bar does NOT drop because there are more meetings. An agenda generated as #4 of 4 must be as deep as one generated alone. If you are running low on effort, do FEWER agendas fully rather than MORE agendas thinly.
 
-Before you save, verify the agenda against the scaffold:
-- **No section may ship with only the `_EMPTY — ...` placeholder.** For each such section, either synthesize from the brief or write a one-line honest reason ("No open blockers from Lindsay's side this week").
-- **No `[source]` tags remain** and the SCAFFOLD guardrail blockquote is removed.
-- **The `## Unrouted signal` block is gone** — every item was placed into a section or deliberately dropped.
-- Each themed section has a framing lead-in, not just a bullet dump.
+See PATTERNS.md → `get_meeting_context` → "Batch anti-degradation" for the recorded anti-pattern.
 
-If any check fails, fix it before saving. "Skeleton + empty qualitative sections" is the regression this skill exists to prevent.
+### 5. Build Agenda — split into named, themed, time-boxed sections
+
+- **Start from the scaffold output (step 4), not the bare template.** The scaffold carries the template's generic `## ` sections (Priorities / Feedback and Growth / Support and Blockers / Next Steps) + time-boxes + pre-seeded candidates. Those generic headings are SCAFFOLDING, **not** the deliverable.
+- **Split the seeded candidates into 2–4 named, THEMED, time-boxed sections** — the April quality bar. A theme comes from cross-source signal: an open commitment + a related decision + a recent-meeting callback + a discussion-topic question = one themed section. Rename "Priorities (30min)" into specific themes like "Status Letters — Lock the TDD (12min)" and "POP MVP — Sequence the Roadmap (10min)". A flat generic "Priorities (30min)" bullet-dump is a FAILED agenda.
+- **Write a one-line framing lead-in per section** (why this is on the agenda now), then 2–4 specific bullets citing commitment IDs / meeting dates / prior decisions, and an "ask" or "decision needed" line where appropriate.
+- **Weave in ≥1 dated prior-conversation callback per themed section** where the source supports it — quote a date + what was decided/said ("Per the 4/28 weekly, we agreed the import script gets the DOI drop method before…"). The scaffold's `[recent meeting]` candidates and the framing block give you these dates; use them.
+- **Weave discussion-topic / standing-prompt questions verbatim** into the Feedback/Growth-type themed sections — quote them as bullets, don't paraphrase them away.
+- Distribute the duration budget across your themed sections so each header carries `(Xmin)`.
+- Keep the frontmatter the scaffold emitted (`meeting_title`, `date`, `type`, `attendees`) — it enables auto-linking. Drop the SCAFFOLD guardrail blockquote and strip every `[source]` tag.
+- Output format (see below): `# Meeting Agenda: [Title]` (or `# 1:1: [Name]`), a one-line **Goal** under the title, metadata, ## themed sections with `(Xmin)`, bullets and checkboxes.
+
+### 5a. Self-check before saving (AC1 gate — non-skippable, NOT skippable in batch)
+
+Before you save or present any agenda, run this check against it. State the result to yourself explicitly:
+
+1. **No empty qualitative section.** For each `## ` section other than a pure "Next Steps" checklist: does it contain synthesized content OR an explicit one-line honest reason it is empty ("No open blockers from Lindsay's side this week")? A section carrying only the `_EMPTY — ...` placeholder, or only the template's generic bullets, is a FAILURE — go back to step 5.
+2. **Themed, not template-shaped.** Are there ≥2 sections named by TOPIC (not the generic template names Priorities / Feedback and Growth / Support and Blockers)? At least the headline themes of the meeting must be named sections.
+3. **≥1 dated callback.** Does at least one themed section weave in a dated prior-conversation callback? If recent-meeting signal existed in the scaffold and no agenda section references it, fix it.
+4. **Commitment IDs cited.** Did the attendee-scoped open commitments appear with their IDs in the relevant themed sections?
+5. **1:1 discussion topics woven in.** For a 1:1: are the person's discussion-topic / standing-prompt questions present verbatim in the Feedback/Growth-type sections?
+6. **No scaffold artifacts remain.** No `[source]` tags, no SCAFFOLD guardrail blockquote, no `## Unrouted signal` block (every item placed or deliberately dropped), no `## Cross-cutting / touches their lane` block left verbatim (pulled-up items folded into themes; the rest dropped).
+7. **Time-boxed.** If duration is known, does each section carry `(Xmin)`?
+
+If any check fails, you are NOT done. Return to step 5 and synthesize the missing depth before saving. This applies identically to every agenda in a batch. "Skeleton + empty qualitative sections" is the regression this skill exists to prevent.
 
 ### 6. Review and Adjust
 

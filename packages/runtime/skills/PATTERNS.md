@@ -102,6 +102,8 @@ templates/outputs/{skill-id}/default.md
 - For task-management view (week-plan, weekly-winddown): use `arete commitments list` — returns structured commitment data for review/resolution.
 - Do NOT call both in the same step — they overlap on commitment data.
 
+**Batch anti-degradation (prepare-meeting-agenda)**: When generating agendas for multiple meetings in one run, do NOT batch the context-gather across meetings and then mass-produce output. The confirmed failure (F3, 2026-06-08) is: the cheap section (Priorities) gets filled and the expensive qualitative synthesis (themed sections, Feedback/Growth, callbacks) gets skeletoned for every agenda in the batch. **Process each meeting end-to-end (scaffold → curate/frame → self-check) before starting the next.** Each agenda must independently match single-agenda depth. The quality bar does not drop because there are more meetings; do fewer agendas fully rather than more thinly. There is NO shared shortcut, no "same template for all," no "Priorities-only" batch output.
+
 ---
 
 ## get_area_context
