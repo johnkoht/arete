@@ -375,10 +375,13 @@ function pathsEquivalent(a, b) {
 }
 /**
  * Check whether an existing qmd collection's registered path/pattern still
- * matches what the scope definition expects. Returns true when a mismatch
- * is POSITIVELY detected (collection must be re-created). When
- * `qmd collection show` fails or its output can't be parsed, returns false
- * — we can't verify, so we leave the collection alone (non-destructive).
+ * matches what the scope definition expects.
+ *  - `'mismatch'`: positively detected — collection must be re-created.
+ *  - `'ok'`: positively verified.
+ *  - `'unverifiable'`: `qmd collection show` failed or its output couldn't
+ *    be parsed. We leave the collection alone (non-destructive) but the
+ *    caller SURFACES this (wiki-repair W5) — a silently-assumed-OK
+ *    collection with a stale path excludes content from search forever.
  */
 async function collectionSpecMismatch(execImpl, workspaceRoot, collectionName, expectedAbsolutePath) {
     let stdout;
@@ -387,19 +390,19 @@ async function collectionSpecMismatch(execImpl, workspaceRoot, collectionName, e
         stdout = showResult.stdout ?? '';
     }
     catch {
-        return false; // Can't verify — assume OK
+        return 'unverifiable'; // Can't verify — leave alone, but surfaced
     }
     const pathMatch = stdout.match(/^\s*Path:\s*(.+)$/m);
     const patternMatch = stdout.match(/^\s*Pattern:\s*(.+)$/m);
     if (!pathMatch && !patternMatch)
-        return false; // Unparseable — assume OK
+        return 'unverifiable'; // Unparseable — surfaced
     if (pathMatch && !pathsEquivalent(pathMatch[1].trim(), expectedAbsolutePath)) {
-        return true;
+        return 'mismatch';
     }
     if (patternMatch && patternMatch[1].trim() !== QMD_COLLECTION_MASK) {
-        return true;
+        return 'mismatch';
     }
-    return false;
+    return 'ok';
 }
 /**
  * Generate a unique scoped collection name from workspace path and scope.
@@ -512,14 +515,20 @@ export async function ensureQmdCollections(workspaceRoot, existingCollections, d
             // (e.g. memory → `.arete/memory/items`) keep their stale path
             // forever otherwise, silently excluding new content like
             // `.arete/memory/topics/` from search.
-            const mismatch = await collectionSpecMismatch(execImpl, workspaceRoot, collectionName, absolutePath);
-            if (!mismatch) {
-                // Collection exists and matches, no need to create
+            const specCheck = await collectionSpecMismatch(execImpl, workspaceRoot, collectionName, absolutePath);
+            if (specCheck !== 'mismatch') {
+                // Collection exists and matches (or can't be verified — left
+                // alone, non-destructive, but SURFACED via `note`).
                 scopeResults.push({
                     scope,
                     created: false,
                     collectionName,
                     skipped: false,
+                    ...(specCheck === 'unverifiable'
+                        ? {
+                            note: `collection '${collectionName}' spec unverifiable (qmd collection show failed or unparseable) — left as-is; if ${scope} search misses content, run \`qmd collection show ${collectionName}\` manually`,
+                        }
+                        : {}),
                 });
                 collections[scope] = collectionName;
                 continue;

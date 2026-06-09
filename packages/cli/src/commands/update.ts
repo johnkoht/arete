@@ -171,6 +171,11 @@ export function registerUpdateCommand(program: Command): void {
           if (qmdResult.warning) {
             warn(qmdResult.warning);
           }
+          // W5: surface per-scope spec-unverifiable notes (info-grade)
+          // instead of silently assuming the collection is OK.
+          for (const s of qmdResult.scopes) {
+            if (s.note) info(s.note);
+          }
         }
 
         // Phase 3 Step 1: print upstream-changes summary when any

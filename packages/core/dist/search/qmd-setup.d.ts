@@ -180,6 +180,12 @@ export type QmdScopeResult = {
     migrated?: boolean;
     /** Warning message if something went wrong */
     warning?: string;
+    /**
+     * Info-grade note (wiki-repair W5): set when the collection's spec
+     * could not be verified (`qmd collection show` failed/unparseable) and
+     * was left as-is. Not an error — but no longer silent.
+     */
+    note?: string;
 };
 /** Result of multi-collection setup */
 export type QmdCollectionsResult = {

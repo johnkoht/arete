@@ -186,7 +186,6 @@ export function registerStatusCommand(program) {
         // Area memory staleness (best-effort)
         let areaMemoryStale = 0;
         let areaMemoryTotal = 0;
-        let synthesisLastRefreshed = null;
         try {
             const areaStatuses = await services.areaMemory.listAreaMemoryStatus(basePaths);
             areaMemoryTotal = areaStatuses.length;
@@ -206,15 +205,10 @@ export function registerStatusCommand(program) {
             topicMemoryOrphan = topicStatuses.filter(s => s.orphan).length;
         }
         catch { /* non-critical */ }
-        try {
-            const synthPath = join(root, '.arete', 'memory', 'areas', '_synthesis.md');
-            const synthContent = await services.storage.read(synthPath);
-            if (synthContent) {
-                const match = synthContent.match(/^last_refreshed:\s*"?([^"\n]+)"?\s*$/m);
-                synthesisLastRefreshed = match?.[1] ?? null;
-            }
-        }
-        catch { /* non-critical */ }
+        // NOTE (wiki-repair W5): the Cross-Area Synthesis status line is
+        // GONE. Its writer (`_synthesis.md` LLM synthesis) was removed in
+        // Phase 7b, so the file is a fossil — reading it produced a
+        // permanently-stale line that nothing can ever refresh.
         // Pattern detection (best-effort, don't fail status if it errors)
         let patternCount = 0;
         try {
@@ -267,7 +261,6 @@ export function registerStatusCommand(program) {
                     stub: topicMemoryStub,
                     orphan: topicMemoryOrphan,
                 },
-                synthesis: { lastRefreshed: synthesisLastRefreshed },
             },
             intelligence: {
                 patterns: patternCount,
@@ -329,13 +322,6 @@ export function registerStatusCommand(program) {
         }
         else {
             console.log(`  ${chalk.dim('📚 Topic Memory:')} ${chalk.dim('none — run `arete topic seed` to backfill from meetings')}`);
-        }
-        if (synthesisLastRefreshed) {
-            const synthAge = Math.floor((Date.now() - new Date(synthesisLastRefreshed).getTime()) / (1000 * 60 * 60 * 24));
-            const synthBadge = synthAge > 7
-                ? chalk.yellow(` (${synthAge}d ago — stale)`)
-                : chalk.green(` (${synthAge}d ago)`);
-            console.log(`  ${chalk.dim('🔗 Cross-Area Synthesis:')}${synthBadge}`);
         }
         console.log(`  ${chalk.dim('⚡ Intelligence:')} Patterns detected in last 30 days: ${chalk.bold(String(patternCount))}`);
         console.log('');

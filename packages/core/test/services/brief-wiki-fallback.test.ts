@@ -24,6 +24,7 @@ import { AreaMemoryService } from '../../src/services/area-memory.js';
 import { AreaParserService } from '../../src/services/area-parser.js';
 import type { SearchProvider, SearchResult } from '../../src/search/types.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
+import { wikiStalenessLabel } from '../../src/services/brief-assemblers.js';
 
 function makePaths(root: string): WorkspacePaths {
   return {
@@ -181,6 +182,46 @@ describe('AC5: wiki integration', () => {
     const wiki = brief.sections.find((s) => s.heading.startsWith('Related wiki pages'));
     assert.ok(wiki, 'Related wiki pages section should appear');
     assert.ok(wiki!.bullets.some((b) => /glance-2-roadmap/.test(b)));
+    // W5/AC5: bullets display last_refreshed.
+    assert.ok(
+      wiki!.bullets.some((b) => /\(as of 2026-06-01/.test(b)),
+      `bullets must show last_refreshed: ${JSON.stringify(wiki!.bullets)}`,
+    );
+  });
+
+  it('marks a >60d-old wiki page visibly stale in brief output (W5/AC5)', async () => {
+    // Freeze the page at a date guaranteed >60 days old relative to ANY
+    // run date of this test (fixture written 2026; page frozen 2025).
+    writeFile(
+      tmpDir,
+      '.arete/memory/topics/glance-2-roadmap.md',
+      `---
+topic_slug: glance-2-roadmap
+status: active
+first_seen: 2025-01-01
+last_refreshed: 2025-01-01
+sources_integrated: []
+aliases:
+  - Lindsay
+area: glance-modernization
+---
+
+# Glance 2 Roadmap
+
+## Current state
+Frozen at the seed.
+`,
+    );
+    const search = fakeSearchProvider([
+      join(tmpDir, '.arete/memory/topics/glance-2-roadmap.md'),
+    ]);
+    const intel = buildIntel(tmpDir, search);
+    const brief = await intel.assembleBriefForPerson('lindsay-gray', paths);
+    const wiki = brief.sections.find((s) => s.heading.startsWith('Related wiki pages'));
+    assert.ok(wiki, 'Related wiki pages section should appear');
+    const bullet = wiki!.bullets.find((b) => /glance-2-roadmap/.test(b));
+    assert.ok(bullet, 'glance-2-roadmap bullet present');
+    assert.match(bullet!, /\(as of 2025-01-01 — stale\)/);
   });
 
   it('falls back to listAll() + tokenizeSlug() when SearchProvider is absent (searchBackend === "none")', async () => {
@@ -210,5 +251,30 @@ aliases:
       wiki!.bullets.every((b) => !/unrelated-topic/.test(b)),
       'unrelated topic should not match in fallback',
     );
+    // W5/AC5: fallback path also displays last_refreshed.
+    assert.ok(
+      wiki!.bullets.some((b) => /\(as of 2026-06-01/.test(b)),
+      `fallback bullets must show last_refreshed: ${JSON.stringify(wiki!.bullets)}`,
+    );
+  });
+});
+
+describe('wikiStalenessLabel (W5/AC5)', () => {
+  const today = new Date('2026-06-09T12:00:00Z');
+
+  it('renders fresh pages without the stale marker', () => {
+    assert.equal(wikiStalenessLabel('2026-06-01', today), '(as of 2026-06-01)');
+    // Exactly 60 days old is NOT stale (strict >, matching listTopicMemoryStatus)
+    assert.equal(wikiStalenessLabel('2026-04-10', today), '(as of 2026-04-10)');
+  });
+
+  it('renders >60d-old pages with the stale marker', () => {
+    assert.equal(wikiStalenessLabel('2026-04-08', today), '(as of 2026-04-08 — stale)');
+    assert.equal(wikiStalenessLabel('2025-01-01', today), '(as of 2025-01-01 — stale)');
+  });
+
+  it('treats unparseable dates as stale (unknown age must not read as fresh)', () => {
+    assert.equal(wikiStalenessLabel('not-a-date', today), '(as of not-a-date — stale)');
+    assert.equal(wikiStalenessLabel('', today), '(as of unknown — stale)');
   });
 });

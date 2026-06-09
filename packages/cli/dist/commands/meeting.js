@@ -1264,7 +1264,7 @@ export function registerMeetingCommands(program) {
         .option('--items <ids>', 'Comma-separated item IDs to mark as approved (e.g., ai_001,de_001)')
         .option('--skip <ids>', 'Comma-separated item IDs to mark as skipped (won\'t be committed)')
         .option('--skip-qmd', 'Skip automatic qmd index update')
-        .option('--skip-topics', 'Skip topic page integration after commit (defer to `arete memory refresh`)')
+        .option('--skip-topics', 'Skip topic page integration after commit (defer to `arete topic refresh`)')
         .option('--json', 'Output as JSON')
         .action(async (slug, opts) => {
         const services = await createServices(process.cwd());
@@ -1518,6 +1518,10 @@ export function registerMeetingCommands(program) {
         // (the committed items are already persisted at this point).
         // --------------------------------------------------------------------------
         let topicIntegration;
+        // W1 (wiki-repair): when Hook 2 is skipped/fails, capture WHY so it
+        // surfaces in command output + JSON instead of a swallowed warn —
+        // the 6/05–6/09 silent-integration-death class.
+        let topicIntegrationError;
         if (!opts.skipTopics && services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
             try {
                 // Re-read the just-committed file to get the post-alias topics list.
@@ -1550,12 +1554,34 @@ export function registerMeetingCommands(program) {
                 }
             }
             catch (err) {
-                // Non-fatal: approve already succeeded. Report and move on.
+                // Non-fatal for the approve itself (committed items are already
+                // persisted) — but NOT silent. Stale locks are taken over inside
+                // acquireSeedLock now, so reaching here means a LIVE process
+                // holds the lock (or integration genuinely failed). Record the
+                // error for JSON + human output below AND write a log event so
+                // the skipped integration is visible in the replay log.
                 if (err instanceof Error && err.name === 'SeedLockHeldError') {
-                    warn(`Topic integration skipped: ${err.message}`);
+                    topicIntegrationError = { kind: 'seed-lock-held', message: err.message };
                 }
                 else {
-                    warn(`Topic integration failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+                    topicIntegrationError = {
+                        kind: 'error',
+                        message: err instanceof Error ? err.message : 'unknown',
+                    };
+                }
+                try {
+                    await services.memoryLog.append(paths, {
+                        event: 'topic-integration-skipped',
+                        fields: {
+                            meeting: meetingSlug,
+                            reason: topicIntegrationError.kind,
+                            detail: topicIntegrationError.message,
+                        },
+                    });
+                }
+                catch (logErr) {
+                    // W5 lossy-logger rule: log-append failures warn, never vanish.
+                    warn(`Could not write topic-integration-skipped log event: ${logErr instanceof Error ? logErr.message : 'unknown'}`);
                 }
             }
         }
@@ -1647,6 +1673,7 @@ export function registerMeetingCommands(program) {
             },
             ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
             topicIntegration: topicIntegration ?? null,
+            topicIntegrationError: topicIntegrationError ?? null,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         if (opts.json) {
@@ -1682,7 +1709,21 @@ export function registerMeetingCommands(program) {
             const dur = topicIntegration.durationMs ?? 0;
             if (dur > 5000 || topicIntegration.topics > 2) {
                 const secs = (dur / 1000).toFixed(1);
-                warn(`Topic integration took ${secs}s (${topicIntegration.topics} topics). Use --skip-topics to defer; run \`arete memory refresh\` later to catch up.`);
+                // NOTE: the catch-up verb is `arete topic refresh` — `arete
+                // memory refresh` has NOT done topic integration since Phase 7b
+                // (the old hint sent users down a path that never catches up).
+                warn(`Topic integration took ${secs}s (${topicIntegration.topics} topics). Use --skip-topics to defer; run \`arete topic refresh\` later to catch up.`);
+            }
+        }
+        if (topicIntegrationError !== undefined) {
+            if (topicIntegrationError.kind === 'seed-lock-held') {
+                error(`Topic integration SKIPPED — ${topicIntegrationError.message}`);
+                info('This meeting was NOT integrated into its topic wiki pages.');
+                info(`Catch up once the conflicting process finishes: arete topic refresh --slugs <topics> (or arete topic refresh --all).`);
+            }
+            else {
+                error(`Topic integration FAILED (approve itself succeeded): ${topicIntegrationError.message}`);
+                info(`Catch up with: arete topic refresh --slugs <topics> (or arete topic refresh --all).`);
             }
         }
         displayQmdResult(qmdResult);
@@ -1823,7 +1864,7 @@ export function registerMeetingCommands(program) {
         .option('--skip-agenda', 'Skip agenda archival')
         .option('--clear', 'Clear existing staged sections before writing')
         .option('--skip-qmd', 'Skip automatic qmd index update')
-        .option('--skip-topics', 'Skip topic alias/merge pass (write intelligence.topics verbatim; `arete memory refresh` will normalize later)')
+        .option('--skip-topics', 'Skip topic alias/merge pass (write intelligence.topics verbatim; `arete topic refresh` will normalize later)')
         .option('--json', 'Output as JSON')
         .action(async (file, opts) => {
         const services = await createServices(process.cwd());

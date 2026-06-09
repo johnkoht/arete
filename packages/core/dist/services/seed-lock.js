@@ -7,11 +7,19 @@
  *
  * Uses `fs.open(path, 'wx')` which maps to POSIX `O_CREAT | O_EXCL`:
  * creation is atomic and fails if the file already exists. The lock
- * records the PID and start time so stale locks (crashed processes)
- * can be identified by the user without automatic takeover.
+ * records the PID and start time.
+ *
+ * Stale-lock takeover (wiki-repair W1, the 6/05–6/09 class): when the
+ * recorded pid is provably dead (or the lock file is unparseable),
+ * `acquireSeedLock` breaks the lock and retries ONCE instead of
+ * refusing. A live pid still refuses with `SeedLockHeldError`. Every
+ * takeover is logged to `<areteDir>/memory/log.md` as a
+ * `seed-lock-takeover` event so silent integration-death is visible
+ * in the replay log.
  */
-import { open, readFile, unlink } from 'node:fs/promises';
+import { appendFile, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { formatEvent, nowIsoSeconds } from '../utils/memory-log.js';
 const LOCK_RELATIVE_PATH = '.seed.lock';
 export class SeedLockHeldError extends Error {
     info;
@@ -32,51 +40,181 @@ function lockPath(areteDir) {
     return join(areteDir, LOCK_RELATIVE_PATH);
 }
 /**
- * Acquire the seed lock. Throws `SeedLockHeldError` if already held.
- * Returns a release function to call in a `finally` block.
+ * Safe pid-liveness check. `process.kill(pid, 0)` performs permission +
+ * existence checks without sending a signal:
+ *  - no throw  → process exists (alive)
+ *  - EPERM     → process exists but belongs to another user (alive —
+ *                NOT ours to take over)
+ *  - ESRCH     → no such process (dead)
+ * Non-positive / non-integer pids are treated as dead (an unparseable
+ * or corrupt lock never holds the system hostage).
+ */
+export function isPidAlive(pid) {
+    if (!Number.isInteger(pid) || pid <= 0)
+        return false;
+    try {
+        process.kill(pid, 0);
+        return true;
+    }
+    catch (err) {
+        return err.code === 'EPERM';
+    }
+}
+/**
+ * Acquire the seed lock. Returns a release function to call in a
+ * `finally` block.
+ *
+ * If the lock is already held:
+ *  - holder pid ALIVE  → throws `SeedLockHeldError` (unchanged behavior)
+ *  - holder pid DEAD or lock unparseable → STALE: break the lock, log a
+ *    `seed-lock-takeover` event to `<areteDir>/memory/log.md`, and retry
+ *    the exclusive create once. If the retry also hits EEXIST (another
+ *    process won the takeover race), throws `SeedLockHeldError`.
+ *
+ * The break is rename-guarded (MG-1.1): the breaker atomically renames
+ * the lock aside before deleting, so exactly ONE breaker captures the
+ * file, and a captured LIVE-pid lock (a competitor's fresh re-create)
+ * is restored and refused — a lagging breaker can no longer delete a
+ * competitor's fresh lock. Accepted residual: a three-party race during
+ * the restore window (a third breaker classifying while the captured
+ * live lock is being renamed back) is advisory-lock-grade residue; the
+ * lock's purpose (don't run two long LLM refreshes concurrently by
+ * accident) tolerates it.
  *
  * @param areteDir `.arete/` directory at workspace root
  * @param command  short label written into the lock file for user-facing diagnosis
  */
-export async function acquireSeedLock(areteDir, command) {
+export async function acquireSeedLock(areteDir, command, options = {}) {
     const path = lockPath(areteDir);
-    let handle;
-    try {
-        handle = await open(path, 'wx');
-    }
-    catch (err) {
-        if (err.code === 'EEXIST') {
+    for (let attempt = 0; attempt < 2; attempt++) {
+        let handle;
+        try {
+            handle = await open(path, 'wx');
+        }
+        catch (err) {
+            if (err.code !== 'EEXIST')
+                throw err;
+            // Lock exists — classify it.
             let info = null;
+            let parseable = false;
             try {
                 const content = await readFile(path, 'utf8');
-                info = JSON.parse(content);
+                const parsed = JSON.parse(content);
+                if (typeof parsed?.pid === 'number') {
+                    info = parsed;
+                    parseable = true;
+                }
             }
             catch {
-                // stale / malformed lock; report without info
+                // Unreadable or malformed lock file → treated as stale below.
+                // (ENOENT here means the holder released between open and read —
+                // also safe to retry.)
             }
-            throw new SeedLockHeldError(info);
+            const stale = !parseable || !isPidAlive(info.pid);
+            if (!stale || attempt > 0) {
+                // Live holder, or we already broke a stale lock once and STILL
+                // hit EEXIST (someone else won the takeover race) — refuse.
+                throw new SeedLockHeldError(info);
+            }
+            // Stale lock: take over via guarded, EXCLUSIVE break (MG-1.1).
+            // `rename` is atomic — exactly ONE breaker captures the file — so
+            // a lagging breaker can never unlink a competitor's freshly
+            // re-created lock.
+            await options.onBeforeBreak?.();
+            const tmp = `${path}.takeover-${process.pid}`;
+            try {
+                await rename(path, tmp); // atomic: only ONE breaker captures the file
+            }
+            catch {
+                // ENOENT: someone else broke it first — just retry the O_EXCL create.
+                continue;
+            }
+            let captured = null;
+            try {
+                captured = JSON.parse(await readFile(tmp, 'utf8'));
+            }
+            catch {
+                // Unreadable capture is still stale — proceed with the takeover.
+            }
+            if (captured && typeof captured.pid === 'number' && isPidAlive(captured.pid)) {
+                // We captured a LIVE competitor's freshly re-created lock —
+                // restore and refuse.
+                try {
+                    await rename(tmp, path);
+                }
+                catch {
+                    // Best-effort restore (accepted three-party residual).
+                }
+                throw new SeedLockHeldError(captured);
+            }
+            await unlink(tmp).catch(() => { });
+            // Capture succeeded — the stale lock is provably gone. Emit the
+            // takeover event NOW (after the capture, so the awaited log I/O
+            // no longer sits inside the classification→break window), then
+            // notify and retry the exclusive create.
+            await logStaleTakeover(areteDir, command, info);
+            try {
+                await options.onStaleTakeover?.(info);
+            }
+            catch {
+                // Reporter failures never block the takeover.
+            }
+            continue;
         }
-        throw err;
+        const info = {
+            pid: process.pid,
+            started: new Date().toISOString(),
+            command,
+        };
+        await handle.writeFile(JSON.stringify(info, null, 2));
+        await handle.close();
+        // Post-acquire own-pid verify (MG-1.1 assertable invariant): the
+        // lock we just created must still carry OUR pid; refuse if stolen.
+        const verified = JSON.parse(await readFile(path, 'utf8'));
+        if (verified.pid !== process.pid)
+            throw new SeedLockHeldError(verified);
+        let released = false;
+        return async () => {
+            if (released)
+                return;
+            released = true;
+            try {
+                await unlink(path);
+            }
+            catch {
+                // already gone
+            }
+        };
     }
-    const info = {
-        pid: process.pid,
-        started: new Date().toISOString(),
-        command,
-    };
-    await handle.writeFile(JSON.stringify(info, null, 2));
-    await handle.close();
-    let released = false;
-    return async () => {
-        if (released)
-            return;
-        released = true;
-        try {
-            await unlink(path);
-        }
-        catch {
-            // already gone
-        }
-    };
+    // Unreachable (loop either returns or throws), but TypeScript needs it.
+    throw new SeedLockHeldError(null);
+}
+/**
+ * Best-effort append of a `seed-lock-takeover` event to
+ * `<areteDir>/memory/log.md` using the strict log grammar. Uses raw
+ * `fs.appendFile` (O_APPEND — atomic for a single line) because this
+ * module has no StorageAdapter. Failures WARN to stderr — never vanish
+ * (wiki-repair W5 lossy-logger rule) — and never block the takeover.
+ */
+async function logStaleTakeover(areteDir, command, stale) {
+    const line = formatEvent({
+        timestamp: nowIsoSeconds(),
+        event: 'seed-lock-takeover',
+        fields: {
+            command,
+            stale_pid: stale !== null ? String(stale.pid) : 'unknown',
+            stale_started: stale?.started ?? 'unknown',
+            stale_command: stale?.command ?? 'unknown',
+        },
+    });
+    try {
+        const memoryDir = join(areteDir, 'memory');
+        await mkdir(memoryDir, { recursive: true });
+        await appendFile(join(memoryDir, 'log.md'), `${line}\n`, 'utf8');
+    }
+    catch (err) {
+        console.warn(`[seed-lock] stale lock taken over (pid ${stale?.pid ?? 'unknown'} dead) but log append failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
 }
 /**
  * Read the current lock owner without acquiring. Returns null if no lock exists.

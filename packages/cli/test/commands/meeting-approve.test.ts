@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import {
   runCli,
   runCliRaw,
@@ -401,5 +401,105 @@ Meeting with pre-marked items.
     assert.equal(result.approvedItems.actionItems.length, 1);
     assert.equal(result.approvedItems.decisions.length, 1);
     assert.equal(result.approvedItems.learnings.length, 0);
+  });
+
+  it('surfaces SeedLockHeldError instead of warn-swallowing (W1 / AC1 surfaced error)', () => {
+    // Meeting tagged with topics so Hook 2 actually attempts integration.
+    const meetingWithTopics = PROCESSED_MEETING.replace(
+      'status: processed',
+      'status: processed\ntopics: [sprint-planning]',
+    );
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      meetingWithTopics,
+      'utf8',
+    );
+
+    // Configure a (never-called) AI tier so `ai.isConfigured()` passes the
+    // Hook-2 gate. The seed lock throws before any LLM call happens.
+    const manifestPath = join(tmpDir, 'arete.yaml');
+    const manifest = readFileSync(manifestPath, 'utf8');
+    writeFileSync(
+      manifestPath,
+      `${manifest}\nai:\n  tiers:\n    fast: anthropic/claude-3-5-haiku-20241022\n`,
+      'utf8',
+    );
+
+    // Hold the lock with OUR (live) pid — takeover must NOT kick in.
+    const lockPath = join(tmpDir, '.arete', '.seed.lock');
+    writeFileSync(
+      lockPath,
+      JSON.stringify({ pid: process.pid, started: new Date().toISOString(), command: 'test-hold' }),
+      { flag: 'wx' },
+    );
+
+    try {
+      const stdout = runCli(
+        ['meeting', 'approve', '2026-03-15-sprint-review', '--all', '--skip-qmd', '--json'],
+        { cwd: tmpDir, env: { ARETE_NO_LLM: '' } },
+      );
+      const result = JSON.parse(stdout) as {
+        success: boolean;
+        topicIntegration: unknown;
+        topicIntegrationError: { kind: string; message: string } | null;
+      };
+
+      // Approve itself succeeds (items committed) — but the skipped
+      // integration is SURFACED, not swallowed.
+      assert.equal(result.success, true);
+      assert.equal(result.topicIntegration, null);
+      assert.ok(result.topicIntegrationError, 'topicIntegrationError must be present');
+      assert.equal(result.topicIntegrationError?.kind, 'seed-lock-held');
+      assert.match(result.topicIntegrationError?.message ?? '', /Seed lock held/i);
+
+      // And a log event records the skipped integration.
+      const log = readFileSync(join(tmpDir, '.arete', 'memory', 'log.md'), 'utf8');
+      assert.match(log, /topic-integration-skipped/);
+      assert.match(log, /reason=seed-lock-held/);
+      assert.match(log, /meeting=2026-03-15-sprint-review/);
+    } finally {
+      rmSync(lockPath, { force: true });
+    }
+  });
+
+  it('human output shows a loud topic-integration error on lock contention (W1)', () => {
+    const meetingWithTopics = PROCESSED_MEETING.replace(
+      'status: processed',
+      'status: processed\ntopics: [sprint-planning]',
+    );
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      meetingWithTopics,
+      'utf8',
+    );
+    const manifestPath = join(tmpDir, 'arete.yaml');
+    writeFileSync(
+      manifestPath,
+      `${readFileSync(manifestPath, 'utf8')}\nai:\n  tiers:\n    fast: anthropic/claude-3-5-haiku-20241022\n`,
+      'utf8',
+    );
+    const lockPath = join(tmpDir, '.arete', '.seed.lock');
+    writeFileSync(
+      lockPath,
+      JSON.stringify({ pid: process.pid, started: new Date().toISOString(), command: 'test-hold' }),
+      { flag: 'wx' },
+    );
+
+    try {
+      // Approve only non-action items: action items in non-JSON mode
+      // trigger the interactive goal-link prompt, which can't run in a
+      // captured subprocess. Hook 2 fires regardless of item kinds.
+      const r = runCliRaw(
+        ['meeting', 'approve', '2026-03-15-sprint-review', '--items', 'de_001,le_001', '--skip-qmd'],
+        { cwd: tmpDir, env: { ARETE_NO_LLM: '' } },
+      );
+      assert.equal(r.code, 0, 'approve still succeeds');
+      const combined = `${r.stdout}\n${r.stderr}`;
+      assert.match(combined, /Topic integration SKIPPED/);
+      assert.match(combined, /NOT integrated into its topic wiki pages/);
+      assert.match(combined, /arete topic refresh/);
+    } finally {
+      rmSync(lockPath, { force: true });
+    }
   });
 });

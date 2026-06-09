@@ -39,8 +39,8 @@ export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.j
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';
 export type { ItemFate, ItemFateEvent, ItemFateImportance, ItemFateKind, AppendItemFateOptions, } from './services/memory-log.js';
-export { acquireSeedLock, readSeedLock, breakSeedLock, SeedLockHeldError, } from './services/seed-lock.js';
-export type { SeedLockInfo } from './services/seed-lock.js';
+export { acquireSeedLock, readSeedLock, breakSeedLock, isPidAlive, SeedLockHeldError, } from './services/seed-lock.js';
+export type { SeedLockInfo, AcquireSeedLockOptions } from './services/seed-lock.js';
 export { formatEvent as formatMemoryLogEvent, parseEvent as parseMemoryLogEvent, parseLog as parseMemoryLog, appendEvent as appendMemoryLogEvent, nowIsoSeconds, } from './utils/memory-log.js';
 export type { LogEvent as MemoryLogEvent } from './utils/memory-log.js';
 export { parseMeetingFile } from './services/meeting-context.js';

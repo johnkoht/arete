@@ -4512,6 +4512,61 @@ describe('buildTopicWikiContextSection', () => {
     const out = buildTopicWikiContextSection(ctx);
     assert.ok(out.includes(sections));
   });
+
+  it('shows last_refreshed on the topic heading; stale pages marked (W5)', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'fresh-topic',
+          sections: '## Current state\n\nFresh.',
+          l2Excerpts: [],
+          lastRefreshed: '2026-06-01',
+          stale: false,
+        },
+        {
+          slug: 'frozen-topic',
+          sections: '## Current state\n\nFrozen at the 4/24 seed.',
+          l2Excerpts: [],
+          lastRefreshed: '2026-04-24',
+          stale: true,
+        },
+      ],
+    };
+    const out = buildTopicWikiContextSection(ctx);
+    assert.ok(out.includes('### [[fresh-topic]] (as of 2026-06-01)'));
+    assert.ok(out.includes('### [[frozen-topic]] (as of 2026-04-24 — stale)'));
+  });
+
+  it('omits the staleness label when lastRefreshed is absent (backward compat)', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'bare-topic', sections: '## Current state\n\nX.', l2Excerpts: [] },
+      ],
+    };
+    const out = buildTopicWikiContextSection(ctx);
+    assert.ok(out.includes('### [[bare-topic]]\n'));
+    assert.ok(!out.includes('as of'));
+  });
+
+  it('truncation preserves lastRefreshed/stale fields (clone copies them)', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'frozen-topic',
+          sections: '## Current state\n\nFrozen.',
+          l2Excerpts: ['2026-04-20: excerpt one', '2026-04-15: excerpt two'],
+          lastRefreshed: '2026-04-24',
+          stale: true,
+        },
+      ],
+    };
+    // Budget large enough to keep everything — clone path still runs.
+    const { ctx: truncated } = truncateTopicWikiContextToBudget(ctx, 10_000);
+    assert.equal(truncated.detectedTopics[0].lastRefreshed, '2026-04-24');
+    assert.equal(truncated.detectedTopics[0].stale, true);
+    const out = buildTopicWikiContextSection(truncated);
+    assert.ok(out.includes('### [[frozen-topic]] (as of 2026-04-24 — stale)'));
+  });
 });
 
 // ---------------------------------------------------------------------------

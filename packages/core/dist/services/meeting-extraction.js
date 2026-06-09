@@ -520,7 +520,12 @@ export function buildTopicWikiContextSection(ctx) {
         return '';
     const blocks = [];
     for (const topic of ctx.detectedTopics) {
-        const lines = [`### [[${topic.slug}]]`, '', topic.sections];
+        // W5 staleness: show page age right under the heading. `(as of
+        // <date> — stale)` past 60 days, matching the brief surfaces.
+        const heading = topic.lastRefreshed !== undefined && topic.lastRefreshed.length > 0
+            ? `### [[${topic.slug}]] (as of ${topic.lastRefreshed}${topic.stale === true ? ' — stale' : ''})`
+            : `### [[${topic.slug}]]`;
+        const lines = [heading, '', topic.sections];
         if (topic.l2Excerpts.length > 0) {
             lines.push('', 'Prior captured items for this topic:');
             for (const excerpt of topic.l2Excerpts) {
@@ -554,6 +559,8 @@ export function truncateTopicWikiContextToBudget(ctx, maxChars) {
             slug: t.slug,
             sections: t.sections,
             l2Excerpts: [...t.l2Excerpts],
+            ...(t.lastRefreshed !== undefined ? { lastRefreshed: t.lastRefreshed } : {}),
+            ...(t.stale !== undefined ? { stale: t.stale } : {}),
         })),
     };
     const measure = (c) => buildTopicWikiContextSection(c).length;

@@ -201,9 +201,10 @@ export {
   acquireSeedLock,
   readSeedLock,
   breakSeedLock,
+  isPidAlive,
   SeedLockHeldError,
 } from './services/seed-lock.js';
-export type { SeedLockInfo } from './services/seed-lock.js';
+export type { SeedLockInfo, AcquireSeedLockOptions } from './services/seed-lock.js';
 export {
   formatEvent as formatMemoryLogEvent,
   parseEvent as parseMemoryLogEvent,

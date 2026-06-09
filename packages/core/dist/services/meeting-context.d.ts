@@ -112,6 +112,14 @@ export interface MeetingContextBundle {
             slug: string;
             sections: string;
             l2Excerpts: string[];
+            /**
+             * `last_refreshed` from the topic page frontmatter (wiki-repair
+             * W5): retrieval surfaces must show page age instead of serving a
+             * frozen page as current.
+             */
+            lastRefreshed?: string;
+            /** True when `last_refreshed` is more than 60 days old (or unparseable). */
+            stale?: boolean;
         }>;
     };
 }

@@ -128,7 +128,9 @@ describe('topic refresh — slack-digest with AI mock', () => {
     const digest = seedDigest(tmpDir, '2026-04-28');
     const lockPath = join(tmpDir, '.arete', '.seed.lock');
     const handle = await fsOpen(lockPath, 'wx');
-    await handle.writeFile(JSON.stringify({ pid: 99999, started: new Date().toISOString(), command: 'test-hold' }));
+    // Use OUR pid: it is guaranteed alive, so stale-lock takeover (W1)
+    // does not kick in and the refresh must refuse.
+    await handle.writeFile(JSON.stringify({ pid: process.pid, started: new Date().toISOString(), command: 'test-hold' }));
     await handle.close();
     try {
       const { services, root, paths, callLLM, calls } = await setup(tmpDir);

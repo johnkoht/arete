@@ -322,6 +322,23 @@ export function extractMemoryHighlights(content) {
         relationshipHealth: bulletsFor('Relationship Health'),
     };
 }
+/** Days since `last_refreshed` after which a wiki page is labeled stale.
+ * Mirrors `listTopicMemoryStatus`'s staleDays=60 (strict `>`). */
+export const WIKI_STALE_DAYS = 60;
+/**
+ * Render the retrieval-surface staleness label for a wiki page:
+ * `(as of 2026-04-24 — stale)` past WIKI_STALE_DAYS, `(as of 2026-06-01)`
+ * otherwise. Unparseable dates render as stale — an unknown age must not
+ * masquerade as fresh. Pure; `today` injectable for tests.
+ */
+export function wikiStalenessLabel(lastRefreshed, today = new Date()) {
+    const refreshed = new Date(lastRefreshed);
+    const daysOld = Number.isNaN(refreshed.getTime())
+        ? Infinity
+        : Math.floor((today.getTime() - refreshed.getTime()) / (1000 * 60 * 60 * 24));
+    const display = lastRefreshed && lastRefreshed.length > 0 ? lastRefreshed : 'unknown';
+    return daysOld > WIKI_STALE_DAYS ? `(as of ${display} — stale)` : `(as of ${display})`;
+}
 /**
  * Per-mode wiki retrieval. `retrieveRelevant()` is the primary path; when
  * `searchBackend === 'none'` we fall back to `listAll() + tokenizeSlug()`
@@ -337,6 +354,7 @@ export async function retrieveWiki(topicMemory, paths, query, opts = {}) {
             area: r.frontmatter.area,
             summary: summarizeWikiBody(r.bodyForContext),
             path: join(paths.memory, 'topics', `${r.slug}.md`),
+            lastRefreshed: r.frontmatter.last_refreshed,
         }));
     }
     if (result.searchBackend !== 'none') {
@@ -384,7 +402,15 @@ export async function retrieveWiki(topicMemory, paths, query, opts = {}) {
         area: s.frontmatter.area,
         summary: summarizeWikiBody(s.bodyForContext),
         path: join(paths.memory, 'topics', `${s.slug}.md`),
+        lastRefreshed: s.frontmatter.last_refreshed,
     }));
+}
+/**
+ * Shared bullet renderer for "Related wiki pages" sections (W5/AC5):
+ * slug + last_refreshed staleness label + 1-line summary + source path.
+ */
+function wikiBullet(w, rel, today) {
+    return `**${w.slug}** ${wikiStalenessLabel(w.lastRefreshed, today)} — ${w.summary || '(no summary)'} — \`${rel}\``;
 }
 function summarizeWikiBody(body) {
     if (!body)
@@ -593,7 +619,7 @@ export async function assembleBriefForPerson(slug, paths, deps) {
             const bullets = wiki.map((w) => {
                 const rel = relativeToRoot(w.path, paths.root);
                 sources.push(rel);
-                return `**${w.slug}** — ${w.summary || '(no summary)'} — \`${rel}\``;
+                return wikiBullet(w, rel);
             });
             const capped = capBulletsByChars(bullets, PER_SECTION_CAPS.related_wiki);
             sections.push({
@@ -819,7 +845,7 @@ export async function assembleBriefForProject(slug, paths, deps) {
             const bullets = wiki.map((w) => {
                 const rel = relativeToRoot(w.path, paths.root);
                 sources.push(rel);
-                return `**${w.slug}** — ${w.summary || '(no summary)'} — \`${rel}\``;
+                return wikiBullet(w, rel);
             });
             const capped = capBulletsByChars(bullets, PER_SECTION_CAPS.related_wiki);
             sections.push({
@@ -1059,7 +1085,7 @@ export async function assembleBriefForArea(slug, paths, deps) {
             const bullets = wiki.map((w) => {
                 const rel = relativeToRoot(w.path, paths.root);
                 sources.push(rel);
-                return `**${w.slug}** — ${w.summary || '(no summary)'} — \`${rel}\``;
+                return wikiBullet(w, rel);
             });
             const capped = capBulletsByChars(bullets, PER_SECTION_CAPS.related_wiki);
             sections.push({
@@ -1333,7 +1359,7 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
             const bullets = wiki.map((w) => {
                 const rel = relativeToRoot(w.path, paths.root);
                 sources.push(rel);
-                return `**${w.slug}** — ${w.summary || '(no summary)'} — \`${rel}\``;
+                return wikiBullet(w, rel);
             });
             const capped = capBulletsByChars(bullets, PER_SECTION_CAPS.related_wiki);
             sections.push({
@@ -1460,7 +1486,7 @@ async function buildUnresolvedMeetingBrief(input, paths, deps) {
             const bullets = wiki.map((w) => {
                 const rel = relativeToRoot(w.path, paths.root);
                 sources.push(rel);
-                return `**${w.slug}** — ${w.summary || '(no summary)'} — \`${rel}\``;
+                return wikiBullet(w, rel);
             });
             sections.push({
                 heading: `Related wiki pages (${wiki.length})`,

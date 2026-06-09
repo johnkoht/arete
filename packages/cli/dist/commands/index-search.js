@@ -79,7 +79,7 @@ export function registerIndexSearchCommand(program) {
                 await services.workspace.updateManifestField(root, 'qmd_collection', result.collections.all);
             }
         }
-        // Surface created/migrated collections
+        // Surface created/migrated/unverifiable collections
         for (const scope of result.scopes) {
             if (scope.migrated) {
                 info(`Collection '${scope.collectionName}' re-created (stale path/pattern migrated)`);
@@ -89,6 +89,11 @@ export function registerIndexSearchCommand(program) {
             }
             if (scope.warning) {
                 warn(scope.warning);
+            }
+            // W5: spec-unverifiable collections are surfaced (info-grade),
+            // not silently assumed OK.
+            if (scope.note) {
+                info(scope.note);
             }
         }
         if (result.indexed) {

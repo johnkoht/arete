@@ -545,8 +545,12 @@ export function registerMemoryCommand(program: Command): void {
       }
 
       // 3b. Emit a `refresh` event to .arete/memory/log.md — dogfoods the
-      // grammar and gives replay tooling a timeline. Best-effort; log write
-      // failure never blocks the refresh.
+      // grammar and gives replay tooling a timeline. Log write failure
+      // never blocks the refresh, but it MUST warn — the bare swallow
+      // here is how the 6/08 full refresh left zero trace in log.md
+      // (wiki-repair W5: append failures warn, never vanish). The two
+      // appends are independent: a refresh-event failure must not also
+      // kill the claude-md-regen event.
       if (!opts.dryRun) {
         try {
           await services.memoryLog.append(paths, {
@@ -559,20 +563,27 @@ export function registerMemoryCommand(program: Command): void {
               index_errors: String(indexErrors.length),
             },
           });
-          // Companion event for CLAUDE.md regen — distinct event kind
-          // so replay can distinguish agent-boot-context changes from
-          // data refreshes.
-          if (claudeMdRegen !== undefined) {
-            const claudeMdStatus = claudeMdRegen['CLAUDE.md'] ?? 'skipped';
+        } catch (err) {
+          warn(`Memory log append failed (refresh event not recorded): ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+        // Companion event for CLAUDE.md regen — distinct event kind
+        // so replay can distinguish agent-boot-context changes from
+        // data refreshes. Note: only emitted when regen RAN (full-scope,
+        // non-dry refresh with `regenerateRootFiles` not throwing) — a
+        // thrown regen is warned above at the 2c catch and leaves no
+        // event by design (claudeMdRegen stays undefined).
+        if (claudeMdRegen !== undefined) {
+          const claudeMdStatus = claudeMdRegen['CLAUDE.md'] ?? 'skipped';
+          try {
             await services.memoryLog.append(paths, {
               event: 'claude-md-regen',
               fields: {
                 result: claudeMdStatus,
               },
             });
+          } catch (err) {
+            warn(`Memory log append failed (claude-md-regen event not recorded): ${err instanceof Error ? err.message : 'unknown'}`);
           }
-        } catch {
-          // swallow — log best-effort
         }
       }
 

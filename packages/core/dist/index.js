@@ -40,7 +40,7 @@ export { TopicMemoryService, hashSource, hashMeetingSource, classifyByJaccard, t
 export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './services/topic-detection.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';
-export { acquireSeedLock, readSeedLock, breakSeedLock, SeedLockHeldError, } from './services/seed-lock.js';
+export { acquireSeedLock, readSeedLock, breakSeedLock, isPidAlive, SeedLockHeldError, } from './services/seed-lock.js';
 export { formatEvent as formatMemoryLogEvent, parseEvent as parseMemoryLogEvent, parseLog as parseMemoryLog, appendEvent as appendMemoryLogEvent, nowIsoSeconds, } from './utils/memory-log.js';
 // Meeting parsing helper
 export { parseMeetingFile } from './services/meeting-context.js';

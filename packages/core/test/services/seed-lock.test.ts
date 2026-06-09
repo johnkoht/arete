@@ -1,13 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   acquireSeedLock,
   readSeedLock,
   breakSeedLock,
+  isPidAlive,
   SeedLockHeldError,
+  type SeedLockInfo,
 } from '../../src/services/seed-lock.js';
 
 async function withAreteDir(fn: (dir: string) => Promise<void>): Promise<void> {
@@ -17,6 +20,25 @@ async function withAreteDir(fn: (dir: string) => Promise<void>): Promise<void> {
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
+}
+
+/**
+ * Produce a pid that is GUARANTEED dead: spawn a trivial child
+ * synchronously — by the time spawnSync returns, the child has exited
+ * and been reaped, so its pid no longer exists.
+ */
+function deadPid(): number {
+  const r = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' });
+  assert.ok(typeof r.pid === 'number' && r.pid > 0, 'spawnSync must report a pid');
+  return r.pid;
+}
+
+function lockFileContent(pid: number, command = 'topic refresh'): string {
+  return JSON.stringify({
+    pid,
+    started: '2026-06-08T21:29:42.474Z',
+    command,
+  } satisfies SeedLockInfo);
 }
 
 describe('seed-lock', () => {
@@ -32,7 +54,7 @@ describe('seed-lock', () => {
     });
   });
 
-  it('throws SeedLockHeldError when lock already exists', async () => {
+  it('throws SeedLockHeldError when lock is held by a LIVE pid (AC1 live-pid refusal)', async () => {
     await withAreteDir(async (dir) => {
       const release1 = await acquireSeedLock(dir, 'seed');
       try {
@@ -40,9 +62,147 @@ describe('seed-lock', () => {
           () => acquireSeedLock(dir, 'other'),
           (err: unknown) => err instanceof SeedLockHeldError && err.info?.pid === process.pid,
         );
+        // Lock must be untouched — still ours.
+        const info = await readSeedLock(dir);
+        assert.strictEqual(info?.command, 'seed');
       } finally {
         await release1();
       }
+    });
+  });
+
+  it('takes over a stale lock whose pid is dead (AC1 dead-pid takeover)', async () => {
+    await withAreteDir(async (dir) => {
+      const stalePid = deadPid();
+      await writeFile(join(dir, '.seed.lock'), lockFileContent(stalePid));
+
+      let observed: SeedLockInfo | null | undefined;
+      const release = await acquireSeedLock(dir, 'meeting approve (topic ingest)', {
+        onStaleTakeover: (stale) => {
+          observed = stale;
+        },
+      });
+
+      // We now hold the lock under OUR pid.
+      const info = await readSeedLock(dir);
+      assert.strictEqual(info?.pid, process.pid);
+      assert.strictEqual(info?.command, 'meeting approve (topic ingest)');
+
+      // Callback saw the stale holder's info.
+      assert.strictEqual(observed?.pid, stalePid);
+      assert.strictEqual(observed?.command, 'topic refresh');
+
+      await release();
+      assert.strictEqual(await readSeedLock(dir), null);
+    });
+  });
+
+  it('logs a seed-lock-takeover event to memory/log.md on takeover', async () => {
+    await withAreteDir(async (dir) => {
+      const stalePid = deadPid();
+      await writeFile(join(dir, '.seed.lock'), lockFileContent(stalePid));
+
+      const release = await acquireSeedLock(dir, 'topic refresh');
+      await release();
+
+      const log = await readFile(join(dir, 'memory', 'log.md'), 'utf8');
+      const lines = log.split('\n').filter((l) => l.includes('seed-lock-takeover'));
+      assert.strictEqual(lines.length, 1, 'exactly one takeover event');
+      assert.match(lines[0], /^## \[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\] seed-lock-takeover \| /);
+      assert.match(lines[0], new RegExp(`stale_pid=${stalePid}`));
+      assert.match(lines[0], /stale_command=topic%20refresh/);
+      assert.match(lines[0], /command=topic%20refresh/);
+    });
+  });
+
+  it('treats an unparseable lock file as stale and takes over', async () => {
+    await withAreteDir(async (dir) => {
+      await writeFile(join(dir, '.seed.lock'), 'not json');
+      let observed: SeedLockInfo | null | undefined = undefined;
+      const release = await acquireSeedLock(dir, 'new', {
+        onStaleTakeover: (stale) => {
+          observed = stale;
+        },
+      });
+      assert.strictEqual(observed, null, 'unparseable lock reports null stale info');
+      const info = await readSeedLock(dir);
+      assert.strictEqual(info?.pid, process.pid);
+      await release();
+    });
+  });
+
+  it('treats a lock with a non-numeric pid as stale and takes over', async () => {
+    await withAreteDir(async (dir) => {
+      await writeFile(
+        join(dir, '.seed.lock'),
+        JSON.stringify({ pid: 'garbage', started: 'x', command: 'y' }),
+      );
+      const release = await acquireSeedLock(dir, 'new');
+      const info = await readSeedLock(dir);
+      assert.strictEqual(info?.pid, process.pid);
+      await release();
+    });
+  });
+
+  it('refuses (no infinite loop) when EEXIST persists after one takeover', async () => {
+    await withAreteDir(async (dir) => {
+      // Simulate losing the takeover race: a stale lock exists, but the
+      // moment we break it another LIVE process re-creates it. Model by
+      // re-creating a live-pid lock from onStaleTakeover (which runs
+      // after the break, before the retry).
+      const stalePid = deadPid();
+      await writeFile(join(dir, '.seed.lock'), lockFileContent(stalePid));
+      await assert.rejects(
+        () =>
+          acquireSeedLock(dir, 'racer', {
+            onStaleTakeover: async () => {
+              await writeFile(
+                join(dir, '.seed.lock'),
+                lockFileContent(process.pid, 'winner'),
+              );
+            },
+          }),
+        (err: unknown) =>
+          err instanceof SeedLockHeldError && err.info?.command === 'winner',
+      );
+      await breakSeedLock(dir);
+    });
+  });
+
+  it('refuses to break when a LIVE-pid lock replaced the stale one between classification and break (MG-1.1 steal guard)', async () => {
+    await withAreteDir(async (dir) => {
+      // Interleaving under test: WE classify a dead-pid lock as stale,
+      // but before OUR break lands, competitor A has already broken it
+      // and re-created the lock under its LIVE pid. The old unconditional
+      // unlink would delete A's fresh lock; the rename-based capture must
+      // detect the live pid, restore A's lock, and refuse.
+      const stalePid = deadPid();
+      await writeFile(join(dir, '.seed.lock'), lockFileContent(stalePid));
+      let takeoverFired = false;
+      await assert.rejects(
+        () =>
+          acquireSeedLock(dir, 'breaker', {
+            onBeforeBreak: async () => {
+              await writeFile(
+                join(dir, '.seed.lock'),
+                lockFileContent(process.pid, 'competitor'),
+              );
+            },
+            onStaleTakeover: () => {
+              takeoverFired = true;
+            },
+          }),
+        (err: unknown) =>
+          err instanceof SeedLockHeldError &&
+          err.info?.pid === process.pid &&
+          err.info?.command === 'competitor',
+      );
+      assert.strictEqual(takeoverFired, false, 'no takeover event on refusal');
+      // Competitor's fresh lock was restored, NOT deleted.
+      const info = await readSeedLock(dir);
+      assert.strictEqual(info?.pid, process.pid);
+      assert.strictEqual(info?.command, 'competitor');
+      await breakSeedLock(dir);
     });
   });
 
@@ -66,43 +226,6 @@ describe('seed-lock', () => {
     });
   });
 
-  it('surfaces existing lock info in SeedLockHeldError.info', async () => {
-    await withAreteDir(async (dir) => {
-      // Pre-seed a lock file (simulating another process's lock)
-      await writeFile(
-        join(dir, '.seed.lock'),
-        JSON.stringify({
-          pid: 99999,
-          started: '2026-04-22T10:00:00Z',
-          command: 'other-process',
-        }),
-      );
-      try {
-        await acquireSeedLock(dir, 'new');
-        assert.fail('should have thrown');
-      } catch (err) {
-        assert.ok(err instanceof SeedLockHeldError);
-        assert.strictEqual(err.info?.pid, 99999);
-        assert.strictEqual(err.info?.command, 'other-process');
-      }
-      await breakSeedLock(dir);
-    });
-  });
-
-  it('tolerates malformed existing lock (reports without info)', async () => {
-    await withAreteDir(async (dir) => {
-      await writeFile(join(dir, '.seed.lock'), 'not json');
-      try {
-        await acquireSeedLock(dir, 'new');
-        assert.fail('should have thrown');
-      } catch (err) {
-        assert.ok(err instanceof SeedLockHeldError);
-        assert.strictEqual(err.info, null);
-      }
-      await breakSeedLock(dir);
-    });
-  });
-
   it('breakSeedLock clears the lock forcibly', async () => {
     await withAreteDir(async (dir) => {
       await writeFile(join(dir, '.seed.lock'), '{}');
@@ -114,7 +237,8 @@ describe('seed-lock', () => {
   it('is safe against concurrent acquirers (at most one wins)', async () => {
     await withAreteDir(async (dir) => {
       // Race three simultaneous acquires. Exactly one should succeed;
-      // the other two throw SeedLockHeldError.
+      // the other two throw SeedLockHeldError (the winner's pid is LIVE
+      // — ours — so no takeover happens).
       const results = await Promise.allSettled([
         acquireSeedLock(dir, 'a'),
         acquireSeedLock(dir, 'b'),
@@ -132,6 +256,21 @@ describe('seed-lock', () => {
       if (wins[0].status === 'fulfilled') {
         await wins[0].value();
       }
+    });
+  });
+
+  describe('isPidAlive', () => {
+    it('returns true for our own pid', () => {
+      assert.strictEqual(isPidAlive(process.pid), true);
+    });
+    it('returns false for a dead pid', () => {
+      assert.strictEqual(isPidAlive(deadPid()), false);
+    });
+    it('returns false for invalid pids', () => {
+      assert.strictEqual(isPidAlive(0), false);
+      assert.strictEqual(isPidAlive(-1), false);
+      assert.strictEqual(isPidAlive(1.5), false);
+      assert.strictEqual(isPidAlive(NaN), false);
     });
   });
 });
