@@ -54,6 +54,8 @@ export interface MeetingIndexEntry {
     attendeeIds: string[];
     attendeeNames: string[];
     area?: string;
+    /** Topic slugs from `topics:` frontmatter (June-style meetings carry these, no `area:`). */
+    topics: string[];
     projectSlug?: string;
     /** First non-empty body excerpt (post-frontmatter heading or summary). */
     excerpt?: string;
@@ -61,7 +63,12 @@ export interface MeetingIndexEntry {
 export declare function loadMeetingIndex(storage: StorageAdapter, paths: WorkspacePaths): Promise<MeetingIndexEntry[]>;
 /** Filter the meeting index to entries where `personSlug` or `personName` appear in attendees. */
 export declare function meetingsForPerson(index: MeetingIndexEntry[], personSlug: string, personName: string): MeetingIndexEntry[];
-/** Filter the meeting index by area frontmatter match. */
+/**
+ * Filter the meeting index by area — union of `area:` frontmatter match
+ * and `topics:` membership (W6, review concern 7: June-style meetings
+ * carry `topics:` lists and no `area:` key, so area-only matching missed
+ * them at both the project (S2) and area call sites).
+ */
 export declare function meetingsForArea(index: MeetingIndexEntry[], areaSlug: string): MeetingIndexEntry[];
 /** Filter the meeting index by overlap with a group of attendee slugs. */
 export declare function meetingsForGroup(index: MeetingIndexEntry[], groupSlugs: string[], excludePath?: string): MeetingIndexEntry[];
@@ -179,6 +186,49 @@ export interface ProjectBriefDeps {
 }
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
+export interface AreaTaggedItem {
+    type: 'decision' | 'learning';
+    text: string;
+    date?: string;
+    path: string;
+}
+/** One parsed entry from `.arete/memory/items/{decisions,learnings}.md`. */
+export interface MemoryItemEntry {
+    /** Heading text (date prefix stripped when legacy `### YYYY-MM-DD: Title`). */
+    title: string;
+    /** From a `- **Date**: YYYY-MM-DD` bullet (live format) or the legacy heading prefix. */
+    date?: string;
+    /** Slugs from a `- **Topics**: a, b, c` bullet (live format). */
+    topics: string[];
+    /** Explicit `Area: foo` line or `[area:foo]` tag (legacy fallback). */
+    area?: string;
+}
+/**
+ * Parse memory-item entries in BOTH live and legacy formats (W6, review
+ * concern 3 respec):
+ *
+ *   Live (what `decisions.md`/`learnings.md` actually contain today):
+ *     ## Title
+ *     - **Date**: YYYY-MM-DD
+ *     - **Source**: ...
+ *     - **Topics**: slug-a, slug-b
+ *
+ *   Legacy (the old spec — only ~5/694 live entries):
+ *     ### YYYY-MM-DD: Title
+ *     Area: foo            (or an inline `[area:foo]` tag)
+ *
+ * Line-based on purpose — the previous `[\s\S]+?(?=...|$)/gm` regex
+ * truncated each section body at its first line end under the `m` flag
+ * (same pitfall documented at `extractDiscussionTopics`).
+ */
+export declare function parseMemoryItemEntries(content: string): MemoryItemEntry[];
+/**
+ * Build the topic-slug → area map from topic-page `area:` frontmatter
+ * (the same surface `ActiveTopicEntry.area` is derived from). Best-effort:
+ * returns an empty map on any failure.
+ */
+export declare function loadTopicAreaMap(topicMemory: TopicMemoryService, paths: WorkspacePaths): Promise<Map<string, string>>;
+export declare function readAreaTaggedMemoryItems(storage: StorageAdapter, paths: WorkspacePaths, area: string, topicAreaBySlug: Map<string, string>): Promise<AreaTaggedItem[]>;
 export interface AreaBriefDeps {
     storage: StorageAdapter;
     commitments: CommitmentsService;

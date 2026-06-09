@@ -28,7 +28,7 @@ Phase 12 (projects-first-class) builds project briefs directly on this foundatio
 
 **Made (John, 2026-06-09):**
 - **Summaries: YES** — wire meeting summaries into the live (approve) path. **Org entities: NO** — delete the dark code (ledger-negative).
-- **Avalanche: option 1+2** — batch alias-rescue + triage, one curated review sitting, before 6/24.
+- **Avalanche: option 1+2** — batch alias-rescue + triage; review-only sitting + resumable background apply (pre-mortem R8). **John pre-authorized slipping past 6/24** (2026-06-09): fallback verified nag-grade (1 stale topic/winddown, capped) — correctness over deadline.
 - **Out of scope, tracked, NOT silently dropped**: email→wiki (never planned), Notion→topics, inbox→topics (summaries are a leaf today), project-docs/PRDs→wiki (published-doc-sync workstream). Also explicitly excluded from this phase: area-memory staleness (4/4 areas ~1mo stale — resolved by normal `arete memory refresh` cadence once observability lands, not a code repair).
 
 **OPEN — needed from John before build:**
@@ -79,6 +79,7 @@ Falsifiable deletion checklist (review concern 6):
 - `topic refresh --all` per-page progress output (today: 18 silent minutes is indistinguishable from a hang — observed live 6/09).
 - `_synthesis.md` fossil (review concern 10): `status.ts:233` still reads the file whose writer was removed in 7b → permanent false "stale" line; drop the status line / mark feature removed.
 - qmd review follow-ups: add-fail-after-remove test; surface "unverifiable" collection-show results instead of silent assume-OK.
+- **LLM-call timeout in the integration path** (added 2026-06-09 after a live wedge): a `topic refresh --all` hung >15 min on a single stuck HTTP call (ESTABLISHED socket, no data, no timeout) and had to be killed — the second wedge of this exact shape (first: 6/08, which created the stale lock). Add a per-call timeout + one retry to the integrateSource LLM path so a stuck call fails forward instead of freezing the run. Lands in wave 2 (or W1+W5 fixup if convenient).
 - Optional/cheap: `arete status` CLAUDE.md-age line; index.md count off-by-2.
 
 ### W6 — Brief correctness trio (repairs that Phase 12 then builds on)
