@@ -13,7 +13,8 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import { getSearchProvider } from '../../src/search/factory.js';
@@ -27,8 +28,15 @@ import { AreaMemoryService } from '../../src/services/area-memory.js';
 import { AreaParserService } from '../../src/services/area-parser.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 
+// Resolve relative to THIS test file (test is at
+// packages/core/test/services/, source at packages/core/src/services/) so
+// the grep guard works regardless of the suite's invocation cwd (the full
+// suite runs from repo root, not packages/core).
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const ASSEMBLERS_PATH = join(
-  process.cwd(),
+  __dirname,
+  '..',
+  '..',
   'src',
   'services',
   'brief-assemblers.ts',
