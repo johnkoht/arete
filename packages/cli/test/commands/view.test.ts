@@ -74,6 +74,20 @@ function makeExistsSyncFor(
   return ((path: string) => existingPaths.some(p => path.includes(p))) as typeof import('fs').existsSync;
 }
 
+/**
+ * Build a fake `createServicesFn` for the non-wait path, which only consults
+ * `services.workspace.findRoot()`. Resolves the workspace root instantly so the
+ * test doesn't depend on real filesystem/index I/O timing (the source of the
+ * prior `Promise.race(timeout)` flakiness + suite-wide hang). Storage is not
+ * exercised on the non-wait path, so a no-op stub is sufficient.
+ */
+function makeFakeServicesFn(root: string): ViewCommandDeps['createServicesFn'] {
+  return (async () => ({
+    workspace: { findRoot: async () => root },
+    storage: {} as StorageAdapter,
+  })) as unknown as NonNullable<ViewCommandDeps['createServicesFn']>;
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ensureWebBuild', () => {
@@ -352,27 +366,15 @@ describe('view command — server-start-success', () => {
       openBrowserFn: async (url: string) => {
         browserOpened = url;
       },
+      createServicesFn: makeFakeServicesFn(tmpDir),
     };
 
-    // setInterval keeps process alive — override process.exit so test can finish
-    const setIntervalOrig = globalThis.setInterval;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    globalThis.setInterval = ((fn: () => void, delay: number) => {
-      intervalId = setIntervalOrig(fn, delay);
-      return intervalId;
-    }) as typeof setInterval;
-
     try {
-      // runView never calls process.exit on success path, but setInterval keeps it alive.
-      // We run it and then resolve via a race with a short timeout.
-      await Promise.race([
-        runView({}, deps),
-        new Promise<void>(resolve => setTimeout(resolve, 200)),
-      ]);
+      // The non-wait success path now resolves cleanly: the keep-alive timer is
+      // unref'd, so awaiting runView terminates deterministically (no timeout race).
+      await runView({}, deps);
     } finally {
       process.chdir(origCwd);
-      if (intervalId !== undefined) clearInterval(intervalId);
-      globalThis.setInterval = setIntervalOrig;
     }
 
     assert.ok(spawnCalled, 'Expected spawn to be called');
@@ -415,12 +417,6 @@ describe('view command — SIGINT cleanup', () => {
     process.chdir(tmpDir);
 
     const fakeChild = makeFakeChild();
-    const setIntervalOrig = globalThis.setInterval;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    globalThis.setInterval = ((fn: () => void, delay: number) => {
-      intervalId = setIntervalOrig(fn, delay);
-      return intervalId;
-    }) as typeof setInterval;
 
     const deps: ViewCommandDeps = {
       isPortAvailableFn: async (port: number) => port === 3847,
@@ -429,17 +425,15 @@ describe('view command — SIGINT cleanup', () => {
       existsSyncFn: makeExistsSyncFor(['dist/index.html', 'dist/index.js']),
       fetchFn: makeFetchOk(),
       openBrowserFn: async (_url: string) => {},
+      createServicesFn: makeFakeServicesFn(tmpDir),
     };
 
     try {
-      await Promise.race([
-        runView({}, deps),
-        new Promise<void>(resolve => setTimeout(resolve, 200)),
-      ]);
+      // Non-wait path resolves cleanly (unref'd keep-alive timer); the SIGINT
+      // handler is registered before the timer, so it's live once runView returns.
+      await runView({}, deps);
     } finally {
       process.chdir(origCwd);
-      if (intervalId !== undefined) clearInterval(intervalId);
-      globalThis.setInterval = setIntervalOrig;
     }
 
     // Simulate SIGINT — should kill the child
@@ -639,24 +633,14 @@ describe('view command — --path flag', () => {
       openBrowserFn: async (url: string) => {
         browserOpened = url;
       },
+      createServicesFn: makeFakeServicesFn(tmpDir),
     };
 
-    const setIntervalOrig = globalThis.setInterval;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    globalThis.setInterval = ((fn: () => void, delay: number) => {
-      intervalId = setIntervalOrig(fn, delay);
-      return intervalId;
-    }) as typeof setInterval;
-
     try {
-      await Promise.race([
-        runView({ path: '/review' }, deps),
-        new Promise<void>(resolve => setTimeout(resolve, 200)),
-      ]);
+      // Non-wait path resolves cleanly (unref'd keep-alive timer); no timeout race.
+      await runView({ path: '/review' }, deps);
     } finally {
       process.chdir(origCwd);
-      if (intervalId !== undefined) clearInterval(intervalId);
-      globalThis.setInterval = setIntervalOrig;
     }
 
     assert.equal(browserOpened, 'http://localhost:3847/review');

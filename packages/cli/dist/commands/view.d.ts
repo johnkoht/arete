@@ -5,7 +5,7 @@ import type { Command } from 'commander';
 import { spawn, spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { type StorageAdapter } from '@arete/core';
+import { createServices, type StorageAdapter } from '@arete/core';
 export type ViewCommandDeps = {
     spawnFn?: typeof spawn;
     spawnSyncFn?: typeof spawnSync;
@@ -14,6 +14,13 @@ export type ViewCommandDeps = {
     isPortAvailableFn?: (port: number) => Promise<boolean>;
     existsSyncFn?: typeof existsSync;
     randomUUIDFn?: typeof randomUUID;
+    /**
+     * Inject service construction (workspace root resolution + storage).
+     * Defaults to the real `createServices`. Surfaced so tests can resolve the
+     * workspace deterministically without waiting on real filesystem/index I/O
+     * (which otherwise made the non-wait path's timing non-deterministic).
+     */
+    createServicesFn?: typeof createServices;
 };
 export type ViewCommandOpts = {
     port?: string;
