@@ -11,11 +11,25 @@
  *
  * Plan: dev/work/plans/arete-v2-chef-orchestrator/phase-9-followup-agenda-synthesis/plan.md
  */
-import { createServices, resolveTemplateContent, TEMPLATE_REGISTRY, assembleAgendaScaffold, renderScaffoldMarkdown, extractDiscussionTopics, extractNextFocus, } from '@arete/core';
+import { createServices, resolveTemplateContent, TEMPLATE_REGISTRY, assembleAgendaScaffold, renderScaffoldMarkdown, extractDiscussionTopics, extractNextFocus, slugifyPersonName, } from '@arete/core';
 import { parse as parseYaml } from 'yaml';
 import { join } from 'path';
 import { error, info } from '../formatters.js';
 const PEOPLE_CATEGORIES = ['internal', 'customers', 'users'];
+/**
+ * Pull the owner's display name from `context/profile.md` frontmatter (`name:`).
+ * Mirrors how the entity service derives the workspace owner. Best-effort: a
+ * lightweight frontmatter read so the CLI need not import the YAML parser path.
+ */
+function parseOwnerName(profileContent) {
+    const fm = profileContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!fm)
+        return undefined;
+    const m = fm[1].match(/^name:\s*(.+?)\s*$/m);
+    if (!m)
+        return undefined;
+    return m[1].replace(/^["']|["']$/g, '').trim() || undefined;
+}
 /**
  * Infer the agenda template variant from the meeting title + attendee count,
  * mirroring the SKILL.md context-inference rules. A two-person sync (the person
@@ -115,7 +129,19 @@ export function registerAgendaCommands(program) {
                 name: mb.name,
                 discussionTopics: extractDiscussionTopics(content),
                 nextFocus: extractNextFocus(content) ?? undefined,
+                // Attendee-scoped commitments (judge #2 BLOCKER fix): seed Priorities
+                // from each person's OWN owed-list, not the owner-global ledger.
+                commitments: mb.commitments,
             });
+        }
+        // Workspace owner slug — exclude their own ledger from per-attendee
+        // Priorities seeds (owner is on every 1:1). Source: context/profile.md.
+        let ownerSlug;
+        const profileContent = await services.storage.read(join(paths.context, 'profile.md'));
+        if (profileContent) {
+            const ownerName = parseOwnerName(profileContent);
+            if (ownerName)
+                ownerSlug = slugifyPersonName(ownerName);
         }
         // 3. Resolve the agenda template (variant from --type or inferred).
         const type = opts.type ?? inferType(brief.metadata.title, brief.metadata.attendees.length);
@@ -144,6 +170,7 @@ export function registerAgendaCommands(program) {
         const maxPer = Number.parseInt(opts.maxPerSection ?? '8', 10);
         const scaffold = assembleAgendaScaffold(brief, attendees, template, {
             maxCandidatesPerSection: Number.isFinite(maxPer) && maxPer > 0 ? maxPer : 8,
+            ownerSlug,
         });
         if (opts.json) {
             console.log(JSON.stringify({ success: true, scaffold }, null, 2));

@@ -168,6 +168,35 @@ Questions to revisit periodically:
     assert.ok(!all.some((q) => q.startsWith('*Questions')));
     assert.ok(all.every((q) => q.startsWith('"')));
   });
+
+  // B must-fix #1 (judge #1): the extractor must match BOTH the canonical
+  // `## 1:1 Discussion Topics` header AND Lindsay's `## Standing 1:1 Discussion
+  // Prompts` alias. Before the fix, the alias-header file returned [] and her
+  // Feedback & Growth section came up EMPTY.
+  it('matches both header variants: "1:1 Discussion Topics" and "Standing 1:1 Discussion Prompts"', () => {
+    const canonical = `# P
+## 1:1 Discussion Topics
+- "Canonical question one?"
+- "Canonical question two?"
+## Interaction Log
+`;
+    const alias = `# P
+## Standing 1:1 Discussion Prompts
+
+Questions to revisit periodically:
+- "Alias question one?"
+- "Alias question two?"
+## Interaction Log
+`;
+    const canonicalGroups = extractDiscussionTopics(canonical);
+    const aliasGroups = extractDiscussionTopics(alias);
+    // Both headers must yield non-empty groups with their verbatim questions.
+    assert.ok(canonicalGroups.length > 0, 'canonical "1:1 Discussion Topics" must extract');
+    assert.ok(aliasGroups.length > 0, 'alias "Standing 1:1 Discussion Prompts" must extract');
+    assert.equal(canonicalGroups.flatMap((g) => g.questions).length, 2);
+    assert.equal(aliasGroups.flatMap((g) => g.questions).length, 2);
+    assert.match(aliasGroups.flatMap((g) => g.questions).join('\n'), /Alias question one/);
+  });
 });
 
 describe('extractNextFocus', () => {
@@ -263,6 +292,143 @@ describe('assembleAgendaScaffold (one-on-one)', () => {
     const s = assembleAgendaScaffold(makeBrief(), [attendeeFromFile()], ONE_ON_ONE_TEMPLATE);
     assert.ok(s.framingNotes && s.framingNotes.length > 0);
     assert.match(s.framingNotes!.join(' '), /status sweep/i);
+  });
+});
+
+// --- B must-fix #2 (judge #2 BLOCKER): attendee-scoped Priorities -----------
+
+/** A minimal open commitment for the attendee-scoping tests. */
+function mkCommitment(
+  id: string,
+  personSlug: string,
+  personName: string,
+  text: string,
+): Commitment {
+  return {
+    id,
+    text,
+    direction: 'i_owe_them',
+    personSlug,
+    personName,
+    source: 'test',
+    date: '2026-06-02',
+    createdAt: '2026-06-02T00:00:00.000Z',
+    status: 'open',
+    resolvedAt: null,
+  } as Commitment;
+}
+
+describe('assembleAgendaScaffold — attendee-scoped Priorities (must-fix #2)', () => {
+  // The proof of the bug: a 1:1 brief is keyed on [attendee, owner], so the
+  // group-global "Open commitments touching this group" section carries the
+  // owner's ENTIRE ledger. Seeding Priorities from that made every 1:1's
+  // Priorities IDENTICAL. The fix seeds from each attendee's OWN list.
+  const ownerGlobal = [
+    '`959208f4` → John Koht: Port topic memory _(2026-06-01)_',
+    '`c0205fec` → John Koht: Complete compliance items _(2026-06-01)_',
+  ];
+
+  function briefForGroup(): MeetingBrief {
+    return makeBrief({
+      sections: [
+        {
+          heading: 'Open commitments touching this group (2)',
+          // Owner-global ledger — what the brief returns for BOTH 1:1s.
+          bullets: ownerGlobal,
+        },
+      ],
+    });
+  }
+
+  function attendee(
+    slug: string,
+    name: string,
+    commitments: Commitment[],
+  ): AttendeeScaffoldInput {
+    return { slug, name, discussionTopics: [], commitments };
+  }
+
+  it('seeds Priorities from the attendee owed-list, NOT the owner-global ledger', () => {
+    const lindsay = attendee('lindsay-gray', 'Lindsay Gray', [
+      mkCommitment('0b3609e9', 'lindsay-gray', 'Lindsay Gray', 'Deliver POP MVP plan'),
+      mkCommitment('52f53ff2', 'lindsay-gray', 'Lindsay Gray', 'Write PRD for task mgmt'),
+    ]);
+    const john = attendee('john-koht', 'John Koht', []);
+    const s = assembleAgendaScaffold(briefForGroup(), [john, lindsay], ONE_ON_ONE_TEMPLATE, {
+      ownerSlug: 'john-koht',
+    });
+    const pri = s.sections.find((x) => x.heading === 'Priorities')!;
+    const text = pri.candidates.map((c) => c.text).join('\n');
+    // Lindsay's own items seed Priorities.
+    assert.match(text, /0b3609e9/);
+    assert.match(text, /52f53ff2/);
+    // The owner-global ledger must NOT be in Priorities.
+    assert.ok(!/959208f4/.test(text), 'owner-global commitment leaked into Priorities');
+    assert.ok(!/c0205fec/.test(text), 'owner-global commitment leaked into Priorities');
+  });
+
+  it('routes owner-global commitments to the separate Cross-cutting bucket', () => {
+    const lindsay = attendee('lindsay-gray', 'Lindsay Gray', [
+      mkCommitment('0b3609e9', 'lindsay-gray', 'Lindsay Gray', 'Deliver POP MVP plan'),
+    ]);
+    const john = attendee('john-koht', 'John Koht', []);
+    const s = assembleAgendaScaffold(briefForGroup(), [john, lindsay], ONE_ON_ONE_TEMPLATE, {
+      ownerSlug: 'john-koht',
+    });
+    const xc = s.crossCutting.map((c) => c.text).join('\n');
+    assert.match(xc, /959208f4/);
+    assert.match(xc, /c0205fec/);
+    // And Cross-cutting must NOT swallow the attendee's own item.
+    assert.ok(!/0b3609e9/.test(xc));
+    const md = renderScaffoldMarkdown(s);
+    assert.match(md, /## Cross-cutting \/ touches their lane/);
+  });
+
+  it('two different attendees get DIFFERENT Priority seeds (the regression proof)', () => {
+    const john = attendee('john-koht', 'John Koht', []);
+    const lindsay = attendee('lindsay-gray', 'Lindsay Gray', [
+      mkCommitment('0b3609e9', 'lindsay-gray', 'Lindsay Gray', 'Deliver POP MVP plan'),
+      mkCommitment('52f53ff2', 'lindsay-gray', 'Lindsay Gray', 'Write PRD'),
+    ]);
+    const anthony = attendee('anthony-avina', 'Anthony Avina', [
+      mkCommitment('08bc2f35', 'anthony-avina', 'Anthony Avina', 'Update import script'),
+      mkCommitment('9e0b1ad5', 'anthony-avina', 'Anthony Avina', 'Review status letter doc'),
+    ]);
+
+    const sL = assembleAgendaScaffold(briefForGroup(), [john, lindsay], ONE_ON_ONE_TEMPLATE, {
+      ownerSlug: 'john-koht',
+    });
+    const sA = assembleAgendaScaffold(briefForGroup(), [john, anthony], ONE_ON_ONE_TEMPLATE, {
+      ownerSlug: 'john-koht',
+    });
+
+    const priL = sL.sections
+      .find((x) => x.heading === 'Priorities')!
+      .candidates.filter((c) => c.source === 'commitment')
+      .map((c) => c.text)
+      .sort();
+    const priA = sA.sections
+      .find((x) => x.heading === 'Priorities')!
+      .candidates.filter((c) => c.source === 'commitment')
+      .map((c) => c.text)
+      .sort();
+
+    assert.ok(priL.length > 0 && priA.length > 0);
+    assert.notDeepEqual(priL, priA, 'two attendees must NOT get identical Priority seeds');
+    assert.match(priL.join('\n'), /0b3609e9/);
+    assert.match(priA.join('\n'), /08bc2f35/);
+    // Cross-cutting is allowed to be identical (it IS the shared owner ledger).
+  });
+
+  it('falls back to group-global commitments when no attendee commitments are passed', () => {
+    // Group meetings / unresolved attendees: preserve prior behavior.
+    const s = assembleAgendaScaffold(briefForGroup(), [attendeeFromFile()], ONE_ON_ONE_TEMPLATE, {
+      ownerSlug: 'john-koht',
+    });
+    const pri = s.sections.find((x) => x.heading === 'Priorities')!;
+    const text = pri.candidates.map((c) => c.text).join('\n');
+    assert.match(text, /959208f4/); // group-global is the only signal → used as seed
+    assert.equal(s.crossCutting.length, 0); // nothing to separate out
   });
 });
 

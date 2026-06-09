@@ -34,6 +34,16 @@ export interface AttendeeScaffoldInput {
     discussionTopics: DiscussionTopicGroup[];
     /** `## Next 1:1 Focus` extract parsed from the person file (if present). */
     nextFocus?: NextFocusExtract;
+    /**
+     * The attendee's OWN open commitments — `listForPerson(slug)`, i.e. the
+     * relationship-scoped owed-list (I-owe-them / they-owe-me). This is what
+     * seeds `## Priorities` (must-fix #2 — judge #2 BLOCKER): seeding Priorities
+     * from the owner-global ledger made every 1:1's Priorities IDENTICAL. The
+     * owner attendee's own ledger is NOT a per-relationship priority signal, so
+     * the assembler skips the owner here (see `ownerSlug`) and routes owner-global
+     * items to the separate `crossCutting` bucket.
+     */
+    commitments?: Commitment[];
 }
 /** A parsed meeting-type template (frontmatter-stripped). */
 export interface TemplateInput {
@@ -71,6 +81,14 @@ export interface AgendaScaffold {
     sources: string[];
     /** Signal that had no obvious home — surfaced so the agent doesn't drop it. */
     unrouted: ScaffoldCandidate[];
+    /**
+     * Owner-global / cross-cutting commitments — the workspace owner's own ledger
+     * items that merely TOUCH this attendee's lane (group-global commitments not
+     * owned by the non-owner attendee themselves). Surfaced in a SEPARATE,
+     * clearly-labeled bucket — never folded into the primary `## Priorities`,
+     * never identical across different 1:1s as the primary signal (must-fix #2).
+     */
+    crossCutting: ScaffoldCandidate[];
     /** Framing prose carried verbatim from person-file `## Next 1:1 Focus`. */
     framingNotes?: string[];
 }
@@ -82,6 +100,13 @@ type Bucket = 'priorities' | 'feedback-growth' | 'support-blockers' | 'next-step
  * falls back to 'general' for free-form templates (other/leadership/customer).
  */
 export declare function classifySection(heading: string): Bucket;
+/**
+ * Render a structured Commitment to candidate-bullet text (no leading `- `),
+ * matching the brief's `renderCommitmentBullet` shape so attendee-scoped
+ * candidates read identically to the group-global ones the agent already
+ * curates: `` `<id8>` <arrow> <name>[ project]: <text> _(date)_ ``.
+ */
+export declare function renderCommitmentText(c: Commitment): string;
 /** Commitment direction split when commitments are passed in structured form. */
 export declare function splitOwed(commitments: Commitment[]): {
     iOwe: Commitment[];
@@ -90,6 +115,14 @@ export declare function splitOwed(commitments: Commitment[]): {
 export interface AssembleScaffoldOptions {
     /** Soft cap on candidate bullets per section (older/lower priority dropped). */
     maxCandidatesPerSection?: number;
+    /**
+     * Workspace owner slug (e.g. `john-koht`). The owner is an attendee of their
+     * own 1:1s; their personal/owner-global ledger must NOT seed the other
+     * person's `## Priorities` (judge #2 BLOCKER). When set, the owner attendee's
+     * own commitments are excluded from the per-attendee Priorities seed and the
+     * group-global ledger is routed to `crossCutting` instead.
+     */
+    ownerSlug?: string;
 }
 /**
  * Assemble the agenda scaffold. Deterministic.

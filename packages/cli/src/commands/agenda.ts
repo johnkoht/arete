@@ -20,6 +20,7 @@ import {
   renderScaffoldMarkdown,
   extractDiscussionTopics,
   extractNextFocus,
+  slugifyPersonName,
   type AttendeeScaffoldInput,
   type TemplateInput,
 } from '@arete/core';
@@ -37,6 +38,19 @@ interface ScaffoldOpts {
 }
 
 const PEOPLE_CATEGORIES = ['internal', 'customers', 'users'] as const;
+
+/**
+ * Pull the owner's display name from `context/profile.md` frontmatter (`name:`).
+ * Mirrors how the entity service derives the workspace owner. Best-effort: a
+ * lightweight frontmatter read so the CLI need not import the YAML parser path.
+ */
+function parseOwnerName(profileContent: string): string | undefined {
+  const fm = profileContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return undefined;
+  const m = fm[1].match(/^name:\s*(.+?)\s*$/m);
+  if (!m) return undefined;
+  return m[1].replace(/^["']|["']$/g, '').trim() || undefined;
+}
 
 /**
  * Infer the agenda template variant from the meeting title + attendee count,
@@ -135,7 +149,19 @@ export function registerAgendaCommands(program: Command): void {
           name: mb.name,
           discussionTopics: extractDiscussionTopics(content),
           nextFocus: extractNextFocus(content) ?? undefined,
+          // Attendee-scoped commitments (judge #2 BLOCKER fix): seed Priorities
+          // from each person's OWN owed-list, not the owner-global ledger.
+          commitments: mb.commitments,
         });
+      }
+
+      // Workspace owner slug — exclude their own ledger from per-attendee
+      // Priorities seeds (owner is on every 1:1). Source: context/profile.md.
+      let ownerSlug: string | undefined;
+      const profileContent = await services.storage.read(join(paths.context, 'profile.md'));
+      if (profileContent) {
+        const ownerName = parseOwnerName(profileContent);
+        if (ownerName) ownerSlug = slugifyPersonName(ownerName);
       }
 
       // 3. Resolve the agenda template (variant from --type or inferred).
@@ -162,6 +188,7 @@ export function registerAgendaCommands(program: Command): void {
       const maxPer = Number.parseInt(opts.maxPerSection ?? '8', 10);
       const scaffold = assembleAgendaScaffold(brief, attendees, template, {
         maxCandidatesPerSection: Number.isFinite(maxPer) && maxPer > 0 ? maxPer : 8,
+        ownerSlug,
       });
 
       if (opts.json) {
