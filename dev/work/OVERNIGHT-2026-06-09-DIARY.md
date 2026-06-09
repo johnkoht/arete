@@ -37,7 +37,7 @@ purpose: Durable log of the autonomous overnight orchestration for John to revie
 |---|---|---|---|
 | Bugs BUG-1/2/3 | `bugfix-pre-existing` | dev (/hotfix) | 🔄 running |
 | I-0 approach A (prose) | `agenda-synth-a` | dev | ✅ built + self-tested (commit `7b0fdf2f`) |
-| I-0 approach B (scaffold) | `agenda-synth-b` | dev | 🔄 running |
+| I-0 approach B (scaffold) | `agenda-synth-b` | dev | ✅ built (`24dbe667`/`2a38e922`/`4312af96`) — fixes the discussion-topics data gap via new extractors; **batch==single byte-identical by construction**; scaffolding still needs agent framing pass |
 | #2 planning | `issues-2-plan` | tech-lead | ✅ plan written (`6aabae61`) |
 | #2 Wave A (I-3/I-5/I-4-diag) | `fix-issues2-wave-a` | dev | 🔄 running |
 | #2 Wave B (I-1/I-6) | `fix-issues2-wave-b` | dev | 🔄 running |
@@ -49,3 +49,4 @@ Pending (spawn as upstreams report): reviewers for each build; I-0 generator+eva
 ## Running log
 
 - **(start)** Pushed v2 to origin/main (286 commits). Created 6 worktrees off the merge. Launched Wave 1 (bugs, agenda A+B, #2 plan). Approach A + #2 plan returned. Adopted Wave B decisions. Launched #2 Wave A + Wave B. Release deferred to end-of-run. Diary started.
+- **I-0 both approaches built.** A = prose/self-check (zero code, skippability is its risk). B = deterministic scaffolding (code; batch-immune by construction; fixes the brief discussion-topics data gap). Early read: likely a COMBINE (B's non-skippable floor + A's framing ceiling). Launched an independent cold-generation agent to produce neutral test agendas (anthony/lindsay/email-templates/glance-2.0, single + 4-way batch) for both approaches → then parallel judge agents. Build-agents' self-generated samples don't count.
