@@ -47,6 +47,7 @@ import { registerHygieneCommand } from './commands/hygiene.js';
 import { registerCostCommand } from './commands/cost.js';
 import { registerEventsCommand } from './commands/events.js';
 import { registerDedupCommand } from './commands/dedup.js';
+import { registerAgendaCommands } from './commands/agenda.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -179,5 +180,6 @@ registerHygieneCommand(program);
 registerCostCommand(program);
 registerEventsCommand(program);
 registerDedupCommand(program);
+registerAgendaCommands(program);
 
 program.parse();
