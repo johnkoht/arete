@@ -711,7 +711,15 @@ export function registerMeetingCommands(program) {
         try {
             const { loadMemorySummary, renderActiveTopicsAsSlugList } = await import('@arete/core');
             const paths = services.workspace.getPaths(root);
-            const memory = await loadMemorySummary(services.topicMemory, paths);
+            // I-3: the bias list is a bare-slug nudge for the extraction LLM, not a
+            // human-facing view. The default 25-entry cap on getActiveTopics starves
+            // it — canonical slugs ranked >25 never reach the LLM, so it proposes
+            // near-duplicate sub-slugs (orphan-topic churn). Pass no limit here so
+            // every active canonical slug biases extraction; the 25-cap stays on the
+            // human CLAUDE.md Active Topics view (its own loadMemorySummary call).
+            const memory = await loadMemorySummary(services.topicMemory, paths, {
+                activeTopics: { limit: Number.POSITIVE_INFINITY },
+            });
             const rendered = renderActiveTopicsAsSlugList(memory.activeTopics);
             activeTopicSlugs = rendered.length > 0 ? rendered : undefined;
         }
