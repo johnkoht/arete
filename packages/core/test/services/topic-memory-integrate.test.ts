@@ -9,6 +9,8 @@ import {
   hashSource,
   hashMeetingSource,
   TopicMemoryService,
+  resolveIntegrationLlmTimeoutMs,
+  DEFAULT_INTEGRATION_LLM_TIMEOUT_MS,
 } from '../../src/services/topic-memory.js';
 import type { TopicPage, TopicSourceRef } from '../../src/models/topic-page.js';
 
@@ -698,5 +700,144 @@ describe('TopicMemoryService.integrateSource', () => {
       },
     );
     assert.strictEqual(second.decision, 'skipped-already-integrated');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// integrateSource LLM timeout + one retry (wiki-repair T5)
+// ---------------------------------------------------------------------------
+
+describe('integrateSource LLM timeout (wiki-repair T5)', () => {
+  const nullStorage = {
+    read: async () => null,
+    write: async () => {},
+    exists: async () => false,
+    delete: async () => {},
+    list: async () => [],
+    listSubdirectories: async () => [],
+    mkdir: async () => {},
+    getModified: async () => null,
+  };
+
+  const VALID_RESPONSE = JSON.stringify({
+    updated_sections: { 'Current state': 'Updated by test' },
+    new_change_log_entry: 'Integrated test source.',
+  });
+
+  /** A wedged LLM call: never settles unless its signal aborts. */
+  function wedgedCall(calls: { count: number; aborted: number }) {
+    return (_prompt: string, opts?: { signal?: AbortSignal }) => {
+      calls.count += 1;
+      return new Promise<string>((_resolve, reject) => {
+        opts?.signal?.addEventListener('abort', () => {
+          calls.aborted += 1;
+          reject(new Error('aborted by signal'));
+        });
+      });
+    };
+  }
+
+  it('fails forward to fallback after timeout + ONE retry (the live-wedge shape)', async () => {
+    const svc = new TopicMemoryService(nullStorage);
+    const calls = { count: 0, aborted: 0 };
+    const result = await svc.integrateSource(
+      'cover-whale-templates',
+      samplePage(),
+      { path: 'resources/meetings/2026-06-09-new.md', date: '2026-06-09', content: 'fresh content' },
+      { today: TODAY, callLLM: wedgedCall(calls), llmTimeoutMs: 40 },
+    );
+    // Run continued (fails forward) instead of freezing.
+    assert.strictEqual(result.decision, 'fallback');
+    assert.strictEqual(result.reason, 'llm-error');
+    // Initial call + exactly ONE retry; both aborted.
+    assert.strictEqual(calls.count, 2);
+    assert.strictEqual(calls.aborted, 2);
+    // The fallback trail records the timeout cause.
+    const trail = result.page.sections['Source trail'] ?? '';
+    const changeLog = result.page.sections['Change log'] ?? '';
+    assert.match(`${trail}\n${changeLog}`, /timed out/);
+  });
+
+  it('retry succeeds: first attempt wedges, second integrates', async () => {
+    const svc = new TopicMemoryService(nullStorage);
+    let attempt = 0;
+    const callLLM = (_prompt: string, opts?: { signal?: AbortSignal }) => {
+      attempt += 1;
+      if (attempt === 1) {
+        return new Promise<string>((_resolve, reject) => {
+          opts?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      }
+      return Promise.resolve(VALID_RESPONSE);
+    };
+    const result = await svc.integrateSource(
+      'cover-whale-templates',
+      samplePage(),
+      { path: 'resources/meetings/2026-06-09-new.md', date: '2026-06-09', content: 'fresh content' },
+      { today: TODAY, callLLM, llmTimeoutMs: 40 },
+    );
+    assert.strictEqual(result.decision, 'integrated');
+    assert.strictEqual(attempt, 2);
+    assert.strictEqual(result.page.sections['Current state'], 'Updated by test');
+  });
+
+  it('non-timeout LLM errors are NOT retried (existing fallback semantics)', async () => {
+    const svc = new TopicMemoryService(nullStorage);
+    let count = 0;
+    const callLLM = async () => {
+      count += 1;
+      throw new Error('HTTP 500');
+    };
+    const result = await svc.integrateSource(
+      'cover-whale-templates',
+      samplePage(),
+      { path: 'resources/meetings/2026-06-09-new.md', date: '2026-06-09', content: 'fresh content' },
+      { today: TODAY, callLLM, llmTimeoutMs: 5000 },
+    );
+    assert.strictEqual(result.decision, 'fallback');
+    assert.strictEqual(result.reason, 'llm-error');
+    assert.strictEqual(count, 1);
+  });
+
+  it('fast successful calls are unaffected by the timeout wrapper', async () => {
+    const svc = new TopicMemoryService(nullStorage);
+    const result = await svc.integrateSource(
+      'cover-whale-templates',
+      samplePage(),
+      { path: 'resources/meetings/2026-06-09-new.md', date: '2026-06-09', content: 'fresh content' },
+      { today: TODAY, callLLM: async () => VALID_RESPONSE },
+    );
+    assert.strictEqual(result.decision, 'integrated');
+  });
+});
+
+describe('resolveIntegrationLlmTimeoutMs', () => {
+  it('explicit override wins over env and default', () => {
+    process.env.ARETE_LLM_TIMEOUT_MS = '5000';
+    try {
+      assert.strictEqual(resolveIntegrationLlmTimeoutMs(250), 250);
+    } finally {
+      delete process.env.ARETE_LLM_TIMEOUT_MS;
+    }
+  });
+
+  it('env var applies when no explicit override', () => {
+    process.env.ARETE_LLM_TIMEOUT_MS = '5000';
+    try {
+      assert.strictEqual(resolveIntegrationLlmTimeoutMs(), 5000);
+    } finally {
+      delete process.env.ARETE_LLM_TIMEOUT_MS;
+    }
+  });
+
+  it('invalid env / explicit values fall through to the 120s default', () => {
+    process.env.ARETE_LLM_TIMEOUT_MS = 'not-a-number';
+    try {
+      assert.strictEqual(resolveIntegrationLlmTimeoutMs(), DEFAULT_INTEGRATION_LLM_TIMEOUT_MS);
+      assert.strictEqual(resolveIntegrationLlmTimeoutMs(-5), DEFAULT_INTEGRATION_LLM_TIMEOUT_MS);
+    } finally {
+      delete process.env.ARETE_LLM_TIMEOUT_MS;
+    }
+    assert.strictEqual(DEFAULT_INTEGRATION_LLM_TIMEOUT_MS, 120_000);
   });
 });

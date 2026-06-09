@@ -211,8 +211,8 @@ export function createMeetingsRouter(workspaceRoot) {
                         const parsed = parseMeetingFile(committed);
                         const meetingTopics = parsed?.frontmatter.topics ?? [];
                         if (meetingTopics.length > 0) {
-                            const topicCallLLM = async (prompt) => {
-                                const r = await services.ai.call('synthesis', prompt);
+                            const topicCallLLM = async (prompt, callOpts) => {
+                                const r = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
                                 return r.text;
                             };
                             await services.topicMemory.refreshAllFromSources(paths, {

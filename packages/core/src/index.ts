@@ -169,9 +169,12 @@ export {
   ESTIMATED_USD_PER_INTEGRATION,
   discoverTopicSources,
   SLACK_DIGEST_FILENAME_RE,
+  DEFAULT_INTEGRATION_LLM_TIMEOUT_MS,
+  resolveIntegrationLlmTimeoutMs,
 } from './services/topic-memory.js';
 export type {
   TopicCandidate,
+  IntegrationLLMCallFn,
   TopicIdentity,
   AliasResult,
   AliasDecision,

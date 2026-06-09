@@ -1651,8 +1651,11 @@ export function registerMeetingCommands(program) {
                     const parsed = parseMeetingFile(committed);
                     const meetingTopics = parsed?.frontmatter.topics ?? [];
                     if (meetingTopics.length > 0) {
-                        const topicCallLLM = async (prompt) => {
-                            const r = await services.ai.call('synthesis', prompt);
+                        // Signal-aware (wiki-repair T5): the integration path's
+                        // per-call timeout aborts the signal so a wedged HTTP
+                        // call is actually torn down, not just raced past.
+                        const topicCallLLM = async (prompt, callOpts) => {
+                            const r = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
                             return r.text;
                         };
                         const integrationStart = Date.now();

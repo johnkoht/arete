@@ -237,8 +237,8 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
             const parsed = parseMeetingFile(committed);
             const meetingTopics = parsed?.frontmatter.topics ?? [];
             if (meetingTopics.length > 0) {
-              const topicCallLLM = async (prompt: string) => {
-                const r = await services.ai.call('synthesis', prompt);
+              const topicCallLLM = async (prompt: string, callOpts?: { signal?: AbortSignal }) => {
+                const r = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
                 return r.text;
               };
               await services.topicMemory.refreshAllFromSources(paths, {

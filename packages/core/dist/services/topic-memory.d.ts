@@ -290,9 +290,40 @@ export declare function buildIntegratePrompt(topicSlug: string, existingPage: To
     date: string;
     content: string;
 }, relevantL2: string): string;
+/**
+ * LLM call signature for the integration path (wiki-repair T5, added
+ * after two live wedges where a single stuck HTTP call froze a
+ * `topic refresh --all` run for 15+ minutes with no timeout).
+ *
+ * Extends the plain `LLMCallFn` with an optional AbortSignal so the
+ * per-call timeout can actually cancel the underlying HTTP request —
+ * `AIService.call` forwards `options.signal` to pi-ai's
+ * `completeSimple`. Plain `(prompt) => Promise<string>` implementations
+ * remain assignable; for those the timeout still fails the call forward,
+ * it just can't cancel the in-flight socket.
+ */
+export type IntegrationLLMCallFn = (prompt: string, options?: {
+    signal?: AbortSignal;
+}) => Promise<string>;
+/**
+ * Default per-call LLM timeout for the integration path. Deliberately
+ * generous — integration synthesis calls are legitimately slow (long
+ * topic pages + transcripts); the timeout exists to catch WEDGED
+ * sockets (ESTABLISHED, no data), not slow-but-live calls. Override
+ * via `llmTimeoutMs` or the `ARETE_LLM_TIMEOUT_MS` env var.
+ */
+export declare const DEFAULT_INTEGRATION_LLM_TIMEOUT_MS = 120000;
+/** Resolve the effective integration LLM timeout (explicit > env > default). */
+export declare function resolveIntegrationLlmTimeoutMs(explicit?: number): number;
 export interface IntegrateSourceOptions {
-    callLLM?: LLMCallFn;
+    callLLM?: IntegrationLLMCallFn;
     relevantL2?: string;
+    /**
+     * Per-call LLM timeout override (ms) for this integration. Defaults
+     * to `ARETE_LLM_TIMEOUT_MS` env or
+     * `DEFAULT_INTEGRATION_LLM_TIMEOUT_MS`.
+     */
+    llmTimeoutMs?: number;
     today: string;
     /**
      * Optional override of the content fed to the LLM prompt. When set,
@@ -327,7 +358,12 @@ declare module './topic-memory.js' {
     }
 }
 export interface RefreshBatchOptions {
-    callLLM?: LLMCallFn;
+    callLLM?: IntegrationLLMCallFn;
+    /**
+     * Per-call LLM timeout override (ms), threaded into each
+     * `integrateSource` call. See `IntegrateSourceOptions.llmTimeoutMs`.
+     */
+    llmTimeoutMs?: number;
     dryRun?: boolean;
     today: string;
     /** Only refresh these slugs; omit for all existing topics. */
