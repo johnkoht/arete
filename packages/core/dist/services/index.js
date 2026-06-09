@@ -46,13 +46,13 @@ export { buildReverseStampMarker, matchReverseStampMarker, insertReverseStampInt
 // Phase 10b-min — dedup-decisions audit log writer (Step 6, AC9)
 export { sanitizeReasoning, renderDedupDecisionLine, payloadFromExtractDecision, appendDedupDecisionLog, appendDedupDecisionLogBatch, } from './dedup-decisions-log.js';
 // Phase 10b-aux — `arete dedup --explain <id>` provenance (Step 1, AC7)
-export { parseDedupLog, filterLogForCommitment, lookupCommitmentById, formatExplainReport, } from './dedup-explain.js';
+export { parseDedupLog, filterLogForCommitment, buildDupeSourceMapping, lookupCommitmentById, formatExplainReport, } from './dedup-explain.js';
 // Phase 10b-aux — [[unmerge]] directive parser + resolver (Step 2, AC8)
 export { parseUnmergeDirectives, resolveUnmerge, } from './unmerge-directives.js';
 // Phase 10b-aux — dedup decision surfacing in winddown (Step 3, AC8a/AC4a)
 export { filterLogByDate, formatDedupedTodaySection, formatPossiblyMergeableSection, formatDedupWinddownSections, } from './dedup-winddown-surface.js';
 // Phase 10e — background dedup hygiene engine
-export { runBackgroundDedup, applyCommitmentsDedup, formatBackgroundDedupDiff, BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR, BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR, } from './background-dedup.js';
+export { runBackgroundDedup, applyCommitmentsDedup, collectDupeProvenance, formatBackgroundDedupDiff, BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR, BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR, } from './background-dedup.js';
 // Phase 10b-min wiring — CLI-facing glue that bridges meeting.ts and
 // the pure pipeline modules above. See extract-dedup-wiring.ts for the
 // flow (lock → load same-day → orchestrator → reverse-stamp → log).

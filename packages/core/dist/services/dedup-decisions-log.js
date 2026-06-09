@@ -8,6 +8,20 @@
  *
  *   ${ISO} ${decision} ${new-id} ${canonical-id} ${jaccard} ${llm-tier} ${llm-decision} ${reasoning}
  *
+ * I-6 extension (back-compat): a MERGE line MAY carry an optional dupe→source
+ * provenance segment appended after the reasoning column, delimited by a TAB:
+ *
+ *   <…space-separated columns incl. reasoning…>\t${dupe-source-meeting}\t${b64(dupe-text)}
+ *
+ * The TAB delimiter is safe because reasoning is single-line, whitespace-
+ * collapsed (no tabs), and the dupe text is base64-encoded (no tabs/newlines).
+ * The first TAB on a line therefore cleanly separates the legacy space-format
+ * prefix from the structured provenance. Old lines have no TAB and parse
+ * exactly as before. This segment persists "dupe X (newId) came from meeting Y
+ * with original text Z" at merge time so a future `[[unmerge]]` of a 3+-source
+ * canonical can reconstruct the correct DupeSourceMapping[] instead of refusing
+ * with `ambiguous-dupe`. (See unmerge-directives.ts:134-150.)
+ *
  * Decisions:
  *   - MERGE     — text-hash exact match OR LLM SAME
  *   - NEW       — no hybrid candidates OR all LLM DIFFERENT
@@ -41,7 +55,7 @@ export function sanitizeReasoning(s) {
 export function renderDedupDecisionLine(iso, payload) {
     const j = payload.jaccard === '-' ? '-' : payload.jaccard.toFixed(2);
     const reasoning = sanitizeReasoning(payload.reasoning);
-    return [
+    const base = [
         iso,
         payload.decision,
         payload.newId,
@@ -51,6 +65,16 @@ export function renderDedupDecisionLine(iso, payload) {
         payload.llmDecision,
         reasoning,
     ].join(' ');
+    // I-6: append the optional dupe→source provenance segment after a TAB.
+    // Only emitted when BOTH fields are present (a complete mapping is required
+    // for an unmerge to use it; a half-record is useless). The source meeting
+    // is written verbatim (slugs carry no tabs); the dupe text is base64-encoded
+    // so it survives the space-separated prefix + tab delimiter unambiguously.
+    if (payload.dupeSourceMeeting != null && payload.dupeText != null) {
+        const encodedText = Buffer.from(payload.dupeText, 'utf8').toString('base64');
+        return `${base}\t${payload.dupeSourceMeeting}\t${encodedText}`;
+    }
+    return base;
 }
 /**
  * Map an `ExtractDedupDecision` to the log payload. The caller (CLI)

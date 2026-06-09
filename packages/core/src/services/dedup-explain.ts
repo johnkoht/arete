@@ -34,6 +34,12 @@ import type { DedupDecisionKind, DedupLLMTier } from './dedup-decisions-log.js';
  *   <ISO> <decision> <new-id> <canonical-id> <jaccard> <llm-tier> <llm-decision> <reasoning...>
  *
  * `reasoning` is the free-form trailing remainder (may contain spaces).
+ *
+ * I-6 extension: a MERGE line may carry a TAB-delimited provenance segment
+ * after reasoning: `…reasoning\t<dupe-source-meeting>\t<base64(dupe-text)>`.
+ * The parser splits the raw line on the FIRST tab; the space-format prefix is
+ * parsed as before and the (optional) segment populates `dupeSourceMeeting` +
+ * `dupeText`. Old lines have no tab and leave those fields `undefined`.
  */
 export type DedupLogEntry = {
   iso: string;
@@ -45,6 +51,10 @@ export type DedupLogEntry = {
   llmTier: DedupLLMTier;
   llmDecision: 'SAME' | 'DIFFERENT' | 'UNCERTAIN' | '-';
   reasoning: string;
+  /** I-6: dupe's source meeting slug (MERGE lines with provenance only). */
+  dupeSourceMeeting?: string;
+  /** I-6: dupe's original extracted text, decoded from base64. */
+  dupeText?: string;
   /** Raw line for fallthrough display. */
   raw: string;
 };
@@ -68,10 +78,29 @@ const DECISION_TOKENS: ReadonlySet<string> = new Set([
 export function parseDedupLog(raw: string): DedupLogEntry[] {
   const out: DedupLogEntry[] = [];
   for (const rawLine of raw.split(/\r?\n/)) {
-    const line = rawLine.trim();
+    // NB: trim spaces only, not tabs — the I-6 provenance delimiter is a tab.
+    const line = rawLine.replace(/^ +| +$/g, '').replace(/\r$/, '');
     if (!line) continue;
-    // Split off the first 7 columns; reasoning is the remainder.
-    const parts = line.split(/\s+/);
+    // I-6: a MERGE line may carry a TAB-delimited provenance segment after
+    // reasoning. Split on the FIRST tab: prefix = legacy space-format, segment
+    // = `<dupe-source-meeting>\t<base64(dupe-text)>`.
+    const tabIdx = line.indexOf('\t');
+    const prefix = tabIdx === -1 ? line : line.slice(0, tabIdx);
+    let dupeSourceMeeting: string | undefined;
+    let dupeText: string | undefined;
+    if (tabIdx !== -1) {
+      const segParts = line.slice(tabIdx + 1).split('\t');
+      if (segParts.length >= 2 && segParts[0] && segParts[1]) {
+        dupeSourceMeeting = segParts[0];
+        try {
+          dupeText = Buffer.from(segParts[1], 'base64').toString('utf8');
+        } catch {
+          dupeSourceMeeting = undefined; // malformed segment → drop both
+        }
+      }
+    }
+    // Split off the first 7 columns; reasoning is the remainder of the prefix.
+    const parts = prefix.split(/\s+/);
     if (parts.length < 7) continue;
     const [iso, decision, newId, canonicalId, jaccard, llmTier, llmDecision] =
       parts;
@@ -86,7 +115,52 @@ export function parseDedupLog(raw: string): DedupLogEntry[] {
       llmTier: llmTier as DedupLLMTier,
       llmDecision: llmDecision as DedupLogEntry['llmDecision'],
       reasoning,
+      ...(dupeSourceMeeting != null && dupeText != null
+        ? { dupeSourceMeeting, dupeText }
+        : {}),
       raw: line,
+    });
+  }
+  return out;
+}
+
+/**
+ * I-6: rebuild the `{ dupeId, sourceMeeting, text }` mapping records for a
+ * canonical from parsed dedup-decisions log entries.
+ *
+ * Returns one record per MERGE line that (a) matches `canonicalId` and (b)
+ * carries a complete dupe→source provenance segment. The `dupeId` is the
+ * line's `newId` (the absorbed dupe's id). Lines without provenance (older
+ * merges, or non-MERGE decisions) are skipped — yielding fewer records, which
+ * the unmerge resolver tolerates (it falls back to `ambiguous-dupe` for any
+ * dupe it can't resolve, the current safe behavior).
+ *
+ * The return shape matches `DupeSourceMapping` (unmerge-directives.ts) by
+ * field; it is typed structurally here to avoid a service-layer import cycle.
+ * The unmerge wire-in (not yet built — see below) consumes this.
+ *
+ * NOTE: this lays the durable record + the rebuild seam. I-6 does not FULLY
+ * close until the `[[unmerge]]` directive is actually executed in a winddown
+ * run and passes the rebuilt mapping into `resolveUnmerge(..., { dupeMapping })`
+ * — that wire-in is unbuilt (worklog Workstream 3 / Phase 11c).
+ *
+ * Exported for tests + the future unmerge wire-in.
+ */
+export function buildDupeSourceMapping(
+  entries: ReadonlyArray<DedupLogEntry>,
+  canonicalId: string,
+): Array<{ dupeId: string; sourceMeeting: string; text: string }> {
+  const out: Array<{ dupeId: string; sourceMeeting: string; text: string }> = [];
+  const needle = canonicalId.toLowerCase().replace(/^canon_/, '');
+  for (const e of entries) {
+    if (e.decision !== 'MERGE') continue;
+    if (e.dupeSourceMeeting == null || e.dupeText == null) continue;
+    const cid = e.canonicalId.toLowerCase().replace(/^canon_/, '');
+    if (!idsMatch(cid, needle)) continue;
+    out.push({
+      dupeId: e.newId.toLowerCase(),
+      sourceMeeting: e.dupeSourceMeeting,
+      text: e.dupeText,
     });
   }
   return out;

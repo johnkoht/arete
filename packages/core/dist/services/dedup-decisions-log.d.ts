@@ -8,6 +8,20 @@
  *
  *   ${ISO} ${decision} ${new-id} ${canonical-id} ${jaccard} ${llm-tier} ${llm-decision} ${reasoning}
  *
+ * I-6 extension (back-compat): a MERGE line MAY carry an optional dupe→source
+ * provenance segment appended after the reasoning column, delimited by a TAB:
+ *
+ *   <…space-separated columns incl. reasoning…>\t${dupe-source-meeting}\t${b64(dupe-text)}
+ *
+ * The TAB delimiter is safe because reasoning is single-line, whitespace-
+ * collapsed (no tabs), and the dupe text is base64-encoded (no tabs/newlines).
+ * The first TAB on a line therefore cleanly separates the legacy space-format
+ * prefix from the structured provenance. Old lines have no TAB and parse
+ * exactly as before. This segment persists "dupe X (newId) came from meeting Y
+ * with original text Z" at merge time so a future `[[unmerge]]` of a 3+-source
+ * canonical can reconstruct the correct DupeSourceMapping[] instead of refusing
+ * with `ambiguous-dupe`. (See unmerge-directives.ts:134-150.)
+ *
  * Decisions:
  *   - MERGE     — text-hash exact match OR LLM SAME
  *   - NEW       — no hybrid candidates OR all LLM DIFFERENT
@@ -51,6 +65,18 @@ export type DedupDecisionLogPayload = {
     llmDecision: 'SAME' | 'DIFFERENT' | 'UNCERTAIN' | '-';
     /** Free-form reasoning string — preserved on one line. */
     reasoning: string;
+    /**
+     * I-6: source meeting slug the absorbed dupe (`newId`) contributed to the
+     * canonical's `source_meetings[]`. Set only on MERGE lines that carry dupe
+     * provenance. When present, `dupeText` should also be present.
+     */
+    dupeSourceMeeting?: string;
+    /**
+     * I-6: the absorbed dupe's ORIGINAL extracted text (its `textVariants[]`
+     * entry). Persisted so an unmerge can recover the correct split wording.
+     * Base64-encoded on the wire to keep the line single-token-safe.
+     */
+    dupeText?: string;
 };
 /**
  * Sanitize reasoning to a single line. Strips newlines + carriage

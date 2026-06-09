@@ -24,7 +24,7 @@
  *     aborts via the same lockfile.
  */
 import { join, isAbsolute, resolve as resolvePath } from 'node:path';
-import { createServices, parseCommitmentsFile, serializeCommitmentsFile, parseMemorySections, runBackgroundDedup, applyCommitmentsDedup, parseDedupLog, lookupCommitmentById, formatExplainReport, } from '@arete/core';
+import { createServices, parseCommitmentsFile, serializeCommitmentsFile, parseMemorySections, runBackgroundDedup, applyCommitmentsDedup, collectDupeProvenance, appendDedupDecisionLog, parseDedupLog, lookupCommitmentById, formatExplainReport, } from '@arete/core';
 import { listItem, error, info, success } from '../formatters.js';
 const VALID_SCOPES = [
     'commitments',
@@ -202,6 +202,18 @@ export function registerDedupCommand(program) {
                 // Atomic write via tmp + rename (storage adapter handles).
                 const json = serializeCommitmentsFile(next);
                 await services.storage.write(commitmentsPath, json);
+                // I-6: persist the dupe→source provenance for each absorbed dupe
+                // to the dedup-decisions log. `applyCommitmentsDedup` unions and
+                // then discards the per-dupe {dupeId, sourceMeeting, text}; we
+                // capture it from the same locked inputs and append it as MERGE
+                // log lines so a future `[[unmerge]]` of a 3+-source canonical can
+                // reconstruct the correct split (via buildDupeSourceMapping).
+                // Best-effort: log-write failures never block the apply. NOTE:
+                // this is the durable RECORD only — I-6 fully closes once the
+                // unmerge wire-in consumes this mapping (currently unbuilt).
+                for (const payload of collectDupeProvenance(lockedCommitments, lockedResult)) {
+                    await appendDedupDecisionLog(root, payload);
+                }
                 // Mutate `result` so output reflects what was written.
                 result = lockedResult;
             });

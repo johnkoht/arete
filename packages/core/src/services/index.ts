@@ -282,6 +282,7 @@ export type {
 export {
   parseDedupLog,
   filterLogForCommitment,
+  buildDupeSourceMapping,
   lookupCommitmentById,
   formatExplainReport,
 } from './dedup-explain.js';
@@ -312,6 +313,7 @@ export {
 export {
   runBackgroundDedup,
   applyCommitmentsDedup,
+  collectDupeProvenance,
   formatBackgroundDedupDiff,
   BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR,
   BACKGROUND_DEDUP_TOPICS_JACCARD_FLOOR,
