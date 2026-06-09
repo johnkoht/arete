@@ -46,6 +46,13 @@ export interface AcquireSeedLockOptions {
      * must never fail because a reporter failed.
      */
     onStaleTakeover?: (stale: SeedLockInfo | null) => void | Promise<void>;
+    /**
+     * TEST-ONLY injection point: invoked after a lock is classified stale,
+     * immediately BEFORE the rename-based break. Lets tests interleave a
+     * competitor's re-create between classification and capture. Errors
+     * propagate — production code must not pass this.
+     */
+    onBeforeBreak?: () => void | Promise<void>;
 }
 /**
  * Acquire the seed lock. Returns a release function to call in a
@@ -58,11 +65,15 @@ export interface AcquireSeedLockOptions {
  *    the exclusive create once. If the retry also hits EEXIST (another
  *    process won the takeover race), throws `SeedLockHeldError`.
  *
- * Residual TOCTOU note: between re-verifying staleness and `unlink`,
- * another taking-over process may have already re-created the lock.
- * The window is microseconds and requires two simultaneous starts
- * against the same dead lock; the advisory lock's purpose (don't run
- * two long LLM refreshes concurrently by accident) tolerates it.
+ * The break is rename-guarded (MG-1.1): the breaker atomically renames
+ * the lock aside before deleting, so exactly ONE breaker captures the
+ * file, and a captured LIVE-pid lock (a competitor's fresh re-create)
+ * is restored and refused — a lagging breaker can no longer delete a
+ * competitor's fresh lock. Accepted residual: a three-party race during
+ * the restore window (a third breaker classifying while the captured
+ * live lock is being renamed back) is advisory-lock-grade residue; the
+ * lock's purpose (don't run two long LLM refreshes concurrently by
+ * accident) tolerates it.
  *
  * @param areteDir `.arete/` directory at workspace root
  * @param command  short label written into the lock file for user-facing diagnosis

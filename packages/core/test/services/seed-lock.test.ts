@@ -169,6 +169,43 @@ describe('seed-lock', () => {
     });
   });
 
+  it('refuses to break when a LIVE-pid lock replaced the stale one between classification and break (MG-1.1 steal guard)', async () => {
+    await withAreteDir(async (dir) => {
+      // Interleaving under test: WE classify a dead-pid lock as stale,
+      // but before OUR break lands, competitor A has already broken it
+      // and re-created the lock under its LIVE pid. The old unconditional
+      // unlink would delete A's fresh lock; the rename-based capture must
+      // detect the live pid, restore A's lock, and refuse.
+      const stalePid = deadPid();
+      await writeFile(join(dir, '.seed.lock'), lockFileContent(stalePid));
+      let takeoverFired = false;
+      await assert.rejects(
+        () =>
+          acquireSeedLock(dir, 'breaker', {
+            onBeforeBreak: async () => {
+              await writeFile(
+                join(dir, '.seed.lock'),
+                lockFileContent(process.pid, 'competitor'),
+              );
+            },
+            onStaleTakeover: () => {
+              takeoverFired = true;
+            },
+          }),
+        (err: unknown) =>
+          err instanceof SeedLockHeldError &&
+          err.info?.pid === process.pid &&
+          err.info?.command === 'competitor',
+      );
+      assert.strictEqual(takeoverFired, false, 'no takeover event on refusal');
+      // Competitor's fresh lock was restored, NOT deleted.
+      const info = await readSeedLock(dir);
+      assert.strictEqual(info?.pid, process.pid);
+      assert.strictEqual(info?.command, 'competitor');
+      await breakSeedLock(dir);
+    });
+  });
+
   it('releases the lock so a subsequent acquire succeeds', async () => {
     await withAreteDir(async (dir) => {
       const release1 = await acquireSeedLock(dir, 'first');

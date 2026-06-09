@@ -1359,7 +1359,7 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
             const bullets = wiki.map((w) => {
                 const rel = relativeToRoot(w.path, paths.root);
                 sources.push(rel);
-                return `**${w.slug}** — ${w.summary || '(no summary)'} — \`${rel}\``;
+                return wikiBullet(w, rel);
             });
             const capped = capBulletsByChars(bullets, PER_SECTION_CAPS.related_wiki);
             sections.push({
@@ -1486,7 +1486,7 @@ async function buildUnresolvedMeetingBrief(input, paths, deps) {
             const bullets = wiki.map((w) => {
                 const rel = relativeToRoot(w.path, paths.root);
                 sources.push(rel);
-                return `**${w.slug}** — ${w.summary || '(no summary)'} — \`${rel}\``;
+                return wikiBullet(w, rel);
             });
             sections.push({
                 heading: `Related wiki pages (${wiki.length})`,

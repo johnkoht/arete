@@ -27,3 +27,12 @@ A full `memory refresh` completed 6/08 10:59:36 (index.md + area file same secon
 - Verify TOCTOU handling: post-break acquire must confirm OWN pid / lose-race-refuse path.
 - Verify approve EXIT CODE stays 0 when integration is skipped (items already committed; non-zero invites chef retry → double-approve).
 - Verify integrated state with W6 (brief-assemblers.ts both-touched).
+
+## Deferred (ticketed)
+- Pid-recycling belt (review finding 3): takeover past a generous `started` age / "held 6h+" surfacing — deferred, not in MG-1.
+
+## Review fixup (MG-1.1)
+- **Guarded, exclusive lock break** (`seed-lock.ts`): the stale-takeover path's unconditional `unlink` could delete a competitor's FRESHLY re-created lock (both classify the same dead pid; A unlinks+creates; B's lagging unlink deletes A's lock → both proceed). Replaced with rename-based capture-and-verify: `rename(path, tmp)` atomically captures the file (exactly one breaker wins; ENOENT → retry the O_EXCL create, still bounded at one takeover attempt); a captured LIVE-pid lock is restored and refused with `SeedLockHeldError`. The `seed-lock-takeover` event is now emitted AFTER the capture succeeds, so the awaited log I/O no longer sits inside the classification→break window. Accepted residual (docstring): three-party race during the restore window — advisory-lock-grade.
+- **Post-acquire own-pid verify**: after the `open('wx')` create + write, the lock is read back; if it no longer carries our pid, throw `SeedLockHeldError` (assertable invariant).
+- **Steal-interleaving test**: new test injects a live-pid lock via the test-only `onBeforeBreak` hook (fires between classification and the rename); asserts the breaker refuses, restores the competitor's lock, and emits no takeover event. 15 seed-lock tests green.
+- **Meeting-brief staleness bullets**: `assembleBriefForMeeting` + the meeting fallback still rendered the old wiki bullet without the staleness label — both switched to the shared `wikiBullet(w, rel)`.

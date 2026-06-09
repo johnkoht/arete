@@ -18,7 +18,7 @@
  * in the replay log.
  */
 
-import { appendFile, mkdir, open, readFile, unlink } from 'node:fs/promises';
+import { appendFile, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatEvent, nowIsoSeconds } from '../utils/memory-log.js';
 
@@ -78,6 +78,13 @@ export interface AcquireSeedLockOptions {
    * must never fail because a reporter failed.
    */
   onStaleTakeover?: (stale: SeedLockInfo | null) => void | Promise<void>;
+  /**
+   * TEST-ONLY injection point: invoked after a lock is classified stale,
+   * immediately BEFORE the rename-based break. Lets tests interleave a
+   * competitor's re-create between classification and capture. Errors
+   * propagate — production code must not pass this.
+   */
+  onBeforeBreak?: () => void | Promise<void>;
 }
 
 /**
@@ -91,11 +98,15 @@ export interface AcquireSeedLockOptions {
  *    the exclusive create once. If the retry also hits EEXIST (another
  *    process won the takeover race), throws `SeedLockHeldError`.
  *
- * Residual TOCTOU note: between re-verifying staleness and `unlink`,
- * another taking-over process may have already re-created the lock.
- * The window is microseconds and requires two simultaneous starts
- * against the same dead lock; the advisory lock's purpose (don't run
- * two long LLM refreshes concurrently by accident) tolerates it.
+ * The break is rename-guarded (MG-1.1): the breaker atomically renames
+ * the lock aside before deleting, so exactly ONE breaker captures the
+ * file, and a captured LIVE-pid lock (a competitor's fresh re-create)
+ * is restored and refused — a lagging breaker can no longer delete a
+ * competitor's fresh lock. Accepted residual: a three-party race during
+ * the restore window (a third breaker classifying while the captured
+ * live lock is being renamed back) is advisory-lock-grade residue; the
+ * lock's purpose (don't run two long LLM refreshes concurrently by
+ * accident) tolerates it.
  *
  * @param areteDir `.arete/` directory at workspace root
  * @param command  short label written into the lock file for user-facing diagnosis
@@ -137,10 +148,41 @@ export async function acquireSeedLock(
         throw new SeedLockHeldError(info);
       }
 
-      // Stale lock: take over. Log first (so even a crash mid-takeover
-      // leaves a trace), then break and retry the exclusive create.
+      // Stale lock: take over via guarded, EXCLUSIVE break (MG-1.1).
+      // `rename` is atomic — exactly ONE breaker captures the file — so
+      // a lagging breaker can never unlink a competitor's freshly
+      // re-created lock.
+      await options.onBeforeBreak?.();
+      const tmp = `${path}.takeover-${process.pid}`;
+      try {
+        await rename(path, tmp); // atomic: only ONE breaker captures the file
+      } catch {
+        // ENOENT: someone else broke it first — just retry the O_EXCL create.
+        continue;
+      }
+      let captured: SeedLockInfo | null = null;
+      try {
+        captured = JSON.parse(await readFile(tmp, 'utf8')) as SeedLockInfo;
+      } catch {
+        // Unreadable capture is still stale — proceed with the takeover.
+      }
+      if (captured && typeof captured.pid === 'number' && isPidAlive(captured.pid)) {
+        // We captured a LIVE competitor's freshly re-created lock —
+        // restore and refuse.
+        try {
+          await rename(tmp, path);
+        } catch {
+          // Best-effort restore (accepted three-party residual).
+        }
+        throw new SeedLockHeldError(captured);
+      }
+      await unlink(tmp).catch(() => {});
+
+      // Capture succeeded — the stale lock is provably gone. Emit the
+      // takeover event NOW (after the capture, so the awaited log I/O
+      // no longer sits inside the classification→break window), then
+      // notify and retry the exclusive create.
       await logStaleTakeover(areteDir, command, info);
-      await breakSeedLock(areteDir);
       try {
         await options.onStaleTakeover?.(info);
       } catch {
@@ -156,6 +198,11 @@ export async function acquireSeedLock(
     };
     await handle.writeFile(JSON.stringify(info, null, 2));
     await handle.close();
+
+    // Post-acquire own-pid verify (MG-1.1 assertable invariant): the
+    // lock we just created must still carry OUR pid; refuse if stolen.
+    const verified = JSON.parse(await readFile(path, 'utf8')) as SeedLockInfo;
+    if (verified.pid !== process.pid) throw new SeedLockHeldError(verified);
 
     let released = false;
     return async () => {
