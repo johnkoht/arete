@@ -1077,7 +1077,7 @@ export async function assembleBriefForProject(
   };
 }
 
-interface AreaTaggedItem {
+export interface AreaTaggedItem {
   type: 'decision' | 'learning';
   text: string;
   date?: string;
@@ -1181,7 +1181,7 @@ export async function loadTopicAreaMap(
   return map;
 }
 
-async function readAreaTaggedMemoryItems(
+export async function readAreaTaggedMemoryItems(
   storage: StorageAdapter,
   paths: WorkspacePaths,
   area: string,
@@ -1215,6 +1215,9 @@ async function readAreaTaggedMemoryItems(
       });
     }
   }
+  // Newest first (undated last) so the section char cap drops oldest items,
+  // honoring the capBulletsByChars contract — file order is not recency order.
+  items.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
   return items;
 }
 

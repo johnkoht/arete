@@ -21,6 +21,7 @@ import { TopicMemoryService } from '../../src/services/topic-memory.js';
 import {
   parseMemoryItemEntries,
   loadTopicAreaMap,
+  readAreaTaggedMemoryItems,
 } from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 
@@ -143,6 +144,86 @@ Area: glance-modernization
   it('ignores the # H1 and returns [] for empty content', () => {
     assert.deepEqual(parseMemoryItemEntries('# Decisions\n\nNo entries yet.\n'), []);
     assert.deepEqual(parseMemoryItemEntries(''), []);
+  });
+});
+
+describe('readAreaTaggedMemoryItems', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'area-tagged-items-'));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('sorts matched items newest-first across decisions+learnings; undated last', async () => {
+    const itemsDir = join(tmpDir, '.arete', 'memory', 'items');
+    mkdirSync(itemsDir, { recursive: true });
+    // File order is intentionally out of order (ascending tail like live data)
+    // — readAreaTaggedMemoryItems must NOT return file order.
+    writeFileSync(
+      join(itemsDir, 'decisions.md'),
+      `# Decisions
+
+## Old decision
+- **Date**: 2026-04-10
+- **Topics**: glance-communications
+
+## Undated decision
+- **Topics**: glance-communications
+
+## Newest decision
+- **Date**: 2026-06-05
+- **Topics**: glance-communications
+
+## Mid decision
+- **Date**: 2026-05-20
+- **Topics**: glance-communications
+`,
+      'utf8',
+    );
+    writeFileSync(
+      join(itemsDir, 'learnings.md'),
+      `# Learnings
+
+## June learning
+- **Date**: 2026-06-02
+- **Topics**: glance-communications
+
+## May learning
+- **Date**: 2026-05-01
+- **Topics**: glance-communications
+
+## Unrelated learning
+- **Date**: 2026-06-08
+- **Topics**: other-area
+`,
+      'utf8',
+    );
+
+    const storage = new FileStorageAdapter();
+    const items = await readAreaTaggedMemoryItems(
+      storage,
+      paths,
+      'glance-communications',
+      new Map(),
+    );
+
+    assert.deepEqual(
+      items.map((i) => [i.type, i.text, i.date]),
+      [
+        ['decision', 'Newest decision', '2026-06-05'],
+        ['learning', 'June learning', '2026-06-02'],
+        ['decision', 'Mid decision', '2026-05-20'],
+        ['learning', 'May learning', '2026-05-01'],
+        ['decision', 'Old decision', '2026-04-10'],
+        ['decision', 'Undated decision', undefined],
+      ],
+    );
   });
 });
 

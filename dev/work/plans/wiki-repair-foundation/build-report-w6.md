@@ -25,3 +25,9 @@ Branch: `fix-wiki-w6` off `b373703e`. Commits: `ae3273d8` (parser), `cb39f960` (
 ## Notes for reviewer/orchestrator
 - S4 section cap (2000 chars) now binds with 127 items — rendering shows 18 + "109 not shown". Acceptable for repair scope; Phase 12 may want smarter selection.
 - Merge-order note: W1+W5 (in flight) also touches `brief-assemblers.ts` (staleness display, retrieveWiki region) — second branch to land rebases.
+
+## Review fixup
+- **Fix (review-mandated):** `readAreaTaggedMemoryItems` returned items in FILE order; live `decisions.md` ends with an ascending chronological block, so the 2000-char section cap (`capBulletsByChars`, which contracts "drops oldest first") kept the 18 stalest matched items and silently dropped every June decision. Now sorts `items.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))` before return — newest first, undated last; combined decisions+learnings sort together (also removes the decisions-before-learnings type bias).
+- Exported `readAreaTaggedMemoryItems` + `AreaTaggedItem` for direct testing (consistent with `parseMemoryItemEntries`/`loadTopicAreaMap`).
+- **Test:** new `readAreaTaggedMemoryItems` describe in `brief-memory-items.test.ts` — out-of-order mixed decisions+learnings fixture asserts exact newest-first interleaved order with undated item last (and non-matching area excluded). Targeted run: 19/19 pass (brief-memory-items + brief-project).
+- **Live confirmation (read-only, arete-reserv):** `brief --project status-letter-automation` S4 now renders 18 bullets STARTING at 2026-06-08 and descending (06-08 ×8 → 06-05 ×5 → 06-04 ×5); truncation marker "older items dropped first" is now truthful.

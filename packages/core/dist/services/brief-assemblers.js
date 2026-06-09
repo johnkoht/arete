@@ -929,7 +929,7 @@ export async function loadTopicAreaMap(topicMemory, paths) {
     }
     return map;
 }
-async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaBySlug) {
+export async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaBySlug) {
     const items = [];
     for (const [type, file] of [
         ['decision', 'decisions.md'],
@@ -958,6 +958,9 @@ async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaBySlug) 
             });
         }
     }
+    // Newest first (undated last) so the section char cap drops oldest items,
+    // honoring the capBulletsByChars contract — file order is not recency order.
+    items.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
     return items;
 }
 /** Assemble an AreaBrief — pure aggregator. AC3. */

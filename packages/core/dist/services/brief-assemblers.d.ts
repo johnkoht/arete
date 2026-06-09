@@ -170,6 +170,12 @@ export interface ProjectBriefDeps {
 }
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
+export interface AreaTaggedItem {
+    type: 'decision' | 'learning';
+    text: string;
+    date?: string;
+    path: string;
+}
 /** One parsed entry from `.arete/memory/items/{decisions,learnings}.md`. */
 export interface MemoryItemEntry {
     /** Heading text (date prefix stripped when legacy `### YYYY-MM-DD: Title`). */
@@ -206,6 +212,7 @@ export declare function parseMemoryItemEntries(content: string): MemoryItemEntry
  * returns an empty map on any failure.
  */
 export declare function loadTopicAreaMap(topicMemory: TopicMemoryService, paths: WorkspacePaths): Promise<Map<string, string>>;
+export declare function readAreaTaggedMemoryItems(storage: StorageAdapter, paths: WorkspacePaths, area: string, topicAreaBySlug: Map<string, string>): Promise<AreaTaggedItem[]>;
 export interface AreaBriefDeps {
     storage: StorageAdapter;
     commitments: CommitmentsService;
