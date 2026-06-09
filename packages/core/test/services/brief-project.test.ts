@@ -24,6 +24,10 @@ import { CommitmentsService } from '../../src/services/commitments.js';
 import { TopicMemoryService } from '../../src/services/topic-memory.js';
 import { AreaMemoryService } from '../../src/services/area-memory.js';
 import { AreaParserService } from '../../src/services/area-parser.js';
+import {
+  meetingsForArea,
+  type MeetingIndexEntry,
+} from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 
 function makePaths(root: string): WorkspacePaths {
@@ -296,6 +300,25 @@ Rollout sequencing for email templates.
 
     writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
 
+    // June-style meeting: `topics:` list, NO `area:` key (W6.2 topics-union).
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-01-drafts-alignment.md',
+      `---
+title: Drafts Alignment - Status Letters
+date: 2026-06-01
+attendee_ids:
+  - john
+topics:
+  - glance-communications
+  - rollout-strategy
+---
+
+## Summary
+Aligned on the drafts approach for status letters.
+`,
+    );
+
     // LIVE format: ## Title + **Date** + **Topics** bullets.
     writeFile(
       tmpDir,
@@ -341,6 +364,14 @@ Legacy-format fallback entry.
     const intel = buildIntel(tmpDir);
     const brief = await intel.assembleBriefForProject('status-letters', paths);
 
+    // S2: June-style topics-only meeting surfaces in Recent activity.
+    const recent = brief.sections.find((s) => s.heading.startsWith('Recent activity'));
+    assert.ok(recent, `missing Recent activity; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    assert.ok(
+      recent!.bullets.some((b) => /Drafts Alignment/.test(b)),
+      'topics-only (no area key) meeting missing from Recent activity',
+    );
+
     const decisions = brief.sections.find((s) => s.heading.startsWith('Decisions & learnings'));
     assert.ok(decisions, `missing Decisions & learnings; got ${brief.sections.map((s) => s.heading).join(', ')}`);
     // 2 decisions (direct slug + mapped via rollout-strategy area) + 2 learnings (live + legacy)
@@ -363,5 +394,36 @@ Legacy-format fallback entry.
     const brief = await intel.assembleBriefForProject('nonexistent', paths);
     assert.equal(brief.subjectSlug, 'nonexistent');
     assert.equal(brief.sections.length, 0);
+  });
+});
+
+describe('meetingsForArea (W6.2 topics-union)', () => {
+  function entry(overrides: Partial<MeetingIndexEntry>): MeetingIndexEntry {
+    return {
+      path: '/w/resources/meetings/x.md',
+      date: '2026-06-01',
+      title: 'x',
+      attendeeIds: [],
+      attendeeNames: [],
+      topics: [],
+      ...overrides,
+    };
+  }
+
+  it('unions area: match with topics: membership', () => {
+    const index = [
+      entry({ title: 'area-only', area: 'glance-communications' }),
+      entry({ title: 'topics-only-june', topics: ['glance-communications', 'rollout-strategy'] }),
+      entry({ title: 'both', area: 'glance-communications', topics: ['glance-communications'] }),
+      entry({ title: 'other-area', area: 'other', topics: ['unrelated-topic'] }),
+      entry({ title: 'neither' }),
+    ];
+    const got = meetingsForArea(index, 'glance-communications').map((m) => m.title);
+    assert.deepEqual(got, ['area-only', 'topics-only-june', 'both']);
+  });
+
+  it('does not substring-match topic slugs', () => {
+    const index = [entry({ title: 'near-miss', topics: ['glance-communications-v2'] })];
+    assert.equal(meetingsForArea(index, 'glance-communications').length, 0);
   });
 });

@@ -122,6 +122,8 @@ export interface MeetingIndexEntry {
   attendeeIds: string[];
   attendeeNames: string[];
   area?: string;
+  /** Topic slugs from `topics:` frontmatter (June-style meetings carry these, no `area:`). */
+  topics: string[];
   projectSlug?: string;
   /** First non-empty body excerpt (post-frontmatter heading or summary). */
   excerpt?: string;
@@ -170,6 +172,15 @@ export async function loadMeetingIndex(
         : [];
 
     const area = typeof fm.area === 'string' ? fm.area : undefined;
+    const topicsRaw = fm.topics;
+    const topics = Array.isArray(topicsRaw)
+      ? topicsRaw.map((t) => String(t).trim()).filter((t) => t.length > 0)
+      : typeof topicsRaw === 'string'
+        ? topicsRaw
+            .split(',')
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0)
+        : [];
     const projectSlug = typeof fm.project === 'string' ? fm.project : undefined;
 
     // Pull a short excerpt from the body — first non-empty line after
@@ -192,6 +203,7 @@ export async function loadMeetingIndex(
       attendeeIds,
       attendeeNames,
       area,
+      topics,
       projectSlug,
       excerpt,
     });
@@ -217,12 +229,17 @@ export function meetingsForPerson(
   });
 }
 
-/** Filter the meeting index by area frontmatter match. */
+/**
+ * Filter the meeting index by area — union of `area:` frontmatter match
+ * and `topics:` membership (W6, review concern 7: June-style meetings
+ * carry `topics:` lists and no `area:` key, so area-only matching missed
+ * them at both the project (S2) and area call sites).
+ */
 export function meetingsForArea(
   index: MeetingIndexEntry[],
   areaSlug: string,
 ): MeetingIndexEntry[] {
-  return index.filter((m) => m.area === areaSlug);
+  return index.filter((m) => m.area === areaSlug || m.topics.includes(areaSlug));
 }
 
 /** Filter the meeting index by overlap with a group of attendee slugs. */
@@ -1411,6 +1428,9 @@ export async function resolveMeetingInput(
           ? fm.attendees.map((s) => String(s).toLowerCase())
           : [],
         area: typeof fm.area === 'string' ? fm.area : undefined,
+        topics: Array.isArray(fm.topics)
+          ? fm.topics.map((t) => String(t).trim()).filter((t) => t.length > 0)
+          : [],
       };
       return { kind: 'meeting-file', entry: synthEntry, content: agendaContent };
     }
