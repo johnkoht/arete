@@ -35,9 +35,10 @@ import { promisify } from 'node:util';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 
-import { createServices, loadConfig } from '@arete/core';
+import { createServices, loadConfig, buildQmdCollectionRoots, rebaseQmdPath } from '@arete/core';
 import type {
   QmdScope,
+  QmdCollectionRoots,
   AreteConfig,
   StorageAdapter,
   ResolvedEntity,
@@ -169,8 +170,18 @@ function extractTitle(snippet: string, path: string): string {
   return filename.replace(/\.md$/, '').replace(/-/g, ' ');
 }
 
-/** Parse QMD CLI JSON output into SearchResultItem[]. */
-export function parseQmdResults(stdout: string): SearchResultItem[] {
+/**
+ * Parse QMD CLI JSON output into SearchResultItem[].
+ *
+ * When `collectionRoots` is provided, paths from known scoped collections
+ * are rebased to workspace-relative (e.g. `qmd://arete-xxxx-memory/topics/foo.md`
+ * → `.arete/memory/topics/foo.md`); unknown collections just get the
+ * `qmd://collection/` prefix stripped.
+ */
+export function parseQmdResults(
+  stdout: string,
+  collectionRoots?: QmdCollectionRoots,
+): SearchResultItem[] {
   const trimmed = stdout.trim();
   if (!trimmed) return [];
   try {
@@ -200,7 +211,9 @@ export function parseQmdResults(stdout: string): SearchResultItem[] {
             : typeof r.path === 'string'
               ? r.path
               : '';
-        const path = stripQmdPrefix(rawPath);
+        const path = collectionRoots
+          ? rebaseQmdPath(rawPath, collectionRoots)
+          : stripQmdPrefix(rawPath);
         const snippet =
           typeof r.snippet === 'string'
             ? r.snippet
@@ -684,7 +697,8 @@ export async function runSearch(
       cwd: root,
       maxBuffer: 10 * 1024 * 1024,
     });
-    results = parseQmdResults(stdout);
+    // Rebase scoped-collection paths to workspace-relative for display/filtering
+    results = parseQmdResults(stdout, buildQmdCollectionRoots(root, collections));
   } catch (err) {
     // QMD query failed — return empty results rather than failing
     // (consistent with qmd.ts provider behavior)
