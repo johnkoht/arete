@@ -94,6 +94,43 @@ describe('getActiveTopics', () => {
     assert.strictEqual(out.length, 5);
   });
 
+  it('defaults to a 25-entry cap (human-facing CLAUDE.md view)', () => {
+    const pages = Array.from({ length: 50 }, (_, i) => page(`t${String(i).padStart(3, '0')}`));
+    const out = getActiveTopics(pages, { today: REF_TODAY });
+    assert.strictEqual(out.length, 25);
+  });
+
+  it('I-3: with no limit (Infinity), a canonical slug ranked >25 reaches the list', () => {
+    // 117 active topics, all same recency → sorted by slug asc. The slug that
+    // sorts to rank #117 is dropped by the default 25-cap but MUST be present
+    // for the extractor-bias path (Strategy A: no-limit bias list).
+    const pages = Array.from({ length: 117 }, (_, i) =>
+      page(`topic-${String(i).padStart(3, '0')}`, { last_refreshed: '2026-04-22' }),
+    );
+    const ranked117 = 'topic-116'; // sorts last under slug-asc tiebreak
+
+    const capped = getActiveTopics(pages, { today: REF_TODAY }); // default 25
+    assert.strictEqual(capped.length, 25);
+    assert.ok(
+      !capped.some((e) => e.slug === ranked117),
+      'rank-117 slug should be truncated under the default cap (repro of the bug)',
+    );
+
+    const unbounded = getActiveTopics(pages, {
+      today: REF_TODAY,
+      limit: Number.POSITIVE_INFINITY,
+    });
+    assert.strictEqual(unbounded.length, 117, 'no-limit returns all active entries');
+    assert.ok(
+      unbounded.some((e) => e.slug === ranked117),
+      'rank-117 slug must reach the bias list when no limit is passed',
+    );
+
+    // And it survives the bias-list render the meeting extractor consumes.
+    const rendered = renderActiveTopicsAsSlugList(unbounded);
+    assert.ok(rendered.includes(ranked117));
+  });
+
   it('populates summary from Current state headline', () => {
     const pages = [
       page('x', {}, { 'Current state': 'Staging-validated; awaiting pilot.\n\nExtra paragraph.' }),

@@ -1170,4 +1170,47 @@ TopicMemoryService.prototype.retrieveRelevant = async function (query, options =
         searchBackend: backend,
     };
 };
+TopicMemoryService.prototype.addAliases = async function (paths, canonicalSlug, aliases) {
+    const storage = this.storage;
+    const pagePath = pathJoin(paths.memory, 'topics', `${canonicalSlug}.md`);
+    const content = await storage.read(pagePath);
+    if (content === null) {
+        throw new Error(`Topic page not found: ${canonicalSlug} (expected at ${pagePath})`);
+    }
+    const page = parseTopicPage(content);
+    if (page === null) {
+        throw new Error(`Topic page is malformed and cannot be parsed: ${canonicalSlug} (${pagePath})`);
+    }
+    const existing = new Set(page.frontmatter.aliases ?? []);
+    const added = [];
+    for (const raw of aliases) {
+        const alias = raw.trim();
+        // Never record the canonical slug as its own alias; skip empties; dedup.
+        if (alias.length === 0 || alias === canonicalSlug || existing.has(alias))
+            continue;
+        existing.add(alias);
+        added.push(alias);
+    }
+    // Sort to match the render-time normalization (topic-page.ts:148-149),
+    // so the stored value and the returned value agree byte-for-byte.
+    const merged = [...existing].sort();
+    const updated = {
+        ...page,
+        frontmatter: {
+            ...page.frontmatter,
+            aliases: merged,
+        },
+    };
+    const rendered = renderTopicPageExternal(updated);
+    let changed = rendered !== content;
+    if (changed) {
+        if (storage.writeIfChanged !== undefined) {
+            await storage.writeIfChanged(pagePath, rendered);
+        }
+        else {
+            await storage.write(pagePath, rendered);
+        }
+    }
+    return { slug: canonicalSlug, aliases: merged, added, changed };
+};
 //# sourceMappingURL=topic-memory.js.map

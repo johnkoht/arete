@@ -526,4 +526,31 @@ declare module './topic-memory.js' {
         retrieveRelevant(query: string, options?: RetrieveRelevantOptions): Promise<RetrieveRelevantResult>;
     }
 }
+export interface AddAliasesResult {
+    /** The canonical topic slug whose page was edited. */
+    slug: string;
+    /** The full, deduped+sorted alias set after the write. */
+    aliases: string[];
+    /** Aliases that were newly added by this call (already-present ones excluded). */
+    added: string[];
+    /** True if the on-disk page changed (false on a pure no-op re-add). */
+    changed: boolean;
+}
+declare module './topic-memory.js' {
+    interface TopicMemoryService {
+        /**
+         * Append `aliases` to an existing topic page's `aliases:` frontmatter
+         * (no LLM). Union + dedup; the canonical slug itself is never recorded
+         * as its own alias. Idempotent: re-adding existing aliases is a no-op.
+         *
+         * Pairs with the AC2 alias-aware re-integration filter
+         * (`refreshAllFromSources`): once a canonical page declares an alias,
+         * `arete topic refresh <slug>` rescues orphaned sources tagged with
+         * that alias. The optional `refresh` chaining is left to the CLI verb.
+         *
+         * Throws if the topic page does not exist.
+         */
+        addAliases(paths: import('../models/workspace.js').WorkspacePaths, canonicalSlug: string, aliases: readonly string[]): Promise<AddAliasesResult>;
+    }
+}
 //# sourceMappingURL=topic-memory.d.ts.map
