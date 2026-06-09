@@ -24,6 +24,10 @@ import { CommitmentsService } from '../../src/services/commitments.js';
 import { TopicMemoryService } from '../../src/services/topic-memory.js';
 import { AreaMemoryService } from '../../src/services/area-memory.js';
 import { AreaParserService } from '../../src/services/area-parser.js';
+import {
+  meetingsForArea,
+  type MeetingIndexEntry,
+} from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 
 function makePaths(root: string): WorkspacePaths {
@@ -257,11 +261,214 @@ Area: other-area
     assert.ok(brief.sources.some((s) => s.includes('2026-05-15-design-review.md')));
   });
 
+  it('W6: live-format decisions/learnings attribute via **Topics** slugs (direct + topic-page area map)', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/status-letters/README.md',
+      `---
+name: Status Letters
+area: glance-communications
+status: active
+---
+
+# Status Letters
+
+## Background
+Automate status letters.
+`,
+    );
+
+    // Topic page whose frontmatter maps a non-area slug into the area.
+    writeFile(
+      tmpDir,
+      '.arete/memory/topics/rollout-strategy.md',
+      `---
+topic_slug: rollout-strategy
+area: glance-communications
+status: new
+first_seen: 2026-04-24
+last_refreshed: 2026-06-04
+sources_integrated: []
+---
+
+# Rollout Strategy
+
+## Current state
+Rollout sequencing for email templates.
+`,
+    );
+
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+
+    // June-style meeting: `topics:` list, NO `area:` key (W6.2 topics-union).
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-01-drafts-alignment.md',
+      `---
+title: Drafts Alignment - Status Letters
+date: 2026-06-01
+attendee_ids:
+  - john
+topics:
+  - glance-communications
+  - rollout-strategy
+---
+
+## Summary
+Aligned on the drafts approach for status letters.
+`,
+    );
+
+    // LIVE format: ## Title + **Date** + **Topics** bullets.
+    writeFile(
+      tmpDir,
+      '.arete/memory/items/decisions.md',
+      `# Decisions
+
+## Reprioritize draft emails ahead of inbound emails
+- **Date**: 2026-05-29
+- **Source**: 2026-05-29-slack-digest.md
+- **Topics**: glance-communications, copilot-email-drafting
+- CJ escalated status letters across all programs.
+
+## Rollout: turn templates on for everybody after Lyft
+- **Date**: 2026-05-29
+- **Source**: 2026-05-29-slack-digest.md
+- **Topics**: rollout-strategy, leap-rollout
+- Confirmed the rollout sequence.
+
+## Unrelated decision
+- **Date**: 2026-05-28
+- **Topics**: some-other-topic
+- Should not appear.
+`,
+    );
+
+    writeFile(
+      tmpDir,
+      '.arete/memory/items/learnings.md',
+      `# Learnings
+
+## Templates without explicit scoping go everywhere
+- **Date**: 2026-05-22
+- **Topics**: glance-communications
+- Treat unscoped as a soft bug.
+
+### 2026-05-01: Legacy learning still works
+Area: glance-communications
+
+Legacy-format fallback entry.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('status-letters', paths);
+
+    // S2: June-style topics-only meeting surfaces in Recent activity.
+    const recent = brief.sections.find((s) => s.heading.startsWith('Recent activity'));
+    assert.ok(recent, `missing Recent activity; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    assert.ok(
+      recent!.bullets.some((b) => /Drafts Alignment/.test(b)),
+      'topics-only (no area key) meeting missing from Recent activity',
+    );
+
+    const decisions = brief.sections.find((s) => s.heading.startsWith('Decisions & learnings'));
+    assert.ok(decisions, `missing Decisions & learnings; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    // 2 decisions (direct slug + mapped via rollout-strategy area) + 2 learnings (live + legacy)
+    assert.ok(
+      decisions!.heading.includes('(4)'),
+      `expected 4 items; heading was "${decisions!.heading}"`,
+    );
+    const text = decisions!.bullets.join('\n');
+    assert.ok(/Reprioritize draft emails/.test(text), 'direct Topics slug match missing');
+    assert.ok(/turn templates on for everybody/.test(text), 'topic-page area-map match missing');
+    assert.ok(/explicit scoping go everywhere/.test(text), 'live-format learning missing');
+    assert.ok(/Legacy learning still works/.test(text), 'legacy Area: fallback missing');
+    assert.ok(!/Unrelated decision/.test(text), 'unrelated topic leaked in');
+    assert.ok(/\[2026-05-29\]/.test(text), 'date from **Date** bullet missing');
+  });
+
   it('returns empty ProjectBrief when project not found', async () => {
     writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
     const intel = buildIntel(tmpDir);
     const brief = await intel.assembleBriefForProject('nonexistent', paths);
     assert.equal(brief.subjectSlug, 'nonexistent');
     assert.equal(brief.sections.length, 0);
+  });
+});
+
+describe('project name fallback (W6.3)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'brief-project-name-'));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  async function subjectFor(frontmatter: string): Promise<string> {
+    writeFile(
+      tmpDir,
+      'projects/active/status-letter-automation/README.md',
+      `---\n${frontmatter}\n---\n\n# Project\n\n## Background\nSome background.\n`,
+    );
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('status-letter-automation', paths);
+    return brief.subject;
+  }
+
+  it('prefers name: when present', async () => {
+    assert.equal(await subjectFor('name: Status Letters\ntitle: Other\nstatus: active'), 'Status Letters');
+  });
+
+  it('falls back to title: when name: absent', async () => {
+    assert.equal(await subjectFor('title: Status Letter Automation\nstatus: active'), 'Status Letter Automation');
+  });
+
+  it('falls back to project: when name:/title: absent (live README shape)', async () => {
+    assert.equal(
+      await subjectFor('project: status-letter-automation\ntype: definition\nstatus: active'),
+      'status-letter-automation',
+    );
+  });
+
+  it('falls back to slug when no naming key present', async () => {
+    assert.equal(await subjectFor('status: active'), 'status-letter-automation');
+  });
+});
+
+describe('meetingsForArea (W6.2 topics-union)', () => {
+  function entry(overrides: Partial<MeetingIndexEntry>): MeetingIndexEntry {
+    return {
+      path: '/w/resources/meetings/x.md',
+      date: '2026-06-01',
+      title: 'x',
+      attendeeIds: [],
+      attendeeNames: [],
+      topics: [],
+      ...overrides,
+    };
+  }
+
+  it('unions area: match with topics: membership', () => {
+    const index = [
+      entry({ title: 'area-only', area: 'glance-communications' }),
+      entry({ title: 'topics-only-june', topics: ['glance-communications', 'rollout-strategy'] }),
+      entry({ title: 'both', area: 'glance-communications', topics: ['glance-communications'] }),
+      entry({ title: 'other-area', area: 'other', topics: ['unrelated-topic'] }),
+      entry({ title: 'neither' }),
+    ];
+    const got = meetingsForArea(index, 'glance-communications').map((m) => m.title);
+    assert.deepEqual(got, ['area-only', 'topics-only-june', 'both']);
+  });
+
+  it('does not substring-match topic slugs', () => {
+    const index = [entry({ title: 'near-miss', topics: ['glance-communications-v2'] })];
+    assert.equal(meetingsForArea(index, 'glance-communications').length, 0);
   });
 });
