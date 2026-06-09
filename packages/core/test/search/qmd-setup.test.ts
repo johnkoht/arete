@@ -7,6 +7,8 @@ import {
   generateCollectionName,
   generateScopedCollectionName,
   refreshQmdIndex,
+  buildQmdCollectionRoots,
+  rebaseQmdPath,
   ALL_SCOPES,
   SCOPE_PATHS,
 } from '../../src/search/qmd-setup.js';
@@ -612,6 +614,10 @@ function makeCollectionsDeps(overrides?: {
   embedFail?: boolean;
   embedError?: string;
   listOutput?: string;
+  /** Output of `qmd collection show <name>` keyed by collection name. */
+  showOutputs?: Record<string, string>;
+  /** Make `qmd collection remove` throw. */
+  removeFail?: boolean;
   existingPaths?: Set<string>;
   calls?: Array<{ file: string; args: string[]; cwd: string }>;
 }): QmdCollectionsDeps {
@@ -627,6 +633,15 @@ function makeCollectionsDeps(overrides?: {
       opts: { timeout: number; cwd: string },
     ) => {
       calls.push({ file, args, cwd: opts.cwd });
+      if (args[0] === 'collection' && args[1] === 'show') {
+        return { stdout: overrides?.showOutputs?.[args[2]] ?? '', stderr: '' };
+      }
+      if (args[0] === 'collection' && args[1] === 'remove') {
+        if (overrides?.removeFail) {
+          throw new Error('remove failed');
+        }
+        return { stdout: '', stderr: '' };
+      }
       if (args.includes('collection') && args.includes('add')) {
         // Check if this scope should fail
         if (overrides?.addFailScopes) {
@@ -817,8 +832,9 @@ describe('ensureQmdCollections', () => {
       assert.ok(memoryScope);
       assert.equal(memoryScope.created, true);
 
-      // Should have: 1 list + 2 adds (not 3, 'all' skipped) + 1 update + 1 embed = 5 calls
-      assert.equal(calls.length, 5);
+      // Should have: 1 list + 1 show (verify 'all') + 2 adds (not 3,
+      // 'all' skipped) + 1 update + 1 embed = 6 calls
+      assert.equal(calls.length, 6);
     } finally {
       if (prev === undefined) {
         delete process.env.ARETE_SEARCH_FALLBACK;
@@ -1053,5 +1069,238 @@ describe('ensureQmdCollections', () => {
         process.env.ARETE_SEARCH_FALLBACK = prev;
       }
     }
+  });
+});
+
+describe('ensureQmdCollections — stale collection migration', () => {
+  const SHOW_STALE_MEMORY = [
+    'Collection: my-memory',
+    '  Path:     /workspace/.arete/memory/items',
+    '  Pattern:  **/*.md',
+    '  Include:  yes (default)',
+  ].join('\n');
+
+  const SHOW_CURRENT_MEMORY = [
+    'Collection: my-memory',
+    '  Path:     /workspace/.arete/memory',
+    '  Pattern:  **/*.md',
+    '  Include:  yes (default)',
+  ].join('\n');
+
+  const SHOW_BAD_PATTERN = [
+    'Collection: my-memory',
+    '  Path:     /workspace/.arete/memory',
+    '  Pattern:  **/*.txt',
+    '  Include:  yes (default)',
+  ].join('\n');
+
+  function run(overrides: Parameters<typeof makeCollectionsDeps>[0]) {
+    const deps = makeCollectionsDeps(overrides);
+    return ensureQmdCollections(
+      '/workspace',
+      { memory: 'my-memory' },
+      deps,
+    );
+  }
+
+  const memoryOnlyPaths = new Set(['/workspace/.arete/memory']);
+
+  it('re-creates an existing collection whose registered path is stale', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await run({
+        calls,
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+        showOutputs: { 'my-memory': SHOW_STALE_MEMORY },
+      });
+
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.migrated, true);
+      assert.equal(memoryScope.created, true);
+      assert.equal(result.collections.memory, 'my-memory');
+
+      // remove then add, same name, correct path
+      const removeCall = calls.find(
+        (c) => c.args[0] === 'collection' && c.args[1] === 'remove',
+      );
+      assert.ok(removeCall);
+      assert.equal(removeCall.args[2], 'my-memory');
+
+      const addCall = calls.find(
+        (c) => c.args[0] === 'collection' && c.args[1] === 'add',
+      );
+      assert.ok(addCall);
+      assert.equal(addCall.args[2], '/workspace/.arete/memory');
+      assert.equal(addCall.args[addCall.args.indexOf('--name') + 1], 'my-memory');
+      assert.equal(addCall.args[addCall.args.indexOf('--mask') + 1], '**/*.md');
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+
+  it('re-creates an existing collection whose pattern is stale', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await run({
+        calls,
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+        showOutputs: { 'my-memory': SHOW_BAD_PATTERN },
+      });
+
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.migrated, true);
+      assert.equal(memoryScope.created, true);
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+
+  it('leaves an existing collection alone when path and pattern match', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await run({
+        calls,
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+        showOutputs: { 'my-memory': SHOW_CURRENT_MEMORY },
+      });
+
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.created, false);
+      assert.equal(memoryScope.migrated, undefined);
+      assert.equal(result.collections.memory, 'my-memory');
+
+      assert.equal(
+        calls.some((c) => c.args[0] === 'collection' && c.args[1] === 'remove'),
+        false,
+      );
+      assert.equal(
+        calls.some((c) => c.args[0] === 'collection' && c.args[1] === 'add'),
+        false,
+      );
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+
+  it('treats unparseable `collection show` output as matching (non-destructive)', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await run({
+        calls,
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+        // no showOutputs — show returns empty stdout
+      });
+
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.created, false);
+      assert.equal(
+        calls.some((c) => c.args[0] === 'collection' && c.args[1] === 'remove'),
+        false,
+      );
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+
+  it('keeps the stale collection with a warning when remove fails', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await run({
+        calls,
+        existingPaths: memoryOnlyPaths,
+        listOutput: 'my-memory (qmd://my-memory/)\n',
+        showOutputs: { 'my-memory': SHOW_STALE_MEMORY },
+        removeFail: true,
+      });
+
+      const memoryScope = result.scopes.find((s) => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.created, false);
+      assert.match(memoryScope.warning ?? '', /remove failed/);
+      // Config keeps the existing name — we did not lose the collection
+      assert.equal(result.collections.memory, 'my-memory');
+      assert.equal(
+        calls.some((c) => c.args[0] === 'collection' && c.args[1] === 'add'),
+        false,
+      );
+    } finally {
+      if (prev === undefined) delete process.env.ARETE_SEARCH_FALLBACK;
+      else process.env.ARETE_SEARCH_FALLBACK = prev;
+    }
+  });
+});
+
+describe('buildQmdCollectionRoots', () => {
+  it('maps generated scoped names to workspace-relative roots', () => {
+    const roots = buildQmdCollectionRoots('/workspace');
+    const memoryName = generateScopedCollectionName('/workspace', 'memory');
+    const meetingsName = generateScopedCollectionName('/workspace', 'meetings');
+    assert.equal(roots[memoryName], '.arete/memory');
+    assert.equal(roots[meetingsName], 'resources/meetings');
+  });
+
+  it('omits the root-scoped "all" collection', () => {
+    const roots = buildQmdCollectionRoots('/workspace', { all: 'custom-all' });
+    const allName = generateScopedCollectionName('/workspace', 'all');
+    assert.equal(roots[allName], undefined);
+    assert.equal(roots['custom-all'], undefined);
+  });
+
+  it('includes configured custom collection names', () => {
+    const roots = buildQmdCollectionRoots('/workspace', {
+      memory: 'my-custom-memory',
+    });
+    assert.equal(roots['my-custom-memory'], '.arete/memory');
+    // Deterministic name still included alongside
+    const memoryName = generateScopedCollectionName('/workspace', 'memory');
+    assert.equal(roots[memoryName], '.arete/memory');
+  });
+});
+
+describe('rebaseQmdPath', () => {
+  const roots = { 'arete-ab12-memory': '.arete/memory', 'arete-ab12-projects': 'projects' };
+
+  it('rebases known scoped collection paths to workspace-relative', () => {
+    assert.equal(
+      rebaseQmdPath('qmd://arete-ab12-memory/topics/foo.md', roots),
+      '.arete/memory/topics/foo.md',
+    );
+    assert.equal(
+      rebaseQmdPath('qmd://arete-ab12-projects/active/bar.md', roots),
+      'projects/active/bar.md',
+    );
+  });
+
+  it('strips prefix for unknown collections (legacy behavior)', () => {
+    assert.equal(
+      rebaseQmdPath('qmd://reserv-121f/projects/active/bar.md', roots),
+      'projects/active/bar.md',
+    );
+  });
+
+  it('returns non-qmd paths unchanged', () => {
+    assert.equal(rebaseQmdPath('projects/active/bar.md', roots), 'projects/active/bar.md');
   });
 });

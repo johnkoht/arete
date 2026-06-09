@@ -12,6 +12,7 @@ import {
   getFallbackSearchProvider,
   getQmdSearchProvider,
   parseQmdJson,
+  generateScopedCollectionName,
 } from '../../src/search/index.js';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 
@@ -136,6 +137,17 @@ describe('search providers', () => {
       assert.strictEqual(results[0].score, 1);
       assert.strictEqual(results[1].score, 0);
     });
+
+    it('rebases scoped-collection paths to workspace-relative when roots provided', () => {
+      const json = JSON.stringify([
+        { file: 'qmd://arete-ab12-memory/topics/glance.md', snippet: 'x', score: 0.9 },
+        { file: 'qmd://root-coll/projects/active/foo.md', snippet: 'y', score: 0.8 },
+      ]);
+      const results = parseQmdJson(json, { 'arete-ab12-memory': '.arete/memory' });
+      assert.strictEqual(results[0].path, '.arete/memory/topics/glance.md');
+      // Unknown collection — prefix stripped (legacy behavior)
+      assert.strictEqual(results[1].path, 'projects/active/foo.md');
+    });
   });
 
   describe('fallback provider', () => {
@@ -195,6 +207,26 @@ describe('search providers', () => {
       });
       const results = await provider.search('query');
       assert.deepEqual(results, []);
+    });
+
+    it('semanticSearch rebases memory-scope paths to workspace-relative (mocked)', async () => {
+      const memoryName = generateScopedCollectionName('/workspace', 'memory');
+      const stdout = JSON.stringify([
+        { file: `qmd://${memoryName}/topics/glance.md`, snippet: 'x', score: 0.9 },
+        { file: 'qmd://configured-memory/topics/other.md', snippet: 'y', score: 0.8 },
+      ]);
+      const provider = getQmdSearchProvider(
+        '/workspace',
+        {
+          whichSync: () => ({ status: 0, stdout: '/usr/bin/qmd' }),
+          execFileAsync: async () => ({ stdout, stderr: '' }),
+        },
+        { memory: 'configured-memory' },
+      );
+      const results = await provider.semanticSearch('glance');
+      assert.strictEqual(results[0].path, '.arete/memory/topics/glance.md');
+      // Configured (non-deterministic) name also rebases
+      assert.strictEqual(results[1].path, '.arete/memory/topics/other.md');
     });
   });
 });

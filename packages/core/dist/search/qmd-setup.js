@@ -9,7 +9,7 @@ import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 const execFileAsync = promisify(execFile);
 /** Timeout for QMD index updates (30s) - updates can be slow for large workspaces */
 const QMD_UPDATE_TIMEOUT_MS = 30_000;
@@ -303,6 +303,45 @@ export const SCOPE_PATHS = {
     resources: 'resources',
     inbox: 'inbox',
 };
+/** File mask used for every Areté qmd collection. */
+export const QMD_COLLECTION_MASK = '**/*.md';
+/**
+ * Build the collection-name → workspace-relative-root map for a workspace.
+ *
+ * Includes both the deterministic generated names
+ * (`arete-<hash>-<scope>`) and any names configured in
+ * `arete.yaml` `qmd_collections` (covers renamed/legacy collections).
+ * Scopes rooted at the workspace root (`.`) are omitted — their result
+ * paths are already workspace-relative after prefix stripping.
+ */
+export function buildQmdCollectionRoots(workspaceRoot, collections) {
+    const roots = {};
+    for (const scope of ALL_SCOPES) {
+        const rel = SCOPE_PATHS[scope];
+        if (rel === '.')
+            continue;
+        roots[generateScopedCollectionName(workspaceRoot, scope)] = rel;
+        const configured = collections?.[scope];
+        if (configured) {
+            roots[configured] = rel;
+        }
+    }
+    return roots;
+}
+/**
+ * Convert a raw qmd result path (`qmd://collection/relative/path.md`) to a
+ * workspace-relative path. Collections found in `roots` get their
+ * workspace-relative root prefixed; unknown collections (e.g. the root
+ * `all` collection, or collections from other workspaces) just have the
+ * `qmd://collection/` prefix stripped (previous behavior).
+ */
+export function rebaseQmdPath(rawPath, roots) {
+    const match = rawPath.match(/^qmd:\/\/([^/]+)\/(.+)$/);
+    if (!match)
+        return rawPath;
+    const root = roots[match[1]];
+    return root ? `${root}/${match[2]}` : match[2];
+}
 /** All scopes in order of creation */
 export const ALL_SCOPES = [
     'all',
@@ -317,6 +356,51 @@ export const ALL_SCOPES = [
     'resources',
     'inbox',
 ];
+/**
+ * Compare two filesystem paths for equivalence, tolerating symlinks
+ * (qmd stores realpaths, e.g. `/tmp` → `/private/tmp` on macOS).
+ */
+function pathsEquivalent(a, b) {
+    const normalize = (p) => resolve(p).replace(/\/+$/, '');
+    const na = normalize(a);
+    const nb = normalize(b);
+    if (na === nb)
+        return true;
+    try {
+        return realpathSync(na) === realpathSync(nb);
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Check whether an existing qmd collection's registered path/pattern still
+ * matches what the scope definition expects. Returns true when a mismatch
+ * is POSITIVELY detected (collection must be re-created). When
+ * `qmd collection show` fails or its output can't be parsed, returns false
+ * — we can't verify, so we leave the collection alone (non-destructive).
+ */
+async function collectionSpecMismatch(execImpl, workspaceRoot, collectionName, expectedAbsolutePath) {
+    let stdout;
+    try {
+        const showResult = await execImpl('qmd', ['collection', 'show', collectionName], { timeout: QMD_COLLECTION_ADD_TIMEOUT_MS, cwd: workspaceRoot });
+        stdout = showResult.stdout ?? '';
+    }
+    catch {
+        return false; // Can't verify — assume OK
+    }
+    const pathMatch = stdout.match(/^\s*Path:\s*(.+)$/m);
+    const patternMatch = stdout.match(/^\s*Pattern:\s*(.+)$/m);
+    if (!pathMatch && !patternMatch)
+        return false; // Unparseable — assume OK
+    if (pathMatch && !pathsEquivalent(pathMatch[1].trim(), expectedAbsolutePath)) {
+        return true;
+    }
+    if (patternMatch && patternMatch[1].trim() !== QMD_COLLECTION_MASK) {
+        return true;
+    }
+    return false;
+}
 /**
  * Generate a unique scoped collection name from workspace path and scope.
  * Format: `arete-<4-char-hash>-<scope>` e.g. `arete-a3f2-memory`
@@ -355,7 +439,9 @@ export function generateScopedCollectionName(workspaceRoot, scope) {
  *
  * @param workspaceRoot - Absolute path to the workspace
  * @param existingCollections - Existing collections from config (scope to collection name).
- *   Collections that already exist in config are verified and re-created if missing from qmd.
+ *   Collections that already exist in config are verified and re-created if missing from
+ *   qmd, or if their registered path/pattern no longer match the scope definition
+ *   (migration for collections created under older scope mappings).
  * @param deps - Injectable dependencies for testing
  * @returns Result with collections map suitable for storing in arete.yaml
  */
@@ -419,16 +505,46 @@ export async function ensureQmdCollections(workspaceRoot, existingCollections, d
         // Determine collection name
         const collectionName = existingCollections?.[scope] ?? generateScopedCollectionName(workspaceRoot, scope);
         // Check if collection already exists in qmd
+        let migrated = false;
         if (existingQmdCollections.has(collectionName)) {
-            // Collection exists, no need to create
-            scopeResults.push({
-                scope,
-                created: false,
-                collectionName,
-                skipped: false,
-            });
-            collections[scope] = collectionName;
-            continue;
+            // Verify the registered path/pattern still match the scope
+            // definition. Collections created under older scope mappings
+            // (e.g. memory → `.arete/memory/items`) keep their stale path
+            // forever otherwise, silently excluding new content like
+            // `.arete/memory/topics/` from search.
+            const mismatch = await collectionSpecMismatch(execImpl, workspaceRoot, collectionName, absolutePath);
+            if (!mismatch) {
+                // Collection exists and matches, no need to create
+                scopeResults.push({
+                    scope,
+                    created: false,
+                    collectionName,
+                    skipped: false,
+                });
+                collections[scope] = collectionName;
+                continue;
+            }
+            // Stale definition — remove so we can re-create with the same name
+            try {
+                await execImpl('qmd', ['collection', 'remove', collectionName], {
+                    timeout: QMD_COLLECTION_ADD_TIMEOUT_MS,
+                    cwd: workspaceRoot,
+                });
+                migrated = true;
+            }
+            catch (err) {
+                // Removal failed — keep the existing (stale) collection rather
+                // than risk losing it entirely. Surface a warning.
+                scopeResults.push({
+                    scope,
+                    created: false,
+                    collectionName,
+                    skipped: false,
+                    warning: `qmd collection remove failed for ${scope} (stale path/pattern kept): ${err.message}`,
+                });
+                collections[scope] = collectionName;
+                continue;
+            }
         }
         // Create the collection
         try {
@@ -439,7 +555,7 @@ export async function ensureQmdCollections(workspaceRoot, existingCollections, d
                 '--name',
                 collectionName,
                 '--mask',
-                '**/*.md',
+                QMD_COLLECTION_MASK,
             ], {
                 timeout: QMD_COLLECTION_ADD_TIMEOUT_MS,
                 cwd: workspaceRoot,
@@ -449,6 +565,7 @@ export async function ensureQmdCollections(workspaceRoot, existingCollections, d
                 created: true,
                 collectionName,
                 skipped: false,
+                ...(migrated ? { migrated: true } : {}),
             });
             collections[scope] = collectionName;
         }
@@ -458,6 +575,7 @@ export async function ensureQmdCollections(workspaceRoot, existingCollections, d
                 created: false,
                 collectionName,
                 skipped: false,
+                ...(migrated ? { migrated: true } : {}),
                 warning: `qmd collection add failed for ${scope}: ${err.message}`,
             });
         }
