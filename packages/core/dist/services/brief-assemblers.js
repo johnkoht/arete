@@ -105,6 +105,15 @@ export async function loadMeetingIndex(storage, paths) {
                     .filter((s) => s.length > 0)
                 : [];
         const area = typeof fm.area === 'string' ? fm.area : undefined;
+        const topicsRaw = fm.topics;
+        const topics = Array.isArray(topicsRaw)
+            ? topicsRaw.map((t) => String(t).trim()).filter((t) => t.length > 0)
+            : typeof topicsRaw === 'string'
+                ? topicsRaw
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter((t) => t.length > 0)
+                : [];
         const projectSlug = typeof fm.project === 'string' ? fm.project : undefined;
         // Pull a short excerpt from the body — first non-empty line after
         // frontmatter, or first H2 (### Summary etc.)
@@ -126,6 +135,7 @@ export async function loadMeetingIndex(storage, paths) {
             attendeeIds,
             attendeeNames,
             area,
+            topics,
             projectSlug,
             excerpt,
         });
@@ -146,9 +156,14 @@ export function meetingsForPerson(index, personSlug, personName) {
         return false;
     });
 }
-/** Filter the meeting index by area frontmatter match. */
+/**
+ * Filter the meeting index by area — union of `area:` frontmatter match
+ * and `topics:` membership (W6, review concern 7: June-style meetings
+ * carry `topics:` lists and no `area:` key, so area-only matching missed
+ * them at both the project (S2) and area call sites).
+ */
 export function meetingsForArea(index, areaSlug) {
-    return index.filter((m) => m.area === areaSlug);
+    return index.filter((m) => m.area === areaSlug || m.topics.includes(areaSlug));
 }
 /** Filter the meeting index by overlap with a group of attendee slugs. */
 export function meetingsForGroup(index, groupSlugs, excludePath) {
@@ -622,6 +637,18 @@ function makeEmptyPersonBrief(slug) {
         metadata: {},
     };
 }
+/**
+ * Project display name from README frontmatter — `name:` → `title:` →
+ * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
+ */
+function projectDisplayName(fm, slug) {
+    for (const key of ['name', 'title', 'project']) {
+        const value = fm[key];
+        if (typeof value === 'string' && value.trim().length > 0)
+            return value.trim();
+    }
+    return slug;
+}
 async function listActiveProjects(storage, paths) {
     const activeDir = join(paths.projects, 'active');
     const exists = await storage.exists(activeDir);
@@ -637,7 +664,7 @@ async function listActiveProjects(storage, paths) {
         const parsed = parseFrontmatter(content);
         const fm = parsed?.frontmatter ?? {};
         const slug = basename(dir);
-        const name = typeof fm.name === 'string' ? fm.name : slug;
+        const name = projectDisplayName(fm, slug);
         projects.push({
             slug,
             name,
@@ -659,7 +686,7 @@ async function readProjectBySlug(storage, paths, slug) {
     const fm = parsed?.frontmatter ?? {};
     return {
         slug,
-        name: typeof fm.name === 'string' ? fm.name : slug,
+        name: projectDisplayName(fm, slug),
         area: typeof fm.area === 'string' ? fm.area : undefined,
         status: typeof fm.status === 'string' ? fm.status : undefined,
         started: typeof fm.started === 'string' ? fm.started : undefined,
@@ -768,7 +795,8 @@ export async function assembleBriefForProject(slug, paths, deps) {
     }
     // 4. Decisions & learnings — area-tagged items
     if (project.area) {
-        const items = await readAreaTaggedMemoryItems(deps.storage, paths, project.area);
+        const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths);
+        const items = await readAreaTaggedMemoryItems(deps.storage, paths, project.area, topicAreaBySlug);
         if (items.length > 0) {
             const bullets = items.map((it) => {
                 sources.push(relativeToRoot(it.path, paths.root));
@@ -817,7 +845,91 @@ export async function assembleBriefForProject(slug, paths, deps) {
         metadata,
     };
 }
-async function readAreaTaggedMemoryItems(storage, paths, area) {
+/**
+ * Parse memory-item entries in BOTH live and legacy formats (W6, review
+ * concern 3 respec):
+ *
+ *   Live (what `decisions.md`/`learnings.md` actually contain today):
+ *     ## Title
+ *     - **Date**: YYYY-MM-DD
+ *     - **Source**: ...
+ *     - **Topics**: slug-a, slug-b
+ *
+ *   Legacy (the old spec — only ~5/694 live entries):
+ *     ### YYYY-MM-DD: Title
+ *     Area: foo            (or an inline `[area:foo]` tag)
+ *
+ * Line-based on purpose — the previous `[\s\S]+?(?=...|$)/gm` regex
+ * truncated each section body at its first line end under the `m` flag
+ * (same pitfall documented at `extractDiscussionTopics`).
+ */
+export function parseMemoryItemEntries(content) {
+    const entries = [];
+    let current = null;
+    for (const line of content.split('\n')) {
+        const heading = line.match(/^(?:##|###)(?!#)\s+(.+?)\s*$/);
+        if (heading) {
+            if (current)
+                entries.push(current);
+            let title = heading[1].trim();
+            let date;
+            const datePrefix = title.match(/^(\d{4}-\d{2}-\d{2}):\s*(.+)$/);
+            if (datePrefix) {
+                date = datePrefix[1];
+                title = datePrefix[2].trim();
+            }
+            current = { title, topics: [], ...(date ? { date } : {}) };
+            continue;
+        }
+        if (!current)
+            continue;
+        const dateBullet = line.match(/^\s*-\s*\*\*Date\*\*:\s*(\d{4}-\d{2}-\d{2})/i);
+        if (dateBullet) {
+            if (!current.date)
+                current.date = dateBullet[1];
+            continue;
+        }
+        const topicsBullet = line.match(/^\s*-\s*\*\*Topics\*\*:\s*(.+)$/i);
+        if (topicsBullet) {
+            for (const raw of topicsBullet[1].split(',')) {
+                const slug = raw.trim().replace(/^`+|`+$/g, '').trim();
+                if (slug)
+                    current.topics.push(slug);
+            }
+            continue;
+        }
+        if (!current.area) {
+            const areaLine = line.match(/^\s*Area:\s*(.+)$/i);
+            const areaTag = line.match(/\[area:\s*([^\]]+)\]/i);
+            const explicit = (areaLine?.[1] ?? areaTag?.[1] ?? '').trim();
+            if (explicit)
+                current.area = explicit;
+        }
+    }
+    if (current)
+        entries.push(current);
+    return entries;
+}
+/**
+ * Build the topic-slug → area map from topic-page `area:` frontmatter
+ * (the same surface `ActiveTopicEntry.area` is derived from). Best-effort:
+ * returns an empty map on any failure.
+ */
+export async function loadTopicAreaMap(topicMemory, paths) {
+    const map = new Map();
+    try {
+        const { topics } = await topicMemory.listAll(paths);
+        for (const t of topics) {
+            if (t.frontmatter.area)
+                map.set(t.frontmatter.topic_slug, t.frontmatter.area);
+        }
+    }
+    catch {
+        // best-effort — attribution falls back to direct slug / Area: matches
+    }
+    return map;
+}
+async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaBySlug) {
     const items = [];
     for (const [type, file] of [
         ['decision', 'decisions.md'],
@@ -827,21 +939,23 @@ async function readAreaTaggedMemoryItems(storage, paths, area) {
         const content = await storage.read(filePath);
         if (!content)
             continue;
-        // Parse `### YYYY-MM-DD: Title` sections, look at trailing `Area:` line
-        // or `[area:foo]` tag in section body.
-        const sectionRe = /^###\s+(?:(\d{4}-\d{2}-\d{2}):\s*)?([^\n]+)\n([\s\S]+?)(?=\n###\s|$)/gm;
-        let m;
-        while ((m = sectionRe.exec(content)) !== null) {
-            const date = m[1];
-            const title = m[2].trim();
-            const body = m[3];
-            // Match `Area: foo` (case-insensitive) or `[area:foo]` tag
-            const areaLine = body.match(/^\s*Area:\s*([^\n]+)/im);
-            const areaTag = body.match(/\[area:\s*([^\]]+)\]/i);
-            const itemArea = (areaLine?.[1] ?? areaTag?.[1] ?? '').trim();
-            if (itemArea !== area)
+        for (const entry of parseMemoryItemEntries(content)) {
+            // Attribution (in priority order):
+            //   1. A `**Topics**:` slug IS the area slug (live data: 127 entries
+            //      carry `glance-communications` directly), or maps to the area
+            //      via topic-page `area:` frontmatter.
+            //   2. Legacy explicit `Area:` line / `[area:]` tag.
+            const matches = entry.topics.includes(area) ||
+                entry.topics.some((t) => topicAreaBySlug.get(t) === area) ||
+                entry.area === area;
+            if (!matches)
                 continue;
-            items.push({ type, text: title, date, path: filePath });
+            items.push({
+                type,
+                text: entry.title,
+                ...(entry.date ? { date: entry.date } : {}),
+                path: filePath,
+            });
         }
     }
     return items;
@@ -920,7 +1034,8 @@ export async function assembleBriefForArea(slug, paths, deps) {
         });
     }
     // 5. Decisions & learnings
-    const items = await readAreaTaggedMemoryItems(deps.storage, paths, slug);
+    const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths);
+    const items = await readAreaTaggedMemoryItems(deps.storage, paths, slug, topicAreaBySlug);
     if (items.length > 0) {
         const bullets = items.map((it) => {
             sources.push(relativeToRoot(it.path, paths.root));
@@ -1008,6 +1123,9 @@ export async function resolveMeetingInput(input, paths, storage, index, calendar
                     ? fm.attendees.map((s) => String(s).toLowerCase())
                     : [],
                 area: typeof fm.area === 'string' ? fm.area : undefined,
+                topics: Array.isArray(fm.topics)
+                    ? fm.topics.map((t) => String(t).trim()).filter((t) => t.length > 0)
+                    : [],
             };
             return { kind: 'meeting-file', entry: synthEntry, content: agendaContent };
         }
