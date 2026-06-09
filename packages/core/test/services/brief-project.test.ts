@@ -257,6 +257,106 @@ Area: other-area
     assert.ok(brief.sources.some((s) => s.includes('2026-05-15-design-review.md')));
   });
 
+  it('W6: live-format decisions/learnings attribute via **Topics** slugs (direct + topic-page area map)', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/status-letters/README.md',
+      `---
+name: Status Letters
+area: glance-communications
+status: active
+---
+
+# Status Letters
+
+## Background
+Automate status letters.
+`,
+    );
+
+    // Topic page whose frontmatter maps a non-area slug into the area.
+    writeFile(
+      tmpDir,
+      '.arete/memory/topics/rollout-strategy.md',
+      `---
+topic_slug: rollout-strategy
+area: glance-communications
+status: new
+first_seen: 2026-04-24
+last_refreshed: 2026-06-04
+sources_integrated: []
+---
+
+# Rollout Strategy
+
+## Current state
+Rollout sequencing for email templates.
+`,
+    );
+
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+
+    // LIVE format: ## Title + **Date** + **Topics** bullets.
+    writeFile(
+      tmpDir,
+      '.arete/memory/items/decisions.md',
+      `# Decisions
+
+## Reprioritize draft emails ahead of inbound emails
+- **Date**: 2026-05-29
+- **Source**: 2026-05-29-slack-digest.md
+- **Topics**: glance-communications, copilot-email-drafting
+- CJ escalated status letters across all programs.
+
+## Rollout: turn templates on for everybody after Lyft
+- **Date**: 2026-05-29
+- **Source**: 2026-05-29-slack-digest.md
+- **Topics**: rollout-strategy, leap-rollout
+- Confirmed the rollout sequence.
+
+## Unrelated decision
+- **Date**: 2026-05-28
+- **Topics**: some-other-topic
+- Should not appear.
+`,
+    );
+
+    writeFile(
+      tmpDir,
+      '.arete/memory/items/learnings.md',
+      `# Learnings
+
+## Templates without explicit scoping go everywhere
+- **Date**: 2026-05-22
+- **Topics**: glance-communications
+- Treat unscoped as a soft bug.
+
+### 2026-05-01: Legacy learning still works
+Area: glance-communications
+
+Legacy-format fallback entry.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('status-letters', paths);
+
+    const decisions = brief.sections.find((s) => s.heading.startsWith('Decisions & learnings'));
+    assert.ok(decisions, `missing Decisions & learnings; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    // 2 decisions (direct slug + mapped via rollout-strategy area) + 2 learnings (live + legacy)
+    assert.ok(
+      decisions!.heading.includes('(4)'),
+      `expected 4 items; heading was "${decisions!.heading}"`,
+    );
+    const text = decisions!.bullets.join('\n');
+    assert.ok(/Reprioritize draft emails/.test(text), 'direct Topics slug match missing');
+    assert.ok(/turn templates on for everybody/.test(text), 'topic-page area-map match missing');
+    assert.ok(/explicit scoping go everywhere/.test(text), 'live-format learning missing');
+    assert.ok(/Legacy learning still works/.test(text), 'legacy Area: fallback missing');
+    assert.ok(!/Unrelated decision/.test(text), 'unrelated topic leaked in');
+    assert.ok(/\[2026-05-29\]/.test(text), 'date from **Date** bullet missing');
+  });
+
   it('returns empty ProjectBrief when project not found', async () => {
     writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
     const intel = buildIntel(tmpDir);

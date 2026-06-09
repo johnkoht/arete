@@ -990,7 +990,13 @@ export async function assembleBriefForProject(
 
   // 4. Decisions & learnings — area-tagged items
   if (project.area) {
-    const items = await readAreaTaggedMemoryItems(deps.storage, paths, project.area);
+    const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths);
+    const items = await readAreaTaggedMemoryItems(
+      deps.storage,
+      paths,
+      project.area,
+      topicAreaBySlug,
+    );
     if (items.length > 0) {
       const bullets = items.map((it) => {
         sources.push(relativeToRoot(it.path, paths.root));
@@ -1049,10 +1055,108 @@ interface AreaTaggedItem {
   path: string;
 }
 
+/** One parsed entry from `.arete/memory/items/{decisions,learnings}.md`. */
+export interface MemoryItemEntry {
+  /** Heading text (date prefix stripped when legacy `### YYYY-MM-DD: Title`). */
+  title: string;
+  /** From a `- **Date**: YYYY-MM-DD` bullet (live format) or the legacy heading prefix. */
+  date?: string;
+  /** Slugs from a `- **Topics**: a, b, c` bullet (live format). */
+  topics: string[];
+  /** Explicit `Area: foo` line or `[area:foo]` tag (legacy fallback). */
+  area?: string;
+}
+
+/**
+ * Parse memory-item entries in BOTH live and legacy formats (W6, review
+ * concern 3 respec):
+ *
+ *   Live (what `decisions.md`/`learnings.md` actually contain today):
+ *     ## Title
+ *     - **Date**: YYYY-MM-DD
+ *     - **Source**: ...
+ *     - **Topics**: slug-a, slug-b
+ *
+ *   Legacy (the old spec — only ~5/694 live entries):
+ *     ### YYYY-MM-DD: Title
+ *     Area: foo            (or an inline `[area:foo]` tag)
+ *
+ * Line-based on purpose — the previous `[\s\S]+?(?=...|$)/gm` regex
+ * truncated each section body at its first line end under the `m` flag
+ * (same pitfall documented at `extractDiscussionTopics`).
+ */
+export function parseMemoryItemEntries(content: string): MemoryItemEntry[] {
+  const entries: MemoryItemEntry[] = [];
+  let current: MemoryItemEntry | null = null;
+
+  for (const line of content.split('\n')) {
+    const heading = line.match(/^(?:##|###)(?!#)\s+(.+?)\s*$/);
+    if (heading) {
+      if (current) entries.push(current);
+      let title = heading[1].trim();
+      let date: string | undefined;
+      const datePrefix = title.match(/^(\d{4}-\d{2}-\d{2}):\s*(.+)$/);
+      if (datePrefix) {
+        date = datePrefix[1];
+        title = datePrefix[2].trim();
+      }
+      current = { title, topics: [], ...(date ? { date } : {}) };
+      continue;
+    }
+    if (!current) continue;
+
+    const dateBullet = line.match(/^\s*-\s*\*\*Date\*\*:\s*(\d{4}-\d{2}-\d{2})/i);
+    if (dateBullet) {
+      if (!current.date) current.date = dateBullet[1];
+      continue;
+    }
+
+    const topicsBullet = line.match(/^\s*-\s*\*\*Topics\*\*:\s*(.+)$/i);
+    if (topicsBullet) {
+      for (const raw of topicsBullet[1].split(',')) {
+        const slug = raw.trim().replace(/^`+|`+$/g, '').trim();
+        if (slug) current.topics.push(slug);
+      }
+      continue;
+    }
+
+    if (!current.area) {
+      const areaLine = line.match(/^\s*Area:\s*(.+)$/i);
+      const areaTag = line.match(/\[area:\s*([^\]]+)\]/i);
+      const explicit = (areaLine?.[1] ?? areaTag?.[1] ?? '').trim();
+      if (explicit) current.area = explicit;
+    }
+  }
+  if (current) entries.push(current);
+  return entries;
+}
+
+/**
+ * Build the topic-slug → area map from topic-page `area:` frontmatter
+ * (the same surface `ActiveTopicEntry.area` is derived from). Best-effort:
+ * returns an empty map on any failure.
+ */
+export async function loadTopicAreaMap(
+  topicMemory: TopicMemoryService,
+  paths: WorkspacePaths,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    const { topics } = await topicMemory.listAll(paths);
+    for (const t of topics) {
+      if (t.frontmatter.area) map.set(t.frontmatter.topic_slug, t.frontmatter.area);
+    }
+  } catch {
+    // best-effort — attribution falls back to direct slug / Area: matches
+  }
+  return map;
+}
+
 async function readAreaTaggedMemoryItems(
   storage: StorageAdapter,
   paths: WorkspacePaths,
   area: string,
+  topicAreaBySlug: Map<string, string>,
 ): Promise<AreaTaggedItem[]> {
   const items: AreaTaggedItem[] = [];
   for (const [type, file] of [
@@ -1063,20 +1167,23 @@ async function readAreaTaggedMemoryItems(
     const content = await storage.read(filePath);
     if (!content) continue;
 
-    // Parse `### YYYY-MM-DD: Title` sections, look at trailing `Area:` line
-    // or `[area:foo]` tag in section body.
-    const sectionRe = /^###\s+(?:(\d{4}-\d{2}-\d{2}):\s*)?([^\n]+)\n([\s\S]+?)(?=\n###\s|$)/gm;
-    let m: RegExpExecArray | null;
-    while ((m = sectionRe.exec(content)) !== null) {
-      const date = m[1];
-      const title = m[2].trim();
-      const body = m[3];
-      // Match `Area: foo` (case-insensitive) or `[area:foo]` tag
-      const areaLine = body.match(/^\s*Area:\s*([^\n]+)/im);
-      const areaTag = body.match(/\[area:\s*([^\]]+)\]/i);
-      const itemArea = (areaLine?.[1] ?? areaTag?.[1] ?? '').trim();
-      if (itemArea !== area) continue;
-      items.push({ type, text: title, date, path: filePath });
+    for (const entry of parseMemoryItemEntries(content)) {
+      // Attribution (in priority order):
+      //   1. A `**Topics**:` slug IS the area slug (live data: 127 entries
+      //      carry `glance-communications` directly), or maps to the area
+      //      via topic-page `area:` frontmatter.
+      //   2. Legacy explicit `Area:` line / `[area:]` tag.
+      const matches =
+        entry.topics.includes(area) ||
+        entry.topics.some((t) => topicAreaBySlug.get(t) === area) ||
+        entry.area === area;
+      if (!matches) continue;
+      items.push({
+        type,
+        text: entry.title,
+        ...(entry.date ? { date: entry.date } : {}),
+        path: filePath,
+      });
     }
   }
   return items;
@@ -1177,7 +1284,8 @@ export async function assembleBriefForArea(
   }
 
   // 5. Decisions & learnings
-  const items = await readAreaTaggedMemoryItems(deps.storage, paths, slug);
+  const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths);
+  const items = await readAreaTaggedMemoryItems(deps.storage, paths, slug, topicAreaBySlug);
   if (items.length > 0) {
     const bullets = items.map((it) => {
       sources.push(relativeToRoot(it.path, paths.root));
