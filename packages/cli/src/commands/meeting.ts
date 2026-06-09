@@ -1213,6 +1213,15 @@ export function registerMeetingCommands(program: Command): void {
                 },
               );
 
+              // D1 (wiki-repair W2): the unified writer set-or-DELETEs
+              // `could_include`, but this patch flows through the
+              // `writeWithLock` PARTIAL-MERGE contract — an absent key
+              // would leave a stale `could_include` from a prior extract
+              // surviving the merge. Explicit `undefined` deletes it.
+              if (!('could_include' in patch)) {
+                patch['could_include'] = undefined;
+              }
+
               // Status map: merge chef-set `'skipped'` (entries with a
               // `staged_item_skip_reason` whose `setBy ∈ {'chef','chef-proposed'}`)
               // on top of the extract-produced status so a re-extract cannot
@@ -1770,6 +1779,49 @@ export function registerMeetingCommands(program: Command): void {
           });
         },
       });
+
+      // --------------------------------------------------------------------------
+      // D1 (wiki-repair W2) — capture `could_include` headlines staged by
+      // `extract --stage` (persisted via the unified frontmatter writer).
+      // Consumed by the approve-time summary hook below as FYI candidates.
+      //
+      // Meetings staged BEFORE the key existed simply have no key:
+      // `couldIncludeHeadlines` stays undefined, the FYI block is omitted,
+      // and the clear below is a no-op (live-fleet upgrade path —
+      // pre-mortem R5).
+      // --------------------------------------------------------------------------
+      let couldIncludeHeadlines: string[] | undefined;
+      const rawCouldInclude = frontmatter['could_include'];
+      if (Array.isArray(rawCouldInclude)) {
+        const headlines = rawCouldInclude.filter(
+          (h): h is string => typeof h === 'string' && h.trim().length > 0,
+        );
+        if (headlines.length > 0) couldIncludeHeadlines = headlines;
+      }
+
+      // --------------------------------------------------------------------------
+      // D1 consume-or-clear: drop the `could_include` key UNCONDITIONALLY —
+      // even when the summary hook is gated off (no AI / ARETE_NO_LLM /
+      // --skip-topics) or fails — so gated-off approves never leave fossil
+      // keys that a later reprocess would render from stale data
+      // (pre-mortem R5). Non-fatal: a failed clear only warns.
+      // --------------------------------------------------------------------------
+      if (rawCouldInclude !== undefined) {
+        try {
+          await writeWithLock(
+            services.storage,
+            meetingPath,
+            // Explicit `undefined` deletes the key under writeWithLock's
+            // partial-merge contract; all other keys are untouched.
+            async () => ({ frontmatter: { could_include: undefined } }),
+            { mtimeGuardSeconds: 0 },
+          );
+        } catch (err) {
+          warn(
+            `Could not clear could_include frontmatter (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`,
+          );
+        }
+      }
 
       // --------------------------------------------------------------------------
       // Hook 2 — Integrate this meeting into its topic wiki pages (Phase A #2)

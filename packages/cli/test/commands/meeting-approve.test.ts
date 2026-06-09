@@ -502,4 +502,75 @@ Meeting with pre-marked items.
       rmSync(lockPath, { force: true });
     }
   });
+
+  // --------------------------------------------------------------------------
+  // wiki-repair W2 / D1 — could_include consume-or-clear at approve.
+  // --------------------------------------------------------------------------
+
+  it('approves a meeting staged BEFORE the could_include key existed (R5 upgrade path)', () => {
+    // PROCESSED_MEETING has NO could_include key — the live-fleet state
+    // for every meeting staged before the D1 change shipped. Approve
+    // must succeed with no FYI handling and no error.
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      PROCESSED_MEETING,
+      'utf8',
+    );
+
+    const stdout = runCli([
+      'meeting', 'approve', '2026-03-15-sprint-review',
+      '--all',
+      '--skip-qmd',
+      '--json',
+    ], { cwd: tmpDir, env: { ARETE_NO_LLM: '1' } });
+
+    const result = JSON.parse(stdout) as { success: boolean };
+    assert.equal(result.success, true);
+
+    const meetingContent = readFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      'utf8',
+    );
+    assert.ok(meetingContent.includes('status: approved'));
+    assert.ok(!meetingContent.includes('could_include'));
+  });
+
+  it('clears could_include even when the summary path is gated off (no fossil keys)', () => {
+    const stagedWithCouldInclude = PROCESSED_MEETING.replace(
+      'status: processed',
+      'status: processed\ncould_include:\n  - "Risks: Sara flagged churn assumption"\n  - "Hiring: two offers out"',
+    );
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      stagedWithCouldInclude,
+      'utf8',
+    );
+
+    // ARETE_NO_LLM gates off BOTH the summary hook and Hook 2 — the
+    // exact "gated-off approve" fossil case from pre-mortem R5.
+    const stdout = runCli([
+      'meeting', 'approve', '2026-03-15-sprint-review',
+      '--all',
+      '--skip-qmd',
+      '--json',
+    ], { cwd: tmpDir, env: { ARETE_NO_LLM: '1' } });
+
+    const result = JSON.parse(stdout) as { success: boolean };
+    assert.equal(result.success, true);
+
+    const meetingContent = readFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      'utf8',
+    );
+    // Key consumed-or-cleared: gone from frontmatter.
+    assert.ok(!meetingContent.includes('could_include'));
+    // Other frontmatter survives the partial-merge clear.
+    assert.ok(meetingContent.includes('status: approved'));
+    assert.ok(meetingContent.includes('title: Sprint Review') || meetingContent.includes('title: "Sprint Review"'));
+    // No summary file was written (gated off).
+    assert.equal(
+      existsSync(join(tmpDir, '.arete', 'memory', 'summaries', 'meetings')),
+      false,
+    );
+  });
 });

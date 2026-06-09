@@ -222,4 +222,44 @@ describe('writeMeetingApplyFrontmatter (Phase 3.5 followup-5 AC1)', () => {
     assert.equal(fmA.status, 'approved');
     assert.equal(fmB.status, 'processed');
   });
+
+  // wiki-repair W2 / D1 — could_include persistence.
+  describe('could_include persistence (wiki-repair W2/D1)', () => {
+    const STATUS = { status: 'processed', processedAt: '2026-06-09T10:00:00.000Z' };
+
+    it('persists could_include when intelligence carries headlines', async () => {
+      const intel = {
+        ...fixtureIntelligence(),
+        could_include: ['Risks: Sara flagged churn', 'Hiring: two offers out'],
+      };
+      const fm: Record<string, unknown> = {};
+      await writeMeetingApplyFrontmatter(fm, intel, STATUS);
+      assert.deepStrictEqual(fm['could_include'], [
+        'Risks: Sara flagged churn',
+        'Hiring: two offers out',
+      ]);
+    });
+
+    it('does not add the key when intelligence has no headlines (no fossil)', async () => {
+      const fm: Record<string, unknown> = {};
+      await writeMeetingApplyFrontmatter(fm, fixtureIntelligence(), STATUS);
+      // Set-or-DELETE contract: key must be fully absent, never set to
+      // undefined (gray-matter/js-yaml throws on undefined values —
+      // backend write path).
+      assert.equal('could_include' in fm, false);
+    });
+
+    it('deletes a stale could_include key on re-run with no headlines', async () => {
+      const fm: Record<string, unknown> = { could_include: ['stale headline'] };
+      await writeMeetingApplyFrontmatter(fm, fixtureIntelligence(), STATUS);
+      assert.equal('could_include' in fm, false);
+    });
+
+    it('treats an empty could_include array as absent', async () => {
+      const fm: Record<string, unknown> = { could_include: ['stale'] };
+      const intel = { ...fixtureIntelligence(), could_include: [] };
+      await writeMeetingApplyFrontmatter(fm, intel, STATUS);
+      assert.equal('could_include' in fm, false);
+    });
+  });
 });
