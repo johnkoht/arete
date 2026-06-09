@@ -1,8 +1,10 @@
 # Changelog
 
-## [Unreleased] — Areté v2 (chef-orchestrator)
+## [0.11.0] — 2026-06-09 — Areté v2 (chef-orchestrator)
 
 Cumulative v2 effort (Phases 1–12). Large feature merge: the daily flow moves from step-by-step CLI/approve loops to a "chef" pattern (do-all-work-then-engage, curate-with-reason-labels, propose-with-MCP-action), the skills system splits into a managed + user layer, the memory system grows a summaries/wiki leg, and commitments get a v2 substrate with dedup. See `dev/work/plans/arete-v2-chef-orchestrator/POST-MORTEM.md` for the full program retro.
+
+**Also in 0.11.0 (post-merge cleanup):** fixed BUG-1/2/3 → full test suite green (two were fixed-date-fixture test time-bombs, not product bugs; plus a `view` event-loop hang); un-truncated the extractor topic-bias list so low-ranked canonical topics reach the LLM bias; added `arete topic add-aliases`; dropped an inert `areas:` write from slack-digest (digest knowledge flows via `topics:`); persisted dupe→source mapping in the dedup-decisions log (rebuild seam for a future `[[unmerge]]` wire-in); and **restored meeting-agenda synthesis quality** — a deterministic agenda scaffold (`arete agenda scaffold`, with attendee-scoped priorities + dual-header discussion-topic extraction) carrying a themed-section framing pass, fixing the post-v2 agenda regression.
 
 ### Added
 - **Chef-orchestrator skill pattern** — skills do all their analysis up front, then engage the user with curated proposals carrying reason labels, surfacing deferred work as a sidecar. Codified in `packages/runtime/skills/PATTERNS.md`; applied to the five Phase-2 daily-flow skills and propagated to `inbox-triage`, `email-triage`, `slack-digest`, `schedule-meeting` (Phase 4). (Phase 2's `ARETE_LEGACY_SKILL_PROSE` runtime rollback flag was sunset in Phase 3 — rollback is now a surgical per-skill `git revert` of the rewrite commit.) Lived daily-winddown median dropped from a 30–45 min baseline to ~21 min.
