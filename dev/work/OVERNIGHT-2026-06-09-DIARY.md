@@ -48,6 +48,7 @@ Pending (spawn as upstreams report): reviewers for each build; I-0 generator+eva
 
 ## MERGES TO MAIN (overnight)
 1. **bug-fix (BUG-1/2/3)** — reviewer APPROVE → merged `--no-ff` to local main + pushed. Suite-green gate met (4463/0). **AM note:** the main repo's `node_modules` was stale (missing `proper-lockfile`, a v2 dep from Phase 10a) — I ran `npm install` in the main repo to fix typecheck. Any fresh checkout / the main repo needs `npm install` after pulling v2.
+2. **#2 Wave B (I-1 + I-6)** — reviewer APPROVE (log back-compat PASS) → merged `--no-ff` + pushed (`ffba83e8`). Clean merge (no dist conflict — disjoint files). Typecheck clean.
 
 ## Running log
 
