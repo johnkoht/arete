@@ -67,32 +67,48 @@ arete template resolve --skill prepare-meeting-agenda --variant {type}
 ```
 The command output defines the complete section structure. If the user wants a different type, switch and re-run the command.
 
-### 4. Gather Context (REQUIRED — verb invocation is the gate)
+### 4. Gather Context + Pre-Seed the Agenda (REQUIRED — verb invocation is the gate)
 
-**Always invoke** `arete brief --meeting "<exact meeting title>"` as your first action. The brief verb is the single source of truth for context aggregation. Do NOT shortcut by reading person files directly with the Read tool — that path produces the regressed thin-template output and is what Phase 9 was built to replace.
+**Always invoke `arete agenda scaffold --meeting "<exact meeting title>"` as your first action.** This is the gate. The scaffold verb internally calls the typed `arete brief --meeting` aggregator AND pulls the qualitative person-file signal the brief alone does not surface (`## 1:1 Discussion Topics` / `## Standing 1:1 Discussion Prompts`, `## Next 1:1 Focus`), then routes every candidate into the meeting-type template's sections. It returns a **pre-populated agenda skeleton**: each themed section already filled with real candidate bullets (open commitments with IDs, recent-meeting callbacks, discussion-topic questions, owed-sweep items, wiki callbacks), each tagged with its `[source]`.
 
-Only fall back to per-attendee briefs (`arete brief --person <slug>` for each attendee) when `arete brief --meeting` returns the `(unresolved — no calendar match, no saved file)` AC4d path.
+```
+arete agenda scaffold --meeting "Anthony / John Weekly"
+# options: --type <one-on-one|leadership|customer|dev-team|other> (default: inferred)
+#          --project <slug>   (pin project context)
+#          --json             (structured output)
+```
 
-If you want richer person memory before composing, run `arete people memory refresh --person <slug> --if-stale-days 3 --skip-qmd` to refresh stale stances. The `--skip-qmd` flag prevents the auto-index output from being surfaced to the user as a status prompt.
+Your job is **CURATE + FRAME, not synthesize from an empty template**:
+- Read the scaffold top-to-bottom. The framing block (carried from `## Next 1:1 Focus`) is your meeting lead-in — use it.
+- For each section: keep/cut/merge the candidate bullets into specific talking points, add a one-line framing lead-in, and **strip the `[source]` tags**. Where a `## 1:1 Discussion Topics` question fits a theme, weave it in verbatim.
+- **Route the `## Unrouted signal` block**: place each candidate into a section above or drop it deliberately — never silently ignore it.
+- **An `_EMPTY — ...` line is an explicit FAILURE STATE, not acceptable output.** When a section is empty, either synthesize from the brief signal or replace the line with a one-line honest reason it is empty. Never ship a section whose only content is the EMPTY placeholder.
 
-**Critical: brief section names are NOT agenda section names.** The brief returns sections like `## Open commitments touching this group`, `## Related wiki pages`, `## Attendees`. These are organizational headers in the *input*, not headers for the *output*. **Synthesize themed agenda sections** named by topic (e.g., "Glance 2.0 Roadmap — Start the Conversation", "Discovery Process Update", "30/60/90 Surface", "Carries"). Each themed section should weave together signal from multiple brief sections.
+Do NOT shortcut by reading person files directly with the Read tool — that path produces the regressed thin-template output. Only fall back to per-attendee briefs (`arete brief --person <slug>`) when the scaffold prints the `(unresolved — ...)` title-only note.
 
-**Concrete synthesis pattern**:
-- Read the brief output top-to-bottom.
-- Identify 3-6 themes the meeting needs to cover. Themes come from cross-source signal: an open commitment + a related decision + a wiki callback = one themed section.
-- For each theme, draft a section with: short framing prose, 2-4 specific bullets citing commitment IDs/meeting dates/wiki pages, an "ask" or "decision needed" framing line where appropriate.
-- Do not pattern-fill the template's generic sections (Priorities / Feedback / Next Steps) without synthesizing first. Those sections belong AT THE END after the themed sections.
+If you want richer person memory before composing, run `arete people memory refresh --person <slug> --if-stale-days 3 --skip-qmd` first, then re-run the scaffold.
 
-Example agenda quality bar: `resources/meetings/2026-04-29-john-lindsay-11.md` lines 88-158. Themed sections ("Glance 2.0 Roadmap — Start the Conversation (20min)", "Discovery Process Update (10min)"), specific commitment IDs ("commitment 45ef9b64"), prior-conversation callbacks ("Per our 4/22 conversation, past misfires came from leadership defining the experience before adjuster-driven research"). That's the target shape.
+**Critical: scaffold/brief section names map to agenda sections, but candidate bullets are RAW signal, not finished agenda lines.** Frame them. The target shape: themed sections with short framing prose, specific bullets citing commitment IDs / meeting dates / wiki pages, and an "ask" or "decision needed" line where appropriate.
+
+Example agenda quality bar: `resources/meetings/2026-04-29-john-lindsay-11.md` lines 88-158. Themed sections ("Glance 2.0 Roadmap — Start the Conversation (20min)", "Discovery Process Update (10min)"), specific commitment IDs ("commitment 45ef9b64"), prior-conversation callbacks ("Per our 4/22 conversation, past misfires came from leadership defining the experience before adjuster-driven research"). That's the target shape — the scaffold hands you the raw materials; you frame them to this bar.
 
 Do not reimplement calendar or context logic; use existing commands and patterns only.
 
 ### 5. Build Agenda
 
-- Start from the template's ## sections.
-- If duration is known, apply **time allocation** from the template (e.g. "Updates (10 min)").
-- Inject any suggested items from context into the right sections.
+- **Start from the scaffold output (step 4), not the bare template.** The scaffold already carries the template's `## ` sections + time-boxes + pre-seeded candidates. Edit it in place: frame each section, curate candidates, strip `[source]` tags, drop the SCAFFOLD guardrail blockquote.
+- Keep the frontmatter the scaffold emitted (`meeting_title`, `date`, `type`, `attendees`) — it enables auto-linking.
 - Output format (see below): `# Meeting Agenda: [Title]`, metadata, ## sections with optional (Xmin), bullets and checkboxes.
+
+### 5a. Self-check before saving (AC1 gate — non-skippable)
+
+Before you save, verify the agenda against the scaffold:
+- **No section may ship with only the `_EMPTY — ...` placeholder.** For each such section, either synthesize from the brief or write a one-line honest reason ("No open blockers from Lindsay's side this week").
+- **No `[source]` tags remain** and the SCAFFOLD guardrail blockquote is removed.
+- **The `## Unrouted signal` block is gone** — every item was placed into a section or deliberately dropped.
+- Each themed section has a framing lead-in, not just a bullet dump.
+
+If any check fails, fix it before saving. "Skeleton + empty qualitative sections" is the regression this skill exists to prevent.
 
 ### 6. Review and Adjust
 
@@ -142,6 +158,7 @@ Use template section names and optional time from template's `time_allocation` w
 
 ## References
 
+- **Scaffold verb**: `arete agenda scaffold --meeting "<title>"` — deterministic agenda pre-seeding (pulls brief + discussion topics + next-focus + commitments + recent meetings + wiki; routes them into the template's sections). This is the step-4 gate.
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) - get_meeting_context (for suggested items)
 - **Quarter goals**: `goals/quarter.md`
 - **Week plan**: `now/week.md`
