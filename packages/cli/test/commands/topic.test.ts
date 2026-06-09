@@ -388,7 +388,9 @@ Discussed ${topics.join(', ')} on ${date}.
       mkdirSync(join(tmpDir, '.arete'), { recursive: true });
       writeFileSync(
         lockPath,
-        JSON.stringify({ pid: 99999, started: new Date().toISOString(), command: 'test-hold' }),
+        // Test-runner pid is alive for the CLI subprocess's whole run, so
+        // stale-lock takeover (W1) does not kick in — the CLI must refuse.
+        JSON.stringify({ pid: process.pid, started: new Date().toISOString(), command: 'test-hold' }),
         { flag: 'wx' },
       );
 
