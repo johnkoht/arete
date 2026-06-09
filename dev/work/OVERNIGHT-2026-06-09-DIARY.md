@@ -61,7 +61,7 @@ The combine builder **committed both fixes before stalling on validation** (`207
 3. **#2 Wave B** — I-1 dead `areas:` field dropped, I-6 dupe→source mapping persisted (wire-in remains, Phase 11c). (`ffba83e8`)
 4. **I-0 agenda** — bake-off (2 approaches → cold-gen → 2 judges → COMBINE), built + fixed both B flaws, verified on real data (Lindsay's prompts populate, attendee-scoped). (`a8468b7c`)
 
-**Now running:** integrated full-suite gate on main (all 4 together). **Then:** cut 0.11.0.
+**Integrated full-suite gate: GREEN — 4514 tests / 4512 pass / 0 fail / 2 pre-existing it.skip** (all 4 merges together; no cross-branch surprises). Release gate met. **0.11.0 ready to cut** (awaiting John's go now that he's awake + the `areas` follow-up decision).
 
 **Needs your eyes (AM):** (a) release = 0.11.0 minor, cutting after suite-green; (b) the agenda fix reaches arete-reserv only after `arete update` (the `.arete/skills/` override wins); (c) main repo needed `npm install` for `proper-lockfile`; (d) infra: the full suite trips the 600s agent-watchdog — 3 agents died (work intact); (e) small follow-ups: I-3 defensive cap (~200), I-6 unmerge wire-in.
 
