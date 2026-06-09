@@ -12,7 +12,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -244,5 +244,124 @@ describe('topic-memory: summary-first integration with transcript fallback', () 
       skipLock: true,
     });
     assert.equal(llmCallCount, 1, 'summary rewrite should not bust topic-page idempotency');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// wiki-repair W5 / AC2 — `ingest` log events per integrated source
+// ---------------------------------------------------------------------------
+
+describe('topic-memory: ingest log events (W5 / AC2 event shape)', () => {
+  const okLLM = async () =>
+    JSON.stringify({
+      updated_sections: { 'Current state': 'Updated.' },
+      new_change_log_entry: 'integrated',
+    });
+
+  function readLog(): string {
+    return readFileSync(join(tmpDir, '.arete', 'memory', 'log.md'), 'utf8');
+  }
+
+  it('emits ingest with input_kind=transcript when no summary exists', async () => {
+    const svc = new TopicMemoryService(storage);
+    await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['cover-whale-templates'],
+      callLLM: okLLM,
+      skipLock: true,
+    });
+
+    const log = readLog();
+    const ingestLines = log.split('\n').filter((l) => / ingest \| /.test(l));
+    assert.equal(ingestLines.length, 1, 'exactly one ingest event');
+    const line = ingestLines[0];
+    assert.match(line, /^## \[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\] ingest \| /);
+    assert.match(line, /input_kind=transcript/);
+    assert.match(line, /topic=cover-whale-templates/);
+    assert.match(line, /source_type=meeting/);
+    assert.match(line, /result=integrated/);
+    const chars = Number(/input_chars=(\d+)/.exec(line)?.[1]);
+    assert.ok(Number.isFinite(chars) && chars > 0, 'input_chars is a positive count');
+  });
+
+  it('emits ingest with input_kind=summary + smaller char count when a summary exists (W2-forward shape)', async () => {
+    // The summary input_kind will not occur organically until W2 wires
+    // summaries into the approve path — this proves the event shape
+    // already renders for both kinds.
+    writeFile(
+      tmpDir,
+      '.arete/memory/summaries/meetings/2026-04-20-cw-sync.md',
+      summaryFileContent('2026-04-20', MEETING_FIXTURE),
+    );
+
+    const svc = new TopicMemoryService(storage);
+    let llmInputLength = 0;
+    const callLLM = async (prompt: string) => {
+      llmInputLength = prompt.length;
+      return okLLM();
+    };
+    await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['cover-whale-templates'],
+      callLLM,
+      skipLock: true,
+    });
+    assert.ok(llmInputLength > 0);
+
+    const log = readLog();
+    const line = log.split('\n').find((l) => / ingest \| /.test(l));
+    assert.ok(line, 'ingest event present');
+    assert.match(line!, /input_kind=summary/);
+    assert.match(line!, /result=integrated/);
+
+    // AC2 measurability: the summary input char count is recorded and is
+    // smaller than the raw meeting source it replaced.
+    const chars = Number(/input_chars=(\d+)/.exec(line!)?.[1]);
+    assert.ok(Number.isFinite(chars) && chars > 0);
+    assert.ok(
+      chars < MEETING_FIXTURE.length,
+      `summary input_chars (${chars}) must be < raw meeting source length (${MEETING_FIXTURE.length})`,
+    );
+  });
+
+  it('emits ingest with result=fallback when no LLM is available; none on skip', async () => {
+    const svc = new TopicMemoryService(storage);
+    // No callLLM → fallback path.
+    await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['cover-whale-templates'],
+      skipLock: true,
+    });
+    let log = readLog();
+    let ingestLines = log.split('\n').filter((l) => / ingest \| /.test(l));
+    assert.equal(ingestLines.length, 1);
+    assert.match(ingestLines[0], /result=fallback/);
+    assert.match(ingestLines[0], /input_kind=transcript/);
+
+    // Second run: source is hash-skipped → NO additional ingest event.
+    await svc.refreshAllFromSources(paths, {
+      today: '2026-04-30',
+      slugs: ['cover-whale-templates'],
+      skipLock: true,
+    });
+    log = readLog();
+    ingestLines = log.split('\n').filter((l) => / ingest \| /.test(l));
+    assert.equal(ingestLines.length, 1, 'skipped sources emit no ingest event');
+  });
+
+  it('reports per-page progress via onProgress as the batch walks', async () => {
+    const svc = new TopicMemoryService(storage);
+    const seen: Array<{ index: number; total: number; slug: string }> = [];
+    await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['cover-whale-templates', 'not-a-real-topic'],
+      callLLM: okLLM,
+      skipLock: true,
+      onProgress: (info) => seen.push(info),
+    });
+    assert.deepEqual(seen, [
+      { index: 1, total: 2, slug: 'cover-whale-templates' },
+      { index: 2, total: 2, slug: 'not-a-real-topic' },
+    ]);
   });
 });
