@@ -110,5 +110,5 @@ export { evaluateSlackThread, formatSlackEvalLogLine, slackSummariesEnabled, DEF
 // Org entity auto-detection + refresh (Phase 1 §b)
 export { detectOrgsFromMeetings, refreshOrgs, createOrgEntityManual, renderOrgAutoSection, slugifyDomain, DEFAULT_INTERNAL_DOMAINS, DEFAULT_DETECTION_WINDOW_DAYS, DEFAULT_DETECTION_MIN_MEETINGS, } from './org-entity.js';
 // Summary writers (Phase 1 wiki expansion)
-export { writeMeetingSummary, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
+export { writeMeetingSummary, writeMeetingSummaryFromFrontmatter, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
 //# sourceMappingURL=index.js.map

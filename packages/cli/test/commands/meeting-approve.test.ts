@@ -504,6 +504,64 @@ Meeting with pre-marked items.
   });
 
   // --------------------------------------------------------------------------
+  // wiki-repair W2 — approve-time summary hook independence (pre-mortem R4).
+  // --------------------------------------------------------------------------
+
+  it('summary LLM failure never skips topic integration; approve exits 0 (R4)', () => {
+    // ai.tiers has ONLY `fast` — the summary hook and Hook 2 both route
+    // through the `synthesis` task (standard tier), so every LLM call
+    // throws "AI tier 'standard' not configured" WITHOUT any network.
+    // The summary hook must fail in its OWN try/catch; Hook 2 must still
+    // run (integrateSource converts per-source LLM throws into fallback
+    // integrations, so topicIntegration reports fallback > 0).
+    const meetingWithTopics = PROCESSED_MEETING.replace(
+      'status: processed',
+      'status: processed\ntopics: [sprint-planning]',
+    );
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      meetingWithTopics,
+      'utf8',
+    );
+    const manifestPath = join(tmpDir, 'arete.yaml');
+    writeFileSync(
+      manifestPath,
+      `${readFileSync(manifestPath, 'utf8')}\nai:\n  tiers:\n    fast: anthropic/claude-3-5-haiku-20241022\n`,
+      'utf8',
+    );
+
+    const stdout = runCli(
+      ['meeting', 'approve', '2026-03-15-sprint-review', '--all', '--skip-qmd', '--json'],
+      { cwd: tmpDir, env: { ARETE_NO_LLM: '' } },
+    );
+    const result = JSON.parse(stdout) as {
+      success: boolean;
+      summary: { path: string | null; written: boolean; reason?: string } | null;
+      topicIntegration: { topics: number; fallback: number } | null;
+      topicIntegrationError: unknown;
+    };
+
+    // Approve exit 0 + success (runCli throws on non-zero exit).
+    assert.equal(result.success, true);
+    // Summary failed in its own try/catch (llm-error from the writer).
+    assert.ok(result.summary, 'summary surface must be present');
+    assert.equal(result.summary?.written, false);
+    assert.match(result.summary?.reason ?? '', /llm-error|error:/);
+    // Integration STILL ran — per-source LLM failure degrades to
+    // fallback integration, not a skipped hook.
+    assert.ok(result.topicIntegration, 'Hook 2 must still run after summary failure');
+    assert.equal(result.topicIntegration!.topics >= 1, true);
+    assert.equal(result.topicIntegration!.fallback >= 1, true);
+    assert.equal(result.topicIntegrationError, null);
+
+    // The summary-first read had nothing to consume → the ingest event
+    // records transcript input (W5 observability).
+    const log = readFileSync(join(tmpDir, '.arete', 'memory', 'log.md'), 'utf8');
+    assert.match(log, /ingest/);
+    assert.match(log, /input_kind=transcript/);
+  });
+
+  // --------------------------------------------------------------------------
   // wiki-repair W2 / D1 — could_include consume-or-clear at approve.
   // --------------------------------------------------------------------------
 

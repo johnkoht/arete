@@ -1800,6 +1800,85 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       // --------------------------------------------------------------------------
+      // W2 (wiki-repair) — approve-time meeting summary (ALSO-FIRE, not move:
+      // `applyMeetingIntelligence` keeps its own call for the backend web
+      // agent + standalone `arete meeting apply`).
+      //
+      // Writes `.arete/memory/summaries/meetings/<date>-<slug>.md` from the
+      // just-committed meeting BEFORE Hook 2 runs, so the EXISTING
+      // summary-first integration read (topic-memory.ts loadMeetingSummaryBody)
+      // engages on the SAME approve — curated input instead of raw
+      // transcript, and the `ingest` log event records
+      // `input_kind: summary` (AC2).
+      //
+      // Gated identically to Hook 2 (`--skip-topics`, `ai.isConfigured()`,
+      // `ARETE_NO_LLM`). OWN try/catch, independent of Hook 2's
+      // (pre-mortem R4): a summary LLM failure must NEVER skip
+      // integration, and an integration failure must never un-write the
+      // summary. Approve exit stays 0 either way — Hook 2 falls back to
+      // transcript input when no summary file exists.
+      // --------------------------------------------------------------------------
+      let approveSummary: { path: string | null; written: boolean; reason?: string } | undefined;
+      if (!opts.skipTopics && services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
+        try {
+          // Re-read the just-committed file: the summary must reflect the
+          // post-commit body (approved sections) and post-alias topics.
+          const committedForSummary = await services.storage.read(meetingPath);
+          if (committedForSummary !== null) {
+            const { frontmatter: committedFm, body: committedBody } =
+              extractFrontmatter(committedForSummary);
+            const { writeMeetingSummaryFromFrontmatter } = await import('@arete/core');
+            const summaryResult = await writeMeetingSummaryFromFrontmatter(
+              {
+                absPath: meetingPath,
+                frontmatter: committedFm,
+                body: committedBody,
+                couldInclude: couldIncludeHeadlines,
+              },
+              {
+                storage: services.storage,
+                workspaceRoot: root,
+                callLLM: async (prompt: string) => {
+                  const r = await services.ai.call('synthesis', prompt);
+                  return r.text;
+                },
+              },
+            );
+            if (summaryResult !== null) {
+              approveSummary = {
+                path: summaryResult.summaryPath,
+                written: summaryResult.written,
+                ...(summaryResult.reason !== undefined ? { reason: summaryResult.reason } : {}),
+              };
+              if (!opts.json) {
+                for (const w of summaryResult.warnings) warn(w);
+              }
+            }
+          }
+        } catch (err) {
+          // Non-fatal AND independent of Hook 2 — integration below still
+          // runs (with transcript fallback). Warn (human mode) + JSON
+          // surface + log event (W5 lossy-logger rule: visible, never
+          // vanishes).
+          const msg = err instanceof Error ? err.message : 'unknown';
+          approveSummary = { path: null, written: false, reason: `error: ${msg}` };
+          if (!opts.json) {
+            warn(`Meeting summary failed (non-fatal; topic integration still runs): ${msg}`);
+          }
+          try {
+            await services.memoryLog.append(paths, {
+              event: 'meeting-summary-failed',
+              fields: { meeting: meetingSlug, detail: msg },
+            });
+          } catch (logErr) {
+            if (!opts.json) {
+              warn(`Could not write meeting-summary-failed log event: ${logErr instanceof Error ? logErr.message : 'unknown'}`);
+            }
+          }
+        }
+      }
+
+      // --------------------------------------------------------------------------
       // D1 consume-or-clear: drop the `could_include` key UNCONDITIONALLY —
       // even when the summary hook is gated off (no AI / ARETE_NO_LLM /
       // --skip-topics) or fails — so gated-off approves never leave fossil
@@ -2030,6 +2109,7 @@ export function registerMeetingCommands(program: Command): void {
           learnings: approvedItems.learnings.length > 0,
         },
         ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
+        summary: approveSummary ?? null,
         topicIntegration: topicIntegration ?? null,
         topicIntegrationError: topicIntegrationError ?? null,
         qmd: qmdResult ?? { indexed: false, skipped: true },
@@ -2056,6 +2136,15 @@ export function registerMeetingCommands(program: Command): void {
       }
       if (learningCount > 0) {
         listItem('Learnings', `${learningCount} (written to memory)`);
+      }
+      if (approveSummary !== undefined) {
+        if (approveSummary.written && approveSummary.path !== null) {
+          listItem('Summary', approveSummary.path);
+        } else if (approveSummary.reason === 'already-fresh' && approveSummary.path !== null) {
+          listItem('Summary', `${approveSummary.path} (already fresh)`);
+        } else {
+          warn(`Meeting summary not written (${approveSummary.reason ?? 'unknown'}) — integration falls back to transcript input.`);
+        }
       }
       if (topicIntegration !== undefined) {
         const parts: string[] = [];

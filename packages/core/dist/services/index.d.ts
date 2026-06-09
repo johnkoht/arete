@@ -105,6 +105,6 @@ export { evaluateSlackThread, formatSlackEvalLogLine, slackSummariesEnabled, DEF
 export type { SlackThreadEvalInput, SlackHeuristicTrigger, SlackHeuristicConfig, SlackHeuristicResult, } from './slack-heuristic.js';
 export { detectOrgsFromMeetings, refreshOrgs, createOrgEntityManual, renderOrgAutoSection, slugifyDomain, DEFAULT_INTERNAL_DOMAINS, DEFAULT_DETECTION_WINDOW_DAYS, DEFAULT_DETECTION_MIN_MEETINGS, } from './org-entity.js';
 export type { DetectOrgsOptions, DetectedOrg, RefreshOrgsOptions, RefreshOrgsResult, } from './org-entity.js';
-export { writeMeetingSummary, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
-export type { MeetingSummaryInput, InboxSummaryInput, WriteSummaryDeps, WriteSummaryResult, } from './summary-writer.js';
+export { writeMeetingSummary, writeMeetingSummaryFromFrontmatter, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
+export type { MeetingSummaryInput, MeetingSummaryFromFrontmatterInput, InboxSummaryInput, WriteSummaryDeps, WriteSummaryResult, } from './summary-writer.js';
 //# sourceMappingURL=index.d.ts.map

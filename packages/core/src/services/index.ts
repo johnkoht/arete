@@ -594,6 +594,7 @@ export type {
 // Summary writers (Phase 1 wiki expansion)
 export {
   writeMeetingSummary,
+  writeMeetingSummaryFromFrontmatter,
   writeInboxSummary,
   readMeetingSummary,
   buildMeetingSummaryPrompt,
@@ -609,6 +610,7 @@ export {
 } from './summary-writer.js';
 export type {
   MeetingSummaryInput,
+  MeetingSummaryFromFrontmatterInput,
   InboxSummaryInput,
   WriteSummaryDeps,
   WriteSummaryResult,

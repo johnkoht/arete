@@ -64,12 +64,24 @@ export interface MeetingApplyAliasDeps {
  *   - `decisions_count` (number)
  *   - `learnings_count` (number)
  *   - `status`, `processed_at` (from the `status` arg)
+ *   - `could_include` (string array; wiki-repair W2/D1 — persisted at
+ *     stage so `arete meeting approve` can render the summary's FYI
+ *     section; consumed + cleared at approve)
  *
  * Mutates `fm` in place. Idempotent: re-running on the same
  * `intelligence` produces the same `fm`. Field order in YAML output is
  * determined by the YAML serializer (insertion order for `yaml` lib);
  * this writer is intentionally written so the canonical 7 fields are
  * always assigned in the same order across the 3 call sites.
+ *
+ * `could_include` clear semantics: when `intelligence.could_include` is
+ * absent/empty, the key is `delete`d from `fm` (NOT set to `undefined`
+ * — the backend path serializes via gray-matter/js-yaml, which throws
+ * on undefined values). Callers that write through a PARTIAL-MERGE
+ * mechanism (`writeWithLock` — extract `--stage`) must additionally set
+ * `patch['could_include'] = undefined` when the writer didn't set the
+ * key, so a stale key from a prior extract is deleted rather than
+ * surviving the merge (see meeting.ts extract mutator).
  *
  * @param fm - Frontmatter object to mutate.
  * @param intelligence - Extracted meeting intelligence.

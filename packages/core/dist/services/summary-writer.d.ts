@@ -164,6 +164,47 @@ export declare function parseInboxSummaryResponse(response: string): InboxSummar
 export declare function writeMeetingSummary(input: MeetingSummaryInput, deps: WriteSummaryDeps): Promise<WriteSummaryResult>;
 export declare function writeInboxSummary(input: InboxSummaryInput, deps: WriteSummaryDeps): Promise<WriteSummaryResult>;
 /**
+ * Input for {@link writeMeetingSummaryFromFrontmatter}: a meeting file
+ * already split into frontmatter + body by the caller.
+ */
+export interface MeetingSummaryFromFrontmatterInput {
+    /** Absolute path to the meeting file. */
+    absPath: string;
+    /** Parsed meeting frontmatter (the caller's parse — not re-read). */
+    frontmatter: Record<string, unknown>;
+    /** Meeting body (frontmatter stripped) — hashed + summarized. */
+    body: string;
+    /**
+     * Side-thread headlines for the `## FYI` section. The apply path
+     * threads `intelligence.could_include` from memory; the approve path
+     * threads the `could_include` frontmatter key persisted at
+     * `extract --stage` (wiki-repair W2/D1).
+     */
+    couldInclude?: string[];
+}
+/**
+ * Derive a `MeetingSummaryInput` from meeting frontmatter and write the
+ * per-meeting summary file (wiki-repair W2).
+ *
+ * Single derivation path shared by BOTH summary call sites:
+ *  - `applyMeetingIntelligence` step 9 (`arete meeting apply`, backend)
+ *  - the `arete meeting approve` summary hook (W2 also-fire)
+ * so the two writers can never diverge on date/area/importance/topics/
+ * participants derivation (the writer-divergence bug class).
+ *
+ * Date convention: frontmatter `date` (first 10 chars) → filename
+ * `YYYY-MM-DD` prefix fallback. Returns null (no write, no throw) when
+ * neither yields a date — the caller treats this as a skip. NOTE: topic
+ * integration's summary-first read derives its lookup date from the
+ * FILENAME prefix; when frontmatter date ≠ filename date the summary
+ * lands under the frontmatter date and won't be picked up (pre-existing
+ * behavior of the apply path, kept identical here).
+ *
+ * Never throws on LLM failure — `writeMeetingSummary` converts LLM
+ * errors into `{ written: false, reason: 'llm-error' }` results.
+ */
+export declare function writeMeetingSummaryFromFrontmatter(input: MeetingSummaryFromFrontmatterInput, deps: WriteSummaryDeps): Promise<WriteSummaryResult | null>;
+/**
  * Read a meeting summary file if one exists. Returns null when the
  * summary doesn't exist or fails to parse.
  *
