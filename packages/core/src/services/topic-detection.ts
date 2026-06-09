@@ -30,7 +30,7 @@
  */
 
 import { normalizeForJaccard } from '../utils/similarity.js';
-import { tokenizeSlug, type TopicIdentity } from './topic-memory.js';
+import { tokenizeSlug, singularizeTokens, type TopicIdentity } from './topic-memory.js';
 
 /**
  * Generic words that appear in many slugs and many transcripts. They
@@ -121,7 +121,10 @@ interface SurfaceScore {
  * arrays are still populated based on the raw transcript hits — the
  * dry-run path renders them so operators can see WHY a slug failed.
  */
-function scoreSurface(surface: string, transcriptTokens: Set<string>): SurfaceScore {
+function scoreSurface(
+  surface: string,
+  transcriptTokens: Map<string, string>,
+): SurfaceScore {
   const slugTokens = tokenizeSlug(surface);
 
   // Apply the multi-char filter BEFORE counting hits (AC D). Single-char
@@ -136,10 +139,20 @@ function scoreSurface(surface: string, transcriptTokens: Set<string>): SurfaceSc
   // Compute hit lists (distinct, transcript-overlapping). These are
   // returned regardless of whether the threshold passes — the dry-run
   // debug path needs visibility into why a slug failed too.
+  //
+  // Matching is done in singularized space (both slug tokens and the
+  // transcript map keys are singularized) so plural/singular forms
+  // intersect, but the REPORTED match is the original transcript surface
+  // (`templates`, not `template`) — that's what operators see and what
+  // the detector contract returns.
   const distinctNonStop = Array.from(new Set(nonStopTokens));
   const distinctStop = Array.from(new Set(stopTokens));
-  const nonStopMatches = distinctNonStop.filter((t) => transcriptTokens.has(t));
-  const stopMatches = distinctStop.filter((t) => transcriptTokens.has(t));
+  const nonStopMatches = distinctNonStop
+    .filter((t) => transcriptTokens.has(t))
+    .map((t) => transcriptTokens.get(t) as string);
+  const stopMatches = distinctStop
+    .filter((t) => transcriptTokens.has(t))
+    .map((t) => transcriptTokens.get(t) as string);
 
   // Pure stop-token surface — cannot score (rejects the "weekly-sync"
   // case in AC K3 explicitly: no non-stop tokens means denominator is
@@ -181,8 +194,23 @@ export function detectTopicsLexicalDetailed(
 ): DetectedTopic[] {
   const maxResults = options?.maxResults ?? DEFAULT_MAX_RESULTS;
 
-  // Tokenize the transcript once (AC C).
-  const transcriptTokens = new Set(normalizeForJaccard(transcript));
+  // Tokenize the transcript once (AC C). Build a map from the
+  // SINGULARIZED token (the comparison key) to the ORIGINAL transcript
+  // surface (what we report in matches). Slug tokens are singularized by
+  // `tokenizeSlug` inside `scoreSurface`, so matching in singularized
+  // space lets plural transcript mentions (`templates`, `tiers`, …)
+  // intersect singularized slug tokens (`template`, `tier`). Without this
+  // the two sides desync and plural/alias detection silently fails
+  // (phase-3-5-followup-5 regression).
+  const rawTranscriptTokens = normalizeForJaccard(transcript);
+  const singularized = singularizeTokens(rawTranscriptTokens);
+  const transcriptTokens = new Map<string, string>();
+  for (let i = 0; i < singularized.length; i++) {
+    // First surface wins so reporting is deterministic.
+    if (!transcriptTokens.has(singularized[i])) {
+      transcriptTokens.set(singularized[i], rawTranscriptTokens[i]);
+    }
+  }
   if (transcriptTokens.size === 0) return [];
 
   // Score each identity by taking the max across canonical + aliases
