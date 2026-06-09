@@ -126,6 +126,7 @@ Jane Doe: I think we should use Kubernetes for deployment.
             direction: 'supports',
             summary: 'Supports using Kubernetes',
             evidence_quote: 'I think we should use Kubernetes for deployment',
+            _justification: 'Not a project-approval (Pair 6) — a transferable infra-platform position on deployment tooling.',
           },
         ],
       });
@@ -194,6 +195,7 @@ Jane Doe mentioned Kubernetes again.
             direction: 'supports',
             summary: 'Supports Kubernetes',
             evidence_quote: 'some quote',
+            _justification: 'Not a project-approval (Pair 6) — a transferable infra-platform position on container orchestration.',
           },
         ],
       });
@@ -238,6 +240,7 @@ Jane Doe really likes react for front-end.
             direction: 'supports',
             summary: `Supports ${topic}`,
             evidence_quote: 'some quote',
+            _justification: 'Not a project-approval (Pair 6) — a transferable front-end framework preference.',
           },
         ],
       });
@@ -415,7 +418,7 @@ Bob Smith opposes the migration plan.
     const mockLLM: LLMCallFn = async (prompt: string) => {
       // Track which person we're extracting STANCES for — check the instruction line.
       // Action items now use parsing, not LLM, so we only see stance prompts.
-      if (prompt.includes('Extract stances ONLY for: Jane Doe')) {
+      if (prompt.includes('Extract stances ONLY for Jane Doe')) {
         callArgs.push('jane');
         return JSON.stringify({
           stances: [{
@@ -423,10 +426,11 @@ Bob Smith opposes the migration plan.
             direction: 'supports',
             summary: 'Jane supports migration',
             evidence_quote: 'Jane supports it',
+            _justification: 'Not a project-approval (Pair 6) — a transferable position on the migration approach.',
           }],
         });
       }
-      if (prompt.includes('Extract stances ONLY for: Bob Smith')) {
+      if (prompt.includes('Extract stances ONLY for Bob Smith')) {
         callArgs.push('bob');
         return JSON.stringify({
           stances: [{
@@ -434,6 +438,7 @@ Bob Smith opposes the migration plan.
             direction: 'opposes',
             summary: 'Bob opposes migration',
             evidence_quote: 'Bob opposes it',
+            _justification: 'Not a project-approval (Pair 6) — a transferable position on the migration approach.',
           }],
         });
       }
