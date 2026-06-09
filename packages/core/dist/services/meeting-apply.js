@@ -11,7 +11,6 @@ import { resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { formatStagedSections, updateMeetingContent } from './meeting-extraction.js';
 import { writeMeetingSummaryFromFrontmatter } from './summary-writer.js';
-import { refreshOrgs } from './org-entity.js';
 import { writeMeetingApplyFrontmatter } from './meeting-frontmatter.js';
 function parseFrontmatter(content) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
@@ -203,35 +202,11 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
             warnings.push(`summary writer failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
         }
     }
-    // 10. Refresh org-entity pages (Phase 1 §b).
-    //
-    // Auto-detection scans recent meetings for non-internal email domains
-    // and writes/updates pages under .arete/memory/entities/orgs/. The
-    // scan runs on every meeting apply because:
-    //   - Detection threshold (≥2 distinct meetings in 90d) is cheap to
-    //     re-evaluate; expensive part is only triggered when an org
-    //     newly qualifies.
-    //   - Existing pages are byte-equal-skipped when content hasn't
-    //     changed.
-    // Caller can disable via `options.skipOrgEntities`. No LLM cost; runs
-    // independently of `deps.callLLM`.
-    let orgsRefreshed = [];
-    if (!options.skipOrgEntities && deps.workspacePaths !== undefined) {
-        try {
-            const result = await refreshOrgs(deps.workspacePaths, storage, {
-                // Pass `today` from the meeting apply so detection windows are
-                // deterministic relative to the meeting being processed (not
-                // wall-clock at write time).
-                today: new Date().toISOString().slice(0, 10),
-            });
-            orgsRefreshed = result.written;
-            for (const w of result.warnings)
-                warnings.push(w);
-        }
-        catch (err) {
-            warnings.push(`org-entity refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
-        }
-    }
+    // (Step 10, organization-entity auto-detection refresh, was REMOVED —
+    // wiki-repair W3. That service/model pair was Phase 1 dark code: hooked
+    // only to `arete meeting apply`, which the chef winddown flow skips,
+    // and its documented manual-create CLI verb never existed. Git history
+    // preserves the implementation if an "accounts" view returns.)
     return {
         meetingPath: absPath,
         actionItemsStaged: intelligence.actionItems.length,
@@ -240,7 +215,6 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
         agendaArchived,
         summaryPath,
         summaryWritten,
-        orgsRefreshed,
         warnings,
     };
 }

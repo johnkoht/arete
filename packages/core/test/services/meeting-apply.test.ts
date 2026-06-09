@@ -840,58 +840,8 @@ Hello world.
       assert.equal(summaryCalls, 0);
     });
 
-    it('refreshes org-entity pages from attendee domains (Phase 1 §b wire-in)', async () => {
-      // Two prior meetings tagged with cover-whale.com attendees so the
-      // detection threshold (≥2 in window) is met.
-      writeMeetingFile(tmpDir, '2026-04-01-cw1.md', {
-        title: 'CW 1',
-        date: '2026-04-01',
-        attendees: [{ name: 'Anthony', email: 'anthony@cover-whale.com' }],
-      }, '# CW 1\n');
-      writeMeetingFile(tmpDir, '2026-04-15-cw2.md', {
-        title: 'CW 2',
-        date: '2026-04-15',
-        attendees: [{ name: 'Carla', email: 'carla@cover-whale.com' }],
-      }, '# CW 2\n');
-
-      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-cw2.md');
-      const { WorkspaceService } = await import('../../src/services/workspace.js');
-      const workspacePaths = new WorkspaceService(storage).getPaths(tmpDir);
-
-      const result = await applyMeetingIntelligence(
-        meetingPath,
-        sampleIntelligence,
-        { storage, workspaceRoot: tmpDir, workspacePaths },
-      );
-
-      assert.deepEqual(result.orgsRefreshed, ['cover-whale']);
-      const orgPath = join(tmpDir, '.arete', 'memory', 'entities', 'orgs', 'cover-whale.md');
-      assert.ok(readFileSync(orgPath, 'utf8').includes('org_slug: cover-whale'));
-    });
-
-    it('skipOrgEntities: bypasses org refresh', async () => {
-      writeMeetingFile(tmpDir, '2026-04-01-cw1.md', {
-        date: '2026-04-01',
-        attendees: [{ name: 'A', email: 'a@cover-whale.com' }],
-      }, '# CW 1\n');
-      writeMeetingFile(tmpDir, '2026-04-15-cw2.md', {
-        date: '2026-04-15',
-        attendees: [{ name: 'B', email: 'b@cover-whale.com' }],
-      }, '# CW 2\n');
-
-      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-cw2.md');
-      const { WorkspaceService } = await import('../../src/services/workspace.js');
-      const workspacePaths = new WorkspaceService(storage).getPaths(tmpDir);
-
-      const result = await applyMeetingIntelligence(
-        meetingPath,
-        sampleIntelligence,
-        { storage, workspaceRoot: tmpDir, workspacePaths },
-        { skipOrgEntities: true },
-      );
-
-      assert.deepEqual(result.orgsRefreshed, []);
-    });
+    // (organization-entity refresh tests removed — wiki-repair W3
+    // deleted that Phase 1 dark code; see plan.md §W3.)
 
     // phase-8-followup-5 Item B amendment — taxonomy alignment.
     //

@@ -210,17 +210,3 @@ export {
   renderSourceSummary,
   parseSourceSummary,
 } from './source-summary.js';
-
-// Org-entity domain (Phase 1 wiki expansion)
-export type {
-  OrgEntityFrontmatter,
-  OrgEntity,
-} from './org-entity.js';
-export {
-  AUTO_ORG_MEMORY_START,
-  AUTO_ORG_MEMORY_END,
-  renderOrgEntityPage,
-  parseOrgEntityPage,
-  upsertOrgMemorySection,
-  extractOrgMemorySection,
-} from './org-entity.js';
