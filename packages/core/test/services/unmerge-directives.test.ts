@@ -17,6 +17,11 @@ import {
   parseUnmergeDirectives,
   resolveUnmerge,
 } from '../../src/services/unmerge-directives.js';
+import {
+  parseDedupLog,
+  buildDupeSourceMapping,
+} from '../../src/services/dedup-explain.js';
+import { renderDedupDecisionLine } from '../../src/services/dedup-decisions-log.js';
 import type { Commitment } from '../../src/models/index.js';
 
 function commitment(overrides: Partial<Commitment> = {}): Commitment {
@@ -216,6 +221,56 @@ describe('resolveUnmerge (AC8 — split dupe back out)', () => {
       !res.canonical.textVariants?.includes('Going to chat with Dave on the staffing plan'),
       'dupe A variant must be removed from the canonical',
     );
+  });
+
+  // I-6 end-to-end: the mapping that the resolver consumes can be rebuilt
+  // entirely from the persisted dedup-decisions log (no hand-authored mapping).
+  it('splits the CORRECT dupe on a 3-source canonical using a mapping rebuilt from the dedup log (I-6)', () => {
+    const c = threeSourceCanonical();
+    // Simulate what `arete dedup --apply` now writes at merge time: one MERGE
+    // line per absorbed dupe carrying its source meeting + original text.
+    const log = [
+      renderDedupDecisionLine('2026-06-02T09:00:00Z', {
+        decision: 'MERGE',
+        newId: 'dupeAAA0',
+        canonicalId: CANON,
+        jaccard: 0.9,
+        llmTier: 'fast',
+        llmDecision: 'SAME',
+        reasoning: 'same action',
+        dupeSourceMeeting: '2026-06-02-glance-2-sync.md',
+        dupeText: 'Going to chat with Dave on the staffing plan',
+      }),
+      renderDedupDecisionLine('2026-06-03T09:00:00Z', {
+        decision: 'MERGE',
+        newId: 'dupeBBB0',
+        canonicalId: CANON,
+        jaccard: 0.88,
+        llmTier: 'fast',
+        llmDecision: 'SAME',
+        reasoning: 'same action',
+        dupeSourceMeeting: '2026-06-03-pop-review.md',
+        dupeText: 'Sync with Dave re: headcount',
+      }),
+    ].join('\n');
+
+    const dupeMapping = buildDupeSourceMapping(parseDedupLog(log), 'c8e3d2f1');
+    assert.equal(dupeMapping.length, 2, 'rebuilt both dupes from the log');
+
+    // Unmerge dupe A (the middle source — old code peeled the LAST source).
+    const res = resolveUnmerge(
+      [c],
+      { canonicalId: 'c8e3d2f1', dupeId: 'dupeAAA0', raw: '' },
+      { dupeMapping, newId: 'splitnew'.padEnd(64, '0') },
+    );
+    assert.equal(res.status, 'resolved');
+    if (res.status !== 'resolved') return;
+    assert.deepEqual(res.splitOut.source_meetings, ['2026-06-02-glance-2-sync.md']);
+    assert.equal(res.splitOut.text, 'Going to chat with Dave on the staffing plan');
+    assert.deepEqual(res.canonical.source_meetings, [
+      '2026-06-01-john-lindsay.md',
+      '2026-06-03-pop-review.md',
+    ]);
   });
 
   it('REFUSES to split a 3-source canonical when dupeId cannot be resolved (ambiguous-dupe)', () => {

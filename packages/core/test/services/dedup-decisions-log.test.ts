@@ -91,6 +91,49 @@ describe('renderDedupDecisionLine', () => {
     assert.ok(!line.includes('\n'));
     assert.match(line, /timing window ambiguous on both$/);
   });
+
+  // I-6: dupe→source provenance segment (TAB-delimited, base64 text)
+  it('appends a TAB-delimited provenance segment when dupeSourceMeeting + dupeText present', () => {
+    const line = renderDedupDecisionLine('2026-06-01T10:00:00Z', {
+      decision: 'MERGE',
+      newId: 'ai_007',
+      canonicalId: 'canon_9',
+      jaccard: 0.91,
+      llmTier: 'fast',
+      llmDecision: 'SAME',
+      reasoning: 'same action',
+      dupeSourceMeeting: '2026-05-30-staffing-sync',
+      dupeText: 'follow up with Dave on headcount',
+    });
+    const tabIdx = line.indexOf('\t');
+    assert.notEqual(tabIdx, -1, 'should contain a TAB');
+    const prefix = line.slice(0, tabIdx);
+    assert.equal(
+      prefix,
+      '2026-06-01T10:00:00Z MERGE ai_007 canon_9 0.91 fast SAME same action',
+    );
+    const [src, b64] = line.slice(tabIdx + 1).split('\t');
+    assert.equal(src, '2026-05-30-staffing-sync');
+    assert.equal(
+      Buffer.from(b64, 'base64').toString('utf8'),
+      'follow up with Dave on headcount',
+    );
+  });
+
+  it('omits the provenance segment when only one of the two fields is present', () => {
+    const line = renderDedupDecisionLine('2026-06-01T10:00:00Z', {
+      decision: 'MERGE',
+      newId: 'ai_008',
+      canonicalId: 'canon_9',
+      jaccard: 0.5,
+      llmTier: '-',
+      llmDecision: '-',
+      reasoning: 'text-hash exact match',
+      dupeSourceMeeting: '2026-05-30-staffing-sync',
+      // dupeText omitted
+    });
+    assert.ok(!line.includes('\t'), 'half-record must not emit a TAB segment');
+  });
 });
 
 // ---------------------------------------------------------------------------

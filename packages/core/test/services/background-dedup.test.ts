@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import {
   runBackgroundDedup,
   applyCommitmentsDedup,
+  collectDupeProvenance,
   formatBackgroundDedupDiff,
   BACKGROUND_DEDUP_MEMORY_JACCARD_FLOOR,
   type BackgroundDedupResult,
@@ -382,6 +383,73 @@ describe('applyCommitmentsDedup', () => {
       'v5',
       'Talk to Dave about staffing',
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// collectDupeProvenance (I-6)
+// ---------------------------------------------------------------------------
+
+describe('collectDupeProvenance (I-6)', () => {
+  it('captures {dupeId, sourceMeeting, text} per absorbed dupe as MERGE payloads', async () => {
+    const c1: Commitment = mkCommitment({
+      id: 'c1'.padEnd(64, '1'),
+      text: 'Talk to Dave about staffing',
+      source: 'meeting-a.md',
+      source_meetings: ['meeting-a'],
+    });
+    const c2: Commitment = mkCommitment({
+      id: 'c2'.padEnd(64, '2'),
+      text: 'Talk Dave about staffing plan',
+      source: 'meeting-b.md',
+      source_meetings: ['meeting-b'],
+      createdAt: '2026-06-02T09:00:00Z',
+      date: '2026-06-02',
+    });
+    const c3: Commitment = mkCommitment({
+      id: 'c3'.padEnd(64, '3'),
+      text: 'Talk to Dave re staffing plan',
+      source: 'meeting-c.md',
+      source_meetings: ['meeting-c'],
+      createdAt: '2026-06-03T09:00:00Z',
+      date: '2026-06-03',
+    });
+
+    const result = await runBackgroundDedup({
+      scope: 'commitments',
+      dryRun: false,
+      commitments: [c1, c2, c3],
+      callConcurrent: makeMockLLM('SAME'),
+    });
+
+    const applied = applyCommitmentsDedup([c1, c2, c3], result);
+    assert.equal(applied.length, 1, '3 → 1 canonical');
+    const canonicalId = applied[0].id;
+
+    const payloads = collectDupeProvenance([c1, c2, c3], result);
+    assert.equal(payloads.length, 2, 'one payload per absorbed dupe');
+    for (const p of payloads) {
+      assert.equal(p.decision, 'MERGE');
+      assert.equal(p.canonicalId, canonicalId);
+      assert.ok(p.dupeSourceMeeting, 'source meeting captured');
+      assert.ok(p.dupeText, 'dupe text captured');
+    }
+    // Each dupe maps to its OWN source meeting + original text.
+    const byId = new Map(payloads.map((p) => [p.newId, p]));
+    assert.equal(byId.get(c2.id)?.dupeSourceMeeting, 'meeting-b.md');
+    assert.equal(byId.get(c2.id)?.dupeText, 'Talk Dave about staffing plan');
+    assert.equal(byId.get(c3.id)?.dupeSourceMeeting, 'meeting-c.md');
+    assert.equal(byId.get(c3.id)?.dupeText, 'Talk to Dave re staffing plan');
+  });
+
+  it('returns [] when there are no groups', async () => {
+    const c1 = mkCommitment({ id: 'c1'.padEnd(64, '1'), source: 'm-a.md' });
+    const result = await runBackgroundDedup({
+      scope: 'commitments',
+      dryRun: false,
+      commitments: [c1],
+    });
+    assert.deepEqual(collectDupeProvenance([c1], result), []);
   });
 });
 

@@ -41,6 +41,7 @@
  */
 import { type LLMCallConcurrentFn } from './commitment-dedup-pipeline.js';
 import type { Commitment } from '../models/index.js';
+import type { DedupDecisionLogPayload } from './dedup-decisions-log.js';
 /** Scope of the background dedup pass. */
 export type BackgroundDedupScope = 'commitments' | 'decisions' | 'learnings' | 'topics';
 /**
@@ -220,4 +221,30 @@ export declare function formatBackgroundDedupDiff(args: {
  * same output array (duplicates are already absent on the second pass).
  */
 export declare function applyCommitmentsDedup(commitments: ReadonlyArray<Commitment>, result: BackgroundDedupResult): Commitment[];
+/**
+ * I-6: collect the dupe→source provenance for each absorbed duplicate in a
+ * commitments-scope dedup result, as MERGE log payloads ready to append to the
+ * dedup-decisions log.
+ *
+ * `applyCommitmentsDedup` (above) is a pure transform that UNIONS each dupe's
+ * `source_meetings` / `text` into the canonical and then discards the per-dupe
+ * association — making "dupe X came from meeting Y with text Z" unrecoverable
+ * from the resulting Commitment row. This helper captures that association from
+ * the SAME inputs (the dupe's own commitment row, looked up by group key) at
+ * merge time so it can be persisted durably.
+ *
+ * Each returned payload is a MERGE line whose `newId` is the dupe id, whose
+ * `canonicalId` is the group canonical, and which carries `dupeSourceMeeting` +
+ * `dupeText`. The unmerge wire-in (not yet built) rebuilds `DupeSourceMapping[]`
+ * from these via `buildDupeSourceMapping` (dedup-explain.ts) so a 3+-source
+ * `[[unmerge]]` peels the correct source instead of refusing with
+ * `ambiguous-dupe`.
+ *
+ * A dupe's source meeting is `dupCommitment.source` if set, else the first of
+ * its `source_meetings[]`. A dupe with no resolvable source is skipped (no
+ * half-records — an incomplete mapping is useless to the resolver).
+ *
+ * Pure: no I/O. The CLI `--apply` path writes the returned payloads to the log.
+ */
+export declare function collectDupeProvenance(commitments: ReadonlyArray<Commitment>, result: BackgroundDedupResult): DedupDecisionLogPayload[];
 //# sourceMappingURL=background-dedup.d.ts.map

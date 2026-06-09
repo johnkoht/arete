@@ -18,9 +18,11 @@ import assert from 'node:assert/strict';
 import {
   parseDedupLog,
   filterLogForCommitment,
+  buildDupeSourceMapping,
   lookupCommitmentById,
   formatExplainReport,
 } from '../../src/services/dedup-explain.js';
+import { renderDedupDecisionLine } from '../../src/services/dedup-decisions-log.js';
 import type { Commitment } from '../../src/models/index.js';
 
 function commitment(overrides: Partial<Commitment> = {}): Commitment {
@@ -68,6 +70,92 @@ describe('parseDedupLog', () => {
     const entries = parseDedupLog(raw);
     assert.equal(entries.length, 1);
     assert.equal(entries[0].decision, 'UNMERGE');
+  });
+});
+
+// I-6: dupe→source provenance round-trip + rebuild
+describe('parseDedupLog — I-6 dupe→source provenance', () => {
+  it('decodes the TAB-delimited provenance segment on a MERGE line', () => {
+    const line = renderDedupDecisionLine('2026-06-02T15:42:01Z', {
+      decision: 'MERGE',
+      newId: 'dupe_a',
+      canonicalId: 'canon_x',
+      jaccard: 0.9,
+      llmTier: 'fast',
+      llmDecision: 'SAME',
+      reasoning: 'same action with spaces',
+      dupeSourceMeeting: '2026-05-30-staffing-sync',
+      dupeText: 'follow up\twith Dave', // text with a tab survives base64
+    });
+    const [entry] = parseDedupLog(line);
+    assert.equal(entry.decision, 'MERGE');
+    assert.equal(entry.reasoning, 'same action with spaces');
+    assert.equal(entry.dupeSourceMeeting, '2026-05-30-staffing-sync');
+    assert.equal(entry.dupeText, 'follow up\twith Dave');
+  });
+
+  it('leaves provenance fields undefined on legacy (no-tab) lines', () => {
+    const [entry] = parseDedupLog(
+      '2026-06-02T15:42:01Z MERGE ai_0042 c8e3d2f1 0.78 fast SAME legacy line',
+    );
+    assert.equal(entry.dupeSourceMeeting, undefined);
+    assert.equal(entry.dupeText, undefined);
+  });
+
+  it('drops a half / malformed provenance segment but still parses the prefix', () => {
+    // Only a source meeting, no base64 text token after the second tab.
+    const [entry] = parseDedupLog(
+      '2026-06-02T15:42:01Z MERGE ai_0042 c8e3d2f1 0.78 fast SAME r\t2026-05-30-x',
+    );
+    assert.equal(entry.decision, 'MERGE');
+    assert.equal(entry.dupeSourceMeeting, undefined);
+    assert.equal(entry.dupeText, undefined);
+  });
+
+  it('buildDupeSourceMapping rebuilds {dupeId, sourceMeeting, text} for a canonical', () => {
+    const raw = [
+      renderDedupDecisionLine('2026-06-02T15:42:01Z', {
+        decision: 'MERGE',
+        newId: 'dupe_a',
+        canonicalId: 'c8e3d2f1abc',
+        jaccard: 0.9,
+        llmTier: 'fast',
+        llmDecision: 'SAME',
+        reasoning: 'r1',
+        dupeSourceMeeting: 'm-alpha',
+        dupeText: 'text alpha',
+      }),
+      renderDedupDecisionLine('2026-06-02T15:42:02Z', {
+        decision: 'MERGE',
+        newId: 'dupe_b',
+        canonicalId: 'c8e3d2f1abc',
+        jaccard: 0.88,
+        llmTier: 'fast',
+        llmDecision: 'SAME',
+        reasoning: 'r2',
+        dupeSourceMeeting: 'm-beta',
+        dupeText: 'text beta',
+      }),
+      // legacy MERGE on same canonical with no provenance → skipped
+      '2026-06-02T15:42:03Z MERGE dupe_c c8e3d2f1abc 0.8 fast SAME r3',
+      // MERGE on a DIFFERENT canonical → excluded
+      renderDedupDecisionLine('2026-06-02T15:42:04Z', {
+        decision: 'MERGE',
+        newId: 'dupe_d',
+        canonicalId: 'e94f1aaa',
+        jaccard: 0.9,
+        llmTier: 'fast',
+        llmDecision: 'SAME',
+        reasoning: 'r4',
+        dupeSourceMeeting: 'm-gamma',
+        dupeText: 'text gamma',
+      }),
+    ].join('\n');
+    const mapping = buildDupeSourceMapping(parseDedupLog(raw), 'c8e3d2f1');
+    assert.deepEqual(mapping, [
+      { dupeId: 'dupe_a', sourceMeeting: 'm-alpha', text: 'text alpha' },
+      { dupeId: 'dupe_b', sourceMeeting: 'm-beta', text: 'text beta' },
+    ]);
   });
 });
 
