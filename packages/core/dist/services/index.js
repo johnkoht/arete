@@ -7,6 +7,10 @@ export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 // Phase 9 — typed-mode brief markdown formatters
 export { formatPersonBriefMarkdown, formatProjectBriefMarkdown, formatAreaBriefMarkdown, formatMeetingBriefMarkdown, } from './brief-formatters.js';
+// Phase 9 follow-up — discussion-topics / next-focus extractors (qualitative
+// person-file signal the typed brief does not surface) + agenda scaffold.
+export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.js';
+export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, } from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
 export { seedSkillsLocal, renderSkillsLocalTemplate, PHASE_2_CHEF_ORCHESTRATOR_SKILLS, PHASE_4_CHEF_ORCHESTRATOR_SKILLS, CHEF_ORCHESTRATOR_SKILLS, } from './skills-local.js';

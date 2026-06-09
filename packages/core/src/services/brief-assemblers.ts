@@ -241,6 +241,117 @@ export function meetingsForGroup(
 }
 
 // ---------------------------------------------------------------------------
+// Discussion-topics & next-focus extraction (person-file qualitative signal)
+//
+// These two sections are the structured, human-curated question bank that the
+// April-quality agendas wove in but the typed brief does NOT currently surface
+// (the brief only reads `## Memory Highlights (Auto)`). The agenda-scaffold
+// helper consumes them directly so each themed section starts pre-populated
+// with real discussion-topic questions and real "owed" sweep items rather than
+// generic placeholders.
+// ---------------------------------------------------------------------------
+
+/** A group of discussion-topic questions under a `### Sub-heading`. */
+export interface DiscussionTopicGroup {
+  /** Sub-heading label, e.g. "Process & how we work together". */
+  label: string;
+  /** Verbatim bullet lines (without the leading "- "). */
+  questions: string[];
+}
+
+/**
+ * Extract the `## 1:1 Discussion Topics` section of a person file into its
+ * `### sub-heading` groups, each with its verbatim question bullets. Drops
+ * the leading italic helper line (`*Questions and ideas...*`). Returns []
+ * when the section is absent. Pure string op.
+ */
+export function extractDiscussionTopics(content: string): DiscussionTopicGroup[] {
+  // Locate the discussion-topic section. Person files vary the heading:
+  //   "## 1:1 Discussion Topics", "## Standing 1:1 Discussion Prompts",
+  //   "## Discussion Topics/Prompts". Match any "Discussion (Topics|Prompts)".
+  const headingRe = /^##\s+[^\n]*Discussion\s+(?:Topics|Prompts)[^\n]*$/im;
+  const headingMatch = headingRe.exec(content);
+  if (!headingMatch) return [];
+  const headingIdx = headingMatch.index;
+  const rest = content.slice(headingIdx);
+  const nextH2 = rest.slice(3).search(/\n##\s/);
+  const block = nextH2 >= 0 ? rest.slice(0, nextH2 + 3) : rest;
+
+  const groups: DiscussionTopicGroup[] = [];
+
+  // Shape A — `### ` sub-heading groups (Anthony-style). Split on each
+  // sub-heading up to the next `###`/`##` (or end of the bounded block). NOTE:
+  // a `(?=...|$)/gm` lookahead is WRONG — under the `m` flag `$` matches every
+  // line end and truncates the body to its first bullet. Bound on heading only.
+  const subRe = /^###\s+([^\n]+)\n([\s\S]*?)(?=\n###\s|\n##\s|$(?![\r\n]))/gm;
+  let m: RegExpExecArray | null;
+  while ((m = subRe.exec(block)) !== null) {
+    const label = m[1].trim();
+    const questions = bulletLines(m[2]);
+    if (questions.length > 0) groups.push({ label, questions });
+  }
+  if (groups.length > 0) return groups;
+
+  // Shape B — flat bullets directly under the section heading, no sub-groups
+  // (Lindsay-style). Collect them into a single "Discussion prompts" group.
+  const bodyAfterHeading = block.replace(/^##[^\n]*\n/, '');
+  const flat = bulletLines(bodyAfterHeading);
+  if (flat.length > 0) return [{ label: 'Discussion prompts', questions: flat }];
+  return [];
+}
+
+/** Collect "- " bullet text (sans prefix) from a block, dropping blanks. */
+function bulletLines(block: string): string[] {
+  const out: string[] = [];
+  for (const line of block.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('- ')) continue;
+    const text = trimmed.slice(2).trim();
+    if (text) out.push(text);
+  }
+  return out;
+}
+
+/** A "Next 1:1 Focus" extract: the framing prose + the checkbox sweep items. */
+export interface NextFocusExtract {
+  /** First paragraph(s) of framing prose under the heading (capped). */
+  framing?: string;
+  /** Checkbox sweep items, verbatim (without the leading "- [ ] "/"- "). */
+  sweepItems: string[];
+}
+
+/**
+ * Extract the `## Next 1:1 Focus (...)` section of a person file: a short
+ * framing prose lead-in plus the checkbox "sweep" items (each often carrying a
+ * commitment id like `6a7f160f`). Returns undefined when the section is
+ * absent. Pure string op.
+ */
+export function extractNextFocus(content: string): NextFocusExtract | undefined {
+  const headingIdx = content.search(/^##\s+Next\s+1:1\s+Focus\b/im);
+  if (headingIdx < 0) return undefined;
+  const rest = content.slice(headingIdx);
+  const nextH2 = rest.slice(3).search(/\n##\s/);
+  const block = nextH2 >= 0 ? rest.slice(0, nextH2 + 3) : rest;
+
+  const lines = block.split('\n').slice(1); // drop the heading line
+  const sweepItems: string[] = [];
+  const framingParas: string[] = [];
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const checkbox = trimmed.match(/^-\s*(?:\[[ xX]?\]\s*)?(.+)$/);
+    if (checkbox) {
+      sweepItems.push(checkbox[1].trim());
+    } else if (!trimmed.startsWith('#') && !trimmed.startsWith('>')) {
+      // Treat **bold** lead lines + plain prose as framing.
+      framingParas.push(trimmed);
+    }
+  }
+  const framing = framingParas.length > 0 ? framingParas.join(' ').slice(0, 600) : undefined;
+  return { framing, sweepItems };
+}
+
+// ---------------------------------------------------------------------------
 // Memory highlights extraction (from `## Memory Highlights (Auto)` section)
 // ---------------------------------------------------------------------------
 
