@@ -31,7 +31,7 @@
  */
 import type { Command } from 'commander';
 import { createServices } from '@arete/core';
-import type { QmdScope, AreteConfig, StorageAdapter, ResolvedEntity, WorkspacePaths, DateRange, MemoryTimeline } from '@arete/core';
+import type { QmdScope, QmdCollectionRoots, AreteConfig, StorageAdapter, ResolvedEntity, WorkspacePaths, DateRange, MemoryTimeline } from '@arete/core';
 /** Search result item */
 export interface SearchResultItem {
     /** Relative path to matching file */
@@ -89,8 +89,15 @@ export interface TimelineOutput {
         end: string;
     };
 }
-/** Parse QMD CLI JSON output into SearchResultItem[]. */
-export declare function parseQmdResults(stdout: string): SearchResultItem[];
+/**
+ * Parse QMD CLI JSON output into SearchResultItem[].
+ *
+ * When `collectionRoots` is provided, paths from known scoped collections
+ * are rebased to workspace-relative (e.g. `qmd://arete-xxxx-memory/topics/foo.md`
+ * → `.arete/memory/topics/foo.md`); unknown collections just get the
+ * `qmd://collection/` prefix stripped.
+ */
+export declare function parseQmdResults(stdout: string, collectionRoots?: QmdCollectionRoots): SearchResultItem[];
 /** Person resolution result for dependency injection */
 export interface PersonResolution {
     type: 'single' | 'multiple' | 'none';

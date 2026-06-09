@@ -36,9 +36,10 @@ import { detectGws, getEmailProvider, getDriveProvider, getDocsProvider, getShee
 export async function createServices(workspaceRoot, options) {
     // Infrastructure
     const storage = new FileStorageAdapter();
-    const search = getSearchProvider(workspaceRoot);
-    // Load config for IntegrationService
+    // Load config for IntegrationService (also feeds qmd_collections to the
+    // search provider so scoped-collection result paths rebase correctly)
     const config = options?.config ?? await loadConfig(storage, workspaceRoot);
+    const search = getSearchProvider(workspaceRoot, config.qmd_collections);
     // GWS providers (null if google-workspace integration not active)
     // Created early so IntelligenceService can use email for enrichment
     // and EntityService can use directory for fallback resolution

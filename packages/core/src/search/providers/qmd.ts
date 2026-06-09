@@ -5,6 +5,9 @@
 
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
+import { buildQmdCollectionRoots, rebaseQmdPath } from '../qmd-setup.js';
+import type { QmdCollectionRoots } from '../qmd-setup.js';
+import type { QmdCollections } from '../../models/workspace.js';
 import type { SearchOptions, SearchProvider, SearchResult } from '../types.js';
 
 const execFileAsync = promisify(execFile);
@@ -45,8 +48,19 @@ function stripQmdPrefix(qmdPath: string): string {
   return match ? match[1] : qmdPath;
 }
 
-/** Parse QMD CLI JSON output into SearchResult[]. Exported for tests. */
-export function parseQmdJson(stdout: string): SearchResult[] {
+/**
+ * Parse QMD CLI JSON output into SearchResult[]. Exported for tests.
+ *
+ * When `collectionRoots` is provided, result paths from known scoped
+ * collections are rebased to workspace-relative paths (qmd returns paths
+ * relative to the COLLECTION root, e.g. `qmd://arete-xxxx-memory/topics/foo.md`
+ * for a file that lives at `.arete/memory/topics/foo.md`). Without it,
+ * paths just have the `qmd://collection/` prefix stripped (legacy behavior).
+ */
+export function parseQmdJson(
+  stdout: string,
+  collectionRoots?: QmdCollectionRoots,
+): SearchResult[] {
   const trimmed = stdout.trim();
   if (!trimmed) return [];
   try {
@@ -61,7 +75,9 @@ export function parseQmdJson(stdout: string): SearchResult[] {
         }
         // Prefer new field names, fall back to legacy
         const rawPath = typeof r.file === 'string' ? r.file : (typeof r.path === 'string' ? r.path : '');
-        const path = stripQmdPrefix(rawPath);
+        const path = collectionRoots
+          ? rebaseQmdPath(rawPath, collectionRoots)
+          : stripQmdPrefix(rawPath);
         const content = typeof r.snippet === 'string' ? r.snippet : (typeof r.content === 'string' ? r.content : '');
         return {
           path,
@@ -90,16 +106,22 @@ export interface QmdTestDeps {
  * QMD-backed search provider. isAvailable() checks for qmd binary.
  * search() runs `qmd search`; semanticSearch() runs `qmd query`.
  * Optional testDeps for unit tests (inject mocks).
+ *
+ * @param collections - Scope → collection-name map from arete.yaml
+ *   (`qmd_collections`). Used together with the deterministic generated
+ *   names to rebase scoped-collection result paths to workspace-relative.
  */
 export function getSearchProvider(
   workspaceRoot: string,
-  testDeps?: QmdTestDeps
+  testDeps?: QmdTestDeps,
+  collections?: QmdCollections,
 ): SearchProvider {
   const whichSyncImpl = testDeps?.whichSync ?? (() => spawnSync('which', ['qmd'], { encoding: 'utf8' }));
   const execFileAsyncImpl =
     testDeps?.execFileAsync ??
     (async (file: string, args: string[], opts: { timeout: number; cwd: string; maxBuffer: number }) =>
       execFileAsync(file, args, opts) as Promise<{ stdout?: string; stderr?: string }>);
+  const collectionRoots = buildQmdCollectionRoots(workspaceRoot, collections);
 
   return {
     name: QMD_PROVIDER_NAME,
@@ -119,7 +141,7 @@ export function getSearchProvider(
           ['search', query, '--json', '-n', String(limit)],
           { timeout: DEFAULT_TIMEOUT_MS, cwd: workspaceRoot, maxBuffer: 10 * 1024 * 1024 }
         );
-        const results = parseQmdJson(stdout ?? '');
+        const results = parseQmdJson(stdout ?? '', collectionRoots);
         const minScore = options?.minScore ?? 0;
         return results.filter(r => r.score >= minScore).slice(0, limit);
       } catch {
@@ -134,7 +156,7 @@ export function getSearchProvider(
           ['query', query, '--json', '-n', String(limit)],
           { timeout: DEFAULT_TIMEOUT_MS, cwd: workspaceRoot, maxBuffer: 10 * 1024 * 1024 }
         );
-        const results = parseQmdJson(stdout ?? '');
+        const results = parseQmdJson(stdout ?? '', collectionRoots);
         const minScore = options?.minScore ?? 0;
         return results.filter(r => r.score >= minScore).slice(0, limit);
       } catch {

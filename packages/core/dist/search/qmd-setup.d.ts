@@ -125,6 +125,40 @@ export declare function ensureQmdCollection(workspaceRoot: string, existingColle
  * - Other scopes index specific directories
  */
 export declare const SCOPE_PATHS: Record<QmdScope, string>;
+/** File mask used for every Areté qmd collection. */
+export declare const QMD_COLLECTION_MASK = "**/*.md";
+/**
+ * Map of qmd collection name → workspace-relative root directory, used to
+ * rebase collection-relative result paths back to workspace-relative paths.
+ *
+ * Background: qmd result paths are relative to the COLLECTION root
+ * (`qmd://arete-da59-memory/topics/foo.md` → `topics/foo.md`), but all
+ * downstream consumers (topic retrieval post-filters, storage reads, CLI
+ * display) expect workspace-relative paths (`.arete/memory/topics/foo.md`).
+ * This matters doubly for the `memory` scope: qmd's file walker prunes
+ * dot-directories regardless of mask, so `.arete/memory` content is ONLY
+ * reachable via a collection rooted inside `.arete/memory` — whose result
+ * paths then need the `.arete/memory/` prefix restored.
+ */
+export type QmdCollectionRoots = Record<string, string>;
+/**
+ * Build the collection-name → workspace-relative-root map for a workspace.
+ *
+ * Includes both the deterministic generated names
+ * (`arete-<hash>-<scope>`) and any names configured in
+ * `arete.yaml` `qmd_collections` (covers renamed/legacy collections).
+ * Scopes rooted at the workspace root (`.`) are omitted — their result
+ * paths are already workspace-relative after prefix stripping.
+ */
+export declare function buildQmdCollectionRoots(workspaceRoot: string, collections?: QmdCollections): QmdCollectionRoots;
+/**
+ * Convert a raw qmd result path (`qmd://collection/relative/path.md`) to a
+ * workspace-relative path. Collections found in `roots` get their
+ * workspace-relative root prefixed; unknown collections (e.g. the root
+ * `all` collection, or collections from other workspaces) just have the
+ * `qmd://collection/` prefix stripped (previous behavior).
+ */
+export declare function rebaseQmdPath(rawPath: string, roots: QmdCollectionRoots): string;
 /** All scopes in order of creation */
 export declare const ALL_SCOPES: readonly QmdScope[];
 /** Result for a single scope's collection setup */
@@ -137,6 +171,13 @@ export type QmdScopeResult = {
     collectionName?: string;
     /** Whether this scope was skipped (path doesn't exist) */
     skipped: boolean;
+    /**
+     * True when an existing collection was re-created because its registered
+     * path or pattern no longer matched the expected scope definition
+     * (e.g. `memory` collections created before the `.arete/memory/items`
+     * → `.arete/memory` repoint).
+     */
+    migrated?: boolean;
     /** Warning message if something went wrong */
     warning?: string;
 };
@@ -198,7 +239,9 @@ export declare function generateScopedCollectionName(workspaceRoot: string, scop
  *
  * @param workspaceRoot - Absolute path to the workspace
  * @param existingCollections - Existing collections from config (scope to collection name).
- *   Collections that already exist in config are verified and re-created if missing from qmd.
+ *   Collections that already exist in config are verified and re-created if missing from
+ *   qmd, or if their registered path/pattern no longer match the scope definition
+ *   (migration for collections created under older scope mappings).
  * @param deps - Injectable dependencies for testing
  * @returns Result with collections map suitable for storing in arete.yaml
  */

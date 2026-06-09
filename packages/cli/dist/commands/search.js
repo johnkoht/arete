@@ -32,7 +32,7 @@
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import chalk from 'chalk';
-import { createServices, loadConfig } from '@arete/core';
+import { createServices, loadConfig, buildQmdCollectionRoots, rebaseQmdPath } from '@arete/core';
 import { header, info, error, listItem, warn } from '../formatters.js';
 const execFileAsync = promisify(execFile);
 /** Timeout for QMD queries (10s) - queries are typically fast */
@@ -70,8 +70,15 @@ function extractTitle(snippet, path) {
     const filename = path.split('/').pop() || path;
     return filename.replace(/\.md$/, '').replace(/-/g, ' ');
 }
-/** Parse QMD CLI JSON output into SearchResultItem[]. */
-export function parseQmdResults(stdout) {
+/**
+ * Parse QMD CLI JSON output into SearchResultItem[].
+ *
+ * When `collectionRoots` is provided, paths from known scoped collections
+ * are rebased to workspace-relative (e.g. `qmd://arete-xxxx-memory/topics/foo.md`
+ * → `.arete/memory/topics/foo.md`); unknown collections just get the
+ * `qmd://collection/` prefix stripped.
+ */
+export function parseQmdResults(stdout, collectionRoots) {
     const trimmed = stdout.trim();
     if (!trimmed)
         return [];
@@ -98,7 +105,9 @@ export function parseQmdResults(stdout) {
                 : typeof r.path === 'string'
                     ? r.path
                     : '';
-            const path = stripQmdPrefix(rawPath);
+            const path = collectionRoots
+                ? rebaseQmdPath(rawPath, collectionRoots)
+                : stripQmdPrefix(rawPath);
             const snippet = typeof r.snippet === 'string'
                 ? r.snippet
                 : typeof r.content === 'string'
@@ -468,7 +477,8 @@ export async function runSearch(query, opts, deps = getDefaultDeps()) {
             cwd: root,
             maxBuffer: 10 * 1024 * 1024,
         });
-        results = parseQmdResults(stdout);
+        // Rebase scoped-collection paths to workspace-relative for display/filtering
+        results = parseQmdResults(stdout, buildQmdCollectionRoots(root, collections));
     }
     catch (err) {
         // QMD query failed — return empty results rather than failing

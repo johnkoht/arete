@@ -3,7 +3,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createServices, loadConfig, refreshQmdIndex, generateMeetingManifest } from '@arete/core';
+import { createServices, loadConfig, ensureQmdCollections, generateMeetingManifest } from '@arete/core';
 import { listItem, success, info, warn, error } from '../formatters.js';
 const execFileAsync = promisify(execFile);
 const QMD_STATUS_TIMEOUT_MS = 5_000;
@@ -57,16 +57,39 @@ export function registerIndexSearchCommand(program) {
             }
             return;
         }
-        // Check collection before calling refreshQmdIndex
-        if (!config.qmd_collection) {
+        // Check collection config before touching qmd
+        if (!config.qmd_collection && !config.qmd_collections) {
             info('No collection configured — run `arete install` first');
             return;
         }
-        const result = await refreshQmdIndex(root, config.qmd_collection);
+        // Ensure scoped collections exist AND match their expected
+        // path/pattern (migrates collections created under older scope
+        // mappings), then re-index + embed.
+        const result = await ensureQmdCollections(root, config.qmd_collections);
         if (result.skipped) {
             // Collection is configured but qmd is not installed (or ARETE_SEARCH_FALLBACK set)
             info('qmd not installed — search index unavailable');
             return;
+        }
+        // Persist collections to arete.yaml (same shape as `arete update`)
+        if (Object.keys(result.collections).length > 0) {
+            await services.workspace.updateManifestField(root, 'qmd_collections', result.collections);
+            // Backward compat: write qmd_collection (singular) as the 'all' collection
+            if (result.collections.all) {
+                await services.workspace.updateManifestField(root, 'qmd_collection', result.collections.all);
+            }
+        }
+        // Surface created/migrated collections
+        for (const scope of result.scopes) {
+            if (scope.migrated) {
+                info(`Collection '${scope.collectionName}' re-created (stale path/pattern migrated)`);
+            }
+            else if (scope.created) {
+                info(`Collection '${scope.collectionName}' created`);
+            }
+            if (scope.warning) {
+                warn(scope.warning);
+            }
         }
         if (result.indexed) {
             if (result.embedded) {

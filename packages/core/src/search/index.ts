@@ -14,8 +14,11 @@ export {
   generateScopedCollectionName,
   refreshQmdIndex,
   embedQmdIndex,
+  buildQmdCollectionRoots,
+  rebaseQmdPath,
   SCOPE_PATHS,
   ALL_SCOPES,
+  QMD_COLLECTION_MASK,
 } from './qmd-setup.js';
 export type {
   QmdSetupResult,
@@ -25,4 +28,5 @@ export type {
   QmdScopeResult,
   QmdCollectionsResult,
   QmdCollectionsDeps,
+  QmdCollectionRoots,
 } from './qmd-setup.js';
