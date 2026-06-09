@@ -677,7 +677,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         ...(existingTasks.length > 0 && { existingTasks }),
     };
     // 7. Topic-wiki context (delta-only extraction support)
-    const wiki = await buildTopicWikiContext(deps, paths, transcript);
+    const wiki = await buildTopicWikiContext(deps, paths, transcript, options.referenceDate);
     if (wiki.context)
         bundle.topicWikiContext = wiki.context;
     if (wiki.warning)
@@ -693,7 +693,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
  * `context` field conditionally so the absent-key semantic is preserved
  * (no `bundle.topicWikiContext = undefined` write).
  */
-async function buildTopicWikiContext(deps, paths, transcript) {
+async function buildTopicWikiContext(deps, paths, transcript, referenceDate) {
     try {
         const { topics: allTopicPages } = await deps.topicMemory.listAll(paths);
         if (allTopicPages.length === 0)
@@ -711,6 +711,8 @@ async function buildTopicWikiContext(deps, paths, transcript) {
         const learningsPath = join(paths.memory, 'items', 'learnings.md');
         const decisionsPath = join(paths.memory, 'items', 'decisions.md');
         const detectedTopics = [];
+        const now = referenceDate ?? new Date();
+        const STALE_DAYS = 60; // mirrors listTopicMemoryStatus staleDays default
         for (const slug of detectedSlugs) {
             const page = pageBySlug.get(slug);
             if (!page)
@@ -722,7 +724,20 @@ async function buildTopicWikiContext(deps, paths, transcript) {
                 const content = item.content ?? '';
                 return `${date}: ${content}`.trim();
             });
-            detectedTopics.push({ slug, sections, l2Excerpts });
+            // W5 staleness: carry last_refreshed so the injected wiki context
+            // shows page age (a 4/24-frozen page must not read as current).
+            const lastRefreshed = page.frontmatter.last_refreshed;
+            const refreshedDate = new Date(lastRefreshed);
+            const daysOld = Number.isNaN(refreshedDate.getTime())
+                ? Infinity
+                : Math.floor((now.getTime() - refreshedDate.getTime()) / (1000 * 60 * 60 * 24));
+            detectedTopics.push({
+                slug,
+                sections,
+                l2Excerpts,
+                lastRefreshed,
+                stale: daysOld > STALE_DAYS,
+            });
         }
         if (detectedTopics.length === 0)
             return {};

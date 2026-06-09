@@ -245,6 +245,14 @@ export type TopicWikiContext = {
         slug: string;
         sections: string;
         l2Excerpts: string[];
+        /**
+         * `last_refreshed` from the topic page frontmatter (wiki-repair W5).
+         * Rendered under the `### [[slug]]` heading so the extraction LLM —
+         * and anyone reading the prompt — sees page age.
+         */
+        lastRefreshed?: string;
+        /** True when the page is >60 days old (or its date is unparseable). */
+        stale?: boolean;
     }>;
 };
 /**

@@ -843,7 +843,19 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
             ? discovered.filter((src) => src.path === resolvedSourcePath)
             : discovered;
         const perTopic = [];
+        // Single writer-of-record for `ingest` log events (wiki-repair W5).
+        // Constructed lazily-cheap here; append failures warn, never vanish.
+        const { MemoryLogService } = await import('./memory-log.js');
+        const memoryLog = new MemoryLogService(storage);
+        let progressIndex = 0;
         for (const targetSlug of targetSlugs) {
+            progressIndex += 1;
+            try {
+                options.onProgress?.({ index: progressIndex, total: targetSlugs.length, slug: targetSlug });
+            }
+            catch {
+                // Progress reporting never blocks the batch.
+            }
             let page = existingBySlug.get(targetSlug) ?? null;
             let integrated = 0;
             let fallback = 0;
@@ -928,6 +940,31 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
                 else if (result.decision === 'skipped-already-integrated')
                     skipped++;
                 page = result.page;
+                // wiki-repair W5 / AC2: one `ingest` log event per integrated
+                // source, carrying what was actually fed to the LLM —
+                // `input_kind: summary | transcript` + input char count. Makes
+                // the summary-first token reduction measurable instead of
+                // asserted. Skips emit nothing (no input was consumed).
+                if (result.decision === 'integrated' || result.decision === 'fallback') {
+                    const inputBody = llmContent ?? src.content;
+                    try {
+                        await memoryLog.append(paths, {
+                            event: 'ingest',
+                            fields: {
+                                topic: targetSlug,
+                                source: pathBasename(src.path),
+                                source_type: src.type,
+                                input_kind: llmContent !== undefined ? 'summary' : 'transcript',
+                                input_chars: String(inputBody.length),
+                                result: result.decision,
+                            },
+                        });
+                    }
+                    catch (err) {
+                        // W5 lossy-logger rule: log-append failures warn, never vanish.
+                        console.warn(`[topic-memory] ingest log event failed for ${targetSlug} ← ${pathBasename(src.path)}: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                }
             }
             // Write the final page
             if (page !== null) {

@@ -373,6 +373,19 @@ export interface RefreshBatchOptions {
      * Default 'topic refresh'.
      */
     lockLabel?: string;
+    /**
+     * Per-topic progress callback (wiki-repair W5). Called once per target
+     * slug BEFORE that topic's sources are processed, with 1-based `index`
+     * and the total target count. `arete topic refresh --all` uses this to
+     * print "page N/M <slug>" as the batch walks — 18 silent minutes is
+     * indistinguishable from a hang otherwise. Errors thrown by the
+     * callback are swallowed.
+     */
+    onProgress?: (info: {
+        index: number;
+        total: number;
+        slug: string;
+    }) => void;
 }
 export interface RefreshBatchTopicResult {
     slug: string;

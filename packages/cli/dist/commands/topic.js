@@ -431,6 +431,12 @@ export function registerTopicCommands(program) {
                 sourcePath: resolvedSourcePath,
                 workspaceRoot: root,
                 lockLabel: 'topic refresh',
+                // W5: per-page progress so a long batch (249 pages ≈ 18 min
+                // observed) is distinguishable from a hang. stderr so --json
+                // stdout stays parseable.
+                onProgress: ({ index, total, slug: progressSlug }) => {
+                    process.stderr.write(chalk.dim(`  page ${index}/${total} ${progressSlug}\n`));
+                },
             });
         }
         catch (err) {
@@ -464,7 +470,7 @@ export function registerTopicCommands(program) {
             }
             throw err;
         }
-        // Log event (best-effort)
+        // Log event — best-effort but NEVER silent (W5 lossy-logger rule).
         try {
             await services.memoryLog.append(paths, {
                 event: 'refresh',
@@ -477,8 +483,8 @@ export function registerTopicCommands(program) {
                 },
             });
         }
-        catch {
-            // best-effort
+        catch (err) {
+            warn(`Memory log append failed (refresh event not recorded): ${err instanceof Error ? err.message : 'unknown'}`);
         }
         if (opts.json) {
             console.log(JSON.stringify({

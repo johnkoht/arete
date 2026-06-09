@@ -115,7 +115,23 @@ export interface WikiMatch {
     summary: string;
     /** File path for sources. */
     path: string;
+    /**
+     * `last_refreshed` from the topic page frontmatter (wiki-repair W5 /
+     * AC5). Surfaced on retrieval so briefs can show staleness instead of
+     * serving a frozen page as if it were current.
+     */
+    lastRefreshed: string;
 }
+/** Days since `last_refreshed` after which a wiki page is labeled stale.
+ * Mirrors `listTopicMemoryStatus`'s staleDays=60 (strict `>`). */
+export declare const WIKI_STALE_DAYS = 60;
+/**
+ * Render the retrieval-surface staleness label for a wiki page:
+ * `(as of 2026-04-24 — stale)` past WIKI_STALE_DAYS, `(as of 2026-06-01)`
+ * otherwise. Unparseable dates render as stale — an unknown age must not
+ * masquerade as fresh. Pure; `today` injectable for tests.
+ */
+export declare function wikiStalenessLabel(lastRefreshed: string, today?: Date): string;
 /**
  * Per-mode wiki retrieval. `retrieveRelevant()` is the primary path; when
  * `searchBackend === 'none'` we fall back to `listAll() + tokenizeSlug()`
