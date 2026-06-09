@@ -558,7 +558,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
             email: a.email,
         }));
         // Single call to get recent meetings for ALL attendees at once (O(N) instead of O(A×N))
-        const precomputedMeetings = await findRecentMeetingsForAttendees(storage, paths, attendeesForBatch);
+        const precomputedMeetings = await findRecentMeetingsForAttendees(storage, paths, attendeesForBatch, 5, options.referenceDate);
         for (const attendee of frontmatter.attendees) {
             try {
                 const resolved = await resolveAttendee(storage, entity, paths, attendee, precomputedMeetings);

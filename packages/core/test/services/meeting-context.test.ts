@@ -474,7 +474,11 @@ title: Product Sync
       }, 'Meeting content.');
 
       const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-current.md');
-      const bundle = await buildMeetingContext(meetingPath, deps);
+      // Pin the recency-window reference date to the fixture timeframe so the
+      // 60-day cutoff doesn't filter out the March fixtures as wall-clock time advances.
+      const bundle = await buildMeetingContext(meetingPath, deps, {
+        referenceDate: new Date('2026-03-19T00:00:00.000Z'),
+      });
 
       // Bob should be resolved and his recentMeetings should include 'Past Meeting with Bob'
       const bob = bundle.attendees.find(a => a.slug === 'bob-smith');
