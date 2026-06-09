@@ -61,7 +61,18 @@ The combine builder **committed both fixes before stalling on validation** (`207
 3. **#2 Wave B** — I-1 dead `areas:` field dropped, I-6 dupe→source mapping persisted (wire-in remains, Phase 11c). (`ffba83e8`)
 4. **I-0 agenda** — bake-off (2 approaches → cold-gen → 2 judges → COMBINE), built + fixed both B flaws, verified on real data (Lindsay's prompts populate, attendee-scoped). (`a8468b7c`)
 
-**Integrated full-suite gate: GREEN — 4514 tests / 4512 pass / 0 fail / 2 pre-existing it.skip** (all 4 merges together; no cross-branch surprises). Release gate met. **0.11.0 ready to cut** (awaiting John's go now that he's awake + the `areas` follow-up decision).
+**Integrated full-suite gate: GREEN — 4514 tests / 4512 pass / 0 fail / 2 pre-existing it.skip** (all 4 merges together; no cross-branch surprises). Release gate met.
+
+## 🎉 RELEASED — v0.11.0 (2026-06-09)
+John confirmed: drop `areas:` (digest knowledge flows via `topics:` — confirmed correct), cut 0.11.0. Bumped root/cli/core 0.10.1→0.11.0, finalized CHANGELOG, annotated tag `v0.11.0`, pushed main + tag (release commit `145de8f1`). `arete --version` → 0.11.0. **Night complete: 4 workstreams + release, all green.**
+
+### Queued follow-ups (small, non-blocking — for a later session)
+- **Run `arete update` in arete-reserv** to pick up the agenda-synthesis fix (the `.arete/skills/` override otherwise shadows it).
+- **I-3 defensive cap (~200)** on the extractor bias list (currently unbounded, bounded-in-practice by the 90-day filter).
+- **I-6 `[[unmerge]]` wire-in** (Phase 11c) to fully close the dupe-mapping work (the record + rebuild seam are shipped).
+- **Optional: digest→area consumer** if slack→area rollup is ever wanted (John chose to leave `areas:` dropped for now).
+- **Test hygiene sweep:** pin `referenceDate` across date-windowed tests (the BUG-1/2 time-bomb class).
+- **Worktree cleanup:** tonight's worktrees (bugfix-pre-existing, agenda-synth-a/b/combine, fix-issues2-wave-a/b, issues-2-plan) can be removed. ⚠️ Re-link arete-reserv's `arete` to the main repo (or reinstall) BEFORE removing the `arete-v2-chef-orchestrator` worktree — it's currently symlinked there.
 
 **Needs your eyes (AM):** (a) release = 0.11.0 minor, cutting after suite-green; (b) the agenda fix reaches arete-reserv only after `arete update` (the `.arete/skills/` override wins); (c) main repo needed `npm install` for `proper-lockfile`; (d) infra: the full suite trips the 600s agent-watchdog — 3 agents died (work intact); (e) small follow-ups: I-3 defensive cap (~200), I-6 unmerge wire-in.
 
