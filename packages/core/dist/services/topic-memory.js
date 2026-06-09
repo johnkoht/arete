@@ -67,7 +67,7 @@ const TOKENIZE_STOP_WORDS = new Set(['vs', 'and', 'or']);
  * `decisions`/`decision`, `learnings`/`learning`, `meetings`/`meeting` —
  * the four high-traffic plural/singular pairs in observed slug drift.
  */
-function singularizeToken(token) {
+export function singularizeToken(token) {
     if (token.length < 4)
         return token;
     if (!token.endsWith('s'))
@@ -76,6 +76,19 @@ function singularizeToken(token) {
     if (token.charAt(token.length - 2) === 's')
         return token;
     return token.slice(0, -1);
+}
+/**
+ * Singularize a list of tokens using {@link singularizeToken}.
+ *
+ * Exported so the lexical topic detector can singularize the
+ * **transcript** token set symmetrically with how `tokenizeSlug`
+ * singularizes the **slug** side. Without this, `templates` (transcript)
+ * and `template` (slug) live in different token spaces and never
+ * intersect — silently breaking plural/alias topic detection
+ * (phase-3-5-followup-5 regression).
+ */
+export function singularizeTokens(tokens) {
+    return tokens.map(singularizeToken);
 }
 /**
  * Tokenize a slug for Jaccard comparison.

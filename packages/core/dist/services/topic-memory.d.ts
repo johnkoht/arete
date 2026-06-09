@@ -74,6 +74,35 @@ export interface TopicIdentity {
     lastRefreshed?: string;
 }
 /**
+ * Singularize a single token (AC3, phase-3-5-followup-5).
+ *
+ * Rule: strip trailing `s` if and only if
+ *   - token length ≥ 4 AND
+ *   - second-to-last char is NOT `s` (preserves `-ss` endings like
+ *     `process`, `address`, `business`, `class`).
+ *
+ * Known accepted edge cases (documented per pre-mortem R1):
+ *   - `status` → `statu` (ends `-us`; benign — unlikely real slug clash)
+ *   - `news` → `new` (ends `-ws`; benign — unlikely real slug clash)
+ *
+ * The rule deliberately stops at "drop trailing `s`": no Porter-style
+ * suffix stripping. The goal is to collapse `templates`/`template`,
+ * `decisions`/`decision`, `learnings`/`learning`, `meetings`/`meeting` —
+ * the four high-traffic plural/singular pairs in observed slug drift.
+ */
+export declare function singularizeToken(token: string): string;
+/**
+ * Singularize a list of tokens using {@link singularizeToken}.
+ *
+ * Exported so the lexical topic detector can singularize the
+ * **transcript** token set symmetrically with how `tokenizeSlug`
+ * singularizes the **slug** side. Without this, `templates` (transcript)
+ * and `template` (slug) live in different token spaces and never
+ * intersect — silently breaking plural/alias topic detection
+ * (phase-3-5-followup-5 regression).
+ */
+export declare function singularizeTokens(tokens: string[]): string[];
+/**
  * Tokenize a slug for Jaccard comparison.
  * `cover-whale-templates` → `['cover', 'whale', 'template']`.
  *
