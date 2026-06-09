@@ -22,6 +22,13 @@ export type ViewCommandDeps = {
   isPortAvailableFn?: (port: number) => Promise<boolean>;
   existsSyncFn?: typeof existsSync;
   randomUUIDFn?: typeof randomUUID;
+  /**
+   * Inject service construction (workspace root resolution + storage).
+   * Defaults to the real `createServices`. Surfaced so tests can resolve the
+   * workspace deterministically without waiting on real filesystem/index I/O
+   * (which otherwise made the non-wait path's timing non-deterministic).
+   */
+  createServicesFn?: typeof createServices;
 };
 
 export type ViewCommandOpts = {
@@ -215,10 +222,11 @@ export async function runView(
     isPortAvailableFn = isPortAvailable,
     existsSyncFn = existsSync,
     randomUUIDFn = randomUUID,
+    createServicesFn = createServices,
   } = deps;
 
   // 1. Resolve workspace root
-  const services = await createServices(process.cwd());
+  const services = await createServicesFn(process.cwd());
   const root = await services.workspace.findRoot();
 
   if (!root) {
@@ -355,8 +363,13 @@ export async function runView(
   info(`\nAreté workspace open at ${url}`);
   info('Press Ctrl+C to stop.\n');
 
-  // Keep the process alive
-  setInterval(() => {}, 1000 * 60 * 60);
+  // Keep the process alive while the spawned server child + SIGINT handler are
+  // active. The child's piped stdio handles already hold the event loop open,
+  // so this timer is a belt-and-suspenders keep-alive. unref() it so it never
+  // pins the loop on its own — otherwise an orphaned runView (e.g. a test that
+  // races runView against a timeout and abandons the promise) leaves an
+  // uncleared timer that keeps the process alive forever (suite-wide hang).
+  setInterval(() => {}, 1000 * 60 * 60).unref();
 }
 
 // ─── Command Registration ─────────────────────────────────────────────────────

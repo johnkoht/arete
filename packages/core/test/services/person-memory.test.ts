@@ -664,8 +664,10 @@ attendee_ids:
       'utf8',
     );
 
-    // Run without CommitmentsService — action items render directly
-    await service.refreshPersonMemory(paths);
+    // Run without CommitmentsService — action items render directly.
+    // Pin referenceDate to the fixture timeframe so the staleness window
+    // doesn't age out the 2026-04-08 action items as wall-clock time advances.
+    await service.refreshPersonMemory(paths, { referenceDate: new Date('2026-04-09T00:00:00.000Z') });
 
     const aliceContent = readFileSync(join(personDir, 'alice.md'), 'utf8');
     const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
@@ -720,7 +722,8 @@ attendee_ids:
       'utf8',
     );
 
-    await service.refreshPersonMemory(paths);
+    // Pin referenceDate to the fixture timeframe (see bilateral test above).
+    await service.refreshPersonMemory(paths, { referenceDate: new Date('2026-04-09T00:00:00.000Z') });
 
     const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
 
@@ -774,7 +777,8 @@ attendee_ids:
       'utf8',
     );
 
-    await service.refreshPersonMemory(paths);
+    // Pin referenceDate to the fixture timeframe (see bilateral test above).
+    await service.refreshPersonMemory(paths, { referenceDate: new Date('2026-04-09T00:00:00.000Z') });
 
     const aliceContent = readFileSync(join(personDir, 'alice.md'), 'utf8');
     const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
@@ -835,7 +839,8 @@ attendee_ids:
       'utf8',
     );
 
-    await service.refreshPersonMemory(paths);
+    // Pin referenceDate to the fixture timeframe (see bilateral test above).
+    await service.refreshPersonMemory(paths, { referenceDate: new Date('2026-04-09T00:00:00.000Z') });
 
     const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
 

@@ -125,6 +125,13 @@ export interface RefreshPersonMemoryOptions {
      * Without this option, plain-text action items are rendered (no regression).
      */
     commitments?: CommitmentsService;
+    /**
+     * Pin the "current date" used for action-item staleness aging
+     * (defaults to wall-clock now). Surfaced for deterministic testing so the
+     * staleness window can be anchored relative to fixture dates rather than
+     * `Date.now()`, which otherwise turns fixed-date fixtures into time-bombs.
+     */
+    referenceDate?: Date;
 }
 export interface RefreshPersonMemoryResult {
     updated: number;

@@ -137,6 +137,12 @@ export interface BuildMeetingContextOptions {
   skipAgenda?: boolean;
   /** Skip attendee resolution. */
   skipPeople?: boolean;
+  /**
+   * Pin the "current date" used for the recent-meeting recency window
+   * (defaults to wall-clock now). Surfaced for deterministic testing so the
+   * 60-day cutoff can be anchored relative to fixture dates rather than `Date.now()`.
+   */
+  referenceDate?: Date;
 }
 
 /**
@@ -854,6 +860,8 @@ export async function buildMeetingContext(
       storage,
       paths,
       attendeesForBatch,
+      5,
+      options.referenceDate,
     );
 
     for (const attendee of frontmatter.attendees) {
