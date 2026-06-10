@@ -2,7 +2,7 @@
  * Commitments commands — list and resolve open commitments
  */
 import { isAbsolute, resolve as resolvePath, join } from 'node:path';
-import { createServices, loadConfig, refreshQmdIndex, buildPersonDirectory, migrateCommitmentsToV2, formatMigrationDiff, parseCommitmentsFile, serializeCommitmentsFile, } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, buildPersonDirectory, migrateCommitmentsToV2, formatMigrationDiff, parseCommitmentsFile, serializeCommitmentsFile, resolveArchivedProjectReadme, } from '@arete/core';
 import chalk from 'chalk';
 import { listItem, error, info, success } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
@@ -79,6 +79,8 @@ export function registerCommitmentsCommand(program) {
                 resolvedAt: c.resolvedAt,
                 ...(c.goalSlug ? { goalSlug: c.goalSlug } : {}),
                 ...(c.area ? { area: c.area } : {}),
+                // Phase 13 AC5 — claims must be visible where commitments are listed.
+                ...(c.projectSlug ? { projectSlug: c.projectSlug } : {}),
             }));
             console.log(JSON.stringify({ success: true, commitments: out, count: out.length }, null, 2));
             return;
@@ -364,6 +366,88 @@ export function registerCommitmentsCommand(program) {
         }
         else {
             info('No matches found at the 0.7 confidence threshold. Commitments unchanged.');
+        }
+    });
+    // ---------------------------------------------------------------------------
+    // arete commitments claim <id-prefix> --project <slug>  (Phase 13 AC5)
+    //
+    // The missing WRITER for the already-consumed `projectSlug` field
+    // (unionProjectCommitments reads it for project-brief Open work).
+    // Explicit act only — no provenance/reset machinery; --clear covers
+    // mistakes (plan design decision 5).
+    // ---------------------------------------------------------------------------
+    commitmentsCmd
+        .command('claim <id>')
+        .description('Claim a commitment for a project (stamps projectSlug; the project brief\'s Open-work section moves it from unclaimed-area to project-claimed). Use --clear to release.')
+        .option('--project <slug>', 'Project slug (projects/active/ or projects/archive/)')
+        .option('--clear', 'Remove the projectSlug claim instead of setting one')
+        .option('--json', 'Output as JSON')
+        .action(async (id, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+                info('Run "arete install" to create a workspace');
+            }
+            process.exit(1);
+        }
+        if (Boolean(opts.clear) === Boolean(opts.project)) {
+            const msg = 'Provide exactly one of --project <slug> or --clear';
+            if (opts.json)
+                console.log(JSON.stringify({ success: false, error: msg }));
+            else
+                error(msg);
+            process.exit(1);
+        }
+        const paths = services.workspace.getPaths(root);
+        // Validate the project slug BEFORE any write — both archive
+        // naming shapes tolerated (AC4's resolver reused).
+        if (opts.project) {
+            const activePath = join(paths.projects, 'active', opts.project, 'README.md');
+            const isActive = await services.storage.exists(activePath);
+            const archivedPath = isActive
+                ? null
+                : await resolveArchivedProjectReadme(services.storage, paths, opts.project);
+            if (!isActive && !archivedPath) {
+                const msg = `Unknown project slug '${opts.project}' — not in projects/active/ or projects/archive/`;
+                if (opts.json)
+                    console.log(JSON.stringify({ success: false, error: msg }));
+                else
+                    error(msg);
+                process.exit(1);
+            }
+        }
+        let updated;
+        try {
+            updated = await services.commitments.setProjectSlug(id, opts.clear ? null : opts.project);
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to claim commitment';
+            if (opts.json)
+                console.log(JSON.stringify({ success: false, error: msg }));
+            else
+                error(msg);
+            process.exit(1);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                id: updated.id,
+                text: updated.text,
+                projectSlug: updated.projectSlug ?? null,
+                cleared: Boolean(opts.clear),
+            }));
+            return;
+        }
+        if (opts.clear) {
+            success(`Released claim on ${updated.id.slice(0, 8)} — "${updated.text}"`);
+        }
+        else {
+            success(`Claimed ${updated.id.slice(0, 8)} for project ${opts.project} — "${updated.text}"`);
         }
     });
     // ---------------------------------------------------------------------------

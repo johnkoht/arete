@@ -416,6 +416,170 @@ describe('commitments list command', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Phase 13 AC5 — arete commitments claim
+// ---------------------------------------------------------------------------
+
+describe('commitments claim command (Phase 13 AC5)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-commitments-claim');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  function seedProject(slug: string, dirName?: string, archived = false): void {
+    const dir = join(
+      tmpDir,
+      'projects',
+      archived ? 'archive' : 'active',
+      dirName ?? slug,
+    );
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'README.md'), `---\ntitle: ${slug}\n---\n# ${slug}\n`, 'utf8');
+  }
+
+  it('claims by id prefix and persists projectSlug; --clear releases', () => {
+    seedProject('glance-2-runyon');
+    const c = makeCommitment({ text: 'Confirm pre-read sent', personSlug: 'lindsay' });
+    writeCommitments(tmpDir, [c]);
+
+    const out = JSON.parse(
+      runCli(
+        ['commitments', 'claim', c.id.slice(0, 8), '--project', 'glance-2-runyon', '--json'],
+        { cwd: tmpDir },
+      ),
+    );
+    assert.equal(out.success, true);
+    assert.equal(out.projectSlug, 'glance-2-runyon');
+
+    const list = JSON.parse(runCli(['commitments', 'list', '--json'], { cwd: tmpDir }));
+    const claimed = list.commitments.find((x: { id: string }) => x.id === c.id);
+    assert.equal(claimed.projectSlug, 'glance-2-runyon');
+
+    const cleared = JSON.parse(
+      runCli(['commitments', 'claim', c.id.slice(0, 8), '--clear', '--json'], { cwd: tmpDir }),
+    );
+    assert.equal(cleared.success, true);
+    assert.equal(cleared.projectSlug, null);
+    assert.equal(cleared.cleared, true);
+  });
+
+  it('validates project slug against active/ AND archive/ (both naming shapes); unknown rejected with no write', () => {
+    const c = makeCommitment({ text: 'Archived claim test' });
+    writeCommitments(tmpDir, [c]);
+
+    // Unknown project → error, no write.
+    const bad = runCliRaw(
+      ['commitments', 'claim', c.id.slice(0, 8), '--project', 'no-such-project', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(bad.code, 1);
+    assert.match(JSON.parse(bad.stdout).error, /Unknown project slug/);
+    const list = JSON.parse(runCli(['commitments', 'list', '--json'], { cwd: tmpDir }));
+    assert.ok(!list.commitments[0].projectSlug, 'no write on rejection');
+
+    // Archived YYYY-MM_<slug> shape accepted.
+    seedProject('visioning-deck', '2026-06_visioning-deck', true);
+    const ok = JSON.parse(
+      runCli(
+        ['commitments', 'claim', c.id.slice(0, 8), '--project', 'visioning-deck', '--json'],
+        { cwd: tmpDir },
+      ),
+    );
+    assert.equal(ok.success, true);
+    assert.equal(ok.projectSlug, 'visioning-deck');
+  });
+
+  it('requires exactly one of --project / --clear; ambiguous prefix errors with matches', () => {
+    seedProject('proj-x');
+    const c1 = makeCommitment({ id: 'deadbeef' + '1'.repeat(56), text: 'One' });
+    const c2 = makeCommitment({ id: 'deadbeef' + '2'.repeat(56), text: 'Two' });
+    writeCommitments(tmpDir, [c1, c2]);
+
+    const neither = runCliRaw(['commitments', 'claim', 'deadbeef', '--json'], { cwd: tmpDir });
+    assert.equal(neither.code, 1);
+    assert.match(JSON.parse(neither.stdout).error, /exactly one of/);
+
+    const ambiguous = runCliRaw(
+      ['commitments', 'claim', 'deadbeef', '--project', 'proj-x', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(ambiguous.code, 1);
+    assert.match(JSON.parse(ambiguous.stdout).error, /Ambiguous prefix/);
+  });
+
+  it('AC5 integration: claiming moves the commitment between sibling project briefs (the a4fdaf7b case)', () => {
+    // Two same-area sibling projects; one area-scoped unclaimed commitment.
+    mkdirSync(join(tmpDir, 'areas'), { recursive: true });
+    writeFileSync(
+      join(tmpDir, 'areas', 'glance-2-mvp.md'),
+      `---\narea: Glance 2 MVP\nstatus: active\nrecurring_meetings: []\n---\n\n# Glance 2 MVP\n\n## Focus\nMVP delivery.\n`,
+      'utf8',
+    );
+    for (const slug of ['runyon', 'roadmap']) {
+      const dir = join(tmpDir, 'projects', 'active', slug);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'README.md'),
+        `---\ntitle: ${slug}\narea: glance-2-mvp\nstatus: active\n---\n\n# ${slug}\n\n## Background\nWork.\n`,
+        'utf8',
+      );
+    }
+    const c = makeCommitment({
+      text: 'Confirm the pre-read package was sent',
+      personSlug: 'lindsay',
+      area: 'glance-2-mvp',
+    });
+    writeCommitments(tmpDir, [c]);
+
+    // Unclaimed: BOTH sibling briefs show it (area-scoped union).
+    for (const slug of ['runyon', 'roadmap']) {
+      const brief = JSON.parse(runCli(['brief', '--project', slug, '--json'], { cwd: tmpDir }));
+      const open = brief.sections.find((s: { heading: string }) =>
+        s.heading.startsWith('Open work'),
+      );
+      assert.ok(open, `${slug} shows Open work while unclaimed`);
+      assert.ok(
+        open.bullets.some((b: string) => b.includes('pre-read package')),
+        `${slug} surfaces the unclaimed commitment`,
+      );
+    }
+
+    // Claim for runyon → roadmap's brief no longer shows it.
+    runCli(['commitments', 'claim', c.id.slice(0, 8), '--project', 'runyon', '--json'], {
+      cwd: tmpDir,
+    });
+
+    const runyonBrief = JSON.parse(
+      runCli(['brief', '--project', 'runyon', '--json'], { cwd: tmpDir }),
+    );
+    const runyonOpen = runyonBrief.sections.find((s: { heading: string }) =>
+      s.heading.startsWith('Open work'),
+    );
+    assert.ok(
+      runyonOpen && runyonOpen.bullets.some((b: string) => b.includes('pre-read package')),
+      'claiming project keeps the commitment',
+    );
+
+    const roadmapBrief = JSON.parse(
+      runCli(['brief', '--project', 'roadmap', '--json'], { cwd: tmpDir }),
+    );
+    const roadmapOpen = roadmapBrief.sections.find((s: { heading: string }) =>
+      s.heading.startsWith('Open work'),
+    );
+    assert.ok(
+      !roadmapOpen ||
+        !roadmapOpen.bullets.some((b: string) => b.includes('pre-read package')),
+      'sibling brief no longer shows the claimed commitment',
+    );
+  });
+});
+
 describe('commitments resolve command', () => {
   let tmpDir: string;
 
