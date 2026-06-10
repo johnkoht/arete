@@ -352,6 +352,43 @@ export function registerMeetingCommands(program: Command): void {
         process.exit(1);
       }
 
+      // -----------------------------------------------------------------
+      // Phase 13 AC2 — propose an area when the meeting lacks one.
+      // PROPOSAL ONLY: process performs ZERO area writes. The
+      // process-meetings skill presents this; on confirm,
+      // `arete meeting set-area` writes BEFORE approve so commitments
+      // inherit. ≥0.7 floor; below floor → proposedArea: null in JSON,
+      // silent in human output.
+      // -----------------------------------------------------------------
+      const { frontmatter: meetingFm, body: meetingBody } = extractFrontmatter(content);
+      let proposedArea:
+        | { slug: string; confidence: number; signal?: string; corroborated: boolean }
+        | null = null;
+      const hasExplicitArea =
+        typeof meetingFm['area'] === 'string' && (meetingFm['area'] as string).trim().length > 0;
+      if (!hasExplicitArea) {
+        try {
+          const areaMatch = await services.areaParser.suggestAreaForMeeting({
+            title:
+              typeof meetingFm['title'] === 'string' && (meetingFm['title'] as string).trim()
+                ? (meetingFm['title'] as string)
+                : meetingPath.replace(/^.*\//, '').replace(/\.md$/, ''),
+            summary: typeof meetingFm['summary'] === 'string' ? (meetingFm['summary'] as string) : undefined,
+            transcript: meetingBody,
+          });
+          if (areaMatch && areaMatch.confidence >= MEETING_BACKFILL_CONFIDENCE_FLOOR) {
+            proposedArea = {
+              slug: areaMatch.areaSlug,
+              confidence: Number(areaMatch.confidence.toFixed(2)),
+              signal: areaMatch.signal,
+              corroborated: Boolean(areaMatch.corroborated),
+            };
+          }
+        } catch {
+          // Inference failure is non-fatal — process continues without a proposal.
+        }
+      }
+
       const attendees = extractAttendeesFromMeeting(content, meetingPath, root);
       if (attendees.length === 0) {
         if (opts.json) {
@@ -447,6 +484,9 @@ export function registerMeetingCommands(program: Command): void {
         digest,
         dryRun,
         applied,
+        // Phase 13 AC2: null when the meeting already has an area, no
+        // confident match exists, or inference failed.
+        proposedArea,
         unknownQueue: unknownQueue.map((u) => ({
           name: u.candidate.name ?? null,
           confidence: u.confidence,
@@ -464,6 +504,11 @@ export function registerMeetingCommands(program: Command): void {
       info(`Candidates: ${attendees.length}`);
       info(`Applied: ${applied.length}`);
       info(`Unknown queue: ${unknownQueue.length}`);
+      if (proposedArea) {
+        info(
+          `Proposed area: ${proposedArea.slug} (confidence ${proposedArea.confidence}) — confirm with \`arete meeting set-area <file> ${proposedArea.slug}\``,
+        );
+      }
       if (unknownQueue.length > 0) {
         warn('Some attendees remain in unknown_queue and require review.');
       }

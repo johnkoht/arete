@@ -341,6 +341,72 @@ Verbatim transcript.
     assert.equal(readFileSync(p, 'utf8'), before, 'meeting untouched');
   });
 
+  it('AC2 integration: process → set-area → approve — created commitments inherit the area', () => {
+    // Staged meeting (extract --stage shape) WITHOUT an area, whose title
+    // matches the recurring meeting of glance-comms.
+    const staged = `---
+title: "Glance Comms Weekly"
+date: "2026-06-09"
+status: processed
+processed_at: "2026-06-09T10:00:00.000Z"
+staged_item_status:
+  ai_001: pending
+staged_item_source:
+  ai_001: ai
+---
+
+# Glance Comms Weekly
+
+## Summary
+Weekly comms sync.
+
+**Attendees**: Mystery Person
+
+## Staged Action Items
+- ai_001: [@john-doe → @anthony] Send the comms rollout doc to Anthony
+
+## Transcript
+John: let's review.
+`;
+    seedMeeting(tmpDir, '2026-06-09-glance-comms-weekly.md', staged);
+
+    // 1. process PROPOSES (no write).
+    const processed = JSON.parse(
+      runCli(
+        ['meeting', 'process', '--file', 'resources/meetings/2026-06-09-glance-comms-weekly.md', '--dry-run', '--skip-qmd', '--json'],
+        { cwd: tmpDir },
+      ),
+    );
+    assert.ok(processed.proposedArea);
+    assert.equal(processed.proposedArea.slug, 'glance-comms');
+
+    // 2. set-area writes on confirm (BEFORE approve).
+    const set = JSON.parse(
+      runCli(
+        ['meeting', 'set-area', '2026-06-09-glance-comms-weekly.md', 'glance-comms', '--json'],
+        { cwd: tmpDir },
+      ),
+    );
+    assert.equal(set.written, true);
+
+    // 3. approve — created commitments inherit frontmatter.area.
+    const approved = JSON.parse(
+      runCli(
+        ['meeting', 'approve', '2026-06-09-glance-comms-weekly', '--all', '--skip-qmd', '--json'],
+        { cwd: tmpDir },
+      ),
+    );
+    assert.equal(approved.success, true);
+
+    const commitmentsRaw = readFileSync(join(tmpDir, '.arete', 'commitments.json'), 'utf8');
+    const commitments = JSON.parse(commitmentsRaw);
+    const list = Array.isArray(commitments) ? commitments : commitments.commitments;
+    assert.ok(list.length >= 1, 'approve created at least one commitment');
+    for (const c of list) {
+      assert.equal(c.area, 'glance-comms', 'commitment inherited the meeting area');
+    }
+  });
+
   it('invalid --set-by and missing meeting are errors with complete JSON', () => {
     seedMeeting(tmpDir, '2026-06-09-v.md', NESTED_MEETING);
     const bad = runCliRaw(
