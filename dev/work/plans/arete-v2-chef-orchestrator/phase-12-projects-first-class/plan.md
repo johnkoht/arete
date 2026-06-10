@@ -4,7 +4,9 @@ slug: phase-12-projects-first-class
 created: "2026-06-05"
 parent: arete-v2-chef-orchestrator
 owner: meta-orchestrator (Claude)
-status: draft
+status: approved
+approved: "2026-06-10"
+has_pre_mortem: true
 ---
 
 # Phase 12 — Projects as first-class citizens
@@ -183,3 +185,35 @@ Cheapest-first, independently shippable slices:
 - **OQ5:** Top-N for the AC5 topics cache — fixed N (e.g. 5) vs confidence-thresholded? Lean: cap at 5, threshold to avoid weak matches polluting the cache.
 - **Parking lot — project↔Jira:** add a `jira:` frontmatter block parallel to the existing `notion:` block (e.g. `jira: { epics: [PLAT-...] }`). No code provider in this repo; pull stays via the arete-reserv MCP. **Backlog — not this phase.**
 - **Parking lot — proactive Scenario-1 ambient loop:** deferred per PM panel; build only after the manual `/project` flow proves (via instrumentation) John wishes it fired unprompted.
+
+---
+
+## Amendment — 2026-06-10 (pre-build: decisions closed, scope cut)
+
+### Decisions (John, 2026-06-10)
+
+- **OQ1 — resolved by workspace restructure, not by code.** John is splitting the mega-projects: `glance-2-mvp` becomes the *area* with child projects (prototype, runyon, vision-deck, roadmap); `glance-comms` likewise (rollout, signature-logic, …). The slug collision dissolves. The parser still *accepts* project-slug==area-slug (costs nothing); no dedupe logic is built. The "siblings share context via the area hub" design (AC4 union) is exactly the shape the restructure produces.
+- **OQ2 — tolerate both schemas.** Confirmed; no migration.
+- **OQ3 — confirmed.** AC9 stays deferred to published-doc-sync work.
+- **OQ5 — default taken:** topics cache cap 5 + confidence floor. Only matters in deferred Slice D; no further discussion needed.
+
+### Scope cut for this build
+
+**Gated slices A+B+C only: AC1, AC2, AC3, AC4, AC6, AC10, AC11 (+ AC12 rollback doc).** Slices D (AC5+AC7 `/update-project` + topics-cache persistence) and E (AC8 close→retro) move to a follow-up phase, gated on (a) dogfooding `/project`, (b) the workspace restructure completing. Since AC5 persistence is out, this build writes **nothing** to project READMEs except via the approval-gated `backfill-area --apply` (which is itself post-merge, operated by John).
+
+### Sequencing (settled)
+
+The restructure does **not** pause the build — Slice B is CLI code; only *applying* backfill to the live workspace is gated on the restructure. Post-merge operational order:
+1. Verify AC11 against the live workspace (read-only brief runs).
+2. John extracts child projects using the now-area-aware creation flow (each stamped `area:` at creation — no backfill needed for them).
+3. Rerun the project audit against the new project set.
+4. `arete project backfill-area` preview (MC3 table) → John reviews → `--apply` confident matches only.
+
+### New inputs since draft (2026-06-05 → 2026-06-10)
+
+- **Wiki rescue W4 applied 2026-06-10**: wiki is now 215 active pages / 34 archived; **23 "project-fed" topics were kept specifically as landing pads for this phase** — use them as AC4 re-rank validation material.
+- **Premise re-verified 2026-06-10 post-wiki-repair merge**: line refs shifted (`readProjectBySlug` ~`:927`, `listActiveProjects` ~`:897`, `if (project.area)` guards `:1007`/`:1030`/`:1056`) but the bug is live — `area` still read only from `fm.area`, nothing writes it.
+
+### Execution mode
+
+Prime orchestrator (main session) + suborchestrator running `/ship` in a dedicated worktree. Suborchestrator keeps `build-diary.md` in this plan dir (committed per-task). Merge gate executed by the prime orchestrator after a green wrap; merge authority delegated by John 2026-06-10 ("approve and /ship autonomously") contingent on all gates green incl. AC11.
