@@ -662,3 +662,99 @@ POP is the first program to migrate.
     );
   });
 });
+
+describe('AC6 — visible message when area unresolved (Phase 12)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-project-ac6-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('area-less project: metadata.areaNote set, message rendered, no empty area sections', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/no-area-project/README.md',
+      `---
+title: No Area Project
+status: active
+---
+
+# No Area Project
+
+## Background
+A project with no area signal at all.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('no-area-project', paths);
+
+    assert.equal(brief.metadata.area, undefined);
+    assert.ok(brief.metadata.areaNote, 'areaNote must be set');
+    assert.ok(/No area resolved/.test(brief.metadata.areaNote!));
+    assert.ok(/arete project backfill-area/.test(brief.metadata.areaNote!));
+
+    const headings = brief.sections.map((s) => s.heading);
+    assert.ok(!headings.some((h) => h.startsWith('Recent activity')), 'no empty Recent activity');
+    assert.ok(!headings.some((h) => h.startsWith('Open work')), 'no empty Open work');
+    assert.ok(!headings.some((h) => h.startsWith('Decisions & learnings')), 'no empty Decisions');
+
+    const { formatProjectBriefMarkdown } = await import('../../src/services/brief-formatters.js');
+    const md = formatProjectBriefMarkdown(brief);
+    assert.ok(/_No area resolved \(no `area:` frontmatter or `\*\*Area\*\*:` link found\)/.test(md));
+  });
+
+  it('resolved area: no areaNote, no message line', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/with-area/README.md',
+      `---
+title: With Area
+area: glance-2-mvp
+status: active
+---
+
+# With Area
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('with-area', paths);
+    assert.equal(brief.metadata.area, 'glance-2-mvp');
+    assert.equal(brief.metadata.areaNote, undefined);
+
+    const { formatProjectBriefMarkdown } = await import('../../src/services/brief-formatters.js');
+    assert.ok(!/No area resolved/.test(formatProjectBriefMarkdown(brief)));
+  });
+
+  it('R9 divergence: metadata.areaWarning set and rendered', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/divergent/README.md',
+      `---
+title: Divergent
+area: glance-2-mvp
+status: active
+---
+
+# Divergent
+
+**Area**: [Other](../../../areas/other-area.md)
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('divergent', paths);
+    assert.equal(brief.metadata.area, 'glance-2-mvp');
+    assert.ok(brief.metadata.areaWarning && /disagree/.test(brief.metadata.areaWarning));
+
+    const { formatProjectBriefMarkdown } = await import('../../src/services/brief-formatters.js');
+    assert.ok(/⚠️.*disagree/.test(formatProjectBriefMarkdown(brief)));
+  });
+});

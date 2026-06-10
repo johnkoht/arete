@@ -128,8 +128,21 @@ export type ProjectBrief = BriefBase & {
   mode: 'project';
   metadata: {
     area?: string;
+    /** Provenance for `area` — `manual` | `creation` | `backfill` (Phase 12). */
+    areaSetBy?: string;
     status?: string;
     started?: string;
+    /**
+     * Phase 12 AC6 — visible one-line message when area could not be
+     * resolved (no `area:` frontmatter, no `**Area**:` prose line).
+     * Rendered as an italic line by formatProjectBriefMarkdown.
+     */
+    areaNote?: string;
+    /**
+     * Phase 12 R9 — one-line warning when frontmatter and prose area
+     * signals disagree (frontmatter wins). Rendered like areaNote.
+     */
+    areaWarning?: string;
   };
 };
 

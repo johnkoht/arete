@@ -811,9 +811,20 @@ export async function assembleBriefForProject(slug, paths, deps) {
     const sources = [relativeToRoot(project.readmePath, paths.root)];
     const metadata = {
         area: project.area,
+        areaSetBy: project.areaSetBy,
         status: project.status,
         started: project.started,
     };
+    // AC6 (Phase 12): area-resolution failure must be visible, not silent.
+    if (!project.area) {
+        metadata.areaNote =
+            'No area resolved (no `area:` frontmatter or `**Area**:` link found) — ' +
+                'meeting/commitment/topic context unavailable. Run `arete project backfill-area` or add an area.';
+    }
+    // R9 (Phase 12): surface frontmatter/prose divergence as one visible line.
+    if (project.areaDivergence) {
+        metadata.areaWarning = project.areaDivergence;
+    }
     const sections = [];
     // 1. Project context — README Background + latest Status Updates excerpt
     const parsed = parseFrontmatter(project.readmeContent);
