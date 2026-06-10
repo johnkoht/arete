@@ -33,6 +33,20 @@ export {
 } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
+// Phase 13 AC2/AC3 — meeting area write surface (set-area + backfill)
+export {
+  listMeetingsForBackfill,
+  qualifyMeetingAreaMatch,
+  applyAreaToMeeting,
+  resetBackfilledMeetingAreas,
+} from './meeting-area.js';
+export type {
+  MeetingBackfillCandidate,
+  MeetingAreaQualification,
+  ApplyAreaResult,
+} from './meeting-area.js';
+// Phase 13 AC4 — archive-prefix-tolerant project lookup (claim validation reuse)
+export { resolveArchivedProjectReadme } from './brief-assemblers.js';
 export {
   assembleAgendaScaffold,
   renderScaffoldMarkdown,
