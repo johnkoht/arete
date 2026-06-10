@@ -12,6 +12,7 @@ export { resolveProjectArea } from './brief-assemblers.js';
 export type { ProjectAreaResolution } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
+export type { ProjectWhatsNew } from './brief-assemblers.js';
 export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, } from './agenda-scaffold.js';
 export type { AgendaScaffold, ScaffoldSection, ScaffoldCandidate, AttendeeScaffoldInput, TemplateInput, AssembleScaffoldOptions, } from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';

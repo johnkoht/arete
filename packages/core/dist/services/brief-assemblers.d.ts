@@ -229,6 +229,36 @@ export declare function unionProjectCommitments(open: Commitment[], slug: string
 export declare function parseSiblingSlugs(body: string, selfSlug: string): string[];
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
+/** Delta of workspace activity since the project README was last modified. */
+export interface ProjectWhatsNew {
+    /** README mtime as ISO timestamp. Absent when sinceUnknown. */
+    since?: string;
+    /** True when the README mtime could not be determined. */
+    sinceUnknown?: boolean;
+    meetings: Array<{
+        title: string;
+        date: string;
+        path: string;
+    }>;
+    topics: Array<{
+        slug: string;
+        lastRefreshed: string;
+    }>;
+    commitments: Array<{
+        id: string;
+        text: string;
+        date: string;
+    }>;
+}
+/**
+ * Compute "what's new since the README was last touched" (Phase 12 AC3):
+ * area meetings dated after the README mtime, wiki topics in the project's
+ * area with a fresher `last_refreshed`, and newly-opened commitments in the
+ * project-grained scope (AC4 union). PURE READ — performs no writes, no LLM.
+ * Date comparison is done on YYYY-MM-DD strings (timezone-safe, see
+ * services/LEARNINGS.md).
+ */
+export declare function assembleProjectWhatsNew(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectWhatsNew | null>;
 export interface AreaTaggedItem {
     type: 'decision' | 'learning';
     text: string;

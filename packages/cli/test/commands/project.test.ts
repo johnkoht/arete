@@ -9,7 +9,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { runCli, runCliRaw, createTmpDir, cleanupTmpDir } from '../helpers.js';
 
 function seedArea(root: string, slug: string, name: string): void {
@@ -213,5 +213,125 @@ status: active
     } finally {
       cleanupTmpDir(bare);
     }
+  });
+});
+
+describe('arete project open (Phase 12 AC3 — read-only)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-project-open');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  function snapshotTree(root: string): Map<string, string> {
+    const out = new Map<string, string>();
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        const st = statSync(full);
+        if (st.isDirectory()) walk(full);
+        else out.set(full, readFileSync(full, 'utf8'));
+      }
+    };
+    walk(root);
+    return out;
+  }
+
+  it('opens by exact slug: brief + whatsNew in JSON; workspace byte-identical', () => {
+    seedProject(
+      tmpDir,
+      'glance-2-mvp',
+      `---
+title: Glance 2 MVP
+area: glance-2-mvp
+status: active
+---
+
+# Glance 2 MVP
+
+## Background
+POP migration.
+`,
+    );
+    const before = snapshotTree(tmpDir);
+
+    const out = JSON.parse(runCli(['project', 'open', 'glance-2-mvp', '--json'], { cwd: tmpDir }));
+    assert.equal(out.success, true);
+    assert.equal(out.subjectSlug, 'glance-2-mvp');
+    assert.equal(out.metadata.area, 'glance-2-mvp');
+    assert.ok(out.whatsNew, 'whatsNew block present');
+    assert.ok(Array.isArray(out.whatsNew.meetings));
+
+    const after = snapshotTree(tmpDir);
+    assert.equal(after.size, before.size, 'no files created or deleted');
+    for (const [path, content] of before) {
+      assert.equal(after.get(path), content, `file changed: ${path}`);
+    }
+  });
+
+  it('tie → top-N disambiguation, never auto-loads', () => {
+    seedProject(
+      tmpDir,
+      'status-letter-automation',
+      `---
+title: Status Letter Automation
+status: active
+---
+
+# Status Letter Automation
+`,
+    );
+    seedProject(
+      tmpDir,
+      'status-letter-research',
+      `---
+title: Status Letter Research
+status: active
+---
+
+# Status Letter Research
+`,
+    );
+
+    const out = JSON.parse(runCli(['project', 'open', 'status letter', '--json'], { cwd: tmpDir }));
+    assert.equal(out.disambiguation, true);
+    const slugs = out.candidates.map((c: { slug: string }) => c.slug);
+    assert.ok(slugs.includes('status-letter-automation'));
+    assert.ok(slugs.includes('status-letter-research'));
+  });
+
+  it('archived project → read-only note, no brief', () => {
+    const dir = join(tmpDir, 'projects', 'archive', 'old-initiative');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'README.md'),
+      `---
+title: Old Initiative
+status: archived
+---
+
+# Old Initiative
+`,
+      'utf8',
+    );
+
+    const out = JSON.parse(runCli(['project', 'open', 'old-initiative', '--json'], { cwd: tmpDir }));
+    assert.equal(out.archived, true);
+    assert.equal(out.slug, 'old-initiative');
+    assert.equal(out.sections, undefined, 'no brief sections for archived');
+  });
+
+  it('no match → --json error with exit 1', () => {
+    const { stdout, code } = runCliRaw(['project', 'open', 'zzz-nonexistent-zzz', '--json'], {
+      cwd: tmpDir,
+    });
+    assert.equal(code, 1);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.success, false);
   });
 });

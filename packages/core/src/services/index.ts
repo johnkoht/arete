@@ -32,6 +32,7 @@ export {
   resetBackfilledProjectAreas,
 } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
+export type { ProjectWhatsNew } from './brief-assemblers.js';
 export {
   assembleAgendaScaffold,
   renderScaffoldMarkdown,

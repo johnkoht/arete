@@ -1058,6 +1058,64 @@ export async function assembleBriefForProject(slug, paths, deps) {
     };
 }
 /**
+ * Compute "what's new since the README was last touched" (Phase 12 AC3):
+ * area meetings dated after the README mtime, wiki topics in the project's
+ * area with a fresher `last_refreshed`, and newly-opened commitments in the
+ * project-grained scope (AC4 union). PURE READ — performs no writes, no LLM.
+ * Date comparison is done on YYYY-MM-DD strings (timezone-safe, see
+ * services/LEARNINGS.md).
+ */
+export async function assembleProjectWhatsNew(slug, paths, deps) {
+    const project = await readProjectBySlug(deps.storage, paths, slug);
+    if (!project)
+        return null;
+    const mtime = await deps.storage.getModified(project.readmePath);
+    if (!mtime) {
+        return { sinceUnknown: true, meetings: [], topics: [], commitments: [] };
+    }
+    const sinceIso = mtime.toISOString();
+    const sinceDay = sinceIso.slice(0, 10);
+    // Meetings in the project's area, dated after the README was touched.
+    const meetings = [];
+    if (project.area) {
+        const index = await loadMeetingIndex(deps.storage, paths);
+        for (const m of meetingsForArea(index, project.area)) {
+            if (m.date > sinceDay) {
+                meetings.push({ title: m.title, date: m.date, path: relativeToRoot(m.path, paths.root) });
+            }
+        }
+    }
+    // Wiki topics in the project's area refreshed after the README mtime.
+    const topics = [];
+    if (project.area) {
+        try {
+            const { topics: pages } = await deps.topicMemory.listAll(paths);
+            for (const page of pages) {
+                if (page.frontmatter.area !== project.area)
+                    continue;
+                const refreshed = page.frontmatter.last_refreshed ?? '';
+                if (refreshed > sinceDay) {
+                    topics.push({ slug: page.frontmatter.topic_slug, lastRefreshed: refreshed });
+                }
+            }
+        }
+        catch {
+            // best-effort — wiki absence must not break the open flow
+        }
+    }
+    // Newly-opened commitments in the project-grained scope (AC4 union).
+    const open = await deps.commitments.listOpen();
+    const scoped = unionProjectCommitments(open, slug, project.area);
+    const commitments = [];
+    for (const c of scoped) {
+        const created = c.createdAt ?? '';
+        const isNew = created ? created > sinceIso : c.date > sinceDay;
+        if (isNew)
+            commitments.push({ id: c.id, text: c.text, date: c.date });
+    }
+    return { since: sinceIso, meetings, topics, commitments };
+}
+/**
  * Parse memory-item entries in BOTH live and legacy formats (W6, review
  * concern 3 respec):
  *

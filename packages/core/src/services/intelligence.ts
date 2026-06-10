@@ -39,6 +39,8 @@ import type {
 import {
   assembleBriefForPerson as assemblePersonImpl,
   assembleBriefForProject as assembleProjectImpl,
+  assembleProjectWhatsNew as assembleProjectWhatsNewImpl,
+  type ProjectWhatsNew,
   assembleBriefForArea as assembleAreaImpl,
   assembleBriefForMeeting as assembleMeetingImpl,
   type MeetingBriefOptions,
@@ -439,6 +441,24 @@ export class IntelligenceService {
   ): Promise<ProjectBrief> {
     const deps = this.requireBriefDeps();
     return assembleProjectImpl(slug, paths, {
+      storage: deps.storage,
+      commitments: deps.commitments,
+      topicMemory: deps.topicMemory,
+      areaMemory: deps.areaMemory,
+      entities: this.entities,
+    });
+  }
+
+  /**
+   * "What's new since the README was last touched" for a project —
+   * Phase 12 AC3 (read-only open flow). Pure read; no LLM, no writes.
+   */
+  async assembleProjectWhatsNew(
+    slug: string,
+    paths: WorkspacePaths,
+  ): Promise<ProjectWhatsNew | null> {
+    const deps = this.requireBriefDeps();
+    return assembleProjectWhatsNewImpl(slug, paths, {
       storage: deps.storage,
       commitments: deps.commitments,
       topicMemory: deps.topicMemory,

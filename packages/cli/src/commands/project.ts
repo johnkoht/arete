@@ -23,12 +23,20 @@ import {
   listProjectsForBackfill,
   applyAreaToProjectReadme,
   resetBackfilledProjectAreas,
+  formatProjectBriefMarkdown,
 } from '@arete/core';
 import { error, info, success, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 
 /** Confidence floor for area inference (pre-mortem R3 — non-negotiable). */
 const BACKFILL_CONFIDENCE_FLOOR = 0.7;
+
+/**
+ * Tie window for open-flow disambiguation (pre-mortem R5): when a
+ * runner-up scores within this fraction of the top candidate, show
+ * top-N candidates instead of auto-loading. Never auto-load a tie.
+ */
+const DISAMBIGUATION_SCORE_RATIO = 0.8;
 
 export function registerProjectCommand(program: Command): void {
   const projectCmd = program
@@ -181,4 +189,140 @@ export function registerProjectCommand(program: Command): void {
         }
       },
     );
+  // ---------------------------------------------------------------------
+  // arete project open <name>  (Phase 12 AC3 — READ-ONLY)
+  // ---------------------------------------------------------------------
+
+  projectCmd
+    .command('open <name>')
+    .description(
+      'READ-ONLY: resolve a project by name, print its brief + what changed since the README was last touched. Never writes.',
+    )
+    .option('--json', 'Output as JSON')
+    .action(async (name: string, opts: { json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+      const paths = services.workspace.getPaths(root);
+
+      const candidates = await services.entity.resolveAll(name, 'project', paths, 5);
+      if (candidates.length === 0) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: `No project matched '${name}'` }));
+        } else {
+          error(`No project matched '${name}'`);
+        }
+        process.exit(1);
+      }
+
+      // R5: never auto-load a tie. An exact slug match short-circuits;
+      // otherwise a runner-up within the score window triggers top-N.
+      const exact = candidates.find((c) => c.slug === name);
+      const top = exact ?? candidates[0];
+      const runnerUp = candidates.find((c) => c.slug !== top.slug);
+      const isTie =
+        !exact &&
+        runnerUp !== undefined &&
+        runnerUp.score >= top.score * DISAMBIGUATION_SCORE_RATIO;
+
+      if (isTie) {
+        const list = candidates.map((c) => ({
+          slug: c.slug ?? '',
+
+          name: c.name,
+          score: c.score,
+          status: (c.metadata?.status as string) ?? 'active',
+        }));
+        if (opts.json) {
+          console.log(
+            JSON.stringify({ success: true, disambiguation: true, candidates: list }, null, 2),
+          );
+        } else {
+          info(`'${name}' is ambiguous — which project did you mean?`);
+          for (const c of list) {
+            console.log(
+              `  ${chalk.cyan(c.slug.padEnd(36))} ${chalk.dim(`score ${c.score}`)}${c.status === 'archived' ? chalk.yellow('  [archived]') : ''}`,
+            );
+          }
+          info('Re-run with the exact slug: arete project open <slug>');
+        }
+        return;
+      }
+
+      // Archived projects live outside projects/active/ — emit a read-only
+      // note instead of an empty brief (review concern #4).
+      if ((top.metadata?.status as string) === 'archived') {
+        if (opts.json) {
+          console.log(
+            JSON.stringify({ success: true, slug: top.slug, archived: true, path: top.path }),
+          );
+        } else {
+          info(`Project \`${top.slug}\` is archived — context is read-only at ${top.path}.`);
+        }
+        return;
+      }
+
+      const topSlug = top.slug ?? name;
+      const brief = await services.intelligence.assembleBriefForProject(topSlug, paths);
+      const whatsNew = await services.intelligence.assembleProjectWhatsNew(topSlug, paths);
+
+      if (opts.json) {
+        const { metadata, sections, sources, subject, subjectSlug, mode, truncated } = brief;
+        console.log(
+          JSON.stringify(
+            {
+              success: true,
+              mode,
+              subject,
+              subjectSlug,
+              metadata,
+              sections,
+              sources,
+              truncated,
+              whatsNew,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      console.log(formatProjectBriefMarkdown(brief));
+      console.log("## What's new since last touched");
+      console.log('');
+      if (!whatsNew || whatsNew.sinceUnknown) {
+        info('README modification time unavailable — skipping delta.');
+        return;
+      }
+      console.log(chalk.dim(`README last touched: ${whatsNew.since}`));
+      console.log('');
+      if (
+        whatsNew.meetings.length === 0 &&
+        whatsNew.topics.length === 0 &&
+        whatsNew.commitments.length === 0
+      ) {
+        info('Nothing new since the README was last touched.');
+        return;
+      }
+      if (whatsNew.meetings.length > 0) {
+        console.log(chalk.bold(`Meetings (${whatsNew.meetings.length}):`));
+        for (const m of whatsNew.meetings) console.log(`  - ${m.title} (${m.date})`);
+      }
+      if (whatsNew.topics.length > 0) {
+        console.log(chalk.bold(`Wiki topics refreshed (${whatsNew.topics.length}):`));
+        for (const t of whatsNew.topics) console.log(`  - ${t.slug} (${t.lastRefreshed})`);
+      }
+      if (whatsNew.commitments.length > 0) {
+        console.log(chalk.bold(`Newly-opened commitments (${whatsNew.commitments.length}):`));
+        for (const c of whatsNew.commitments) console.log(`  - ${c.text} (${c.date})`);
+      }
+    });
 }
