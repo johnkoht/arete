@@ -350,11 +350,15 @@ export class AreaParserService {
                         areaSlug: area.slug,
                         matchType: 'recurring',
                         confidence: EXACT_TITLE_MATCH_CONFIDENCE,
+                        signal: 'recurring-title',
                     });
                     break; // Only one match per area for this method
                 }
             }
-            // 2. Area name match (confidence 0.8)
+            // 2. Area name match (confidence 0.8). Signal records WHERE the
+            // substring hit (title vs summary-only) — a summary-only mention is
+            // structurally tangential and meeting backfill refuses it
+            // (Phase 13 pre-mortem D1).
             const areaNameLower = area.name.toLowerCase();
             const titleLower = normalizedTitle.toLowerCase();
             const summaryLower = (summary ?? '').toLowerCase();
@@ -363,6 +367,7 @@ export class AreaParserService {
                     areaSlug: area.slug,
                     matchType: 'inferred',
                     confidence: AREA_NAME_MATCH_CONFIDENCE,
+                    signal: titleLower.includes(areaNameLower) ? 'area-name-title' : 'area-name-summary',
                 });
             }
             // 3. Keyword overlap with focus (confidence 0.5-0.7)
@@ -382,6 +387,7 @@ export class AreaParserService {
                                 areaSlug: area.slug,
                                 matchType: 'inferred',
                                 confidence,
+                                signal: 'keyword',
                             });
                         }
                     }
@@ -399,7 +405,9 @@ export class AreaParserService {
         if (best.confidence < SUGGESTION_THRESHOLD) {
             return null;
         }
-        return best;
+        // D1: corroborated when a second DISTINCT signal matched the same area.
+        const corroborated = matches.some((m) => m.areaSlug === best.areaSlug && m.signal !== best.signal);
+        return { ...best, corroborated };
     }
 }
 //# sourceMappingURL=area-parser.js.map
