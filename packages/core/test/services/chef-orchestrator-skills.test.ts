@@ -1221,3 +1221,40 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 12 — /project skill prose (NOT a chef skill; separate envelope).
+// Load-bearing rules: read-only open, no LLM in the data path, never
+// auto-load a disambiguation tie.
+// ---------------------------------------------------------------------------
+
+describe('/project skill prose (Phase 12 AC3)', () => {
+  const skillPath = join(SKILLS_DIR, 'project', 'SKILL.md');
+
+  it('exists', () => {
+    assert.ok(existsSync(skillPath), `missing ${skillPath}`);
+  });
+
+  it('carries the read-only rule (open never writes the README)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /READ-ONLY/);
+    assert.match(prose, /NEVER writes to the project README/i);
+    assert.match(prose, /Never write to the project README on open/i);
+  });
+
+  it('carries the no-LLM-in-data-path note', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /No LLM in the data path/i);
+  });
+
+  it('carries the disambiguation rule (never auto-pick a tie)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /Never auto-pick/i);
+    assert.match(prose, /disambiguation/i);
+  });
+
+  it('routes through the CLI data path', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /arete project open/);
+  });
+});

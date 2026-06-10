@@ -10,6 +10,9 @@ export { formatPersonBriefMarkdown, formatProjectBriefMarkdown, formatAreaBriefM
 // Phase 9 follow-up — discussion-topics / next-focus extractors (qualitative
 // person-file signal the typed brief does not surface) + agenda scaffold.
 export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.js';
+// Phase 12 AC1/AC2 — project area resolution + backfill helpers
+export { resolveProjectArea } from './brief-assemblers.js';
+export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, } from './project-area.js';
 export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, } from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';

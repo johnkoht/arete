@@ -73,6 +73,17 @@
   - `--skip-qmd` - Skip qmd index refresh
   - `--json` - Output as JSON
 
+## Projects
+
+- `arete project open <name>` - READ-ONLY: resolve a project by name and print its brief (background, recent area meetings, open commitments, decisions, related wiki topics, siblings) + what changed since the README was last touched. Ambiguous names return top-N candidates — never auto-loads a tie.
+  - `--json` - Output as JSON
+- `arete project backfill-area` - Propose an `area:` for active projects missing one (inferred from README title + Background/Key Questions at ≥0.7 confidence). Default is preview (dry-run)
+  - `--apply` - Write `area:` + `area_set_by: backfill` to project READMEs
+  - `--reset` - Clear ONLY backfill-stamped areas (creation/manual untouched)
+  - `--skip-qmd` - Skip automatic qmd index update after --apply
+  - `--json` - Output as JSON
+- `arete brief --project <slug>` - Project brief (also reachable via `arete project open`)
+
 ## Meetings
 
 - `arete meeting add` - Add a meeting from JSON file or stdin

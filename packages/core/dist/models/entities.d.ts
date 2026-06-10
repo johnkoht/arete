@@ -40,6 +40,15 @@ export type Project = {
     status?: 'active' | 'completed' | 'archived';
     created?: string;
     updated?: string;
+    /**
+     * Area this project belongs to (Phase 12 AC1). Derived at read time in
+     * priority order: frontmatter `area:` → `areas:[0]` → prose `**Area**:`
+     * line → unresolved. Stored only via creation-time proposal or
+     * `arete project backfill-area --apply`.
+     */
+    area?: string;
+    /** Provenance for `area` — `manual` | `creation` | `backfill` (Phase 12 AC2). */
+    areaSetBy?: string;
 };
 /** Goal status for tracking progress */
 export type GoalStatus = 'active' | 'complete' | 'deferred';

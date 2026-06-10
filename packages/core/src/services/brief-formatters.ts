@@ -95,6 +95,9 @@ export function formatProjectBriefMarkdown(brief: ProjectBrief): string {
     meta.started ? `**Started:** ${meta.started}` : null,
   ].filter((s): s is string => s !== null);
   if (metaBits.length > 0) headerLines.push(metaBits.join(' · '), '');
+  // Phase 12 AC6 / R9 — visible one-liners for unresolved or divergent area.
+  if (meta.areaNote) headerLines.push(`_${meta.areaNote}_`, '');
+  if (meta.areaWarning) headerLines.push(`_⚠️ ${meta.areaWarning}_`, '');
   parts.push(headerLines.join('\n'));
 
   for (const section of brief.sections) parts.push(renderSection(section));

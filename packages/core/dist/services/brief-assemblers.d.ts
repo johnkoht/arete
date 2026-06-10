@@ -18,7 +18,7 @@ import type { EntityService } from './entity.js';
 import type { TopicMemoryService } from './topic-memory.js';
 import type { AreaParserService } from './area-parser.js';
 import type { AreaMemoryService } from './area-memory.js';
-import type { WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief, BriefSection } from '../models/index.js';
+import type { WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief, BriefSection, Commitment } from '../models/index.js';
 /** Global per-brief soft cap (characters). Matches old BRIEF_MAX_CONTEXT_CHARS. */
 export declare const BRIEF_GLOBAL_CAP_CHARS = 12000;
 /** Per-section caps (chars). v2 MC1 — mini-brief truncation drops tail. */
@@ -184,8 +184,86 @@ export interface ProjectBriefDeps {
     areaMemory: AreaMemoryService;
     entities: EntityService;
 }
+/** Result of project-area resolution (Phase 12 AC1). */
+export interface ProjectAreaResolution {
+    area?: string;
+    areaSetBy?: string;
+    /** Which signal resolved the area. Absent when unresolved. */
+    source?: 'frontmatter' | 'prose';
+    /** R9: non-empty when frontmatter and prose disagree (frontmatter wins). */
+    divergence?: string;
+}
+/**
+ * Resolve a project's area from its README (Phase 12 AC1).
+ *
+ * Priority order (first hit wins):
+ *  1. `fm.area` (covers both the older `{title,status,...}` and newer
+ *     `{project,type,area}` schemas)
+ *  2. `fm.areas` — future plural form, first entry tolerated (pre-mortem R4;
+ *     plural support is NOT promoted here)
+ *  3. Prose `**Area**:` line in the body (permissive — see PROSE_AREA_LINE)
+ *  4. Unresolved
+ *
+ * R9: when frontmatter AND prose both resolve and disagree, frontmatter wins
+ * and `divergence` carries a one-line warning for the brief to surface.
+ */
+export declare function resolveProjectArea(fm: Record<string, unknown>, body: string): ProjectAreaResolution;
+/**
+ * Project display name from README frontmatter — `name:` → `title:` →
+ * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
+ */
+export declare function projectDisplayName(fm: Record<string, unknown>, slug: string): string;
+/**
+ * Build the wiki re-rank query for a project brief (Phase 12 AC4):
+ * name + area strengthened with the first lines of `## Key Questions`
+ * and `## Background`. Pure; exported for tests.
+ */
+export declare function buildProjectWikiQuery(name: string, area: string | undefined, body: string): string;
+/**
+ * Project-grained commitment scope (Phase 12 AC4): commitments explicitly
+ * claimed by this project (`projectSlug`) first, unioned with area-scoped
+ * commitments not yet claimed by ANY project (a sibling's claim excludes
+ * them). Deduped by id, projectSlug-claimed first. Pure; exported for tests.
+ */
+export declare function unionProjectCommitments(open: Commitment[], slug: string, area: string | undefined): Commitment[];
+/**
+ * Sibling-project slugs referenced from a README body via relative links
+ * (`](../<slug>/...`), excluding self. Pure; exported for tests.
+ * Phase 12 AC4.
+ */
+export declare function parseSiblingSlugs(body: string, selfSlug: string): string[];
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
+/** Delta of workspace activity since the project README was last modified. */
+export interface ProjectWhatsNew {
+    /** README mtime as ISO timestamp. Absent when sinceUnknown. */
+    since?: string;
+    /** True when the README mtime could not be determined. */
+    sinceUnknown?: boolean;
+    meetings: Array<{
+        title: string;
+        date: string;
+        path: string;
+    }>;
+    topics: Array<{
+        slug: string;
+        lastRefreshed: string;
+    }>;
+    commitments: Array<{
+        id: string;
+        text: string;
+        date: string;
+    }>;
+}
+/**
+ * Compute "what's new since the README was last touched" (Phase 12 AC3):
+ * area meetings dated after the README mtime, wiki topics in the project's
+ * area with a fresher `last_refreshed`, and newly-opened commitments in the
+ * project-grained scope (AC4 union). PURE READ — performs no writes, no LLM.
+ * Date comparison is done on YYYY-MM-DD strings (timezone-safe, see
+ * services/LEARNINGS.md).
+ */
+export declare function assembleProjectWhatsNew(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectWhatsNew | null>;
 export interface AreaTaggedItem {
     type: 'decision' | 'learning';
     text: string;

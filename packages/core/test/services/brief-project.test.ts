@@ -26,6 +26,10 @@ import { AreaMemoryService } from '../../src/services/area-memory.js';
 import { AreaParserService } from '../../src/services/area-parser.js';
 import {
   meetingsForArea,
+  resolveProjectArea,
+  buildProjectWikiQuery,
+  unionProjectCommitments,
+  parseSiblingSlugs,
   type MeetingIndexEntry,
 } from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
@@ -470,5 +474,495 @@ describe('meetingsForArea (W6.2 topics-union)', () => {
   it('does not substring-match topic slugs', () => {
     const index = [entry({ title: 'near-miss', topics: ['glance-communications-v2'] })];
     assert.equal(meetingsForArea(index, 'glance-communications').length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 12 AC1 — project area resolution (priority order + prose variants)
+// ---------------------------------------------------------------------------
+
+describe('resolveProjectArea (Phase 12 AC1)', () => {
+  it('resolves from fm.area (frontmatter wins tier)', () => {
+    const res = resolveProjectArea({ area: 'glance-2-mvp' }, 'body');
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'frontmatter');
+    assert.equal(res.divergence, undefined);
+  });
+
+  it('treats empty-string fm.area as absent', () => {
+    const res = resolveProjectArea({ area: '   ' }, 'no signal');
+    assert.equal(res.area, undefined);
+    assert.equal(res.source, undefined);
+  });
+
+  it('tolerates a future areas: plural list — first entry (R4)', () => {
+    const res = resolveProjectArea({ areas: ['comms', 'claims'] }, '');
+    assert.equal(res.area, 'comms');
+    assert.equal(res.source, 'frontmatter');
+  });
+
+  it('reads area_set_by provenance', () => {
+    const res = resolveProjectArea({ area: 'x', area_set_by: 'backfill' }, '');
+    assert.equal(res.areaSetBy, 'backfill');
+  });
+
+  it('resolves prose **Area**: markdown link (live glance-2-mvp shape)', () => {
+    const body = 'Intro\n\n**Area**: [Glance 2.0 MVP](../../../areas/glance-2-mvp.md)\n';
+    const res = resolveProjectArea({}, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'prose');
+  });
+
+  it('resolves prose link at a different relative depth', () => {
+    const body = '**Area**: [Comms](../../areas/glance-communications.md)';
+    assert.equal(resolveProjectArea({}, body).area, 'glance-communications');
+  });
+
+  it('resolves **Area:** colon-inside-bold variant', () => {
+    const body = '**Area:** [Glance](../../../areas/glance-2-mvp.md)';
+    assert.equal(resolveProjectArea({}, body).area, 'glance-2-mvp');
+  });
+
+  it('resolves unbolded Area: variant', () => {
+    const body = 'Area: [Glance](../../../areas/glance-2-mvp.md)';
+    assert.equal(resolveProjectArea({}, body).area, 'glance-2-mvp');
+  });
+
+  it('resolves plain-text slug-shaped value', () => {
+    const body = '**Area**: glance-2-mvp';
+    const res = resolveProjectArea({}, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'prose');
+  });
+
+  it('does NOT guess from a non-slug display name (R3: wrong area worse than none)', () => {
+    const body = '**Area**: Glance 2.0 MVP Launch';
+    const res = resolveProjectArea({}, body);
+    assert.equal(res.area, undefined);
+  });
+
+  it('unresolved when neither signal present', () => {
+    const res = resolveProjectArea({ title: 'X' }, '# X\n\nNo area anywhere.');
+    assert.equal(res.area, undefined);
+    assert.equal(res.source, undefined);
+  });
+
+  it('frontmatter wins over agreeing prose with no divergence', () => {
+    const body = '**Area**: [G](../../../areas/glance-2-mvp.md)';
+    const res = resolveProjectArea({ area: 'glance-2-mvp' }, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'frontmatter');
+    assert.equal(res.divergence, undefined);
+  });
+
+  it('R9: frontmatter wins over disagreeing prose and surfaces divergence', () => {
+    const body = '**Area**: [Other](../../../areas/other-area.md)';
+    const res = resolveProjectArea({ area: 'glance-2-mvp' }, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.ok(res.divergence && /other-area/.test(res.divergence));
+    assert.ok(/glance-2-mvp/.test(res.divergence!));
+  });
+});
+
+describe('assembleBriefForProject with prose-only area (Phase 12 AC1 integration)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-project-ac1-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('populates area-gated sections from a prose **Area**: line alone', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/glance-2-mvp/README.md',
+      `---
+title: Glance 2.0 MVP — POP Launch
+status: active
+started: 2026-04-14
+notion:
+  roadmap:
+    url: "https://example.com"
+---
+
+# Project: Glance 2.0 MVP — POP Launch
+
+**Area**: [Glance 2.0 MVP](../../../areas/glance-2-mvp.md)
+
+## Background
+Migrate POP to Glance 2.
+
+## Status Updates
+2026-05-15: Story mapping complete.
+`,
+    );
+
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-05-15-pop-sync.md',
+      `---
+title: POP sync
+date: 2026-05-15
+attendee_ids:
+  - john
+area: glance-2-mvp
+---
+
+## Summary
+POP migration sync.
+`,
+    );
+
+    writeFile(
+      tmpDir,
+      '.arete/commitments.json',
+      JSON.stringify({
+        commitments: [
+          {
+            id: 'ccc33333ccc33333ccc33333ccc33333ccc33333ccc33333ccc33333ccc33333',
+            text: 'Draft POP migration plan',
+            direction: 'i_owe_them',
+            personSlug: 'lindsay-gray',
+            personName: 'Lindsay',
+            source: '2026-05-15-pop-sync.md',
+            date: '2026-05-15',
+            status: 'open',
+            resolvedAt: null,
+            area: 'glance-2-mvp',
+          },
+        ],
+      }),
+    );
+
+    writeFile(
+      tmpDir,
+      '.arete/memory/items/decisions.md',
+      `# Decisions
+
+### 2026-05-15: POP first
+Area: glance-2-mvp
+
+POP is the first program to migrate.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('glance-2-mvp', paths);
+
+    assert.equal(brief.metadata.area, 'glance-2-mvp');
+    const headings = brief.sections.map((s) => s.heading);
+    assert.ok(headings.includes('Project context'), `got: ${headings.join(', ')}`);
+    assert.ok(headings.some((h) => h.startsWith('Recent activity')), `got: ${headings.join(', ')}`);
+    assert.ok(headings.some((h) => h.startsWith('Open work')), `got: ${headings.join(', ')}`);
+    assert.ok(
+      headings.some((h) => h.startsWith('Decisions & learnings')),
+      `got: ${headings.join(', ')}`,
+    );
+  });
+});
+
+describe('AC6 — visible message when area unresolved (Phase 12)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-project-ac6-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('area-less project: metadata.areaNote set, message rendered, no empty area sections', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/no-area-project/README.md',
+      `---
+title: No Area Project
+status: active
+---
+
+# No Area Project
+
+## Background
+A project with no area signal at all.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('no-area-project', paths);
+
+    assert.equal(brief.metadata.area, undefined);
+    assert.ok(brief.metadata.areaNote, 'areaNote must be set');
+    assert.ok(/No area resolved/.test(brief.metadata.areaNote!));
+    assert.ok(/arete project backfill-area/.test(brief.metadata.areaNote!));
+
+    const headings = brief.sections.map((s) => s.heading);
+    assert.ok(!headings.some((h) => h.startsWith('Recent activity')), 'no empty Recent activity');
+    assert.ok(!headings.some((h) => h.startsWith('Open work')), 'no empty Open work');
+    assert.ok(!headings.some((h) => h.startsWith('Decisions & learnings')), 'no empty Decisions');
+
+    const { formatProjectBriefMarkdown } = await import('../../src/services/brief-formatters.js');
+    const md = formatProjectBriefMarkdown(brief);
+    assert.ok(/_No area resolved \(no `area:` frontmatter or `\*\*Area\*\*:` link found\)/.test(md));
+  });
+
+  it('resolved area: no areaNote, no message line', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/with-area/README.md',
+      `---
+title: With Area
+area: glance-2-mvp
+status: active
+---
+
+# With Area
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('with-area', paths);
+    assert.equal(brief.metadata.area, 'glance-2-mvp');
+    assert.equal(brief.metadata.areaNote, undefined);
+
+    const { formatProjectBriefMarkdown } = await import('../../src/services/brief-formatters.js');
+    assert.ok(!/No area resolved/.test(formatProjectBriefMarkdown(brief)));
+  });
+
+  it('R9 divergence: metadata.areaWarning set and rendered', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/divergent/README.md',
+      `---
+title: Divergent
+area: glance-2-mvp
+status: active
+---
+
+# Divergent
+
+**Area**: [Other](../../../areas/other-area.md)
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('divergent', paths);
+    assert.equal(brief.metadata.area, 'glance-2-mvp');
+    assert.ok(brief.metadata.areaWarning && /disagree/.test(brief.metadata.areaWarning));
+
+    const { formatProjectBriefMarkdown } = await import('../../src/services/brief-formatters.js');
+    assert.ok(/⚠️.*disagree/.test(formatProjectBriefMarkdown(brief)));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 12 AC4 — topic-aware, project-grained brief helpers
+// ---------------------------------------------------------------------------
+
+describe('buildProjectWikiQuery (Phase 12 AC4)', () => {
+  it('appends first lines of Key Questions and Background', () => {
+    const body = `# P
+
+## Background
+POP migration is the wedge.
+More background.
+
+## Key Questions
+Which template fits POP?
+Second question.
+`;
+    const q = buildProjectWikiQuery('Glance 2 MVP', 'glance-2-mvp', body);
+    assert.ok(q.startsWith('Glance 2 MVP glance-2-mvp'));
+    assert.ok(q.includes('Which template fits POP?'));
+    assert.ok(q.includes('POP migration is the wedge.'));
+    assert.ok(!q.includes('Second question'));
+    assert.ok(!q.includes('More background'));
+  });
+
+  it('degrades to name+area when sections missing; name-only without area', () => {
+    assert.equal(buildProjectWikiQuery('Name', 'area-x', '# nothing'), 'Name area-x');
+    assert.equal(buildProjectWikiQuery('Name', undefined, ''), 'Name');
+  });
+});
+
+describe('unionProjectCommitments (Phase 12 AC4)', () => {
+  function c(id: string, over: Record<string, unknown>): never {
+    return {
+      id,
+      text: id,
+      direction: 'i_owe_them',
+      personSlug: 'p',
+      personName: 'P',
+      source: 's.md',
+      date: '2026-06-01',
+      createdAt: '2026-06-01T00:00:00Z',
+      status: 'open',
+      resolvedAt: null,
+      ...over,
+    } as never;
+  }
+
+  it('projectSlug-claimed first, unioned with unclaimed area commitments, deduped', () => {
+    const open = [
+      c('own-1', { projectSlug: 'me', area: 'a' }),
+      c('sibling-claimed', { projectSlug: 'sibling', area: 'a' }),
+      c('area-unclaimed', { area: 'a' }),
+      c('other-area', { area: 'b' }),
+      c('own-no-area', { projectSlug: 'me' }),
+    ];
+    const got = unionProjectCommitments(open as never[], 'me', 'a').map((x) => x.id);
+    assert.deepEqual(got, ['own-1', 'own-no-area', 'area-unclaimed']);
+  });
+
+  it('without area: only projectSlug-claimed', () => {
+    const open = [c('own', { projectSlug: 'me' }), c('loose', { area: 'a' })];
+    const got = unionProjectCommitments(open as never[], 'me', undefined).map((x) => x.id);
+    assert.deepEqual(got, ['own']);
+  });
+
+  it('dedupes by id when a commitment is both own and area-scoped', () => {
+    const both = c('dup', { projectSlug: 'me', area: 'a' });
+    const got = unionProjectCommitments([both] as never[], 'me', 'a');
+    assert.equal(got.length, 1);
+  });
+});
+
+describe('parseSiblingSlugs (Phase 12 AC4)', () => {
+  it('captures single-depth relative project links, trailing slash or bare', () => {
+    const body = [
+      'See [discovery](../adjuster-shadowing-discovery/discovery.md).',
+      'And [comms](../glance-comms/).',
+      'Bare dir: [bare](../bare-sibling)',
+      'Area link must NOT match: [area](../../../areas/glance-2-mvp.md)',
+      'Self link excluded: [self](../me/README.md)',
+      'Dup: [again](../glance-comms/README.md)',
+    ].join('\n');
+    assert.deepEqual(parseSiblingSlugs(body, 'me'), [
+      'adjuster-shadowing-discovery',
+      'glance-comms',
+      'bare-sibling',
+    ]);
+  });
+
+  it('returns empty for bodies without relative links', () => {
+    assert.deepEqual(parseSiblingSlugs('# Nothing here', 'me'), []);
+  });
+});
+
+describe('sibling projects section (Phase 12 AC4 integration)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-project-ac4-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('renders active + archived siblings; drops unresolvable links', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/main-project/README.md',
+      `---
+title: Main Project
+area: glance-2-mvp
+status: active
+---
+
+# Main
+
+Linked: [active sib](../active-sib/README.md), [old sib](../archived-sib/), [ghost](../no-such-project/).
+`,
+    );
+    writeFile(tmpDir, 'projects/active/active-sib/README.md', '---\ntitle: Active Sib\n---\n# A\n');
+    writeFile(tmpDir, 'projects/archive/archived-sib/README.md', '---\ntitle: Old\n---\n# O\n');
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('main-project', paths);
+    const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+    assert.ok(sib, `missing sibling section; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    assert.equal(sib!.heading, 'Sibling projects (2)');
+    assert.ok(sib!.bullets.some((b) => /active-sib/.test(b) && !/archived/.test(b)));
+    assert.ok(sib!.bullets.some((b) => /archived-sib/.test(b) && /_\(archived\)_/.test(b)));
+    assert.ok(!sib!.bullets.some((b) => /no-such-project/.test(b)));
+  });
+
+  it('project-grained commitments: own projectSlug included even without sibling claims', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/me/README.md',
+      `---
+title: Me
+area: shared-area
+status: active
+---
+
+# Me
+`,
+    );
+    writeFile(
+      tmpDir,
+      '.arete/commitments.json',
+      JSON.stringify({
+        commitments: [
+          {
+            id: 'own11111own11111own11111own11111own11111own11111own11111own11111',
+            text: 'Own commitment',
+            direction: 'i_owe_them',
+            personSlug: 'p',
+            personName: 'P',
+            source: 's.md',
+            date: '2026-06-01',
+            status: 'open',
+            resolvedAt: null,
+            projectSlug: 'me',
+          },
+          {
+            id: 'sib22222sib22222sib22222sib22222sib22222sib22222sib22222sib22222',
+            text: 'Sibling claimed',
+            direction: 'i_owe_them',
+            personSlug: 'p',
+            personName: 'P',
+            source: 's.md',
+            date: '2026-06-01',
+            status: 'open',
+            resolvedAt: null,
+            area: 'shared-area',
+            projectSlug: 'sibling-project',
+          },
+          {
+            id: 'una33333una33333una33333una33333una33333una33333una33333una33333',
+            text: 'Unclaimed area commitment',
+            direction: 'they_owe_me',
+            personSlug: 'p',
+            personName: 'P',
+            source: 's.md',
+            date: '2026-06-01',
+            status: 'open',
+            resolvedAt: null,
+            area: 'shared-area',
+          },
+        ],
+      }),
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('me', paths);
+    const work = brief.sections.find((s) => s.heading.startsWith('Open work'));
+    assert.ok(work, `missing Open work; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    const text = work!.bullets.join('\n');
+    assert.ok(/Own commitment/.test(text));
+    assert.ok(/Unclaimed area commitment/.test(text));
+    assert.ok(!/Sibling claimed/.test(text), 'sibling-claimed must be excluded');
   });
 });

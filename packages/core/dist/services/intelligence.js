@@ -5,7 +5,7 @@
  * Orchestrates ContextService, MemoryService, and EntityService.
  * No direct fs imports — uses injected services only.
  */
-import { assembleBriefForPerson as assemblePersonImpl, assembleBriefForProject as assembleProjectImpl, assembleBriefForArea as assembleAreaImpl, assembleBriefForMeeting as assembleMeetingImpl, } from './brief-assemblers.js';
+import { assembleBriefForPerson as assemblePersonImpl, assembleBriefForProject as assembleProjectImpl, assembleProjectWhatsNew as assembleProjectWhatsNewImpl, assembleBriefForArea as assembleAreaImpl, assembleBriefForMeeting as assembleMeetingImpl, } from './brief-assemblers.js';
 // ---------------------------------------------------------------------------
 // routeToSkill — ported from skill-router.ts
 // ---------------------------------------------------------------------------
@@ -341,6 +341,20 @@ export class IntelligenceService {
     async assembleBriefForProject(slug, paths) {
         const deps = this.requireBriefDeps();
         return assembleProjectImpl(slug, paths, {
+            storage: deps.storage,
+            commitments: deps.commitments,
+            topicMemory: deps.topicMemory,
+            areaMemory: deps.areaMemory,
+            entities: this.entities,
+        });
+    }
+    /**
+     * "What's new since the README was last touched" for a project —
+     * Phase 12 AC3 (read-only open flow). Pure read; no LLM, no writes.
+     */
+    async assembleProjectWhatsNew(slug, paths) {
+        const deps = this.requireBriefDeps();
+        return assembleProjectWhatsNewImpl(slug, paths, {
             storage: deps.storage,
             commitments: deps.commitments,
             topicMemory: deps.topicMemory,

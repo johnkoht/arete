@@ -664,10 +664,78 @@ function makeEmptyPersonBrief(slug) {
     };
 }
 /**
+ * Permissive prose `**Area**:` line matcher (Phase 12 AC1, review concern #3).
+ *
+ * Tolerates: `**Area**:`, `**Area:**`, unbolded `Area:` — case-insensitive,
+ * leading whitespace allowed. The captured remainder is either a markdown
+ * link (slug = link-target basename minus `.md`, any `../` depth) or a
+ * plain slug-shaped token. Display names that aren't slug-shaped are NOT
+ * guessed at — a wrong area is worse than none (pre-mortem R3).
+ */
+const PROSE_AREA_LINE = /^[ \t]*(?:\*\*\s*)?area\s*(?::\s*\*\*|\*\*\s*:|:)\s*(.+?)\s*$/im;
+const SLUG_SHAPED = /^[a-z0-9][a-z0-9_-]*$/i;
+function parseProseAreaLine(body) {
+    const line = body.match(PROSE_AREA_LINE);
+    if (!line)
+        return undefined;
+    const value = line[1].trim();
+    // Markdown link form: take the target's basename minus `.md`.
+    const link = value.match(/\]\(([^)\s]+)\)/);
+    if (link) {
+        const target = link[1].split(/[/\\]/).pop() ?? '';
+        const slug = target.replace(/\.md$/i, '').trim();
+        return slug.length > 0 ? slug : undefined;
+    }
+    // Plain text: accept only slug-shaped tokens (no spaces). Anything else
+    // (e.g. a human display name) stays unresolved rather than mis-slugged.
+    if (SLUG_SHAPED.test(value))
+        return value.toLowerCase();
+    return undefined;
+}
+/**
+ * Resolve a project's area from its README (Phase 12 AC1).
+ *
+ * Priority order (first hit wins):
+ *  1. `fm.area` (covers both the older `{title,status,...}` and newer
+ *     `{project,type,area}` schemas)
+ *  2. `fm.areas` — future plural form, first entry tolerated (pre-mortem R4;
+ *     plural support is NOT promoted here)
+ *  3. Prose `**Area**:` line in the body (permissive — see PROSE_AREA_LINE)
+ *  4. Unresolved
+ *
+ * R9: when frontmatter AND prose both resolve and disagree, frontmatter wins
+ * and `divergence` carries a one-line warning for the brief to surface.
+ */
+export function resolveProjectArea(fm, body) {
+    let fmArea;
+    if (typeof fm.area === 'string' && fm.area.trim().length > 0) {
+        fmArea = fm.area.trim();
+    }
+    else if (Array.isArray(fm.areas)) {
+        const first = fm.areas.find((a) => typeof a === 'string' && a.trim().length > 0);
+        if (first)
+            fmArea = first.trim();
+    }
+    const areaSetBy = typeof fm.area_set_by === 'string' && fm.area_set_by.trim().length > 0
+        ? fm.area_set_by.trim()
+        : undefined;
+    const proseArea = parseProseAreaLine(body);
+    if (fmArea) {
+        const divergence = proseArea && proseArea !== fmArea
+            ? `Frontmatter \`area: ${fmArea}\` and prose \`**Area**:\` line (${proseArea}) disagree — using frontmatter.`
+            : undefined;
+        return { area: fmArea, areaSetBy, source: 'frontmatter', divergence };
+    }
+    if (proseArea) {
+        return { area: proseArea, areaSetBy, source: 'prose' };
+    }
+    return { areaSetBy };
+}
+/**
  * Project display name from README frontmatter — `name:` → `title:` →
  * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
  */
-function projectDisplayName(fm, slug) {
+export function projectDisplayName(fm, slug) {
     for (const key of ['name', 'title', 'project']) {
         const value = fm[key];
         if (typeof value === 'string' && value.trim().length > 0)
@@ -691,10 +759,13 @@ async function listActiveProjects(storage, paths) {
         const fm = parsed?.frontmatter ?? {};
         const slug = basename(dir);
         const name = projectDisplayName(fm, slug);
+        const areaRes = resolveProjectArea(fm, parsed?.body ?? content);
         projects.push({
             slug,
             name,
-            area: typeof fm.area === 'string' ? fm.area : undefined,
+            area: areaRes.area,
+            areaSetBy: areaRes.areaSetBy,
+            areaDivergence: areaRes.divergence,
             status: typeof fm.status === 'string' ? fm.status : undefined,
             started: typeof fm.started === 'string' ? fm.started : undefined,
             readmePath,
@@ -710,15 +781,91 @@ async function readProjectBySlug(storage, paths, slug) {
         return null;
     const parsed = parseFrontmatter(content);
     const fm = parsed?.frontmatter ?? {};
+    const areaRes = resolveProjectArea(fm, parsed?.body ?? content);
     return {
         slug,
         name: projectDisplayName(fm, slug),
-        area: typeof fm.area === 'string' ? fm.area : undefined,
+        area: areaRes.area,
+        areaSetBy: areaRes.areaSetBy,
+        areaDivergence: areaRes.divergence,
         status: typeof fm.status === 'string' ? fm.status : undefined,
         started: typeof fm.started === 'string' ? fm.started : undefined,
         readmePath,
         readmeContent: content,
     };
+}
+/**
+ * First content line of a `## <heading>` section (Phase 12 AC4 — wiki
+ * query strengthening). Returns '' when the section is missing/empty.
+ */
+function firstLineOfSection(body, heading) {
+    const re = new RegExp(`##\\s+${heading}\\s*\\n([\\s\\S]+?)(?=\\n##\\s|$)`, 'i');
+    const match = body.match(re);
+    if (!match)
+        return '';
+    for (const line of match[1].split('\n')) {
+        const t = line.trim();
+        if (t.length > 0)
+            return t;
+    }
+    return '';
+}
+/**
+ * Build the wiki re-rank query for a project brief (Phase 12 AC4):
+ * name + area strengthened with the first lines of `## Key Questions`
+ * and `## Background`. Pure; exported for tests.
+ */
+export function buildProjectWikiQuery(name, area, body) {
+    return [
+        name,
+        area,
+        firstLineOfSection(body, 'Key Questions'),
+        firstLineOfSection(body, 'Background'),
+    ]
+        .filter((s) => Boolean(s && s.length > 0))
+        .join(' ');
+}
+/**
+ * Project-grained commitment scope (Phase 12 AC4): commitments explicitly
+ * claimed by this project (`projectSlug`) first, unioned with area-scoped
+ * commitments not yet claimed by ANY project (a sibling's claim excludes
+ * them). Deduped by id, projectSlug-claimed first. Pure; exported for tests.
+ */
+export function unionProjectCommitments(open, slug, area) {
+    const own = open.filter((c) => c.projectSlug === slug);
+    const areaUnclaimed = area
+        ? open.filter((c) => c.area === area && !c.projectSlug)
+        : [];
+    const seen = new Set();
+    const out = [];
+    for (const c of [...own, ...areaUnclaimed]) {
+        if (seen.has(c.id))
+            continue;
+        seen.add(c.id);
+        out.push(c);
+    }
+    return out;
+}
+/**
+ * Sibling-project slugs referenced from a README body via relative links
+ * (`](../<slug>/...`), excluding self. Pure; exported for tests.
+ * Phase 12 AC4.
+ */
+export function parseSiblingSlugs(body, selfSlug) {
+    const out = [];
+    const seen = new Set();
+    // Exactly ONE `../` — deeper links (`../../../areas/...`) are not siblings.
+    // Trailing `/` (file inside) or `)` (bare dir link) both count.
+    const re = /\]\(\.\.\/([\w-]+)[/)]/g;
+    let match;
+    while ((match = re.exec(body)) !== null) {
+        const slug = match[1];
+        if (slug === selfSlug || seen.has(slug))
+            continue;
+        seen.add(slug);
+        out.push(slug);
+    }
+    return out;
 }
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export async function assembleBriefForProject(slug, paths, deps) {
@@ -737,9 +884,20 @@ export async function assembleBriefForProject(slug, paths, deps) {
     const sources = [relativeToRoot(project.readmePath, paths.root)];
     const metadata = {
         area: project.area,
+        areaSetBy: project.areaSetBy,
         status: project.status,
         started: project.started,
     };
+    // AC6 (Phase 12): area-resolution failure must be visible, not silent.
+    if (!project.area) {
+        metadata.areaNote =
+            'No area resolved (no `area:` frontmatter or `**Area**:` link found) — ' +
+                'meeting/commitment/topic context unavailable. Run `arete project backfill-area` or add an area.';
+    }
+    // R9 (Phase 12): surface frontmatter/prose divergence as one visible line.
+    if (project.areaDivergence) {
+        metadata.areaWarning = project.areaDivergence;
+    }
     const sections = [];
     // 1. Project context — README Background + latest Status Updates excerpt
     const parsed = parseFrontmatter(project.readmeContent);
@@ -792,9 +950,11 @@ export async function assembleBriefForProject(slug, paths, deps) {
             });
         }
     }
-    // 3. Open work — commitments scoped to area
-    if (project.area) {
-        const openCommitments = await deps.commitments.listOpen({ area: project.area });
+    // 3. Open work — projectSlug-claimed first, unioned with area-scoped
+    // commitments not claimed by a sibling (Phase 12 AC4).
+    {
+        const allOpen = await deps.commitments.listOpen();
+        const openCommitments = unionProjectCommitments(allOpen, slug, project.area);
         if (openCommitments.length > 0) {
             // Group by direction.
             const iOwe = openCommitments.filter((c) => c.direction === 'i_owe_them');
@@ -837,8 +997,9 @@ export async function assembleBriefForProject(slug, paths, deps) {
             });
         }
     }
-    // 5. Related wiki pages
-    const wikiQuery = [project.name, project.area].filter(Boolean).join(' ');
+    // 5. Related wiki pages — query strengthened with README Key Questions /
+    // Background first lines (Phase 12 AC4).
+    const wikiQuery = buildProjectWikiQuery(project.name, project.area, body);
     try {
         const wiki = await retrieveWiki(deps.topicMemory, paths, wikiQuery, { area: project.area });
         if (wiki.length > 0) {
@@ -859,6 +1020,31 @@ export async function assembleBriefForProject(slug, paths, deps) {
     catch {
         // best-effort
     }
+    // 6. Sibling projects — relative README links resolved against
+    // active/ + archive/ (archived labeled); unresolvable links dropped.
+    // Phase 12 AC4.
+    const siblingSlugs = parseSiblingSlugs(body, slug);
+    if (siblingSlugs.length > 0) {
+        const bullets = [];
+        for (const sibling of siblingSlugs) {
+            const activePath = join(paths.projects, 'active', sibling, 'README.md');
+            const archivePath = join(paths.projects, 'archive', sibling, 'README.md');
+            if (await deps.storage.exists(activePath)) {
+                bullets.push(`**${sibling}** — \`${relativeToRoot(activePath, paths.root)}\``);
+            }
+            else if (await deps.storage.exists(archivePath)) {
+                bullets.push(`**${sibling}** _(archived)_ — \`${relativeToRoot(archivePath, paths.root)}\``);
+            }
+            // Unresolvable link → dropped (not a project).
+        }
+        if (bullets.length > 0) {
+            sections.push({
+                heading: `Sibling projects (${bullets.length})`,
+                bullets,
+                truncated: false,
+            });
+        }
+    }
     const { kept, droppedNames } = capSectionsByGlobalChars(sections, BRIEF_GLOBAL_CAP_CHARS);
     return {
         mode: 'project',
@@ -870,6 +1056,64 @@ export async function assembleBriefForProject(slug, paths, deps) {
         truncatedSections: droppedNames.length > 0 ? droppedNames : undefined,
         metadata,
     };
+}
+/**
+ * Compute "what's new since the README was last touched" (Phase 12 AC3):
+ * area meetings dated after the README mtime, wiki topics in the project's
+ * area with a fresher `last_refreshed`, and newly-opened commitments in the
+ * project-grained scope (AC4 union). PURE READ — performs no writes, no LLM.
+ * Date comparison is done on YYYY-MM-DD strings (timezone-safe, see
+ * services/LEARNINGS.md).
+ */
+export async function assembleProjectWhatsNew(slug, paths, deps) {
+    const project = await readProjectBySlug(deps.storage, paths, slug);
+    if (!project)
+        return null;
+    const mtime = await deps.storage.getModified(project.readmePath);
+    if (!mtime) {
+        return { sinceUnknown: true, meetings: [], topics: [], commitments: [] };
+    }
+    const sinceIso = mtime.toISOString();
+    const sinceDay = sinceIso.slice(0, 10);
+    // Meetings in the project's area, dated after the README was touched.
+    const meetings = [];
+    if (project.area) {
+        const index = await loadMeetingIndex(deps.storage, paths);
+        for (const m of meetingsForArea(index, project.area)) {
+            if (m.date > sinceDay) {
+                meetings.push({ title: m.title, date: m.date, path: relativeToRoot(m.path, paths.root) });
+            }
+        }
+    }
+    // Wiki topics in the project's area refreshed after the README mtime.
+    const topics = [];
+    if (project.area) {
+        try {
+            const { topics: pages } = await deps.topicMemory.listAll(paths);
+            for (const page of pages) {
+                if (page.frontmatter.area !== project.area)
+                    continue;
+                const refreshed = page.frontmatter.last_refreshed ?? '';
+                if (refreshed > sinceDay) {
+                    topics.push({ slug: page.frontmatter.topic_slug, lastRefreshed: refreshed });
+                }
+            }
+        }
+        catch {
+            // best-effort — wiki absence must not break the open flow
+        }
+    }
+    // Newly-opened commitments in the project-grained scope (AC4 union).
+    const open = await deps.commitments.listOpen();
+    const scoped = unionProjectCommitments(open, slug, project.area);
+    const commitments = [];
+    for (const c of scoped) {
+        const created = c.createdAt ?? '';
+        const isNew = created ? created > sinceIso : c.date > sinceDay;
+        if (isNew)
+            commitments.push({ id: c.id, text: c.text, date: c.date });
+    }
+    return { since: sinceIso, meetings, topics, commitments };
 }
 /**
  * Parse memory-item entries in BOTH live and legacy formats (W6, review

@@ -23,6 +23,16 @@ export type {
   DiscussionTopicGroup,
   NextFocusExtract,
 } from './brief-assemblers.js';
+// Phase 12 AC1/AC2 — project area resolution + backfill helpers
+export { resolveProjectArea } from './brief-assemblers.js';
+export type { ProjectAreaResolution } from './brief-assemblers.js';
+export {
+  listProjectsForBackfill,
+  applyAreaToProjectReadme,
+  resetBackfilledProjectAreas,
+} from './project-area.js';
+export type { ProjectBackfillCandidate } from './project-area.js';
+export type { ProjectWhatsNew } from './brief-assemblers.js';
 export {
   assembleAgendaScaffold,
   renderScaffoldMarkdown,

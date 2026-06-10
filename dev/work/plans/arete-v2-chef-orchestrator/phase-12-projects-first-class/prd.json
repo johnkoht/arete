@@ -1,0 +1,137 @@
+{
+  "name": "phase-12-projects-first-class",
+  "branchName": "worktree-agent-a4515b3b04126e6e0",
+  "goal": "Make project area a system-derived field so the shipped project brief lights up (AC1+AC6), provide approval-gated fleet backfill (AC2), and ship the read-only /project open experience with a topic-aware project-grained brief (AC3+AC4). Hard gate AC11: glance-2-mvp brief sections 2 -> 4+ with metadata.area === 'glance-2-mvp'. Scope per Amendment 2026-06-10: slices A+B+C only.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "AC1 read path: shared project-area resolution helper (core)",
+      "description": "One shared helper in brief-assemblers.ts used by listActiveProjects and readProjectBySlug. Priority: fm.area -> fm.areas[0] (tolerated plural) -> permissive prose **Area**: line (bold variants, link any depth or plain slug) -> unresolved. Read fm.area_set_by. R9 divergence: fm wins, divergence exposed. Project type gains area?/areaSetBy? (no topics fields).",
+      "acceptanceCriteria": [
+        "Unit tests cover: fm-only, prose-link-only, prose-plain-slug, colon-inside-bold, unbolded, variable ../ depth, fm+prose agree, fm+prose disagree (fm wins + divergence), neither, areas: plural first entry, empty-string fm.area absent",
+        "Integration (real fs temp dir): prose-only-area fixture brief populates sections 2-5",
+        "npm run typecheck green; targeted tsx --test green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "AC6: visible one-line message when area unresolved",
+      "description": "metadata.areaNote with the plan's exact message when unresolved; formatProjectBriefMarkdown renders one italic line; R9 divergence warning rendered same way.",
+      "acceptanceCriteria": [
+        "Area-less brief: markdown contains message line, JSON metadata carries it, no empty area-gated sections",
+        "Divergence case renders warning line; resolved-area brief has no note",
+        "Typecheck + targeted tests green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "AC1 write path: creation-time area proposal in 3 skills (prose)",
+      "description": "Optional propose-an-area step in general-project, create-prd, discovery SKILL.md: arete areas list, single best-guess with default + skip (R6, never blocking), on confirm write area: + area_set_by: creation.",
+      "acceptanceCriteria": [
+        "All three SKILL.md carry the optional step with exact frontmatter keys",
+        "Docs-only; diff reviewed"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "AC11 HARD GATE: before/after section-count verification (read-only)",
+      "description": "Run worktree-built CLI against /Users/john/code/arete-reserv (READ-ONLY): brief --project glance-2-mvp --json. Baseline 2 sections.",
+      "acceptanceCriteria": [
+        "Section count >= 4 AND metadata.area === 'glance-2-mvp'",
+        "Live workspace untouched (git status unchanged)",
+        "MC3 shadow: section counts for all live projects pre/post recorded in diary",
+        "On failure: STOP build, diary entry, BLOCKED report"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "AC2: arete project backfill-area CLI (preview/--apply/--reset)",
+      "description": "New project command group (project.ts + index.ts registration). Mirrors commitments backfill-area: preview default, 0.7 confidence floor via suggestAreaForMeeting(title + Background/Key Questions), --apply writes area: + area_set_by: backfill via yaml round-trip preserving body, qmd refresh + --skip-qmd, --reset clears only backfill-stamped, --json all exit paths. Core write helpers in project-area.ts with CLI call-sites.",
+      "acceptanceCriteria": [
+        "Preview writes nothing (byte-identical READMEs); below-floor proposes nothing",
+        "Inference text = title + Background + Key Questions",
+        "--apply writes both keys, preserves body + nested fm (notion) through round-trip, idempotent on rerun",
+        "--reset clears only area_set_by==='backfill'",
+        "--json complete shapes for preview/apply/reset/error",
+        "Typecheck + targeted tests green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "AC3: arete project open <name> read-only open flow",
+      "description": "Resolve via entities.resolveAll(name,'project'); tie -> top-N disambiguation, never auto-load; archived -> note and stop; else brief + what's-new (getModified mtime: area meetings, fresher topics, newly-opened commitments). Zero writes. --json all paths.",
+      "acceptanceCriteria": [
+        "Resolver tests: exact, fuzzy unique, tie -> top-N without loading, archived note",
+        "What's-new delta vs controlled fixture mtime",
+        "Zero-writes: workspace hash-tree identical end-to-end + counting StorageAdapter asserts no write/append/delete",
+        "Typecheck + targeted tests green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "AC4: topic-aware project-grained brief (query, commitments union, siblings)",
+      "description": "(a) wiki query += first lines of ## Key Questions / ## Background; (b) commitments projectSlug-first union with unclaimed area commitments, dedup by id; (c) sibling links ](../<slug>/ resolved active+archive (archived labeled) as small section.",
+      "acceptanceCriteria": [
+        "Query assembly unit tests (with/without sections)",
+        "Union dedup tests: sibling-claimed excluded, unclaimed included, dedup by id",
+        "Sibling parse tests incl. archived label, trailing/no-trailing slash, unresolvable dropped",
+        "Integration: fixture brief includes topic section + project-grained commitments",
+        "Typecheck + targeted tests green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "AC3: /project skill prose + skill-prose test",
+      "description": "New packages/runtime/skills/project/SKILL.md: runs arete project open (no LLM in data path), asks on disambiguation, read-only (never writes README). Prose test in chef-orchestrator-skills.test.ts.",
+      "acceptanceCriteria": [
+        "SKILL.md exists, frontmatter consistent with siblings, carries read-only + no-LLM + disambiguation rules",
+        "Prose test asserts those lines",
+        "Typecheck + targeted tests green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-9",
+      "title": "AC10/AC12 + wrap-tier verification",
+      "description": "Full suite + typecheck, dark-code audit, cli-commands docs + AGENTS.md rebuild, AC12 rollback doc, dist rebuild for core+cli.",
+      "acceptanceCriteria": [
+        "Full test suite green, typecheck green",
+        "Dark-code audit: every new export has production call-site",
+        ".agents/sources cli-commands updated + build:agents:dev run",
+        "Rollback documented; dist/ rebuilt and committed"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-06-10T06:45:00Z",
+    "totalTasks": 9,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
