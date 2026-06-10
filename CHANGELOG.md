@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.13.0] — 2026-06-10 — Projects as first-class citizens (read side)
+
+A project's area is now a reliably-present, system-derived field, so the already-built project brief lights up (plan: `dev/work/plans/arete-v2-chef-orchestrator/phase-12-projects-first-class/plan.md`, slices A+B+C; the write-back flow `/update-project` and close→retro are deferred to a follow-up phase).
+
+### Added
+- **Project area resolution** — `area` derives in priority order (frontmatter `area:` → `areas[0]` → prose `**Area**:` link line) in all project read paths; both project-brief constructors share one resolver. When no area resolves, the brief says so honestly in one line instead of silently degrading. Frontmatter/prose divergence warns.
+- **`arete project backfill-area`** — preview-by-default inference of `area:` for area-less active projects (0.7 confidence floor; below it, nothing is proposed). `--apply` writes with `area_set_by: backfill` provenance; `--reset` reverts only backfill-stamped values. `--json` on all paths.
+- **`arete project open <name>` + `/project` skill** — read-only project open: resolved brief + "what's new since the README was last touched" (area meetings, fresher topics, newly-opened commitments). Ties disambiguate top-N, never auto-load. Open performs zero writes (test-asserted).
+- **Topic-aware, project-grained brief** — wiki re-rank query strengthened with README Key Questions/Background; commitments are project-claimed ∪ unclaimed-area (sibling-claimed excluded); sibling projects section (archived labeled).
+- **Creation-time area proposal** — `general-project`, `create-prd`, and `discovery` skills propose a best-match area at project creation (optional, default + skip; never a blocking field).
+
 ## [0.12.0] — 2026-06-09 — Wiki repair (foundation fixes)
 
 A verified audit found the wiki's write/read arteries degraded in ways rich data masked. This release repairs the foundation (plan + retro: `dev/work/plans/wiki-repair-foundation/plan.md`).
