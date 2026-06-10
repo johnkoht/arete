@@ -33,4 +33,9 @@ merge authority delegated contingent on all gates green incl. AC11. John checks 
 
 ## Check-ins
 
-(appended as they happen)
+- **Launch verified.** Sub worktree: `.claude/worktrees/agent-a4515b3b04126e6e0`. Confirmed its branch
+  includes the amendment commit (619b621c) and its plan.md reads `status: approved` — pre-flight will pass.
+  (Initial `git worktree list` showed a stale base; fast-forward check returned "already up to date".)
+- Sub runs in background; prime gets notified on completion or BLOCKED report, then reviews wrap and
+  runs the merge gate. John: read `build-diary.md` in the worktree path above if this lands before merge;
+  post-merge it'll be in the plan dir on main.
