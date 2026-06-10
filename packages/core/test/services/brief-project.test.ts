@@ -478,6 +478,89 @@ describe('meetingsForArea (W6.2 topics-union)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 13 AC1 — explicit `area:` wins per meeting; topics-union is the
+// fallback for area-less meetings only. AC10 fixture gate lives here.
+// ---------------------------------------------------------------------------
+
+describe('meetingsForArea (Phase 13 AC1 — explicit area: wins per meeting)', () => {
+  function entry(overrides: Partial<MeetingIndexEntry>): MeetingIndexEntry {
+    return {
+      path: '/w/resources/meetings/x.md',
+      date: '2026-06-01',
+      title: 'x',
+      attendeeIds: [],
+      attendeeNames: [],
+      topics: [],
+      ...overrides,
+    };
+  }
+
+  it('area-edge leak: meeting with explicit area elsewhere + topic tag is EXCLUDED from the topic area, INCLUDED for its own', () => {
+    // The observed live leak: a pm-operations meeting mentioning a glance
+    // topic bled into glance-2-mvp recent activity.
+    const index = [
+      entry({
+        title: 'claims-ops sync',
+        area: 'pm-operations',
+        topics: ['glance-2-mvp'],
+      }),
+    ];
+    assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 0);
+    assert.deepEqual(
+      meetingsForArea(index, 'pm-operations').map((m) => m.title),
+      ['claims-ops sync'],
+    );
+  });
+
+  it('area-edge miss: meeting with explicit area and NO twin topic page is INCLUDED for its area', () => {
+    // pm-operations has no same-named topic page — under the old union the
+    // area arm was the only hope and nothing wrote area:, so these areas
+    // silently saw zero meetings.
+    const index = [
+      entry({ title: 'pm ops weekly', area: 'pm-operations', topics: [] }),
+    ];
+    assert.deepEqual(
+      meetingsForArea(index, 'pm-operations').map((m) => m.title),
+      ['pm ops weekly'],
+    );
+  });
+
+  it('ACCEPTED TRADE-OFF (review finding 1, R4-bounded): multi-area-flavored meeting with area:X + topics:[Y] is deliberately EXCLUDED from Y', () => {
+    // This is the documented recall cost of per-meeting preference — a
+    // tested decision, not a regression. Recovery: remove the key or the
+    // parked `areas:` plural. Soak must not misread this as a bug.
+    const index = [
+      entry({
+        title: 'spans-two-areas',
+        area: 'glance-communications',
+        topics: ['glance-2-mvp'],
+      }),
+    ];
+    assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 0);
+    assert.deepEqual(
+      meetingsForArea(index, 'glance-communications').map((m) => m.title),
+      ['spans-two-areas'],
+    );
+  });
+
+  it('area-less meeting keeps the topics-union fallback unchanged', () => {
+    const index = [
+      entry({ title: 'june-style', topics: ['glance-2-mvp', 'rollout-strategy'] }),
+    ];
+    assert.deepEqual(
+      meetingsForArea(index, 'glance-2-mvp').map((m) => m.title),
+      ['june-style'],
+    );
+    assert.equal(meetingsForArea(index, 'rollout-strategy').length, 1);
+  });
+
+  it('empty-string area is treated as absent (falls back to topics)', () => {
+    const index = [entry({ title: 'empty-area', area: undefined, topics: ['glance-2-mvp'] })];
+    assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Phase 12 AC1 — project area resolution (priority order + prose variants)
 // ---------------------------------------------------------------------------
 

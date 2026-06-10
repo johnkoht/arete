@@ -230,16 +230,30 @@ export function meetingsForPerson(
 }
 
 /**
- * Filter the meeting index by area — union of `area:` frontmatter match
- * and `topics:` membership (W6, review concern 7: June-style meetings
- * carry `topics:` lists and no `area:` key, so area-only matching missed
- * them at both the project (S2) and area call sites).
+ * Filter the meeting index by area — explicit `area:` frontmatter wins
+ * PER MEETING; the W6 topics-union arm survives only as a fallback for
+ * meetings without one (Phase 13 AC1).
+ *
+ * A meeting WITH explicit `area:` matches only on `area:` — a topic
+ * mention of another area no longer leaks it into that area's brief
+ * (observed live failure mode (b)). A meeting WITHOUT `area:` falls back
+ * to `topics:` membership (June-style meetings carry `topics:` lists and
+ * no `area:` key — W6, review concern 7 — so area-only matching missed
+ * them at both the project and area call sites).
+ *
+ * Documented trade-off (phase-13 review finding 1, R4-bounded): once a
+ * meeting carries `area: X`, a topic mention of area Y no longer
+ * surfaces it under Y — single primary area now, `areas:` plural is the
+ * parked structural fix. Tested by the named exclusion fixture in
+ * brief-project.test.ts.
  */
 export function meetingsForArea(
   index: MeetingIndexEntry[],
   areaSlug: string,
 ): MeetingIndexEntry[] {
-  return index.filter((m) => m.area === areaSlug || m.topics.includes(areaSlug));
+  return index.filter((m) =>
+    m.area ? m.area === areaSlug : m.topics.includes(areaSlug),
+  );
 }
 
 /** Filter the meeting index by overlap with a group of attendee slugs. */
