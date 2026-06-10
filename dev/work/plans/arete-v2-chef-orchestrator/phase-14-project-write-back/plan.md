@@ -4,10 +4,14 @@ slug: phase-14-project-write-back
 created: "2026-06-10"
 parent: arete-v2-chef-orchestrator
 owner: planning orchestrator (Claude)
-status: draft
+status: approved
+approved: "2026-06-10"
 has_pre_mortem: false
+has_review: true
 depends_on: phase-13-area-edge-completion
 ---
+
+> **Approval — 2026-06-10 (John):** OQ1 decided: retro ships via items/ + `topic refresh` (the recommended mechanism; parent-plan AC8's direct area-page writer is superseded). OQ3: yes — commitment-claim proposals in the v1 menu. OQ4: skill-only invocation. Delta pre-mortem (seeds in Review disposition) REQUIRED at ship Phase 1.2 before build.
 
 # Phase 14 — Project write-back
 

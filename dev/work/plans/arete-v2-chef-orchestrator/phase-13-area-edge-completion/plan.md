@@ -4,11 +4,15 @@ slug: phase-13-area-edge-completion
 created: "2026-06-10"
 parent: arete-v2-chef-orchestrator
 owner: planning orchestrator (Claude)
-status: draft
+status: approved
+approved: "2026-06-10"
 has_pre_mortem: false
+has_review: true
 ---
 
 # Phase 13 — Area edge completion
+
+> **Approval — 2026-06-10 (John):** all OQ leans confirmed — OQ1 backfill defaults to all-history with `--days` as optional limiter; OQ2 provenance vocab `approval`. Delta pre-mortem (seeds in Review disposition) REQUIRED at ship Phase 1.2 before build.
 
 ## Why this exists
 
