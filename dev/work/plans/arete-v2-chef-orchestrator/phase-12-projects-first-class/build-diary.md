@@ -75,3 +75,17 @@ Proceeding to Slice B (backfill CLI).
 **One deviation worth noting**: executed task-7 before task-6 (open consumes the AC4 commitment union) — pure ordering, no scope change. And one small correctness catch beyond plan text: the plan's sibling regex `\]\(\.\.\/([\w-]+)\/` would have ALSO matched `../../../areas/...` links if generalized for depth (the reviewer asked for depth tolerance); resolved by locking to single-depth + bare-dir links — areas links can't be siblings.
 
 **Wrap-tier so far**: dark-code audit CLEAN (all 9 new exports have production call-sites). cli-commands.md + AGENTS.md rebuilt (12.7KB; was already over the 10KB threshold pre-change, +0.6KB). Routability verified in a fresh worktree install: "open project glance with context" → routes to `project` skill. Rollback doc written (rollback.md). Full suite + independent final review (opus) running in background.
+
+## 2026-06-10T08:15Z — WRAP: all gates green, stopping at ship 5.5 as instructed
+
+**Full suite**: 4578 tests, **4576 pass, 0 fail**, 2 pre-existing skips. Typecheck green.
+
+**Final review (independent opus, fresh context): VERDICT READY.** It verified every pre-mortem mitigation in code (R3 floor at project.ts:32/:104, R5 tie logic, R6 prose, R9 divergence, R4 plural tolerance), confirmed zero invariant violations (no fs in services, no --json gaps, findRoot guards present) and a **clean scope boundary** — no AC5/7/8/9 scaffolding anywhere. Its single note (cosmetic DRY: `displayTitle` duplicated `projectDisplayName`) I fixed anyway (a936d42e) since it was a 2-minute dedupe.
+
+**Final AC11 with the shipped dist: glance-2-mvp brief 2 → 6 sections** (the AC4 sibling section joined the original five), `area: glance-2-mvp`, live workspace hash byte-identical before/after every read-only run.
+
+**Wrap checklist** (manual /wrap — extension not in this harness): memory entry + index ✓, services LEARNINGS ✓ (area-resolution invariant + zero-write test pattern), capabilities.json `project-cli` ✓, cli-commands.md + dist/AGENTS.md rebuilt ✓, routability ✓ ("open project glance with context" routes to the new `project` skill in a fresh install), rollback.md ✓, dist current in every commit (discovered the typecheck script EMITS — dist never went stale).
+
+**LOC accounting (AC11 ledger, honest)**: src +842/−7 (≈608 logic + ≈234 JSDoc/blank), tests +1292, skill prose +104. Plan estimated ~+240 for A+B+C — we're ~2.5× over on logic lines. Why, itemized: the plan's per-AC numbers were thin against the precedent being mirrored (`commitments backfill-area` alone is ~130 CLI lines; AC2 estimated 90 for the same shape plus README round-trip helpers), and the cross-model review added real surface the estimate never contained (qmd wiring, archived handling, top-N disambiguation output, divergence warnings, --json completeness in every exit path). Substitution argument intact: nothing parallel was built — AC1 lights up dead code, AC4 re-wires existing filters, AC2/AC3 reuse suggestAreaForMeeting/resolveAll/getModified. Zero speculative code; dark-code audit 0.
+
+**Stopping here per briefing**: ship 5.6 (merge gate) and Phase 6 (cleanup) belong to the prime orchestrator. Branch `worktree-agent-a4515b3b04126e6e0` is ready for the gitboss pass. Post-merge operational order is in the amendment (live AC11 verify → restructure → re-audit → backfill preview → John approves --apply).
