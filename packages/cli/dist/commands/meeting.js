@@ -517,6 +517,110 @@ export function registerMeetingCommands(program) {
             info('Every meeting already carries an `area:`. Nothing to backfill.');
         }
     });
+    // ---------------------------------------------------------------------------
+    // arete meeting set-area <file> <area-slug>  (Phase 13 AC2)
+    //
+    // The confirm-time writer in the propose→confirm→approve flow:
+    // `meeting process` PROPOSES (zero area writes), the process-meetings
+    // skill presents the proposal, and on John's confirm this verb writes
+    // `area:` + `area_set_by:` BEFORE `meeting approve` so created
+    // commitments inherit the area (meeting.ts approve path reads
+    // frontmatter.area). Default provenance `approval` (OQ2); `--set-by
+    // manual` for hand-corrections (e.g. re-stamping a legacy carrier).
+    // ---------------------------------------------------------------------------
+    meetingCmd
+        .command('set-area <file> <area-slug>')
+        .description('Write `area:` + `area_set_by:` into a meeting\'s frontmatter (body preserved). Area slug must match a file in areas/.')
+        .option('--set-by <provenance>', 'Provenance marker: approval | manual', 'approval')
+        .option('--json', 'Output as JSON')
+        .action(async (file, areaSlug, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const setBy = opts.setBy ?? 'approval';
+        if (setBy !== 'approval' && setBy !== 'manual') {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: '--set-by must be approval or manual' }));
+            }
+            else {
+                error('--set-by must be approval or manual');
+            }
+            process.exit(1);
+        }
+        // Validate the area slug against areas/*.md BEFORE any write —
+        // an unknown slug is an error, never a write (AC2).
+        const areaContext = await services.areaParser.getAreaContext(areaSlug);
+        if (!areaContext) {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `Unknown area slug '${areaSlug}' — no areas/${areaSlug}.md`,
+                }));
+            }
+            else {
+                error(`Unknown area slug '${areaSlug}' — no areas/${areaSlug}.md`);
+                info('Run `ls areas/` to see valid slugs.');
+            }
+            process.exit(1);
+        }
+        // Resolve the meeting file: absolute → as-is; has a slash →
+        // workspace-relative; bare name → resources/meetings/.
+        const meetingPath = file.startsWith('/')
+            ? file
+            : file.includes('/')
+                ? join(root, file)
+                : join(root, 'resources', 'meetings', file);
+        if (!(await services.storage.exists(meetingPath))) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Meeting not found: ${meetingPath}` }));
+            }
+            else {
+                error(`Meeting not found: ${meetingPath}`);
+            }
+            process.exit(1);
+        }
+        const result = await applyAreaToMeeting(services.storage, meetingPath, areaSlug, setBy);
+        // D4: a lock abstain is an ERROR, never silent — the approve step
+        // would not inherit the area.
+        if (!result.written && !result.noop) {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `Area not written (lock abstain: ${result.abstainReason ?? 'unknown'})`,
+                    abstainReason: result.abstainReason ?? 'unknown',
+                }));
+            }
+            else {
+                error(`Area not written (lock abstain: ${result.abstainReason ?? 'unknown'})`);
+            }
+            process.exit(1);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                meeting: meetingPath,
+                area: areaSlug,
+                areaSetBy: setBy,
+                written: result.written,
+                noop: result.noop,
+            }));
+            return;
+        }
+        if (result.noop) {
+            info(`Meeting already carries area: ${areaSlug} (${setBy}) — nothing to write.`);
+        }
+        else {
+            success(`Set area: ${areaSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
+        }
+    });
     // Extract subcommand - uses AIService for LLM-based extraction
     meetingCmd
         .command('extract <file>')

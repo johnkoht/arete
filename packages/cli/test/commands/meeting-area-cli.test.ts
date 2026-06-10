@@ -241,3 +241,120 @@ describe('arete meeting backfill-area (Phase 13 AC3)', () => {
     }
   });
 });
+
+describe('arete meeting set-area (Phase 13 AC2)', () => {
+  let tmpDir: string;
+
+  const NESTED_MEETING = `---
+title: Nested frontmatter meeting
+date: 2026-06-09T16:00:00.000Z
+attendees:
+  - name: John Koht
+    email: ''
+approved_items:
+  actionItems:
+    - Do the thing (@john → @anthony)
+topics:
+  - rollout-strategy
+---
+
+## Summary
+
+Body line one.
+
+## Transcript
+
+Verbatim transcript.
+`;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-meeting-setarea');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    seedArea(tmpDir, 'glance-comms', 'Glance Comms');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('writes area + approval provenance (default); body + nested frontmatter preserved; D4: file written milliseconds earlier', () => {
+    // seedMeeting writes the file IMMEDIATELY before set-area runs — this
+    // is the D4 mtime-guard regression: the default 60s guard would
+    // silently abstain here.
+    const p = seedMeeting(tmpDir, '2026-06-09-nested.md', NESTED_MEETING);
+    const bodyBefore = readFileSync(p, 'utf8').split(/\n---\n/)[1];
+
+    const out = JSON.parse(
+      runCli(['meeting', 'set-area', '2026-06-09-nested.md', 'glance-comms', '--json'], {
+        cwd: tmpDir,
+      }),
+    );
+    assert.equal(out.success, true);
+    assert.equal(out.written, true);
+    assert.equal(out.areaSetBy, 'approval');
+
+    const after = readFileSync(p, 'utf8');
+    assert.match(after, /^area: glance-comms$/m);
+    assert.match(after, /^area_set_by: approval$/m);
+    assert.equal(
+      after.split(/\n---\n/)[1].replace(/^\n+/, ''),
+      bodyBefore.replace(/^\n+/, ''),
+      'body byte-preserved',
+    );
+    assert.match(after, /approved_items:/);
+    assert.match(after, /name: John Koht/);
+    assert.match(after, /topics:/);
+  });
+
+  it('--set-by manual stamps manual provenance; rerun same values is a no-op', () => {
+    seedMeeting(tmpDir, '2026-06-09-m.md', NESTED_MEETING);
+    const first = JSON.parse(
+      runCli(
+        ['meeting', 'set-area', '2026-06-09-m.md', 'glance-comms', '--set-by', 'manual', '--json'],
+        { cwd: tmpDir },
+      ),
+    );
+    assert.equal(first.written, true);
+
+    const again = JSON.parse(
+      runCli(
+        ['meeting', 'set-area', '2026-06-09-m.md', 'glance-comms', '--set-by', 'manual', '--json'],
+        { cwd: tmpDir },
+      ),
+    );
+    assert.equal(again.success, true);
+    assert.equal(again.written, false);
+    assert.equal(again.noop, true);
+  });
+
+  it('unknown area slug → error, NO write', () => {
+    const p = seedMeeting(tmpDir, '2026-06-09-u.md', NESTED_MEETING);
+    const before = readFileSync(p, 'utf8');
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'set-area', '2026-06-09-u.md', 'no-such-area', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 1);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.success, false);
+    assert.match(parsed.error, /Unknown area slug/);
+    assert.equal(readFileSync(p, 'utf8'), before, 'meeting untouched');
+  });
+
+  it('invalid --set-by and missing meeting are errors with complete JSON', () => {
+    seedMeeting(tmpDir, '2026-06-09-v.md', NESTED_MEETING);
+    const bad = runCliRaw(
+      ['meeting', 'set-area', '2026-06-09-v.md', 'glance-comms', '--set-by', 'wizard', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(bad.code, 1);
+    assert.match(JSON.parse(bad.stdout).error, /--set-by/);
+
+    const missing = runCliRaw(
+      ['meeting', 'set-area', 'no-such-meeting.md', 'glance-comms', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(missing.code, 1);
+    assert.match(JSON.parse(missing.stdout).error, /Meeting not found/);
+  });
+});
