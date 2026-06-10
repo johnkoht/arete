@@ -1247,6 +1247,34 @@ export function parseSiblingSlugs(body: string, selfSlug: string): string[] {
   return out;
 }
 
+/**
+ * Resolve an archived project README path, tolerating BOTH archive
+ * naming shapes (Phase 13 AC4):
+ *   - `projects/archive/<slug>/README.md` (the shape phase-12 checked)
+ *   - `projects/archive/YYYY-MM_<slug>/README.md` (what finalize-project
+ *     actually writes, e.g. `archive/2026-06_visioning-deck/`)
+ * Returns null when neither exists. Exported for reuse by the
+ * commitments-claim project validation (Phase 13 AC5).
+ */
+export async function resolveArchivedProjectReadme(
+  storage: StorageAdapter,
+  paths: WorkspacePaths,
+  slug: string,
+): Promise<string | null> {
+  const direct = join(paths.projects, 'archive', slug, 'README.md');
+  if (await storage.exists(direct)) return direct;
+  const archiveDir = join(paths.projects, 'archive');
+  if (!(await storage.exists(archiveDir))) return null;
+  for (const dir of await storage.listSubdirectories(archiveDir)) {
+    const base = basename(dir);
+    if (/^\d{4}-\d{2}_/.test(base) && base.slice(8) === slug) {
+      const candidate = join(dir, 'README.md');
+      if (await storage.exists(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export async function assembleBriefForProject(
   slug: string,
@@ -1412,24 +1440,43 @@ export async function assembleBriefForProject(
     // best-effort
   }
 
-  // 6. Sibling projects — relative README links resolved against
-  // active/ + archive/ (archived labeled); unresolvable links dropped.
-  // Phase 12 AC4.
-  const siblingSlugs = parseSiblingSlugs(body, slug);
-  if (siblingSlugs.length > 0) {
+  // 6. Sibling projects — shared-`area:` actives FIRST (robust primary
+  // source post-phase-12), then link-derived extras not already present
+  // (cross-area + archived references); dedup by slug; archived labeled.
+  // Archive lookup tolerates the `YYYY-MM_<slug>` prefix finalize-project
+  // actually writes. Phase 13 AC4 (supersedes the link-only Phase 12 AC4).
+  {
     const bullets: string[] = [];
-    for (const sibling of siblingSlugs) {
+    const seen = new Set<string>();
+
+    if (project.area) {
+      const actives = await listActiveProjects(deps.storage, paths);
+      for (const p of actives) {
+        if (p.slug === slug || !p.area || p.area !== project.area) continue;
+        if (seen.has(p.slug)) continue;
+        seen.add(p.slug);
+        bullets.push(`**${p.slug}** — \`${relativeToRoot(p.readmePath, paths.root)}\``);
+      }
+    }
+
+    for (const sibling of parseSiblingSlugs(body, slug)) {
+      if (seen.has(sibling)) continue;
       const activePath = join(paths.projects, 'active', sibling, 'README.md');
-      const archivePath = join(paths.projects, 'archive', sibling, 'README.md');
       if (await deps.storage.exists(activePath)) {
+        seen.add(sibling);
         bullets.push(`**${sibling}** — \`${relativeToRoot(activePath, paths.root)}\``);
-      } else if (await deps.storage.exists(archivePath)) {
+        continue;
+      }
+      const archivePath = await resolveArchivedProjectReadme(deps.storage, paths, sibling);
+      if (archivePath) {
+        seen.add(sibling);
         bullets.push(
           `**${sibling}** _(archived)_ — \`${relativeToRoot(archivePath, paths.root)}\``,
         );
       }
       // Unresolvable link → dropped (not a project).
     }
+
     if (bullets.length > 0) {
       sections.push({
         heading: `Sibling projects (${bullets.length})`,

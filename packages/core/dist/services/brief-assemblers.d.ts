@@ -268,6 +268,16 @@ export declare function unionProjectCommitments(open: Commitment[], slug: string
  * Phase 12 AC4.
  */
 export declare function parseSiblingSlugs(body: string, selfSlug: string): string[];
+/**
+ * Resolve an archived project README path, tolerating BOTH archive
+ * naming shapes (Phase 13 AC4):
+ *   - `projects/archive/<slug>/README.md` (the shape phase-12 checked)
+ *   - `projects/archive/YYYY-MM_<slug>/README.md` (what finalize-project
+ *     actually writes, e.g. `archive/2026-06_visioning-deck/`)
+ * Returns null when neither exists. Exported for reuse by the
+ * commitments-claim project validation (Phase 13 AC5).
+ */
+export declare function resolveArchivedProjectReadme(storage: StorageAdapter, paths: WorkspacePaths, slug: string): Promise<string | null>;
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
 /** Delta of workspace activity since the project README was last modified. */

@@ -1114,6 +1114,88 @@ Linked: [active sib](../active-sib/README.md), [old sib](../archived-sib/), [gho
     assert.ok(!sib!.bullets.some((b) => /no-such-project/.test(b)));
   });
 
+  // -------------------------------------------------------------------------
+  // Phase 13 AC4 — siblings derive from shared `area:` ∪ README links
+  // -------------------------------------------------------------------------
+
+  it('AC4: area-siblings appear with ZERO README links (3 same-area projects each list the other 2)', async () => {
+    const readme = (title: string) =>
+      `---\ntitle: ${title}\narea: glance-2-mvp\nstatus: active\n---\n\n# ${title}\n\n## Background\nNo links here.\n`;
+    writeFile(tmpDir, 'projects/active/proj-a/README.md', readme('Proj A'));
+    writeFile(tmpDir, 'projects/active/proj-b/README.md', readme('Proj B'));
+    writeFile(tmpDir, 'projects/active/proj-c/README.md', readme('Proj C'));
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+
+    const intel = buildIntel(tmpDir);
+    for (const [self, others] of [
+      ['proj-a', ['proj-b', 'proj-c']],
+      ['proj-b', ['proj-a', 'proj-c']],
+      ['proj-c', ['proj-a', 'proj-b']],
+    ] as const) {
+      const brief = await intel.assembleBriefForProject(self, paths);
+      const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+      assert.ok(sib, `${self}: missing sibling section`);
+      assert.equal(sib!.heading, 'Sibling projects (2)', self);
+      for (const other of others) {
+        assert.ok(sib!.bullets.some((b) => b.includes(`**${other}**`)), `${self} lists ${other}`);
+      }
+      assert.ok(!sib!.bullets.some((b) => b.includes(`**${self}**`)), `${self} excludes itself`);
+    }
+  });
+
+  it('AC4: dedup when area AND link both yield the same sibling; cross-area link-only sibling still appears', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/main/README.md',
+      `---\ntitle: Main\narea: glance-2-mvp\nstatus: active\n---\n\n# Main\n\nLinked: [same area](../same-area-sib/README.md), [other area](../cross-area-sib/).\n`,
+    );
+    writeFile(
+      tmpDir,
+      'projects/active/same-area-sib/README.md',
+      '---\ntitle: Same\narea: glance-2-mvp\n---\n# S\n',
+    );
+    writeFile(
+      tmpDir,
+      'projects/active/cross-area-sib/README.md',
+      '---\ntitle: Cross\narea: pm-operations\n---\n# C\n',
+    );
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('main', paths);
+    const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+    assert.ok(sib);
+    assert.equal(
+      sib!.bullets.filter((b) => b.includes('**same-area-sib**')).length,
+      1,
+      'same-area sibling appears exactly once (deduped across sources)',
+    );
+    assert.ok(
+      sib!.bullets.some((b) => b.includes('**cross-area-sib**')),
+      'link-only cross-area sibling still appears',
+    );
+    assert.equal(sib!.heading, 'Sibling projects (2)');
+  });
+
+  it('AC4: archived YYYY-MM_<slug> directory resolves and is labeled archived', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/main/README.md',
+      `---\ntitle: Main\narea: glance-2-mvp\nstatus: active\n---\n\n# Main\n\nSee [the deck](../visioning-deck/).\n`,
+    );
+    writeFile(
+      tmpDir,
+      'projects/archive/2026-06_visioning-deck/README.md',
+      '---\ntitle: Visioning Deck\n---\n# V\n',
+    );
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('main', paths);
+    const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+    assert.ok(sib, 'sibling section present');
+    const bullet = sib!.bullets.find((b) => b.includes('**visioning-deck**'));
+    assert.ok(bullet, 'YYYY-MM_ archived sibling resolved');
+    assert.ok(bullet!.includes('_(archived)_'), 'archived label present');
+    assert.ok(bullet!.includes('2026-06_visioning-deck/README.md'), 'path points at the real dir');
+  });
+
   it('project-grained commitments: own projectSlug included even without sibling claims', async () => {
     writeFile(
       tmpDir,
