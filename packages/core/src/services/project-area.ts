@@ -15,7 +15,7 @@ import { join, basename } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { WorkspacePaths } from '../models/index.js';
-import { resolveProjectArea } from './brief-assemblers.js';
+import { resolveProjectArea, projectDisplayName } from './brief-assemblers.js';
 
 /** One active project, annotated for the backfill flow. */
 export interface ProjectBackfillCandidate {
@@ -58,14 +58,6 @@ function extractSectionText(body: string, heading: string): string {
   return match ? match[1].trim() : '';
 }
 
-function displayTitle(fm: Record<string, unknown>, slug: string): string {
-  for (const key of ['name', 'title', 'project'] as const) {
-    const value = fm[key];
-    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
-  }
-  return slug;
-}
-
 /**
  * List active projects annotated with area resolution + inference text.
  * Used by `arete project backfill-area` (preview, apply, reset).
@@ -88,7 +80,7 @@ export async function listProjectsForBackfill(
     const keyQuestions = extractSectionText(body, 'Key Questions');
     out.push({
       slug: basename(dir),
-      title: displayTitle(fm, basename(dir)),
+      title: projectDisplayName(fm, basename(dir)),
       readmePath,
       area: res.area,
       areaSource: res.source,

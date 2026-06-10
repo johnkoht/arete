@@ -12,7 +12,7 @@
  */
 import { join, basename } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { resolveProjectArea } from './brief-assemblers.js';
+import { resolveProjectArea, projectDisplayName } from './brief-assemblers.js';
 const FM_BLOCK = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 function parseReadme(content) {
     const match = content.match(FM_BLOCK);
@@ -32,14 +32,6 @@ function extractSectionText(body, heading) {
     const re = new RegExp(`##\\s+${heading}\\s*\\n([\\s\\S]+?)(?=\\n##\\s|$)`, 'i');
     const match = body.match(re);
     return match ? match[1].trim() : '';
-}
-function displayTitle(fm, slug) {
-    for (const key of ['name', 'title', 'project']) {
-        const value = fm[key];
-        if (typeof value === 'string' && value.trim().length > 0)
-            return value.trim();
-    }
-    return slug;
 }
 /**
  * List active projects annotated with area resolution + inference text.
@@ -61,7 +53,7 @@ export async function listProjectsForBackfill(storage, paths) {
         const keyQuestions = extractSectionText(body, 'Key Questions');
         out.push({
             slug: basename(dir),
-            title: displayTitle(fm, basename(dir)),
+            title: projectDisplayName(fm, basename(dir)),
             readmePath,
             area: res.area,
             areaSource: res.source,

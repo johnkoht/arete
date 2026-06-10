@@ -982,7 +982,7 @@ export function resolveProjectArea(
  * Project display name from README frontmatter — `name:` → `title:` →
  * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
  */
-function projectDisplayName(fm: Record<string, unknown>, slug: string): string {
+export function projectDisplayName(fm: Record<string, unknown>, slug: string): string {
   for (const key of ['name', 'title', 'project'] as const) {
     const value = fm[key];
     if (typeof value === 'string' && value.trim().length > 0) return value.trim();

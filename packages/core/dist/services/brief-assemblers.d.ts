@@ -209,6 +209,11 @@ export interface ProjectAreaResolution {
  */
 export declare function resolveProjectArea(fm: Record<string, unknown>, body: string): ProjectAreaResolution;
 /**
+ * Project display name from README frontmatter — `name:` → `title:` →
+ * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
+ */
+export declare function projectDisplayName(fm: Record<string, unknown>, slug: string): string;
+/**
  * Build the wiki re-rank query for a project brief (Phase 12 AC4):
  * name + area strengthened with the first lines of `## Key Questions`
  * and `## Background`. Pure; exported for tests.
