@@ -32,6 +32,7 @@ import {
   parseSiblingSlugs,
   extractStatusUpdates,
   loadMeetingIndex,
+  parseJiraFrontmatter,
   type MeetingIndexEntry,
 } from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
@@ -559,6 +560,54 @@ describe('meetingsForArea (Phase 13 AC1 — explicit area: wins per meeting)', (
   it('empty-string area is treated as absent (falls back to topics)', () => {
     const index = [entry({ title: 'empty-area', area: undefined, topics: ['glance-2-mvp'] })];
     assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 13 AC7 — `jira:` frontmatter read-side parsing
+// ---------------------------------------------------------------------------
+
+describe('parseJiraFrontmatter (Phase 13 AC7)', () => {
+  it('parses a flat object into a string map (task-management-v1 shape)', () => {
+    assert.deepEqual(parseJiraFrontmatter({ idea: 'GL-12' }), { idea: 'GL-12' });
+    assert.deepEqual(parseJiraFrontmatter({ idea: 'GL-12', epic: 'PLAT-9858' }), {
+      idea: 'GL-12',
+      epic: 'PLAT-9858',
+    });
+  });
+
+  it('comma-joins array values and stringifies scalars', () => {
+    assert.deepEqual(parseJiraFrontmatter({ epics: ['PLAT-1', 'PLAT-2'], ticket: 42 }), {
+      epics: 'PLAT-1, PLAT-2',
+      ticket: '42',
+    });
+  });
+
+  it('returns undefined for missing/malformed shapes without throwing', () => {
+    assert.equal(parseJiraFrontmatter(undefined), undefined);
+    assert.equal(parseJiraFrontmatter(null), undefined);
+    assert.equal(parseJiraFrontmatter('GL-12'), undefined);
+    assert.equal(parseJiraFrontmatter(['GL-12']), undefined);
+    assert.equal(parseJiraFrontmatter({}), undefined);
+    assert.equal(parseJiraFrontmatter({ nested: { deep: 'x' } }), undefined);
+  });
+
+  it('surfaces jira in ProjectBrief.metadata via readProjectBySlug', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), `brief-jira-${process.pid}-`));
+    try {
+      const p = makePaths(tmp);
+      writeFile(
+        tmp,
+        'projects/active/task-management-v1/README.md',
+        `---\nname: Task Management v1\nstatus: active\njira:\n  idea: GL-12\n---\n\n# Task Management\n\n## Background\nTask mgmt.\n`,
+      );
+      writeFile(tmp, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+      const intel = buildIntel(tmp);
+      const brief = await intel.assembleBriefForProject('task-management-v1', p);
+      assert.deepEqual(brief.metadata.jira, { idea: 'GL-12' });
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
 

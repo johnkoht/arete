@@ -196,6 +196,13 @@ export interface ProjectBriefDeps {
     areaMemory: AreaMemoryService;
     entities: EntityService;
 }
+/**
+ * Parse a `jira:` frontmatter block into a flat string map (Phase 13 AC7).
+ * Tolerates absence and non-object shapes (returns undefined, never
+ * throws). Array values are comma-joined; scalars stringified; nested
+ * objects skipped. Pure; exported for tests.
+ */
+export declare function parseJiraFrontmatter(value: unknown): Record<string, string> | undefined;
 /** Result of project-area resolution (Phase 12 AC1). */
 export interface ProjectAreaResolution {
     area?: string;

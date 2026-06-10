@@ -929,8 +929,41 @@ interface ActiveProject {
   areaDivergence?: string;
   status?: string;
   started?: string;
+  /**
+   * Phase 13 AC7 — read-only surfacing of the `jira:` frontmatter block
+   * (hand-maintained map like `jira: {idea: GL-12}`). Values stringified,
+   * arrays comma-joined. Absent when missing or malformed. No write path.
+   */
+  jira?: Record<string, string>;
   readmePath: string;
   readmeContent: string;
+}
+
+/**
+ * Parse a `jira:` frontmatter block into a flat string map (Phase 13 AC7).
+ * Tolerates absence and non-object shapes (returns undefined, never
+ * throws). Array values are comma-joined; scalars stringified; nested
+ * objects skipped. Pure; exported for tests.
+ */
+export function parseJiraFrontmatter(value: unknown): Record<string, string> | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (raw === null || raw === undefined) continue;
+    if (Array.isArray(raw)) {
+      const joined = raw
+        .filter((v) => v !== null && v !== undefined && typeof v !== 'object')
+        .map((v) => String(v).trim())
+        .filter((s) => s.length > 0)
+        .join(', ');
+      if (joined.length > 0) out[key] = joined;
+      continue;
+    }
+    if (typeof raw === 'object') continue; // nested maps are not ticket refs
+    const s = String(raw).trim();
+    if (s.length > 0) out[key] = s;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** Result of project-area resolution (Phase 12 AC1). */
@@ -1059,6 +1092,7 @@ async function listActiveProjects(
       areaDivergence: areaRes.divergence,
       status: typeof fm.status === 'string' ? fm.status : undefined,
       started: typeof fm.started === 'string' ? fm.started : undefined,
+      jira: parseJiraFrontmatter(fm.jira),
       readmePath,
       readmeContent: content,
     });
@@ -1085,6 +1119,7 @@ async function readProjectBySlug(
     areaDivergence: areaRes.divergence,
     status: typeof fm.status === 'string' ? fm.status : undefined,
     started: typeof fm.started === 'string' ? fm.started : undefined,
+    jira: parseJiraFrontmatter(fm.jira),
     readmePath,
     readmeContent: content,
   };
@@ -1237,6 +1272,7 @@ export async function assembleBriefForProject(
     areaSetBy: project.areaSetBy,
     status: project.status,
     started: project.started,
+    jira: project.jira,
   };
   // AC6 (Phase 12): area-resolution failure must be visible, not silent.
   if (!project.area) {

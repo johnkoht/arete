@@ -708,6 +708,37 @@ function makeEmptyPersonBrief(slug) {
     };
 }
 /**
+ * Parse a `jira:` frontmatter block into a flat string map (Phase 13 AC7).
+ * Tolerates absence and non-object shapes (returns undefined, never
+ * throws). Array values are comma-joined; scalars stringified; nested
+ * objects skipped. Pure; exported for tests.
+ */
+export function parseJiraFrontmatter(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        return undefined;
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+        if (raw === null || raw === undefined)
+            continue;
+        if (Array.isArray(raw)) {
+            const joined = raw
+                .filter((v) => v !== null && v !== undefined && typeof v !== 'object')
+                .map((v) => String(v).trim())
+                .filter((s) => s.length > 0)
+                .join(', ');
+            if (joined.length > 0)
+                out[key] = joined;
+            continue;
+        }
+        if (typeof raw === 'object')
+            continue; // nested maps are not ticket refs
+        const s = String(raw).trim();
+        if (s.length > 0)
+            out[key] = s;
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+/**
  * Permissive prose `**Area**:` line matcher (Phase 12 AC1, review concern #3).
  *
  * Tolerates: `**Area**:`, `**Area:**`, unbolded `Area:` — case-insensitive,
@@ -812,6 +843,7 @@ async function listActiveProjects(storage, paths) {
             areaDivergence: areaRes.divergence,
             status: typeof fm.status === 'string' ? fm.status : undefined,
             started: typeof fm.started === 'string' ? fm.started : undefined,
+            jira: parseJiraFrontmatter(fm.jira),
             readmePath,
             readmeContent: content,
         });
@@ -834,6 +866,7 @@ async function readProjectBySlug(storage, paths, slug) {
         areaDivergence: areaRes.divergence,
         status: typeof fm.status === 'string' ? fm.status : undefined,
         started: typeof fm.started === 'string' ? fm.started : undefined,
+        jira: parseJiraFrontmatter(fm.jira),
         readmePath,
         readmeContent: content,
     };
@@ -974,6 +1007,7 @@ export async function assembleBriefForProject(slug, paths, deps) {
         areaSetBy: project.areaSetBy,
         status: project.status,
         started: project.started,
+        jira: project.jira,
     };
     // AC6 (Phase 12): area-resolution failure must be visible, not silent.
     if (!project.area) {

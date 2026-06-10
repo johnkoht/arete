@@ -158,6 +158,37 @@ describe('brief-formatters', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Phase 13 AC7 — Jira line in the project brief header
+  // -------------------------------------------------------------------------
+
+  it('formatProjectBriefMarkdown renders one **Jira:** line when metadata.jira present (AC7)', () => {
+    const brief: ProjectBrief = {
+      mode: 'project',
+      subject: 'Task Management v1',
+      subjectSlug: 'task-management-v1',
+      sections: [],
+      sources: [],
+      truncated: false,
+      metadata: { area: 'glance-2-mvp', jira: { idea: 'GL-12', epic: 'PLAT-9858' } },
+    };
+    const md = formatProjectBriefMarkdown(brief);
+    assert.ok(md.includes('**Jira:** idea: GL-12 · epic: PLAT-9858'));
+  });
+
+  it('formatProjectBriefMarkdown renders no Jira line when metadata.jira absent (AC7)', () => {
+    const brief: ProjectBrief = {
+      mode: 'project',
+      subject: 'P',
+      subjectSlug: 'p',
+      sections: [],
+      sources: [],
+      truncated: false,
+      metadata: {},
+    };
+    assert.ok(!formatProjectBriefMarkdown(brief).includes('**Jira:**'));
+  });
+
+  // -------------------------------------------------------------------------
   // Phase 13 AC8(8) — already-indented bullets pass through un-prefixed
   // -------------------------------------------------------------------------
 

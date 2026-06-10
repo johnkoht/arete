@@ -99,6 +99,12 @@ export function formatProjectBriefMarkdown(brief: ProjectBrief): string {
     meta.started ? `**Started:** ${meta.started}` : null,
   ].filter((s): s is string => s !== null);
   if (metaBits.length > 0) headerLines.push(metaBits.join(' · '), '');
+  // Phase 13 AC7 — one read-only Jira line when the README carries a
+  // `jira:` frontmatter block.
+  if (meta.jira && Object.keys(meta.jira).length > 0) {
+    const jiraBits = Object.entries(meta.jira).map(([k, v]) => `${k}: ${v}`);
+    headerLines.push(`**Jira:** ${jiraBits.join(' · ')}`, '');
+  }
   // Phase 12 AC6 / R9 — visible one-liners for unresolved or divergent area.
   if (meta.areaNote) headerLines.push(`_${meta.areaNote}_`, '');
   if (meta.areaWarning) headerLines.push(`_⚠️ ${meta.areaWarning}_`, '');
