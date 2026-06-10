@@ -5,7 +5,6 @@
  * One unit per primary ingest (per the absorption principle):
  *  - meetings → `.arete/memory/summaries/meetings/<date>-<slug>.md`
  *  - inbox docs → `.arete/memory/summaries/inbox/<doc-id>.md`
- *  - slack threads → `.arete/memory/summaries/slack/<thread-id>.md`
  *
  * Pure helpers (`buildMeetingSummaryPrompt`, `parseMeetingSummaryResponse`,
  * `buildInboxSummaryPrompt`, `parseInboxSummaryResponse`) are exported for
@@ -119,14 +118,6 @@ export declare function summaryPathForInbox(workspaceRoot: string, input: {
     sourcePath: string;
 }): string;
 /**
- * Derive the summary filename for a slack thread. Convention:
- * `.arete/memory/summaries/slack/<thread-slug>.md` where thread-slug is
- * a sanitized thread id (channel+ts).
- */
-export declare function summaryPathForSlack(workspaceRoot: string, input: {
-    threadId: string;
-}): string;
-/**
  * Returns `true` if a summary file already exists at `summaryPath` and
  * was generated from the same source content (hash match). Caller skips
  * the LLM call when this returns true.
@@ -146,8 +137,7 @@ export declare function summaryAlreadyFresh(storage: StorageAdapter, summaryPath
  */
 export declare function buildMeetingSummaryPrompt(input: MeetingSummaryInput): string;
 /**
- * Build the inbox-doc summary prompt. Source-agnostic; same shape used
- * for slack threads in Phase 1.5 when `ARETE_SLACK_SUMMARIES=1`.
+ * Build the inbox-doc summary prompt. Source-agnostic.
  */
 export declare function buildInboxSummaryPrompt(input: InboxSummaryInput): string;
 /**
@@ -163,6 +153,47 @@ export declare function parseInboxSummaryResponse(response: string): InboxSummar
  */
 export declare function writeMeetingSummary(input: MeetingSummaryInput, deps: WriteSummaryDeps): Promise<WriteSummaryResult>;
 export declare function writeInboxSummary(input: InboxSummaryInput, deps: WriteSummaryDeps): Promise<WriteSummaryResult>;
+/**
+ * Input for {@link writeMeetingSummaryFromFrontmatter}: a meeting file
+ * already split into frontmatter + body by the caller.
+ */
+export interface MeetingSummaryFromFrontmatterInput {
+    /** Absolute path to the meeting file. */
+    absPath: string;
+    /** Parsed meeting frontmatter (the caller's parse — not re-read). */
+    frontmatter: Record<string, unknown>;
+    /** Meeting body (frontmatter stripped) — hashed + summarized. */
+    body: string;
+    /**
+     * Side-thread headlines for the `## FYI` section. The apply path
+     * threads `intelligence.could_include` from memory; the approve path
+     * threads the `could_include` frontmatter key persisted at
+     * `extract --stage` (wiki-repair W2/D1).
+     */
+    couldInclude?: string[];
+}
+/**
+ * Derive a `MeetingSummaryInput` from meeting frontmatter and write the
+ * per-meeting summary file (wiki-repair W2).
+ *
+ * Single derivation path shared by BOTH summary call sites:
+ *  - `applyMeetingIntelligence` step 9 (`arete meeting apply`, backend)
+ *  - the `arete meeting approve` summary hook (W2 also-fire)
+ * so the two writers can never diverge on date/area/importance/topics/
+ * participants derivation (the writer-divergence bug class).
+ *
+ * Date convention: frontmatter `date` (first 10 chars) → filename
+ * `YYYY-MM-DD` prefix fallback. Returns null (no write, no throw) when
+ * neither yields a date — the caller treats this as a skip. NOTE: topic
+ * integration's summary-first read derives its lookup date from the
+ * FILENAME prefix; when frontmatter date ≠ filename date the summary
+ * lands under the frontmatter date and won't be picked up (pre-existing
+ * behavior of the apply path, kept identical here).
+ *
+ * Never throws on LLM failure — `writeMeetingSummary` converts LLM
+ * errors into `{ written: false, reason: 'llm-error' }` results.
+ */
+export declare function writeMeetingSummaryFromFrontmatter(input: MeetingSummaryFromFrontmatterInput, deps: WriteSummaryDeps): Promise<WriteSummaryResult | null>;
 /**
  * Read a meeting summary file if one exists. Returns null when the
  * summary doesn't exist or fails to parse.

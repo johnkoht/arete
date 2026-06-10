@@ -631,6 +631,70 @@ Constraints:
 - Prefer terse synthesis over copying source text verbatim.
 - Use Obsidian-style wikilinks [[slug]] to reference related topics or people.`;
 }
+/**
+ * Default per-call LLM timeout for the integration path. Deliberately
+ * generous — integration synthesis calls are legitimately slow (long
+ * topic pages + transcripts); the timeout exists to catch WEDGED
+ * sockets (ESTABLISHED, no data), not slow-but-live calls. Override
+ * via `llmTimeoutMs` or the `ARETE_LLM_TIMEOUT_MS` env var.
+ */
+export const DEFAULT_INTEGRATION_LLM_TIMEOUT_MS = 120_000;
+/** Resolve the effective integration LLM timeout (explicit > env > default). */
+export function resolveIntegrationLlmTimeoutMs(explicit) {
+    if (explicit !== undefined && Number.isFinite(explicit) && explicit > 0) {
+        return explicit;
+    }
+    const env = process.env.ARETE_LLM_TIMEOUT_MS;
+    if (env !== undefined && env.trim().length > 0) {
+        const n = Number(env);
+        if (Number.isFinite(n) && n > 0)
+            return n;
+    }
+    return DEFAULT_INTEGRATION_LLM_TIMEOUT_MS;
+}
+/**
+ * Run one integration LLM call with a per-call timeout and ONE retry
+ * (timeout-only — non-timeout errors propagate immediately so the
+ * caller's existing fallback handling stays in charge).
+ *
+ * On timeout the AbortController is aborted (cancels the HTTP request
+ * for signal-aware callers) and a warn is emitted (W5 pattern: visible,
+ * never vanishes). A second timeout throws, which `integrateSource`
+ * converts into a fallback update — the run FAILS FORWARD instead of
+ * freezing.
+ */
+async function callLLMWithTimeout(callLLM, prompt, timeoutMs, onWarn = (m) => console.warn(m)) {
+    const attempts = 2; // initial call + ONE retry
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        const controller = new AbortController();
+        let timer;
+        try {
+            return await new Promise((resolvePromise, rejectPromise) => {
+                timer = setTimeout(() => {
+                    // Reject FIRST (deterministic winner of the race), then abort
+                    // so a signal-aware transport tears down the wedged socket.
+                    rejectPromise(new Error(`LLM call timed out after ${timeoutMs}ms (attempt ${attempt}/${attempts})`));
+                    controller.abort();
+                }, timeoutMs);
+                callLLM(prompt, { signal: controller.signal }).then(resolvePromise, rejectPromise);
+            });
+        }
+        catch (err) {
+            const timedOut = controller.signal.aborted;
+            if (timedOut && attempt < attempts) {
+                onWarn(`[topic-memory] integration LLM call timed out after ${timeoutMs}ms — retrying once`);
+                continue;
+            }
+            throw err;
+        }
+        finally {
+            if (timer !== undefined)
+                clearTimeout(timer);
+        }
+    }
+    // Unreachable: the loop either returns or throws.
+    throw new Error('callLLMWithTimeout: exhausted attempts');
+}
 import { join as pathJoin, basename as pathBasename, isAbsolute as pathIsAbsolute, resolve as pathResolve } from 'node:path';
 import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
 import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
@@ -931,6 +995,7 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
                 const result = await this.integrateSource(targetSlug, page, src, {
                     today: options.today,
                     callLLM: options.callLLM,
+                    llmTimeoutMs: options.llmTimeoutMs,
                     llmContent,
                 });
                 if (result.decision === 'integrated')
@@ -1073,9 +1138,13 @@ TopicMemoryService.prototype.integrateSource = async function (topicSlug, existi
         ? { ...newSource, content: options.llmContent }
         : newSource;
     const prompt = buildIntegratePrompt(topicSlug, existingPage, llmSource, options.relevantL2 ?? '');
+    // Per-call timeout + ONE retry (wiki-repair T5): a wedged HTTP call
+    // fails forward into the fallback path below instead of freezing the
+    // whole refresh run (two live wedges: 6/08 — which created the stale
+    // seed lock — and 6/09, an 18-minute silent hang).
     let response;
     try {
-        response = await options.callLLM(prompt);
+        response = await callLLMWithTimeout(options.callLLM, prompt, resolveIntegrationLlmTimeoutMs(options.llmTimeoutMs));
     }
     catch (err) {
         return {

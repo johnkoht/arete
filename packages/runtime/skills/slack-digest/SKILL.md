@@ -59,12 +59,6 @@ high-priority, which Slack reactions act as user-flags, which Slack
 DMs translate to commitments_create, which Notion docs to propose
 updates against. Treat its content as opinion-defining context.
 
-> **Phase 1 wiki-expansion note**: this skill emits a
-> `slack-thread-eval` event per thread (Phase 2c-bis) for the
-> substantial-thread heuristic shadow run. The slack-summary writer
-> is gated by `ARETE_SLACK_SUMMARIES=1` (default OFF during the
-> 7-day shadow). See Phase 2c-bis for the CLI invocation.
-
 ## When to Use
 
 - "Slack digest" / "Process my slack"
@@ -242,30 +236,6 @@ Per-thread output shape:
 
 A thread with no clear topic match emits `topics: []`. Two threads
 in the same digest may emit the same slug — Phase 5a dedups.
-
-#### 2c. Slack-thread heuristic eval (MC3 shadow run)
-
-For each thread evaluated in 2b, emit a `slack-thread-eval` event:
-
-```bash
-arete events log slack-thread \
-  --thread "<channel_id>/<thread_ts>" \
-  --messages <message_count> \
-  --participants <participant_count> \
-  $([ <decision_detected> = true ] && echo --decision) \
-  $([ <user_flagged> = true ] && echo --user-flag) \
-  --json
-```
-
-Default heuristic — `would_summarize=true` when **any** of:
-- `messages >= 10`
-- decision detected by significance_analyst
-- `participants >= 3`
-- user-flagged via slack reaction or skill arg
-
-Best-effort: if CLI errors, continue. After ≤20% combined
-false-pos/false-neg rate over 7 days, `ARETE_SLACK_SUMMARIES=1`
-goes live writing to `.arete/memory/summaries/slack/<thread-id>.md`.
 
 #### 2d. Area Association
 
@@ -648,7 +618,6 @@ commitments-json-shape.md` for the parallel pattern with commitments
 | 1 — Pull & Organize (1a–1e) | yes | yes |
 | 2a — Assemble Context Bundle | yes | yes |
 | 2b — Extract Intelligence (significance_analyst) | yes | yes |
-| 2c — Slack-thread heuristic eval (events log) | yes | yes (best-effort; if it fails, continue) |
 | 2d — Area Association | yes | yes |
 | 3 — Reconcile Against Existing Work | yes | **partial** — read state for dedup (3a + dedup checks); do NOT propose updates or write |
 | 4 — Compose curated view | yes | **skipped** — return JSON to orchestrator instead |
@@ -759,8 +728,6 @@ These are read-only or telemetry-only and do not violate the contract:
 - `arete commitments list` (read).
 - `arete people show` (read).
 - `arete topic list --active --slugs` (read).
-- `arete events log slack-thread` (telemetry; best-effort — if it
-  fails, the gather-only output still ships).
 
 ## Integration with Daily Winddown
 
@@ -824,8 +791,7 @@ week-long async threads that didn't surface in meetings.
   `arete people memory refresh`, `arete commitments list / create /
   resolve`, `arete search`, `arete index`,
   `arete topic list --active --slugs --json`,
-  `arete topic refresh --slugs <list> --source <path>`,
-  `arete events log slack-thread`.
+  `arete topic refresh --slugs <list> --source <path>`.
 - **MCP**: `slack_search_public_and_private`, `slack_read_channel`,
   `slack_read_thread`, `slack_search_users`.
 - **Related**: `capture-conversation` (single thread),

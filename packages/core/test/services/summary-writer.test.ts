@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 
 import {
   writeMeetingSummary,
+  writeMeetingSummaryFromFrontmatter,
   writeInboxSummary,
   readMeetingSummary,
   buildMeetingSummaryPrompt,
@@ -422,5 +423,130 @@ describe('readMeetingSummary', () => {
     assert.notEqual(summary, null);
     assert.equal(summary!.frontmatter.source_type, 'meeting');
     assert.match(summary!.sections['What happened']!, /Cover Whale/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// writeMeetingSummaryFromFrontmatter (wiki-repair W2 — shared derivation
+// path for `meeting apply` step 9 + the `meeting approve` summary hook)
+// ---------------------------------------------------------------------------
+
+describe('writeMeetingSummaryFromFrontmatter', () => {
+  it('derives metadata from frontmatter and writes the summary', async () => {
+    const storage = new FileStorageAdapter();
+    const prompts: string[] = [];
+    const callLLM = async (prompt: string) => {
+      prompts.push(prompt);
+      return VALID_MEETING_RESPONSE;
+    };
+
+    const absPath = join(workspaceRoot, 'resources', 'meetings', '2026-06-09-cover-whale.md');
+    const result = await writeMeetingSummaryFromFrontmatter(
+      {
+        absPath,
+        frontmatter: {
+          date: '2026-06-09T10:00:00.000Z',
+          area: 'claims',
+          importance: 'important',
+          topics: ['cover-whale-templates', 7, 'email-templates'],
+          attendees: [{ name: 'Anthony' }, 'Sara', { email: 'no-name@x.com' }],
+        },
+        body: 'Anthony said the pilot looks good.',
+        couldInclude: ['Risks: Sara flagged churn assumption'],
+      },
+      { storage, workspaceRoot, callLLM },
+    );
+
+    assert.notEqual(result, null);
+    assert.equal(result!.written, true);
+    // Date derived from frontmatter (sliced to YYYY-MM-DD), filename slug kept.
+    assert.equal(
+      result!.summaryPath,
+      join(workspaceRoot, '.arete', 'memory', 'summaries', 'meetings', '2026-06-09-cover-whale.md'),
+    );
+
+    const content = readFileSync(result!.summaryPath, 'utf8');
+    assert.match(content, /source_type: meeting/);
+    assert.match(content, /importance: important/);
+    assert.match(content, /area: claims/);
+    // Non-string topics filtered; attendees normalized from mixed shapes.
+    assert.match(content, /cover-whale-templates/);
+    assert.match(content, /Anthony/);
+
+    // could_include headlines reach the LLM prompt as FYI candidates
+    // (AC2b round-trip: stage → approve → summary FYI section).
+    assert.equal(prompts.length, 1);
+    assert.match(prompts[0], /SIDE-THREAD HEADLINES/);
+    assert.match(prompts[0], /Risks: Sara flagged churn assumption/);
+  });
+
+  it('falls back to the filename date when frontmatter has none', async () => {
+    const storage = new FileStorageAdapter();
+    const callLLM = async () => VALID_MEETING_RESPONSE;
+    const absPath = join(workspaceRoot, 'resources', 'meetings', '2026-06-08-standup.md');
+    const result = await writeMeetingSummaryFromFrontmatter(
+      { absPath, frontmatter: {}, body: 'notes' },
+      { storage, workspaceRoot, callLLM },
+    );
+    assert.notEqual(result, null);
+    assert.equal(result!.written, true);
+    assert.match(result!.summaryPath, /2026-06-08-standup\.md$/);
+  });
+
+  it('returns null (no write, no throw) when no date is derivable', async () => {
+    const storage = new FileStorageAdapter();
+    let called = false;
+    const callLLM = async () => {
+      called = true;
+      return VALID_MEETING_RESPONSE;
+    };
+    const result = await writeMeetingSummaryFromFrontmatter(
+      {
+        absPath: join(workspaceRoot, 'resources', 'meetings', 'undated-meeting.md'),
+        frontmatter: { date: 42 },
+        body: 'notes',
+      },
+      { storage, workspaceRoot, callLLM },
+    );
+    assert.equal(result, null);
+    assert.equal(called, false);
+  });
+
+  it('resolves with written:false on LLM failure — never throws (pre-mortem R4)', async () => {
+    const storage = new FileStorageAdapter();
+    const callLLM = async () => {
+      throw new Error('socket hang up');
+    };
+    const result = await writeMeetingSummaryFromFrontmatter(
+      {
+        absPath: join(workspaceRoot, 'resources', 'meetings', '2026-06-09-standup.md'),
+        frontmatter: { date: '2026-06-09' },
+        body: 'notes',
+      },
+      { storage, workspaceRoot, callLLM },
+    );
+    assert.notEqual(result, null);
+    assert.equal(result!.written, false);
+    assert.equal(result!.reason, 'llm-error');
+    assert.equal(result!.warnings.length > 0, true);
+  });
+
+  it('omits the FYI prompt block when couldInclude is absent (R5 upgrade path)', async () => {
+    const storage = new FileStorageAdapter();
+    const prompts: string[] = [];
+    const callLLM = async (prompt: string) => {
+      prompts.push(prompt);
+      return VALID_MEETING_RESPONSE;
+    };
+    const result = await writeMeetingSummaryFromFrontmatter(
+      {
+        absPath: join(workspaceRoot, 'resources', 'meetings', '2026-06-09-standup.md'),
+        frontmatter: { date: '2026-06-09' },
+        body: 'notes',
+      },
+      { storage, workspaceRoot, callLLM },
+    );
+    assert.equal(result!.written, true);
+    assert.doesNotMatch(prompts[0], /SIDE-THREAD HEADLINES/);
   });
 });

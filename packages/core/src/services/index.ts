@@ -558,42 +558,10 @@ export type {
   ScoredTask,
 } from './task-scoring.js';
 
-// Slack-thread substantial heuristic (Phase 1 §a.3 / MC3)
-export {
-  evaluateSlackThread,
-  formatSlackEvalLogLine,
-  slackSummariesEnabled,
-  DEFAULT_SLACK_MESSAGE_THRESHOLD,
-  DEFAULT_SLACK_PARTICIPANT_THRESHOLD,
-} from './slack-heuristic.js';
-export type {
-  SlackThreadEvalInput,
-  SlackHeuristicTrigger,
-  SlackHeuristicConfig,
-  SlackHeuristicResult,
-} from './slack-heuristic.js';
-
-// Org entity auto-detection + refresh (Phase 1 §b)
-export {
-  detectOrgsFromMeetings,
-  refreshOrgs,
-  createOrgEntityManual,
-  renderOrgAutoSection,
-  slugifyDomain,
-  DEFAULT_INTERNAL_DOMAINS,
-  DEFAULT_DETECTION_WINDOW_DAYS,
-  DEFAULT_DETECTION_MIN_MEETINGS,
-} from './org-entity.js';
-export type {
-  DetectOrgsOptions,
-  DetectedOrg,
-  RefreshOrgsOptions,
-  RefreshOrgsResult,
-} from './org-entity.js';
-
 // Summary writers (Phase 1 wiki expansion)
 export {
   writeMeetingSummary,
+  writeMeetingSummaryFromFrontmatter,
   writeInboxSummary,
   readMeetingSummary,
   buildMeetingSummaryPrompt,
@@ -609,6 +577,7 @@ export {
 } from './summary-writer.js';
 export type {
   MeetingSummaryInput,
+  MeetingSummaryFromFrontmatterInput,
   InboxSummaryInput,
   WriteSummaryDeps,
   WriteSummaryResult,

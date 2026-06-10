@@ -368,8 +368,10 @@ export function registerTopicCommands(program: Command): void {
       const noLlmEnv = process.env.ARETE_NO_LLM === '1';
       const callLLM =
         services.ai.isConfigured() && !noLlmEnv
-          ? async (prompt: string) => {
-              const result = await services.ai.call('synthesis', prompt);
+          ? async (prompt: string, callOpts?: { signal?: AbortSignal }) => {
+              // Signal-aware (wiki-repair T5): lets the integration
+              // path's per-call timeout cancel a wedged HTTP call.
+              const result = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
               return result.text;
             }
           : undefined;
@@ -623,8 +625,8 @@ export function registerTopicCommands(program: Command): void {
           }
           return;
         }
-        const callLLM = async (prompt: string): Promise<string> => {
-          const r = await services.ai.call('synthesis', prompt);
+        const callLLM = async (prompt: string, callOpts?: { signal?: AbortSignal }): Promise<string> => {
+          const r = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
           return r.text;
         };
         const batch = await services.topicMemory.refreshAllFromSources(paths, {
@@ -1020,8 +1022,10 @@ export function registerTopicCommands(program: Command): void {
       const noLlmEnv = process.env.ARETE_NO_LLM === '1';
       const callLLM =
         services.ai.isConfigured() && !noLlmEnv
-          ? async (prompt: string) => {
-              const result = await services.ai.call('synthesis', prompt);
+          ? async (prompt: string, callOpts?: { signal?: AbortSignal }) => {
+              // Signal-aware (wiki-repair T5): lets the integration
+              // path's per-call timeout cancel a wedged HTTP call.
+              const result = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
               return result.text;
             }
           : undefined;

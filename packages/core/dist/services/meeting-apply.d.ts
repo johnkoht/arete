@@ -32,12 +32,6 @@ export interface ApplyMeetingOptions {
      * content_hash match, so this flag is mostly a fast-path.
      */
     skipSummary?: boolean;
-    /**
-     * Skip the post-apply org-entity auto-detection refresh (Phase 1
-     * wiki expansion §b). When set, no `.arete/memory/entities/orgs/`
-     * pages are written from this apply.
-     */
-    skipOrgEntities?: boolean;
 }
 /**
  * Result of applying meeting intelligence.
@@ -64,12 +58,6 @@ export interface ApplyMeetingResult {
      * already-fresh / no-llm / skip-summary paths.
      */
     summaryWritten: boolean;
-    /**
-     * Slugs of org-entity pages refreshed this invocation. Empty when
-     * skipOrgEntities is set, when no orgs qualified, or when the
-     * detection scan was skipped (e.g., no workspacePaths).
-     */
-    orgsRefreshed: string[];
     /** Warnings during processing. */
     warnings: string[];
 }

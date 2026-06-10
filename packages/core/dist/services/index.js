@@ -105,10 +105,6 @@ export { HygieneService } from './hygiene.js';
 export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 // Task scoring
 export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';
-// Slack-thread substantial heuristic (Phase 1 §a.3 / MC3)
-export { evaluateSlackThread, formatSlackEvalLogLine, slackSummariesEnabled, DEFAULT_SLACK_MESSAGE_THRESHOLD, DEFAULT_SLACK_PARTICIPANT_THRESHOLD, } from './slack-heuristic.js';
-// Org entity auto-detection + refresh (Phase 1 §b)
-export { detectOrgsFromMeetings, refreshOrgs, createOrgEntityManual, renderOrgAutoSection, slugifyDomain, DEFAULT_INTERNAL_DOMAINS, DEFAULT_DETECTION_WINDOW_DAYS, DEFAULT_DETECTION_MIN_MEETINGS, } from './org-entity.js';
 // Summary writers (Phase 1 wiki expansion)
-export { writeMeetingSummary, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
+export { writeMeetingSummary, writeMeetingSummaryFromFrontmatter, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
 //# sourceMappingURL=index.js.map

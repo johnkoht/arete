@@ -323,8 +323,10 @@ export function registerTopicCommands(program) {
         // Honor ARETE_NO_LLM envvar regardless of AI configuration.
         const noLlmEnv = process.env.ARETE_NO_LLM === '1';
         const callLLM = services.ai.isConfigured() && !noLlmEnv
-            ? async (prompt) => {
-                const result = await services.ai.call('synthesis', prompt);
+            ? async (prompt, callOpts) => {
+                // Signal-aware (wiki-repair T5): lets the integration
+                // path's per-call timeout cancel a wedged HTTP call.
+                const result = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
                 return result.text;
             }
             : undefined;
@@ -575,8 +577,8 @@ export function registerTopicCommands(program) {
                 }
                 return;
             }
-            const callLLM = async (prompt) => {
-                const r = await services.ai.call('synthesis', prompt);
+            const callLLM = async (prompt, callOpts) => {
+                const r = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
                 return r.text;
             };
             const batch = await services.topicMemory.refreshAllFromSources(paths, {
@@ -964,8 +966,10 @@ export function registerTopicCommands(program) {
         // ---- AI configuration check (only matters when there IS work to do) -
         const noLlmEnv = process.env.ARETE_NO_LLM === '1';
         const callLLM = services.ai.isConfigured() && !noLlmEnv
-            ? async (prompt) => {
-                const result = await services.ai.call('synthesis', prompt);
+            ? async (prompt, callOpts) => {
+                // Signal-aware (wiki-repair T5): lets the integration
+                // path's per-call timeout cancel a wedged HTTP call.
+                const result = await services.ai.call('synthesis', prompt, { signal: callOpts?.signal });
                 return result.text;
             }
             : undefined;

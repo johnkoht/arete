@@ -5,7 +5,6 @@
  * One unit per primary ingest (per the absorption principle):
  *  - meetings → `.arete/memory/summaries/meetings/<date>-<slug>.md`
  *  - inbox docs → `.arete/memory/summaries/inbox/<doc-id>.md`
- *  - slack threads → `.arete/memory/summaries/slack/<thread-id>.md`
  *
  * Pure helpers (`buildMeetingSummaryPrompt`, `parseMeetingSummaryResponse`,
  * `buildInboxSummaryPrompt`, `parseInboxSummaryResponse`) are exported for
@@ -168,16 +167,6 @@ export function summaryPathForInbox(workspaceRoot: string, input: { sourcePath: 
   return join(workspaceRoot, '.arete', 'memory', SUMMARIES_DIR, 'inbox', `${base}.md`);
 }
 
-/**
- * Derive the summary filename for a slack thread. Convention:
- * `.arete/memory/summaries/slack/<thread-slug>.md` where thread-slug is
- * a sanitized thread id (channel+ts).
- */
-export function summaryPathForSlack(workspaceRoot: string, input: { threadId: string }): string {
-  const safe = input.threadId.replace(/[^a-zA-Z0-9._-]+/g, '-');
-  return join(workspaceRoot, '.arete', 'memory', SUMMARIES_DIR, 'slack', `${safe}.md`);
-}
-
 // ---------------------------------------------------------------------------
 // Idempotency check
 // ---------------------------------------------------------------------------
@@ -264,8 +253,7 @@ Constraints:
 }
 
 /**
- * Build the inbox-doc summary prompt. Source-agnostic; same shape used
- * for slack threads in Phase 1.5 when `ARETE_SLACK_SUMMARIES=1`.
+ * Build the inbox-doc summary prompt. Source-agnostic.
  */
 export function buildInboxSummaryPrompt(input: InboxSummaryInput): string {
   const title = input.title ?? '(untitled)';
@@ -467,6 +455,125 @@ export async function writeInboxSummary(
   await deps.storage.write(summaryPath, stamped);
 
   return { summaryPath, written: true, contentHash, warnings };
+}
+
+// ---------------------------------------------------------------------------
+// Frontmatter-derived writer (shared by `meeting apply` + `meeting approve`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract YYYY-MM-DD from a meeting filename, e.g.,
+ * `2026-04-22-cover-whale.md` → `2026-04-22`. Returns null if no date
+ * prefix is present.
+ */
+function extractDateFromFilename(absPath: string): string | null {
+  const m = basename(absPath).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Input for {@link writeMeetingSummaryFromFrontmatter}: a meeting file
+ * already split into frontmatter + body by the caller.
+ */
+export interface MeetingSummaryFromFrontmatterInput {
+  /** Absolute path to the meeting file. */
+  absPath: string;
+  /** Parsed meeting frontmatter (the caller's parse — not re-read). */
+  frontmatter: Record<string, unknown>;
+  /** Meeting body (frontmatter stripped) — hashed + summarized. */
+  body: string;
+  /**
+   * Side-thread headlines for the `## FYI` section. The apply path
+   * threads `intelligence.could_include` from memory; the approve path
+   * threads the `could_include` frontmatter key persisted at
+   * `extract --stage` (wiki-repair W2/D1).
+   */
+  couldInclude?: string[];
+}
+
+/**
+ * Derive a `MeetingSummaryInput` from meeting frontmatter and write the
+ * per-meeting summary file (wiki-repair W2).
+ *
+ * Single derivation path shared by BOTH summary call sites:
+ *  - `applyMeetingIntelligence` step 9 (`arete meeting apply`, backend)
+ *  - the `arete meeting approve` summary hook (W2 also-fire)
+ * so the two writers can never diverge on date/area/importance/topics/
+ * participants derivation (the writer-divergence bug class).
+ *
+ * Date convention: frontmatter `date` (first 10 chars) → filename
+ * `YYYY-MM-DD` prefix fallback. Returns null (no write, no throw) when
+ * neither yields a date — the caller treats this as a skip. NOTE: topic
+ * integration's summary-first read derives its lookup date from the
+ * FILENAME prefix; when frontmatter date ≠ filename date the summary
+ * lands under the frontmatter date and won't be picked up (pre-existing
+ * behavior of the apply path, kept identical here).
+ *
+ * Never throws on LLM failure — `writeMeetingSummary` converts LLM
+ * errors into `{ written: false, reason: 'llm-error' }` results.
+ */
+export async function writeMeetingSummaryFromFrontmatter(
+  input: MeetingSummaryFromFrontmatterInput,
+  deps: WriteSummaryDeps,
+): Promise<WriteSummaryResult | null> {
+  const { absPath, frontmatter: data, body } = input;
+  const { workspaceRoot } = deps;
+
+  const dateRaw = data['date'];
+  const meetingDate = typeof dateRaw === 'string'
+    ? dateRaw.slice(0, 10)
+    : extractDateFromFilename(absPath);
+  if (meetingDate === null) return null;
+
+  // Workspace-relative source_path for portability.
+  const wsRel = absPath.startsWith(workspaceRoot)
+    ? absPath.slice(workspaceRoot.length).replace(/^[/\\]+/, '')
+    : absPath;
+
+  // Canonical taxonomy lives in `packages/core/src/integrations/meetings.ts`
+  // (`Importance = 'skip' | 'light' | 'normal' | 'important'`). The
+  // chef orchestrator gates on `importance: important`; coercing
+  // 'normal'/'important' to undefined here silently defeats the gate
+  // (phase-8-followup-5 amendment).
+  const importanceRaw = data['importance'];
+  const importance: Importance | undefined =
+    importanceRaw === 'skip' ||
+    importanceRaw === 'light' ||
+    importanceRaw === 'normal' ||
+    importanceRaw === 'important'
+      ? importanceRaw
+      : undefined;
+
+  const areaRaw = data['area'];
+  const area = typeof areaRaw === 'string' ? areaRaw : undefined;
+
+  const attendeesRaw = data['attendees'];
+  const participants: string[] | undefined = Array.isArray(attendeesRaw)
+    ? attendeesRaw
+        .map((a) => (typeof a === 'string' ? a : (a as { name?: string })?.name))
+        .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+    : typeof attendeesRaw === 'string'
+      ? attendeesRaw.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+      : undefined;
+
+  // Topics as currently written on the meeting file (post-alias-coerce
+  // when the unified frontmatter writer ran before us).
+  const topics = Array.isArray(data['topics'])
+    ? (data['topics'] as unknown[]).filter((t): t is string => typeof t === 'string')
+    : undefined;
+
+  const summaryInput: MeetingSummaryInput = {
+    sourcePath: wsRel,
+    date: meetingDate,
+    sourceBody: body,
+    area,
+    importance,
+    topics,
+    participants,
+    couldInclude: input.couldInclude,
+  };
+
+  return writeMeetingSummary(summaryInput, deps);
 }
 
 // ---------------------------------------------------------------------------

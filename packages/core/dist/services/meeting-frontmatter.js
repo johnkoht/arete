@@ -29,12 +29,24 @@
  *   - `decisions_count` (number)
  *   - `learnings_count` (number)
  *   - `status`, `processed_at` (from the `status` arg)
+ *   - `could_include` (string array; wiki-repair W2/D1 — persisted at
+ *     stage so `arete meeting approve` can render the summary's FYI
+ *     section; consumed + cleared at approve)
  *
  * Mutates `fm` in place. Idempotent: re-running on the same
  * `intelligence` produces the same `fm`. Field order in YAML output is
  * determined by the YAML serializer (insertion order for `yaml` lib);
  * this writer is intentionally written so the canonical 7 fields are
  * always assigned in the same order across the 3 call sites.
+ *
+ * `could_include` clear semantics: when `intelligence.could_include` is
+ * absent/empty, the key is `delete`d from `fm` (NOT set to `undefined`
+ * — the backend path serializes via gray-matter/js-yaml, which throws
+ * on undefined values). Callers that write through a PARTIAL-MERGE
+ * mechanism (`writeWithLock` — extract `--stage`) must additionally set
+ * `patch['could_include'] = undefined` when the writer didn't set the
+ * key, so a stale key from a prior extract is deleted rather than
+ * surviving the merge (see meeting.ts extract mutator).
  *
  * @param fm - Frontmatter object to mutate.
  * @param intelligence - Extracted meeting intelligence.
@@ -78,5 +90,22 @@ export async function writeMeetingApplyFrontmatter(fm, intelligence, status, ali
     fm['their_commitments'] = intelligence.actionItems.filter((i) => i.direction === 'they_owe_me').length;
     fm['decisions_count'] = intelligence.decisions.length;
     fm['learnings_count'] = intelligence.learnings.length;
+    // 4. could_include — wiki-repair W2/D1 persistence.
+    //
+    // Side-thread headlines parsed by wiki-aware extraction previously
+    // lived only in the extract process's memory: the body-block rendering
+    // was removed in Phase 1 and the approve path (a separate process)
+    // could never see them — the FYI content went nowhere. Persisting the
+    // (already-sanitized, hard-capped-at-8) list here lets
+    // `arete meeting approve` consume it for the summary's FYI section.
+    const couldInclude = intelligence.could_include;
+    if (couldInclude !== undefined && couldInclude.length > 0) {
+        fm['could_include'] = couldInclude;
+    }
+    else {
+        // Set-or-DELETE, never set-undefined (js-yaml throws on undefined;
+        // see module docstring for the partial-merge caveat).
+        delete fm['could_include'];
+    }
 }
 //# sourceMappingURL=meeting-frontmatter.js.map

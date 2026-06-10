@@ -40,7 +40,7 @@ Output is the full assembled context (no LLM synthesis step). The `--raw` flag s
 
 ### Sharper memory and commitments
 
-- **Memory grew a summaries layer** — alongside topic pages, Areté now writes source summaries and org-entity pages, so the wiki accumulates "what we know" in more than one shape.
+- **Memory grew a summaries layer** — alongside topic pages, Areté now writes source summaries, so the wiki accumulates "what we know" in more than one shape.
 - **Commitment dedup** — a new `arete dedup` command runs the same near-duplicate detection retroactively across a window (`--dry-run` by default, `--apply` to write, `--explain <id>` to see why two commitments were merged). A background hygiene pass keeps the list clean over time.
 - **Commitment migration** — if you have older commitments, `arete commitments migrate` upgrades them (dry-run first, then `--apply --owner-slug <you>`), and `arete commitments backfill-area` fills in areas. Read the generated diff before applying.
 

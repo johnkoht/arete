@@ -7,11 +7,10 @@
  *
  * Used by `arete meeting apply <file>` CLI command.
  */
-import { resolve, basename } from 'path';
+import { resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { formatStagedSections, updateMeetingContent } from './meeting-extraction.js';
-import { writeMeetingSummary } from './summary-writer.js';
-import { refreshOrgs } from './org-entity.js';
+import { writeMeetingSummaryFromFrontmatter } from './summary-writer.js';
 import { writeMeetingApplyFrontmatter } from './meeting-frontmatter.js';
 function parseFrontmatter(content) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
@@ -28,15 +27,6 @@ function parseFrontmatter(content) {
 function serializeFrontmatter(data, body) {
     const fm = stringifyYaml(data).trimEnd();
     return `---\n${fm}\n---\n\n${body.replace(/^\n+/, '')}`;
-}
-/**
- * Extract YYYY-MM-DD from a meeting filename, e.g.,
- * `2026-04-22-cover-whale.md` → `2026-04-22`. Returns null if no
- * date prefix is present.
- */
-function extractDateFromFilename(absPath) {
-    const m = basename(absPath).match(/^(\d{4}-\d{2}-\d{2})/);
-    return m ? m[1] : null;
 }
 // ---------------------------------------------------------------------------
 // Content manipulation helpers
@@ -184,64 +174,23 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
     let summaryWritten = false;
     if (!options.skipSummary) {
         try {
-            const dateRaw = data['date'];
-            const meetingDate = typeof dateRaw === 'string'
-                ? dateRaw.slice(0, 10)
-                : extractDateFromFilename(absPath);
-            if (meetingDate !== null) {
-                // Workspace-relative source_path for portability.
-                const wsRel = absPath.startsWith(workspaceRoot)
-                    ? absPath.slice(workspaceRoot.length).replace(/^[/\\]+/, '')
-                    : absPath;
-                // Canonical taxonomy lives in `packages/core/src/integrations/meetings.ts`
-                // (`Importance = 'skip' | 'light' | 'normal' | 'important'`). The
-                // chef orchestrator gates on `importance: important`; coercing
-                // 'normal'/'important' to undefined here silently defeats the gate
-                // (phase-8-followup-5 amendment).
-                const importanceRaw = data['importance'];
-                const importance = importanceRaw === 'skip' ||
-                    importanceRaw === 'light' ||
-                    importanceRaw === 'normal' ||
-                    importanceRaw === 'important'
-                    ? importanceRaw
-                    : undefined;
-                const areaRaw = data['area'];
-                const area = typeof areaRaw === 'string' ? areaRaw : undefined;
-                const attendeesRaw = data['attendees'];
-                const participants = Array.isArray(attendeesRaw)
-                    ? attendeesRaw
-                        .map((a) => (typeof a === 'string' ? a : a?.name))
-                        .filter((s) => typeof s === 'string' && s.trim().length > 0)
-                    : typeof attendeesRaw === 'string'
-                        ? attendeesRaw.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
-                        : undefined;
-                // Hash on body alone, mirroring topic-memory.hashMeetingSource —
-                // frontmatter changes (status bumps, item counts) don't bust dedup.
-                // Phase 1: pass `could_include` headlines through so the summary
-                // writer's `## FYI` section can surface them — the body-block
-                // rendering on the meeting source file was removed.
-                // Read the post-write topics from `data` — the unified writer
-                // mutated `data.topics` with the alias-coerced result (or proposed
-                // slugs as fallback). This keeps the summary writer's topics field
-                // consistent with what was just written to meeting frontmatter.
-                const writtenTopics = Array.isArray(data['topics'])
-                    ? data['topics'].filter((t) => typeof t === 'string')
-                    : undefined;
-                const summaryInput = {
-                    sourcePath: wsRel,
-                    date: meetingDate,
-                    sourceBody: updatedBody,
-                    area,
-                    importance,
-                    topics: writtenTopics,
-                    participants,
-                    couldInclude: intelligence.could_include,
-                };
-                const summaryResult = await writeMeetingSummary(summaryInput, {
-                    storage,
-                    workspaceRoot,
-                    callLLM: deps.callLLM,
-                });
+            // Derivation (date/area/importance/topics/participants) is shared
+            // with the `arete meeting approve` summary hook via
+            // `writeMeetingSummaryFromFrontmatter` (wiki-repair W2 — single
+            // derivation path so the two writers can never diverge). Hash on
+            // body alone, mirroring topic-memory.hashMeetingSource —
+            // frontmatter changes (status bumps, item counts) don't bust
+            // dedup. `data['topics']` carries the post-alias-coerce result
+            // the unified writer just wrote; `could_include` headlines feed
+            // the summary's `## FYI` section (body-block rendering on the
+            // source file was removed in Phase 1).
+            const summaryResult = await writeMeetingSummaryFromFrontmatter({
+                absPath,
+                frontmatter: data,
+                body: updatedBody,
+                couldInclude: intelligence.could_include,
+            }, { storage, workspaceRoot, callLLM: deps.callLLM });
+            if (summaryResult !== null) {
                 summaryPath = summaryResult.summaryPath;
                 summaryWritten = summaryResult.written;
                 for (const w of summaryResult.warnings)
@@ -253,35 +202,11 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
             warnings.push(`summary writer failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
         }
     }
-    // 10. Refresh org-entity pages (Phase 1 §b).
-    //
-    // Auto-detection scans recent meetings for non-internal email domains
-    // and writes/updates pages under .arete/memory/entities/orgs/. The
-    // scan runs on every meeting apply because:
-    //   - Detection threshold (≥2 distinct meetings in 90d) is cheap to
-    //     re-evaluate; expensive part is only triggered when an org
-    //     newly qualifies.
-    //   - Existing pages are byte-equal-skipped when content hasn't
-    //     changed.
-    // Caller can disable via `options.skipOrgEntities`. No LLM cost; runs
-    // independently of `deps.callLLM`.
-    let orgsRefreshed = [];
-    if (!options.skipOrgEntities && deps.workspacePaths !== undefined) {
-        try {
-            const result = await refreshOrgs(deps.workspacePaths, storage, {
-                // Pass `today` from the meeting apply so detection windows are
-                // deterministic relative to the meeting being processed (not
-                // wall-clock at write time).
-                today: new Date().toISOString().slice(0, 10),
-            });
-            orgsRefreshed = result.written;
-            for (const w of result.warnings)
-                warnings.push(w);
-        }
-        catch (err) {
-            warnings.push(`org-entity refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
-        }
-    }
+    // (Step 10, organization-entity auto-detection refresh, was REMOVED —
+    // wiki-repair W3. That service/model pair was Phase 1 dark code: hooked
+    // only to `arete meeting apply`, which the chef winddown flow skips,
+    // and its documented manual-create CLI verb never existed. Git history
+    // preserves the implementation if an "accounts" view returns.)
     return {
         meetingPath: absPath,
         actionItemsStaged: intelligence.actionItems.length,
@@ -290,7 +215,6 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
         agendaArchived,
         summaryPath,
         summaryWritten,
-        orgsRefreshed,
         warnings,
     };
 }

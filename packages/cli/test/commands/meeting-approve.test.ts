@@ -502,4 +502,133 @@ Meeting with pre-marked items.
       rmSync(lockPath, { force: true });
     }
   });
+
+  // --------------------------------------------------------------------------
+  // wiki-repair W2 — approve-time summary hook independence (pre-mortem R4).
+  // --------------------------------------------------------------------------
+
+  it('summary LLM failure never skips topic integration; approve exits 0 (R4)', () => {
+    // ai.tiers has ONLY `fast` — the summary hook and Hook 2 both route
+    // through the `synthesis` task (standard tier), so every LLM call
+    // throws "AI tier 'standard' not configured" WITHOUT any network.
+    // The summary hook must fail in its OWN try/catch; Hook 2 must still
+    // run (integrateSource converts per-source LLM throws into fallback
+    // integrations, so topicIntegration reports fallback > 0).
+    const meetingWithTopics = PROCESSED_MEETING.replace(
+      'status: processed',
+      'status: processed\ntopics: [sprint-planning]',
+    );
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      meetingWithTopics,
+      'utf8',
+    );
+    const manifestPath = join(tmpDir, 'arete.yaml');
+    writeFileSync(
+      manifestPath,
+      `${readFileSync(manifestPath, 'utf8')}\nai:\n  tiers:\n    fast: anthropic/claude-3-5-haiku-20241022\n`,
+      'utf8',
+    );
+
+    const stdout = runCli(
+      ['meeting', 'approve', '2026-03-15-sprint-review', '--all', '--skip-qmd', '--json'],
+      { cwd: tmpDir, env: { ARETE_NO_LLM: '' } },
+    );
+    const result = JSON.parse(stdout) as {
+      success: boolean;
+      summary: { path: string | null; written: boolean; reason?: string } | null;
+      topicIntegration: { topics: number; fallback: number } | null;
+      topicIntegrationError: unknown;
+    };
+
+    // Approve exit 0 + success (runCli throws on non-zero exit).
+    assert.equal(result.success, true);
+    // Summary failed in its own try/catch (llm-error from the writer).
+    assert.ok(result.summary, 'summary surface must be present');
+    assert.equal(result.summary?.written, false);
+    assert.match(result.summary?.reason ?? '', /llm-error|error:/);
+    // Integration STILL ran — per-source LLM failure degrades to
+    // fallback integration, not a skipped hook.
+    assert.ok(result.topicIntegration, 'Hook 2 must still run after summary failure');
+    assert.equal(result.topicIntegration!.topics >= 1, true);
+    assert.equal(result.topicIntegration!.fallback >= 1, true);
+    assert.equal(result.topicIntegrationError, null);
+
+    // The summary-first read had nothing to consume → the ingest event
+    // records transcript input (W5 observability).
+    const log = readFileSync(join(tmpDir, '.arete', 'memory', 'log.md'), 'utf8');
+    assert.match(log, /ingest/);
+    assert.match(log, /input_kind=transcript/);
+  });
+
+  // --------------------------------------------------------------------------
+  // wiki-repair W2 / D1 — could_include consume-or-clear at approve.
+  // --------------------------------------------------------------------------
+
+  it('approves a meeting staged BEFORE the could_include key existed (R5 upgrade path)', () => {
+    // PROCESSED_MEETING has NO could_include key — the live-fleet state
+    // for every meeting staged before the D1 change shipped. Approve
+    // must succeed with no FYI handling and no error.
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      PROCESSED_MEETING,
+      'utf8',
+    );
+
+    const stdout = runCli([
+      'meeting', 'approve', '2026-03-15-sprint-review',
+      '--all',
+      '--skip-qmd',
+      '--json',
+    ], { cwd: tmpDir, env: { ARETE_NO_LLM: '1' } });
+
+    const result = JSON.parse(stdout) as { success: boolean };
+    assert.equal(result.success, true);
+
+    const meetingContent = readFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      'utf8',
+    );
+    assert.ok(meetingContent.includes('status: approved'));
+    assert.ok(!meetingContent.includes('could_include'));
+  });
+
+  it('clears could_include even when the summary path is gated off (no fossil keys)', () => {
+    const stagedWithCouldInclude = PROCESSED_MEETING.replace(
+      'status: processed',
+      'status: processed\ncould_include:\n  - "Risks: Sara flagged churn assumption"\n  - "Hiring: two offers out"',
+    );
+    writeFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      stagedWithCouldInclude,
+      'utf8',
+    );
+
+    // ARETE_NO_LLM gates off BOTH the summary hook and Hook 2 — the
+    // exact "gated-off approve" fossil case from pre-mortem R5.
+    const stdout = runCli([
+      'meeting', 'approve', '2026-03-15-sprint-review',
+      '--all',
+      '--skip-qmd',
+      '--json',
+    ], { cwd: tmpDir, env: { ARETE_NO_LLM: '1' } });
+
+    const result = JSON.parse(stdout) as { success: boolean };
+    assert.equal(result.success, true);
+
+    const meetingContent = readFileSync(
+      join(tmpDir, 'resources', 'meetings', '2026-03-15-sprint-review.md'),
+      'utf8',
+    );
+    // Key consumed-or-cleared: gone from frontmatter.
+    assert.ok(!meetingContent.includes('could_include'));
+    // Other frontmatter survives the partial-merge clear.
+    assert.ok(meetingContent.includes('status: approved'));
+    assert.ok(meetingContent.includes('title: Sprint Review') || meetingContent.includes('title: "Sprint Review"'));
+    // No summary file was written (gated off).
+    assert.equal(
+      existsSync(join(tmpDir, '.arete', 'memory', 'summaries', 'meetings')),
+      false,
+    );
+  });
 });

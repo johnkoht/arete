@@ -268,7 +268,7 @@ composition, "Explicit limitation" subsection) — no harness gate
 enforces it.
 
 **Frontmatter writes are separate from gather-only persistence**:
-`arete meeting apply` (commit-staged-to-approved) is run by the
+`arete meeting approve` (commit-staged-to-approved) is run by the
 ORCHESTRATOR in its own Step 6 after user approval (see daily-winddown
 SKILL.md), not by this skill in gather-only mode. The orchestrator
 runs `arete meeting extract <file> --stage --reconcile` in its Step 1h

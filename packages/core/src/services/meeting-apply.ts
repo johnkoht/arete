@@ -8,13 +8,12 @@
  * Used by `arete meeting apply <file>` CLI command.
  */
 
-import { resolve, dirname, join, basename } from 'path';
+import { resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { MeetingIntelligence, MeetingExtractionResult } from './meeting-extraction.js';
 import { formatStagedSections, updateMeetingContent } from './meeting-extraction.js';
-import { writeMeetingSummary, type MeetingSummaryInput } from './summary-writer.js';
-import { refreshOrgs } from './org-entity.js';
+import { writeMeetingSummaryFromFrontmatter } from './summary-writer.js';
 import { writeMeetingApplyFrontmatter } from './meeting-frontmatter.js';
 
 // ---------------------------------------------------------------------------
@@ -44,12 +43,6 @@ export interface ApplyMeetingOptions {
    * content_hash match, so this flag is mostly a fast-path.
    */
   skipSummary?: boolean;
-  /**
-   * Skip the post-apply org-entity auto-detection refresh (Phase 1
-   * wiki expansion §b). When set, no `.arete/memory/entities/orgs/`
-   * pages are written from this apply.
-   */
-  skipOrgEntities?: boolean;
 }
 
 /**
@@ -77,12 +70,6 @@ export interface ApplyMeetingResult {
    * already-fresh / no-llm / skip-summary paths.
    */
   summaryWritten: boolean;
-  /**
-   * Slugs of org-entity pages refreshed this invocation. Empty when
-   * skipOrgEntities is set, when no orgs qualified, or when the
-   * detection scan was skipped (e.g., no workspacePaths).
-   */
-  orgsRefreshed: string[];
   /** Warnings during processing. */
   warnings: string[];
 }
@@ -140,16 +127,6 @@ function parseFrontmatter(content: string): FrontmatterResult {
 function serializeFrontmatter(data: Record<string, unknown>, body: string): string {
   const fm = stringifyYaml(data).trimEnd();
   return `---\n${fm}\n---\n\n${body.replace(/^\n+/, '')}`;
-}
-
-/**
- * Extract YYYY-MM-DD from a meeting filename, e.g.,
- * `2026-04-22-cover-whale.md` → `2026-04-22`. Returns null if no
- * date prefix is present.
- */
-function extractDateFromFilename(absPath: string): string | null {
-  const m = basename(absPath).match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -325,70 +302,26 @@ export async function applyMeetingIntelligence(
   let summaryWritten = false;
   if (!options.skipSummary) {
     try {
-      const dateRaw = data['date'];
-      const meetingDate = typeof dateRaw === 'string'
-        ? dateRaw.slice(0, 10)
-        : extractDateFromFilename(absPath);
-      if (meetingDate !== null) {
-        // Workspace-relative source_path for portability.
-        const wsRel = absPath.startsWith(workspaceRoot)
-          ? absPath.slice(workspaceRoot.length).replace(/^[/\\]+/, '')
-          : absPath;
-
-        // Canonical taxonomy lives in `packages/core/src/integrations/meetings.ts`
-        // (`Importance = 'skip' | 'light' | 'normal' | 'important'`). The
-        // chef orchestrator gates on `importance: important`; coercing
-        // 'normal'/'important' to undefined here silently defeats the gate
-        // (phase-8-followup-5 amendment).
-        const importanceRaw = data['importance'];
-        const importance: import('../integrations/meetings.js').Importance | undefined =
-          importanceRaw === 'skip' ||
-          importanceRaw === 'light' ||
-          importanceRaw === 'normal' ||
-          importanceRaw === 'important'
-            ? importanceRaw
-            : undefined;
-
-        const areaRaw = data['area'];
-        const area = typeof areaRaw === 'string' ? areaRaw : undefined;
-
-        const attendeesRaw = data['attendees'];
-        const participants: string[] | undefined = Array.isArray(attendeesRaw)
-          ? attendeesRaw
-              .map((a) => (typeof a === 'string' ? a : (a as { name?: string })?.name))
-              .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-          : typeof attendeesRaw === 'string'
-            ? attendeesRaw.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
-            : undefined;
-
-        // Hash on body alone, mirroring topic-memory.hashMeetingSource —
-        // frontmatter changes (status bumps, item counts) don't bust dedup.
-        // Phase 1: pass `could_include` headlines through so the summary
-        // writer's `## FYI` section can surface them — the body-block
-        // rendering on the meeting source file was removed.
-        // Read the post-write topics from `data` — the unified writer
-        // mutated `data.topics` with the alias-coerced result (or proposed
-        // slugs as fallback). This keeps the summary writer's topics field
-        // consistent with what was just written to meeting frontmatter.
-        const writtenTopics = Array.isArray(data['topics'])
-          ? (data['topics'] as unknown[]).filter((t): t is string => typeof t === 'string')
-          : undefined;
-        const summaryInput: MeetingSummaryInput = {
-          sourcePath: wsRel,
-          date: meetingDate,
-          sourceBody: updatedBody,
-          area,
-          importance,
-          topics: writtenTopics,
-          participants,
+      // Derivation (date/area/importance/topics/participants) is shared
+      // with the `arete meeting approve` summary hook via
+      // `writeMeetingSummaryFromFrontmatter` (wiki-repair W2 — single
+      // derivation path so the two writers can never diverge). Hash on
+      // body alone, mirroring topic-memory.hashMeetingSource —
+      // frontmatter changes (status bumps, item counts) don't bust
+      // dedup. `data['topics']` carries the post-alias-coerce result
+      // the unified writer just wrote; `could_include` headlines feed
+      // the summary's `## FYI` section (body-block rendering on the
+      // source file was removed in Phase 1).
+      const summaryResult = await writeMeetingSummaryFromFrontmatter(
+        {
+          absPath,
+          frontmatter: data,
+          body: updatedBody,
           couldInclude: intelligence.could_include,
-        };
-
-        const summaryResult = await writeMeetingSummary(summaryInput, {
-          storage,
-          workspaceRoot,
-          callLLM: deps.callLLM,
-        });
+        },
+        { storage, workspaceRoot, callLLM: deps.callLLM },
+      );
+      if (summaryResult !== null) {
         summaryPath = summaryResult.summaryPath;
         summaryWritten = summaryResult.written;
         for (const w of summaryResult.warnings) warnings.push(w);
@@ -401,35 +334,11 @@ export async function applyMeetingIntelligence(
     }
   }
 
-  // 10. Refresh org-entity pages (Phase 1 §b).
-  //
-  // Auto-detection scans recent meetings for non-internal email domains
-  // and writes/updates pages under .arete/memory/entities/orgs/. The
-  // scan runs on every meeting apply because:
-  //   - Detection threshold (≥2 distinct meetings in 90d) is cheap to
-  //     re-evaluate; expensive part is only triggered when an org
-  //     newly qualifies.
-  //   - Existing pages are byte-equal-skipped when content hasn't
-  //     changed.
-  // Caller can disable via `options.skipOrgEntities`. No LLM cost; runs
-  // independently of `deps.callLLM`.
-  let orgsRefreshed: string[] = [];
-  if (!options.skipOrgEntities && deps.workspacePaths !== undefined) {
-    try {
-      const result = await refreshOrgs(deps.workspacePaths, storage, {
-        // Pass `today` from the meeting apply so detection windows are
-        // deterministic relative to the meeting being processed (not
-        // wall-clock at write time).
-        today: new Date().toISOString().slice(0, 10),
-      });
-      orgsRefreshed = result.written;
-      for (const w of result.warnings) warnings.push(w);
-    } catch (err) {
-      warnings.push(
-        `org-entity refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`,
-      );
-    }
-  }
+  // (Step 10, organization-entity auto-detection refresh, was REMOVED —
+  // wiki-repair W3. That service/model pair was Phase 1 dark code: hooked
+  // only to `arete meeting apply`, which the chef winddown flow skips,
+  // and its documented manual-create CLI verb never existed. Git history
+  // preserves the implementation if an "accounts" view returns.)
 
   return {
     meetingPath: absPath,
@@ -439,7 +348,6 @@ export async function applyMeetingIntelligence(
     agendaArchived,
     summaryPath,
     summaryWritten,
-    orgsRefreshed,
     warnings,
   };
 }

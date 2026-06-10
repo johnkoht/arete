@@ -164,7 +164,7 @@ Four commands registered from one file. The intelligence hub.
 - **`inbox add`** (`--title/--body`, `--url`, `--file`) → universal capture into `inbox/`
 - **`create area <slug>`** → scaffolds `areas/{slug}.md` + `context/{slug}/`
 - **`momentum`** → commitment + relationship momentum
-- **`events log winddown|deferral-disagreement|slack-thread ...`** → thin wrapper over `MemoryLogService.append` for agent-driven instrumentation (Phase 0 + chef events). Append-only to `.arete/memory/log.md`.
+- **`events log winddown|deferral-disagreement ...`** → thin wrapper over `MemoryLogService.append` for agent-driven instrumentation (Phase 0 + chef events). Append-only to `.arete/memory/log.md`. (The `slack-thread` eval subcommand was removed in wiki-repair W7 — dead shadow-run telemetry.)
 - **`events backfill item-fates --since <date>`** → recovery primitive (Phase 3.5 D4, `events.ts:606`); scans approved meeting bodies in window, emits `fate=approved` events for items not yet in `item-fates.jsonl`. Idempotent; append-only (does NOT touch commitments/tasks/wiki).
 - **`cost report`** → AI cost telemetry from `.arete/memory/log.md`
 
