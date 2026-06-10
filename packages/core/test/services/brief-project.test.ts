@@ -27,6 +27,9 @@ import { AreaParserService } from '../../src/services/area-parser.js';
 import {
   meetingsForArea,
   resolveProjectArea,
+  buildProjectWikiQuery,
+  unionProjectCommitments,
+  parseSiblingSlugs,
   type MeetingIndexEntry,
 } from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
@@ -756,5 +759,210 @@ status: active
 
     const { formatProjectBriefMarkdown } = await import('../../src/services/brief-formatters.js');
     assert.ok(/⚠️.*disagree/.test(formatProjectBriefMarkdown(brief)));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 12 AC4 — topic-aware, project-grained brief helpers
+// ---------------------------------------------------------------------------
+
+describe('buildProjectWikiQuery (Phase 12 AC4)', () => {
+  it('appends first lines of Key Questions and Background', () => {
+    const body = `# P
+
+## Background
+POP migration is the wedge.
+More background.
+
+## Key Questions
+Which template fits POP?
+Second question.
+`;
+    const q = buildProjectWikiQuery('Glance 2 MVP', 'glance-2-mvp', body);
+    assert.ok(q.startsWith('Glance 2 MVP glance-2-mvp'));
+    assert.ok(q.includes('Which template fits POP?'));
+    assert.ok(q.includes('POP migration is the wedge.'));
+    assert.ok(!q.includes('Second question'));
+    assert.ok(!q.includes('More background'));
+  });
+
+  it('degrades to name+area when sections missing; name-only without area', () => {
+    assert.equal(buildProjectWikiQuery('Name', 'area-x', '# nothing'), 'Name area-x');
+    assert.equal(buildProjectWikiQuery('Name', undefined, ''), 'Name');
+  });
+});
+
+describe('unionProjectCommitments (Phase 12 AC4)', () => {
+  function c(id: string, over: Record<string, unknown>): never {
+    return {
+      id,
+      text: id,
+      direction: 'i_owe_them',
+      personSlug: 'p',
+      personName: 'P',
+      source: 's.md',
+      date: '2026-06-01',
+      createdAt: '2026-06-01T00:00:00Z',
+      status: 'open',
+      resolvedAt: null,
+      ...over,
+    } as never;
+  }
+
+  it('projectSlug-claimed first, unioned with unclaimed area commitments, deduped', () => {
+    const open = [
+      c('own-1', { projectSlug: 'me', area: 'a' }),
+      c('sibling-claimed', { projectSlug: 'sibling', area: 'a' }),
+      c('area-unclaimed', { area: 'a' }),
+      c('other-area', { area: 'b' }),
+      c('own-no-area', { projectSlug: 'me' }),
+    ];
+    const got = unionProjectCommitments(open as never[], 'me', 'a').map((x) => x.id);
+    assert.deepEqual(got, ['own-1', 'own-no-area', 'area-unclaimed']);
+  });
+
+  it('without area: only projectSlug-claimed', () => {
+    const open = [c('own', { projectSlug: 'me' }), c('loose', { area: 'a' })];
+    const got = unionProjectCommitments(open as never[], 'me', undefined).map((x) => x.id);
+    assert.deepEqual(got, ['own']);
+  });
+
+  it('dedupes by id when a commitment is both own and area-scoped', () => {
+    const both = c('dup', { projectSlug: 'me', area: 'a' });
+    const got = unionProjectCommitments([both] as never[], 'me', 'a');
+    assert.equal(got.length, 1);
+  });
+});
+
+describe('parseSiblingSlugs (Phase 12 AC4)', () => {
+  it('captures single-depth relative project links, trailing slash or bare', () => {
+    const body = [
+      'See [discovery](../adjuster-shadowing-discovery/discovery.md).',
+      'And [comms](../glance-comms/).',
+      'Bare dir: [bare](../bare-sibling)',
+      'Area link must NOT match: [area](../../../areas/glance-2-mvp.md)',
+      'Self link excluded: [self](../me/README.md)',
+      'Dup: [again](../glance-comms/README.md)',
+    ].join('\n');
+    assert.deepEqual(parseSiblingSlugs(body, 'me'), [
+      'adjuster-shadowing-discovery',
+      'glance-comms',
+      'bare-sibling',
+    ]);
+  });
+
+  it('returns empty for bodies without relative links', () => {
+    assert.deepEqual(parseSiblingSlugs('# Nothing here', 'me'), []);
+  });
+});
+
+describe('sibling projects section (Phase 12 AC4 integration)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-project-ac4-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('renders active + archived siblings; drops unresolvable links', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/main-project/README.md',
+      `---
+title: Main Project
+area: glance-2-mvp
+status: active
+---
+
+# Main
+
+Linked: [active sib](../active-sib/README.md), [old sib](../archived-sib/), [ghost](../no-such-project/).
+`,
+    );
+    writeFile(tmpDir, 'projects/active/active-sib/README.md', '---\ntitle: Active Sib\n---\n# A\n');
+    writeFile(tmpDir, 'projects/archive/archived-sib/README.md', '---\ntitle: Old\n---\n# O\n');
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('main-project', paths);
+    const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+    assert.ok(sib, `missing sibling section; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    assert.equal(sib!.heading, 'Sibling projects (2)');
+    assert.ok(sib!.bullets.some((b) => /active-sib/.test(b) && !/archived/.test(b)));
+    assert.ok(sib!.bullets.some((b) => /archived-sib/.test(b) && /_\(archived\)_/.test(b)));
+    assert.ok(!sib!.bullets.some((b) => /no-such-project/.test(b)));
+  });
+
+  it('project-grained commitments: own projectSlug included even without sibling claims', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/me/README.md',
+      `---
+title: Me
+area: shared-area
+status: active
+---
+
+# Me
+`,
+    );
+    writeFile(
+      tmpDir,
+      '.arete/commitments.json',
+      JSON.stringify({
+        commitments: [
+          {
+            id: 'own11111own11111own11111own11111own11111own11111own11111own11111',
+            text: 'Own commitment',
+            direction: 'i_owe_them',
+            personSlug: 'p',
+            personName: 'P',
+            source: 's.md',
+            date: '2026-06-01',
+            status: 'open',
+            resolvedAt: null,
+            projectSlug: 'me',
+          },
+          {
+            id: 'sib22222sib22222sib22222sib22222sib22222sib22222sib22222sib22222',
+            text: 'Sibling claimed',
+            direction: 'i_owe_them',
+            personSlug: 'p',
+            personName: 'P',
+            source: 's.md',
+            date: '2026-06-01',
+            status: 'open',
+            resolvedAt: null,
+            area: 'shared-area',
+            projectSlug: 'sibling-project',
+          },
+          {
+            id: 'una33333una33333una33333una33333una33333una33333una33333una33333',
+            text: 'Unclaimed area commitment',
+            direction: 'they_owe_me',
+            personSlug: 'p',
+            personName: 'P',
+            source: 's.md',
+            date: '2026-06-01',
+            status: 'open',
+            resolvedAt: null,
+            area: 'shared-area',
+          },
+        ],
+      }),
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('me', paths);
+    const work = brief.sections.find((s) => s.heading.startsWith('Open work'));
+    assert.ok(work, `missing Open work; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    const text = work!.bullets.join('\n');
+    assert.ok(/Own commitment/.test(text));
+    assert.ok(/Unclaimed area commitment/.test(text));
+    assert.ok(!/Sibling claimed/.test(text), 'sibling-claimed must be excluded');
   });
 });

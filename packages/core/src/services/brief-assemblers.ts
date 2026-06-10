@@ -1047,6 +1047,87 @@ async function readProjectBySlug(
   };
 }
 
+/**
+ * First content line of a `## <heading>` section (Phase 12 AC4 — wiki
+ * query strengthening). Returns '' when the section is missing/empty.
+ */
+function firstLineOfSection(body: string, heading: string): string {
+  const re = new RegExp(`##\\s+${heading}\\s*\\n([\\s\\S]+?)(?=\\n##\\s|$)`, 'i');
+  const match = body.match(re);
+  if (!match) return '';
+  for (const line of match[1].split('\n')) {
+    const t = line.trim();
+    if (t.length > 0) return t;
+  }
+  return '';
+}
+
+/**
+ * Build the wiki re-rank query for a project brief (Phase 12 AC4):
+ * name + area strengthened with the first lines of `## Key Questions`
+ * and `## Background`. Pure; exported for tests.
+ */
+export function buildProjectWikiQuery(
+  name: string,
+  area: string | undefined,
+  body: string,
+): string {
+  return [
+    name,
+    area,
+    firstLineOfSection(body, 'Key Questions'),
+    firstLineOfSection(body, 'Background'),
+  ]
+    .filter((s): s is string => Boolean(s && s.length > 0))
+    .join(' ');
+}
+
+/**
+ * Project-grained commitment scope (Phase 12 AC4): commitments explicitly
+ * claimed by this project (`projectSlug`) first, unioned with area-scoped
+ * commitments not yet claimed by ANY project (a sibling's claim excludes
+ * them). Deduped by id, projectSlug-claimed first. Pure; exported for tests.
+ */
+export function unionProjectCommitments(
+  open: Commitment[],
+  slug: string,
+  area: string | undefined,
+): Commitment[] {
+  const own = open.filter((c) => c.projectSlug === slug);
+  const areaUnclaimed = area
+    ? open.filter((c) => c.area === area && !c.projectSlug)
+    : [];
+  const seen = new Set<string>();
+  const out: Commitment[] = [];
+  for (const c of [...own, ...areaUnclaimed]) {
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    out.push(c);
+  }
+  return out;
+}
+
+/**
+ * Sibling-project slugs referenced from a README body via relative links
+ * (`](../<slug>/...`), excluding self. Pure; exported for tests.
+ * Phase 12 AC4.
+ */
+export function parseSiblingSlugs(body: string, selfSlug: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  // Exactly ONE `../` — deeper links (`../../../areas/...`) are not siblings.
+  // Trailing `/` (file inside) or `)` (bare dir link) both count.
+  const re = /\]\(\.\.\/([\w-]+)[/)]/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(body)) !== null) {
+    const slug = match[1];
+    if (slug === selfSlug || seen.has(slug)) continue;
+    seen.add(slug);
+    out.push(slug);
+  }
+  return out;
+}
+
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export async function assembleBriefForProject(
   slug: string,
@@ -1139,9 +1220,11 @@ export async function assembleBriefForProject(
     }
   }
 
-  // 3. Open work — commitments scoped to area
-  if (project.area) {
-    const openCommitments = await deps.commitments.listOpen({ area: project.area });
+  // 3. Open work — projectSlug-claimed first, unioned with area-scoped
+  // commitments not claimed by a sibling (Phase 12 AC4).
+  {
+    const allOpen = await deps.commitments.listOpen();
+    const openCommitments = unionProjectCommitments(allOpen, slug, project.area);
     if (openCommitments.length > 0) {
       // Group by direction.
       const iOwe = openCommitments.filter((c) => c.direction === 'i_owe_them');
@@ -1189,8 +1272,9 @@ export async function assembleBriefForProject(
     }
   }
 
-  // 5. Related wiki pages
-  const wikiQuery = [project.name, project.area].filter(Boolean).join(' ');
+  // 5. Related wiki pages — query strengthened with README Key Questions /
+  // Background first lines (Phase 12 AC4).
+  const wikiQuery = buildProjectWikiQuery(project.name, project.area, body);
   try {
     const wiki = await retrieveWiki(deps.topicMemory, paths, wikiQuery, { area: project.area });
     if (wiki.length > 0) {
@@ -1209,6 +1293,33 @@ export async function assembleBriefForProject(
     }
   } catch {
     // best-effort
+  }
+
+  // 6. Sibling projects — relative README links resolved against
+  // active/ + archive/ (archived labeled); unresolvable links dropped.
+  // Phase 12 AC4.
+  const siblingSlugs = parseSiblingSlugs(body, slug);
+  if (siblingSlugs.length > 0) {
+    const bullets: string[] = [];
+    for (const sibling of siblingSlugs) {
+      const activePath = join(paths.projects, 'active', sibling, 'README.md');
+      const archivePath = join(paths.projects, 'archive', sibling, 'README.md');
+      if (await deps.storage.exists(activePath)) {
+        bullets.push(`**${sibling}** — \`${relativeToRoot(activePath, paths.root)}\``);
+      } else if (await deps.storage.exists(archivePath)) {
+        bullets.push(
+          `**${sibling}** _(archived)_ — \`${relativeToRoot(archivePath, paths.root)}\``,
+        );
+      }
+      // Unresolvable link → dropped (not a project).
+    }
+    if (bullets.length > 0) {
+      sections.push({
+        heading: `Sibling projects (${bullets.length})`,
+        bullets,
+        truncated: false,
+      });
+    }
   }
 
   const { kept, droppedNames } = capSectionsByGlobalChars(sections, BRIEF_GLOBAL_CAP_CHARS);

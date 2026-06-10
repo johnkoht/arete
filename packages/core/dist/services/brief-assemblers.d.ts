@@ -18,7 +18,7 @@ import type { EntityService } from './entity.js';
 import type { TopicMemoryService } from './topic-memory.js';
 import type { AreaParserService } from './area-parser.js';
 import type { AreaMemoryService } from './area-memory.js';
-import type { WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief, BriefSection } from '../models/index.js';
+import type { WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief, BriefSection, Commitment } from '../models/index.js';
 /** Global per-brief soft cap (characters). Matches old BRIEF_MAX_CONTEXT_CHARS. */
 export declare const BRIEF_GLOBAL_CAP_CHARS = 12000;
 /** Per-section caps (chars). v2 MC1 — mini-brief truncation drops tail. */
@@ -208,6 +208,25 @@ export interface ProjectAreaResolution {
  * and `divergence` carries a one-line warning for the brief to surface.
  */
 export declare function resolveProjectArea(fm: Record<string, unknown>, body: string): ProjectAreaResolution;
+/**
+ * Build the wiki re-rank query for a project brief (Phase 12 AC4):
+ * name + area strengthened with the first lines of `## Key Questions`
+ * and `## Background`. Pure; exported for tests.
+ */
+export declare function buildProjectWikiQuery(name: string, area: string | undefined, body: string): string;
+/**
+ * Project-grained commitment scope (Phase 12 AC4): commitments explicitly
+ * claimed by this project (`projectSlug`) first, unioned with area-scoped
+ * commitments not yet claimed by ANY project (a sibling's claim excludes
+ * them). Deduped by id, projectSlug-claimed first. Pure; exported for tests.
+ */
+export declare function unionProjectCommitments(open: Commitment[], slug: string, area: string | undefined): Commitment[];
+/**
+ * Sibling-project slugs referenced from a README body via relative links
+ * (`](../<slug>/...`), excluding self. Pure; exported for tests.
+ * Phase 12 AC4.
+ */
+export declare function parseSiblingSlugs(body: string, selfSlug: string): string[];
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
 export interface AreaTaggedItem {
