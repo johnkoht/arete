@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.12.0] — 2026-06-09 — Wiki repair (foundation fixes)
+
+A verified audit found the wiki's write/read arteries degraded in ways rich data masked. This release repairs the foundation (plan + retro: `dev/work/plans/wiki-repair-foundation/plan.md`).
+
+### Added
+- **Meeting summaries on the live path** — `arete meeting approve` now writes `.arete/memory/summaries/meetings/<date>-<slug>.md` (own failure isolation; topic integration consumes the summary on the same approve, cutting integration tokens). `## Could include` headlines are persisted at `extract --stage` and carried into the summary's FYI section instead of vanishing.
+- **Seed-lock resilience** — stale locks from killed runs are atomically taken over (rename-guarded exclusive break + own-pid verify); lock-blocked integration is surfaced loudly (exit stays 0) with a `topic-integration-skipped` log event.
+- **Per-call LLM timeout** in the topic-integration path (120s default, `ARETE_LLM_TIMEOUT_MS`, one timeout-only retry, fails forward) — ends the wedged-`topic refresh` class.
+- **Observability** — per-source `ingest` log events (`input_kind`, chars); log-append failures warn instead of vanishing; `topic refresh` prints `page N/M` progress; staleness labels ("as of YYYY-MM-DD — stale") on all brief wiki sections and extraction topic context.
+- **Brief correctness** — decisions/learnings parser matches the live `items/` format with Topics-based area attribution (project briefs went from 0 to 100+ surfaced items, newest-first); recent-activity matching unions meeting `topics:` with `area:`; project display names fall back `name:`→`title:`→`project:`→slug.
+
+### Removed
+- **Org-entity dark code** (never fired in the live flow; ~−1,300 lines) and the **slack-thread-summaries shadow** (1-day orphan experiment incl. per-digest eval spend). `arete status`'s permanently-stale "Cross-Area Synthesis" fossil line dropped.
+
+### Fixed
+- qmd collections now verified-and-migrated on every `arete index`/`update` (tri-state verify; "unverifiable" surfaced); wrong recovery hint (`memory refresh` → `topic refresh`); process-meetings skill verb misnomer.
+
 ## [0.11.0] — 2026-06-09 — Areté v2 (chef-orchestrator)
 
 Cumulative v2 effort (Phases 1–12). Large feature merge: the daily flow moves from step-by-step CLI/approve loops to a "chef" pattern (do-all-work-then-engage, curate-with-reason-labels, propose-with-MCP-action), the skills system splits into a managed + user layer, the memory system grows a summaries/wiki leg, and commitments get a v2 substrate with dedup. See `dev/work/plans/arete-v2-chef-orchestrator/POST-MORTEM.md` for the full program retro.
