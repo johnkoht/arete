@@ -138,3 +138,13 @@ Open (not code): **W4 rescue sitting** — `rescue-proposal.md` ready (144 bulk 
 Process notes for the record: pre-mortem gates earned their keep twice (MG-1.1 bounced a deliberately-tolerated TOCTOU; MG-2 predicted the W5/W6 file collision). The 600s agent watchdog killed 4 agents tonight (2 reviewers, 1 builder-at-wrap, 1 read-only reviewer) — all work survived via per-task commits; orchestrator completed wraps/reviews directly. Durable fix worth considering: split long reviews into smaller agent tasks; never put builds+suites in reviewer prompts.
 
 Live-workspace deltas applied during the phase (operational): stale seed lock removed ×3 (runs killed at wedge threshold), catch-up `topic refresh` runs 1–3 (run 3 in flight at wrap, progress-visible).
+
+## W4 APPLIED — 2026-06-10 (plan fully complete)
+
+Two-round analysis (v1 falsified by John — archive band was 71% wrong; v2 added body-mention + active-project signals). Applied with AG gates (snapshot `arete-reserv/.arete/archive/snapshots/topics-pre-rescue-2026-06-10.tar.gz`, alias-uniqueness validator, lock check, ledger at `.arete/archive/topics/LEDGER.md`):
+- **89 alias-rescues** (83 bulk + 6 hand-resolved from conflicts) — starved canonicals now route future mentions.
+- **34 archived** (26 checklist-approved + 8 merge-absorptions) to `.arete/archive/topics/` (outside indexed tree); John kept 14 via checklist (incl. `engineer-autonomy` — importance ≠ activity).
+- **6 merges** applied (claim-transfer-tdd KEPT standalone per John — `tdd` too broad); `default-email-template` kept alongside `email-templates` (G3).
+- Refresh band: 6 pages, 5 sources integrated. Final shape: **215 active pages, 34 archived** (was 249 with 222 frozen).
+- **project-fed 23** kept as landing pads → queued as scoping input for Phase 12 / projects→wiki flow.
+- Lint findings 154→317 — dominated by new wikilinks from ~70 freshly rewritten pages + bounded archive fallout; chef's slow-drip cleanup class.
