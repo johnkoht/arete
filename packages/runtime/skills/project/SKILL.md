@@ -8,6 +8,12 @@ triggers:
   - let's work on
   - pull up project
   - project context for
+  - load project
+  - load the project
+  - load up
+  - review project
+  - look at project
+  - look at the project
 work_type: general
 category: essential
 primitives: []
@@ -28,6 +34,9 @@ Open a project with its full surrounding context in one move: `/project <name>` 
 - "open the status letter project"
 - "let's work on inbound emails"
 - "pull up project context for claims review"
+- "load project glance-2-roadmap and review" (any load/review/look-at phrasing
+  that names a project means THIS flow — use the assembled CLI surface, do
+  not freestyle with manual file reads)
 
 ## Workflow
 
@@ -51,9 +60,10 @@ arete project open "<name>" --json
 
 ### 3. Present
 
-- **Header**: project name, area (or the "No area resolved" line verbatim if present — it tells the user how to fix it), status.
+- **Header**: project name, area (or the "No area resolved" line verbatim if present — it tells the user how to fix it), status, Jira refs when present.
 - **What's new since last touched**: meetings, refreshed wiki topics, newly-opened commitments. This is the "catch me up" signal — lead with it when non-empty.
 - **Brief sections**: background/status excerpt, recent activity, open work, decisions & learnings, related wiki pages, sibling projects.
+- **ALWAYS show the Sibling-projects and Related-wiki-pages sections when they are present in the CLI output** — never drop them as "secondary" detail; they are the cross-project and knowledge edges the user opened this flow to get. When a section is absent from the CLI output, say so in one line ("No siblings / no wiki pages matched") instead of silently omitting it.
 - Then offer to dig in: open a wiki topic, prep for a related meeting, review open commitments.
 
 ### 4. Boundaries

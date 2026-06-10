@@ -1257,4 +1257,33 @@ describe('/project skill prose (Phase 12 AC3)', () => {
     const prose = readFileSync(skillPath, 'utf8');
     assert.match(prose, /arete project open/);
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 13 AC6 — prose-pinned, soak-verified (string-presence assertions:
+  // prose pins the rule, soak verifies the agent follows it).
+  // -------------------------------------------------------------------------
+
+  it('AC6: carries the always-show rule for siblings + wiki sections', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(
+      prose,
+      /ALWAYS show the Sibling-projects and Related-wiki-pages sections when they are present in the CLI output/,
+    );
+    assert.match(prose, /never drop them as "secondary"/);
+    assert.match(prose, /No siblings \/ no wiki pages matched/);
+  });
+
+  it('AC6: trigger vocabulary covers load/review/look-at phrasings (punch #13)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    for (const trigger of [
+      'load project',
+      'load the project',
+      'load up',
+      'review project',
+      'look at project',
+      'look at the project',
+    ]) {
+      assert.ok(prose.includes(`- ${trigger}`), `missing trigger: ${trigger}`);
+    }
+  });
 });
