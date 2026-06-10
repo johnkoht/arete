@@ -129,6 +129,36 @@ export interface MeetingIndexEntry {
   excerpt?: string;
 }
 
+/**
+ * First non-empty, non-HTML-comment line of the first `## …` section of a
+ * meeting body, capped at 200 chars (Phase 13 AC8(9)). Returns undefined
+ * when the body has no `## ` section or the section holds only comments.
+ */
+function firstSectionExcerpt(body: string): string | undefined {
+  let inSection = false;
+  let inComment = false;
+  for (const raw of body.split('\n')) {
+    if (/^##\s/.test(raw)) {
+      if (inSection) return undefined; // first section ended without content
+      inSection = true;
+      continue;
+    }
+    if (!inSection) continue;
+    const line = raw.trim();
+    if (line.length === 0) continue;
+    if (inComment) {
+      if (line.includes('-->')) inComment = false;
+      continue;
+    }
+    if (line.startsWith('<!--')) {
+      if (!line.includes('-->')) inComment = true;
+      continue;
+    }
+    return line.slice(0, 200);
+  }
+  return undefined;
+}
+
 export async function loadMeetingIndex(
   storage: StorageAdapter,
   paths: WorkspacePaths,
@@ -183,18 +213,17 @@ export async function loadMeetingIndex(
         : [];
     const projectSlug = typeof fm.project === 'string' ? fm.project : undefined;
 
-    // Pull a short excerpt from the body — first non-empty line after
-    // frontmatter, or first H2 (### Summary etc.)
+    // Pull a short excerpt from the body — first non-empty line of the
+    // first `## …` section. HTML-comment lines (`<!-- merged from … -->`
+    // markers and friends) are skipped so they never surface as
+    // recent-activity excerpts (Phase 13 AC8(9)).
+    //
+    // Line-walk on purpose: the previous `([\s\S]+?)(?=\n##\s|$)` regex
+    // truncated the section at its first line end under the `m` flag
+    // (same pitfall documented at `extractDiscussionTopics`), which made
+    // a leading comment line swallow the whole excerpt.
     const body = parsed?.body ?? '';
-    let excerpt: string | undefined;
-    const firstHeading = body.match(/^##\s+([^\n]+)\n([\s\S]+?)(?=\n##\s|$)/m);
-    if (firstHeading) {
-      const firstLine = firstHeading[2]
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0)[0];
-      if (firstLine) excerpt = firstLine.slice(0, 200);
-    }
+    const excerpt = firstSectionExcerpt(body);
 
     entries.push({
       path: filePath,
@@ -1062,6 +1091,47 @@ async function readProjectBySlug(
 }
 
 /**
+ * Extract renderable status-update paragraphs from a `## Status Updates`
+ * section body (Phase 13 AC8(7)).
+ *
+ * Live READMEs structure the section as dated `### YYYY-MM-DD` headings
+ * followed by paragraphs. The old paragraph-split echoed the raw `###`
+ * lines into the brief. Rules:
+ *  - heading-only chunks are never emitted as content;
+ *  - a `### YYYY-MM-DD` (date-prefixed) heading becomes a
+ *    `**[YYYY-MM-DD]**` prefix on its following paragraph;
+ *  - non-date `###` headings are dropped (and clear any pending date);
+ *  - at most `limit` paragraphs are returned (matches the previous
+ *    first-2-paragraphs behavior).
+ *
+ * Pure; exported for unit tests.
+ */
+export function extractStatusUpdates(sectionText: string, limit = 2): string[] {
+  const out: string[] = [];
+  let pendingDate: string | undefined;
+  for (const rawChunk of sectionText.split(/\n\n+/)) {
+    const chunk = rawChunk.trim();
+    if (!chunk) continue;
+    const contentLines: string[] = [];
+    for (const line of chunk.split('\n')) {
+      const heading = line.match(/^###\s+(.+?)\s*$/);
+      if (heading) {
+        const date = heading[1].match(/^(\d{4}-\d{2}-\d{2})/);
+        pendingDate = date ? date[1] : undefined;
+        continue;
+      }
+      contentLines.push(line);
+    }
+    const text = contentLines.join('\n').trim();
+    if (!text) continue;
+    out.push(pendingDate ? `**[${pendingDate}]** ${text}` : text);
+    pendingDate = undefined;
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
  * First content line of a `## <heading>` section (Phase 12 AC4 — wiki
  * query strengthening). Returns '' when the section is missing/empty.
  */
@@ -1188,12 +1258,9 @@ export async function assembleBriefForProject(
   if (backgroundMatch) contextChunks.push(`**Background:** ${backgroundMatch[1].trim()}`);
   const statusMatch = body.match(/##\s+Status\s+Updates\s*\n([\s\S]+?)(?=\n##\s|$)/i);
   if (statusMatch) {
-    // Take first 2 paragraphs
-    const updates = statusMatch[1]
-      .split(/\n\n+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-      .slice(0, 2);
+    // Phase 13 AC8(7): date headings become **[YYYY-MM-DD]** prefixes;
+    // raw `###` lines never reach the rendered excerpt.
+    const updates = extractStatusUpdates(statusMatch[1]);
     if (updates.length > 0) contextChunks.push(`**Status:** ${updates.join('\n\n')}`);
   }
   if (contextChunks.length > 0) {

@@ -29,7 +29,11 @@ function renderSection(section: BriefSection): string {
     if (section.bullets.length > 0) lines.push('');
   }
   for (const bullet of section.bullets) {
-    lines.push(`- ${bullet}`);
+    // Phase 13 AC8(8): bullets that arrive already indented (nested
+    // sub-bullets like `  - item` under a `**I owe (1):**` group header)
+    // pass through un-prefixed — prefixing them produced the `-   - …`
+    // double-nest observed in live project briefs.
+    lines.push(/^\s/.test(bullet) ? bullet : `- ${bullet}`);
   }
   if (section.truncated) {
     const count =

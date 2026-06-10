@@ -64,10 +64,22 @@ export declare function loadMeetingIndex(storage: StorageAdapter, paths: Workspa
 /** Filter the meeting index to entries where `personSlug` or `personName` appear in attendees. */
 export declare function meetingsForPerson(index: MeetingIndexEntry[], personSlug: string, personName: string): MeetingIndexEntry[];
 /**
- * Filter the meeting index by area — union of `area:` frontmatter match
- * and `topics:` membership (W6, review concern 7: June-style meetings
- * carry `topics:` lists and no `area:` key, so area-only matching missed
- * them at both the project (S2) and area call sites).
+ * Filter the meeting index by area — explicit `area:` frontmatter wins
+ * PER MEETING; the W6 topics-union arm survives only as a fallback for
+ * meetings without one (Phase 13 AC1).
+ *
+ * A meeting WITH explicit `area:` matches only on `area:` — a topic
+ * mention of another area no longer leaks it into that area's brief
+ * (observed live failure mode (b)). A meeting WITHOUT `area:` falls back
+ * to `topics:` membership (June-style meetings carry `topics:` lists and
+ * no `area:` key — W6, review concern 7 — so area-only matching missed
+ * them at both the project and area call sites).
+ *
+ * Documented trade-off (phase-13 review finding 1, R4-bounded): once a
+ * meeting carries `area: X`, a topic mention of area Y no longer
+ * surfaces it under Y — single primary area now, `areas:` plural is the
+ * parked structural fix. Tested by the named exclusion fixture in
+ * brief-project.test.ts.
  */
 export declare function meetingsForArea(index: MeetingIndexEntry[], areaSlug: string): MeetingIndexEntry[];
 /** Filter the meeting index by overlap with a group of attendee slugs. */
@@ -213,6 +225,23 @@ export declare function resolveProjectArea(fm: Record<string, unknown>, body: st
  * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
  */
 export declare function projectDisplayName(fm: Record<string, unknown>, slug: string): string;
+/**
+ * Extract renderable status-update paragraphs from a `## Status Updates`
+ * section body (Phase 13 AC8(7)).
+ *
+ * Live READMEs structure the section as dated `### YYYY-MM-DD` headings
+ * followed by paragraphs. The old paragraph-split echoed the raw `###`
+ * lines into the brief. Rules:
+ *  - heading-only chunks are never emitted as content;
+ *  - a `### YYYY-MM-DD` (date-prefixed) heading becomes a
+ *    `**[YYYY-MM-DD]**` prefix on its following paragraph;
+ *  - non-date `###` headings are dropped (and clear any pending date);
+ *  - at most `limit` paragraphs are returned (matches the previous
+ *    first-2-paragraphs behavior).
+ *
+ * Pure; exported for unit tests.
+ */
+export declare function extractStatusUpdates(sectionText: string, limit?: number): string[];
 /**
  * Build the wiki re-rank query for a project brief (Phase 12 AC4):
  * name + area strengthened with the first lines of `## Key Questions`

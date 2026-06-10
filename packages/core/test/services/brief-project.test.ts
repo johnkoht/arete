@@ -30,6 +30,8 @@ import {
   buildProjectWikiQuery,
   unionProjectCommitments,
   parseSiblingSlugs,
+  extractStatusUpdates,
+  loadMeetingIndex,
   type MeetingIndexEntry,
 } from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
@@ -557,6 +559,89 @@ describe('meetingsForArea (Phase 13 AC1 — explicit area: wins per meeting)', (
   it('empty-string area is treated as absent (falls back to topics)', () => {
     const index = [entry({ title: 'empty-area', area: undefined, topics: ['glance-2-mvp'] })];
     assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 13 AC8(7) — status-update extraction (dated headings → prefixes)
+// ---------------------------------------------------------------------------
+
+describe('extractStatusUpdates (Phase 13 AC8)', () => {
+  it('turns ### YYYY-MM-DD headings into **[date]** prefixes, never emits raw ###', () => {
+    const section = `### 2026-06-08\n\nShipped the leak fix to staging.\n\n### 2026-06-01\n\nKickoff complete.\n`;
+    const got = extractStatusUpdates(section);
+    assert.deepEqual(got, [
+      '**[2026-06-08]** Shipped the leak fix to staging.',
+      '**[2026-06-01]** Kickoff complete.',
+    ]);
+    assert.ok(!got.join('\n').includes('###'));
+  });
+
+  it('handles heading and paragraph in the same chunk (no blank line)', () => {
+    const section = `### 2026-06-08\nShipped the fix.\n\n### 2026-06-01\nKickoff.`;
+    assert.deepEqual(extractStatusUpdates(section), [
+      '**[2026-06-08]** Shipped the fix.',
+      '**[2026-06-01]** Kickoff.',
+    ]);
+  });
+
+  it('drops heading-only chunks and non-date headings without emitting them', () => {
+    const section = `### 2026-06-08\n\n### Notes\n\nPlain paragraph.`;
+    assert.deepEqual(extractStatusUpdates(section), ['Plain paragraph.']);
+  });
+
+  it('keeps undated paragraphs as-is and caps at the limit', () => {
+    const section = `First update.\n\nSecond update.\n\nThird update.`;
+    assert.deepEqual(extractStatusUpdates(section), ['First update.', 'Second update.']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 13 AC8(9) — meeting-index excerpt skips HTML-comment lines
+// ---------------------------------------------------------------------------
+
+describe('loadMeetingIndex excerpt (Phase 13 AC8)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-excerpt-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('skips a leading <!-- merged from … --> comment and uses the next real line', async () => {
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-09-merged.md',
+      `---\ntitle: Merged meeting\ndate: 2026-06-09\n---\n\n## Summary\n\n<!-- merged from 2026-06-09-other.md -->\nThe real first line of the summary.\n`,
+    );
+    const index = await loadMeetingIndex(new FileStorageAdapter(), paths);
+    assert.equal(index.length, 1);
+    assert.equal(index[0].excerpt, 'The real first line of the summary.');
+  });
+
+  it('skips multi-line HTML comments', async () => {
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-09-multiline.md',
+      `---\ntitle: Multi\ndate: 2026-06-09\n---\n\n## Summary\n\n<!-- merged from\nanother-file.md -->\nActual content line.\n`,
+    );
+    const index = await loadMeetingIndex(new FileStorageAdapter(), paths);
+    assert.equal(index[0].excerpt, 'Actual content line.');
+  });
+
+  it('comment-only section yields no excerpt rather than the comment', async () => {
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-09-only-comment.md',
+      `---\ntitle: OnlyComment\ndate: 2026-06-09\n---\n\n## Summary\n\n<!-- merged from x.md -->\n`,
+    );
+    const index = await loadMeetingIndex(new FileStorageAdapter(), paths);
+    assert.equal(index[0].excerpt, undefined);
   });
 });
 

@@ -156,4 +156,46 @@ describe('brief-formatters', () => {
     const md = formatMeetingBriefMarkdown(brief);
     assert.ok(/Project pinned via `--project glance-2-mvp`/.test(md));
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 13 AC8(8) — already-indented bullets pass through un-prefixed
+  // -------------------------------------------------------------------------
+
+  it('renderSection passes indented bullets through without adding the `- ` prefix (AC8)', () => {
+    const brief: ProjectBrief = {
+      mode: 'project',
+      subject: 'P',
+      subjectSlug: 'p',
+      sections: [
+        {
+          heading: 'Open work (1)',
+          bullets: ['**I owe (1):**', '  - Send the API spec to Anthony (2026-06-08)'],
+        },
+      ],
+      sources: [],
+      truncated: false,
+      metadata: {},
+    };
+    const md = formatProjectBriefMarkdown(brief);
+    assert.ok(md.includes('- **I owe (1):**'), 'group header keeps the `- ` prefix');
+    assert.ok(
+      md.includes('  - Send the API spec to Anthony (2026-06-08)'),
+      'nested bullet stays nested',
+    );
+    assert.ok(!md.includes('-   - '), 'no double-nest artifact');
+  });
+
+  it('renderSection still prefixes non-indented bullets across modes (AC8 regression)', () => {
+    const brief: AreaBrief = {
+      mode: 'area',
+      subject: 'Area',
+      subjectSlug: 'area',
+      sections: [{ heading: 'Recent meetings (1)', bullets: ['**Sync** (2026-06-01)'] }],
+      sources: [],
+      truncated: false,
+      metadata: { name: 'Area' },
+    };
+    const md = formatAreaBriefMarkdown(brief);
+    assert.ok(md.includes('- **Sync** (2026-06-01)'));
+  });
 });
