@@ -29,3 +29,27 @@ Pre-mortem saved (`pre-mortem.md`, 6 risks: 3 seeded + 3 new from recon). The tw
 **D6 (premise correction worth knowing)**: the plan's "zero meetings carry `area:`" is wrong — 96/322 live meetings carry it (older capture flow via `meeting add`; all pre-June). The operative claim survives on better evidence: ZERO meetings have `area: X` + different-area topics (live-scanned), so AC1 is still live-behavior-identical and the shadow gate is now a meaningful assertion, not a tautology. Backfill candidate population ≈ 226. Also answered the reviewer's D2 question with data: ~10 area-less meetings carry topics matching BOTH glance areas — the recall-loss set overlaps John's own leak examples, which supports precision-over-recall. Preview gets an `also-matches-via-topics` column so these are visible pre-apply.
 
 Phase 1.3 skipped (`has_review: true`). Next: Phase 2.1 memory synthesis + 2.2 PRD.
+
+## 2026-06-10T23:55Z — Slice A complete; SLICE A GATE: **PASS**
+
+Tasks 1–5 shipped (commits 3b10d89b, 446d45d5, d2e5e6d6, a70918f2, 7e932760): AC1 per-meeting area preference, AC8 three formatter fixes, AC7 jira read-side, AC4 sibling union + `YYYY-MM_` archive tolerance, AC6 prose + triggers.
+
+**Fixture gate**: named `area-edge leak` / `area-edge miss` tests green (plus the accepted-trade-off exclusion fixture and topics-fallback regression; W6.2 suite passes UNMODIFIED).
+
+**Live shadow (MC3a, read-only, all 15 live arete-reserv projects, main-dist BEFORE vs worktree-dist AFTER):**
+
+| Project | Before | After | Verdict |
+|---|---|---|---|
+| adjuster-shadowing-discovery, ai-tooling, claims-workspace-discovery, notion-refactor | 0 | 0 | unchanged (no README at standard path — pre-existing) |
+| claims-review-generator | 2 | 2 | unchanged |
+| product-analytics-playbook-project | 2 | 2 | unchanged |
+| glance-2-roadmap | 6 | 6 | unchanged (siblings already (5)) |
+| inbound-emails-prd | 6 | 6 | unchanged |
+| email-signatures | 6 | 6 | unchanged |
+| glance-2-prototype / glance-2-runyon / pop-belongings-estimate | 6 | 6 | count unchanged; sibling heading (2)→(4) — AC4 area-derived siblings, intended |
+| **task-management-v1** | 5 | 6 | **gained `Sibling projects (5)` — the plan's named AC4 evidence case, working as designed** |
+| status-letter-automation / email-template-rollout | 5* | 6 | *first baseline run lacked the wiki section; 3 baseline reruns all show 6 with wiki — **pre-existing qmd-warmth variance in the BEFORE CLI itself** (parked punch #10, now observed directly), not a phase-13 change |
+
+**AC1-attributable diffs: ZERO** — no recent-activity/meeting changes anywhere (pre-mortem D6 predicted this and the 96 area-carrying + 47 topics-arm meetings make it a real assertion). AC4 diffs are the intended feature, enumerated above. arete-reserv `git status --porcelain` hash byte-identical before/after every run (320058c13300).
+
+**Gate verdict: PASS — funding Slice B.**
