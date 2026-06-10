@@ -53,3 +53,13 @@ Tasks 1–5 shipped (commits 3b10d89b, 446d45d5, d2e5e6d6, a70918f2, 7e932760): 
 **AC1-attributable diffs: ZERO** — no recent-activity/meeting changes anywhere (pre-mortem D6 predicted this and the 96 area-carrying + 47 topics-arm meetings make it a real assertion). AC4 diffs are the intended feature, enumerated above. arete-reserv `git status --porcelain` hash byte-identical before/after every run (320058c13300).
 
 **Gate verdict: PASS — funding Slice B.**
+
+## 2026-06-11T00:45Z — Slice B complete (tasks 7–12)
+
+Meeting-area write surface shipped: AreaMatch signal provenance (9aebe3d7), meeting-area.ts core (37ccf0e2), backfill-area CLI (9f4cc3da), set-area CLI (f0a15fb9), process proposal + inheritance integration (a714086b), process-meetings prose (this commit).
+
+**Pre-mortem mitigations landed as designed**: D1 (summary-only name matches refused, title-only flagged `name-only` + grouped last + warn line; signal/corroborated in JSON), D2 (`also-via-topics` column), D4 (`mtimeGuardSeconds: 0` + surfaced abstains; regression test = set-area on a file written milliseconds earlier), review finding 2 (same-values rerun = zero write calls via pre-serialization abstain, counting adapter + snapshot both assert it).
+
+**One test-fixture stumble, fixed**: the inheritance integration first used `[@john-doe →]` (no counterparty) — approve's commitment creation silently skips items without a personSlug, so commitments.json never appeared. Notation `[@john-doe → @anthony]` fixed it. Worth knowing: an owner-only action item produces NO commitment at approve.
+
+**Calibration vs ledger (AC2/AC3 were the flagged overrun rows)**: AC3 = meeting-area.ts ~160 logic + CLI verb ~210 ≈ 370 vs ~310 est (1.2×); AC2 = set-area ~120 + process block ~50 + prose ~20 ≈ 190 vs ~170 est (1.1×). Both under the 1.5× tripwire — the review's re-anchoring did its job. Slice C next.
