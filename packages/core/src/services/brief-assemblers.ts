@@ -876,10 +876,106 @@ interface ActiveProject {
   slug: string;
   name: string;
   area?: string;
+  /** Provenance for `area` — `manual` | `creation` | `backfill` (Phase 12 AC1/AC2). */
+  areaSetBy?: string;
+  /**
+   * R9 (Phase 12 pre-mortem): set when frontmatter `area:` and a prose
+   * `**Area**:` line BOTH resolve and disagree. Frontmatter wins; the
+   * divergence is surfaced as a one-line warning instead of being silent.
+   */
+  areaDivergence?: string;
   status?: string;
   started?: string;
   readmePath: string;
   readmeContent: string;
+}
+
+/** Result of project-area resolution (Phase 12 AC1). */
+export interface ProjectAreaResolution {
+  area?: string;
+  areaSetBy?: string;
+  /** Which signal resolved the area. Absent when unresolved. */
+  source?: 'frontmatter' | 'prose';
+  /** R9: non-empty when frontmatter and prose disagree (frontmatter wins). */
+  divergence?: string;
+}
+
+/**
+ * Permissive prose `**Area**:` line matcher (Phase 12 AC1, review concern #3).
+ *
+ * Tolerates: `**Area**:`, `**Area:**`, unbolded `Area:` — case-insensitive,
+ * leading whitespace allowed. The captured remainder is either a markdown
+ * link (slug = link-target basename minus `.md`, any `../` depth) or a
+ * plain slug-shaped token. Display names that aren't slug-shaped are NOT
+ * guessed at — a wrong area is worse than none (pre-mortem R3).
+ */
+const PROSE_AREA_LINE = /^[ \t]*(?:\*\*\s*)?area\s*(?::\s*\*\*|\*\*\s*:|:)\s*(.+?)\s*$/im;
+
+const SLUG_SHAPED = /^[a-z0-9][a-z0-9_-]*$/i;
+
+function parseProseAreaLine(body: string): string | undefined {
+  const line = body.match(PROSE_AREA_LINE);
+  if (!line) return undefined;
+  const value = line[1].trim();
+  // Markdown link form: take the target's basename minus `.md`.
+  const link = value.match(/\]\(([^)\s]+)\)/);
+  if (link) {
+    const target = link[1].split(/[/\\]/).pop() ?? '';
+    const slug = target.replace(/\.md$/i, '').trim();
+    return slug.length > 0 ? slug : undefined;
+  }
+  // Plain text: accept only slug-shaped tokens (no spaces). Anything else
+  // (e.g. a human display name) stays unresolved rather than mis-slugged.
+  if (SLUG_SHAPED.test(value)) return value.toLowerCase();
+  return undefined;
+}
+
+/**
+ * Resolve a project's area from its README (Phase 12 AC1).
+ *
+ * Priority order (first hit wins):
+ *  1. `fm.area` (covers both the older `{title,status,...}` and newer
+ *     `{project,type,area}` schemas)
+ *  2. `fm.areas` — future plural form, first entry tolerated (pre-mortem R4;
+ *     plural support is NOT promoted here)
+ *  3. Prose `**Area**:` line in the body (permissive — see PROSE_AREA_LINE)
+ *  4. Unresolved
+ *
+ * R9: when frontmatter AND prose both resolve and disagree, frontmatter wins
+ * and `divergence` carries a one-line warning for the brief to surface.
+ */
+export function resolveProjectArea(
+  fm: Record<string, unknown>,
+  body: string,
+): ProjectAreaResolution {
+  let fmArea: string | undefined;
+  if (typeof fm.area === 'string' && fm.area.trim().length > 0) {
+    fmArea = fm.area.trim();
+  } else if (Array.isArray(fm.areas)) {
+    const first = fm.areas.find(
+      (a): a is string => typeof a === 'string' && a.trim().length > 0,
+    );
+    if (first) fmArea = first.trim();
+  }
+
+  const areaSetBy =
+    typeof fm.area_set_by === 'string' && fm.area_set_by.trim().length > 0
+      ? fm.area_set_by.trim()
+      : undefined;
+
+  const proseArea = parseProseAreaLine(body);
+
+  if (fmArea) {
+    const divergence =
+      proseArea && proseArea !== fmArea
+        ? `Frontmatter \`area: ${fmArea}\` and prose \`**Area**:\` line (${proseArea}) disagree — using frontmatter.`
+        : undefined;
+    return { area: fmArea, areaSetBy, source: 'frontmatter', divergence };
+  }
+  if (proseArea) {
+    return { area: proseArea, areaSetBy, source: 'prose' };
+  }
+  return { areaSetBy };
 }
 
 /**
@@ -911,10 +1007,13 @@ async function listActiveProjects(
     const fm = parsed?.frontmatter ?? {};
     const slug = basename(dir);
     const name = projectDisplayName(fm, slug);
+    const areaRes = resolveProjectArea(fm, parsed?.body ?? content);
     projects.push({
       slug,
       name,
-      area: typeof fm.area === 'string' ? fm.area : undefined,
+      area: areaRes.area,
+      areaSetBy: areaRes.areaSetBy,
+      areaDivergence: areaRes.divergence,
       status: typeof fm.status === 'string' ? fm.status : undefined,
       started: typeof fm.started === 'string' ? fm.started : undefined,
       readmePath,
@@ -934,10 +1033,13 @@ async function readProjectBySlug(
   if (!content) return null;
   const parsed = parseFrontmatter(content);
   const fm = parsed?.frontmatter ?? {};
+  const areaRes = resolveProjectArea(fm, parsed?.body ?? content);
   return {
     slug,
     name: projectDisplayName(fm, slug),
-    area: typeof fm.area === 'string' ? fm.area : undefined,
+    area: areaRes.area,
+    areaSetBy: areaRes.areaSetBy,
+    areaDivergence: areaRes.divergence,
     status: typeof fm.status === 'string' ? fm.status : undefined,
     started: typeof fm.started === 'string' ? fm.started : undefined,
     readmePath,

@@ -184,6 +184,30 @@ export interface ProjectBriefDeps {
     areaMemory: AreaMemoryService;
     entities: EntityService;
 }
+/** Result of project-area resolution (Phase 12 AC1). */
+export interface ProjectAreaResolution {
+    area?: string;
+    areaSetBy?: string;
+    /** Which signal resolved the area. Absent when unresolved. */
+    source?: 'frontmatter' | 'prose';
+    /** R9: non-empty when frontmatter and prose disagree (frontmatter wins). */
+    divergence?: string;
+}
+/**
+ * Resolve a project's area from its README (Phase 12 AC1).
+ *
+ * Priority order (first hit wins):
+ *  1. `fm.area` (covers both the older `{title,status,...}` and newer
+ *     `{project,type,area}` schemas)
+ *  2. `fm.areas` — future plural form, first entry tolerated (pre-mortem R4;
+ *     plural support is NOT promoted here)
+ *  3. Prose `**Area**:` line in the body (permissive — see PROSE_AREA_LINE)
+ *  4. Unresolved
+ *
+ * R9: when frontmatter AND prose both resolve and disagree, frontmatter wins
+ * and `divergence` carries a one-line warning for the brief to surface.
+ */
+export declare function resolveProjectArea(fm: Record<string, unknown>, body: string): ProjectAreaResolution;
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
 export interface AreaTaggedItem {

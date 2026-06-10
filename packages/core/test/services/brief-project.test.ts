@@ -26,6 +26,7 @@ import { AreaMemoryService } from '../../src/services/area-memory.js';
 import { AreaParserService } from '../../src/services/area-parser.js';
 import {
   meetingsForArea,
+  resolveProjectArea,
   type MeetingIndexEntry,
 } from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
@@ -470,5 +471,194 @@ describe('meetingsForArea (W6.2 topics-union)', () => {
   it('does not substring-match topic slugs', () => {
     const index = [entry({ title: 'near-miss', topics: ['glance-communications-v2'] })];
     assert.equal(meetingsForArea(index, 'glance-communications').length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 12 AC1 — project area resolution (priority order + prose variants)
+// ---------------------------------------------------------------------------
+
+describe('resolveProjectArea (Phase 12 AC1)', () => {
+  it('resolves from fm.area (frontmatter wins tier)', () => {
+    const res = resolveProjectArea({ area: 'glance-2-mvp' }, 'body');
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'frontmatter');
+    assert.equal(res.divergence, undefined);
+  });
+
+  it('treats empty-string fm.area as absent', () => {
+    const res = resolveProjectArea({ area: '   ' }, 'no signal');
+    assert.equal(res.area, undefined);
+    assert.equal(res.source, undefined);
+  });
+
+  it('tolerates a future areas: plural list — first entry (R4)', () => {
+    const res = resolveProjectArea({ areas: ['comms', 'claims'] }, '');
+    assert.equal(res.area, 'comms');
+    assert.equal(res.source, 'frontmatter');
+  });
+
+  it('reads area_set_by provenance', () => {
+    const res = resolveProjectArea({ area: 'x', area_set_by: 'backfill' }, '');
+    assert.equal(res.areaSetBy, 'backfill');
+  });
+
+  it('resolves prose **Area**: markdown link (live glance-2-mvp shape)', () => {
+    const body = 'Intro\n\n**Area**: [Glance 2.0 MVP](../../../areas/glance-2-mvp.md)\n';
+    const res = resolveProjectArea({}, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'prose');
+  });
+
+  it('resolves prose link at a different relative depth', () => {
+    const body = '**Area**: [Comms](../../areas/glance-communications.md)';
+    assert.equal(resolveProjectArea({}, body).area, 'glance-communications');
+  });
+
+  it('resolves **Area:** colon-inside-bold variant', () => {
+    const body = '**Area:** [Glance](../../../areas/glance-2-mvp.md)';
+    assert.equal(resolveProjectArea({}, body).area, 'glance-2-mvp');
+  });
+
+  it('resolves unbolded Area: variant', () => {
+    const body = 'Area: [Glance](../../../areas/glance-2-mvp.md)';
+    assert.equal(resolveProjectArea({}, body).area, 'glance-2-mvp');
+  });
+
+  it('resolves plain-text slug-shaped value', () => {
+    const body = '**Area**: glance-2-mvp';
+    const res = resolveProjectArea({}, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'prose');
+  });
+
+  it('does NOT guess from a non-slug display name (R3: wrong area worse than none)', () => {
+    const body = '**Area**: Glance 2.0 MVP Launch';
+    const res = resolveProjectArea({}, body);
+    assert.equal(res.area, undefined);
+  });
+
+  it('unresolved when neither signal present', () => {
+    const res = resolveProjectArea({ title: 'X' }, '# X\n\nNo area anywhere.');
+    assert.equal(res.area, undefined);
+    assert.equal(res.source, undefined);
+  });
+
+  it('frontmatter wins over agreeing prose with no divergence', () => {
+    const body = '**Area**: [G](../../../areas/glance-2-mvp.md)';
+    const res = resolveProjectArea({ area: 'glance-2-mvp' }, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.equal(res.source, 'frontmatter');
+    assert.equal(res.divergence, undefined);
+  });
+
+  it('R9: frontmatter wins over disagreeing prose and surfaces divergence', () => {
+    const body = '**Area**: [Other](../../../areas/other-area.md)';
+    const res = resolveProjectArea({ area: 'glance-2-mvp' }, body);
+    assert.equal(res.area, 'glance-2-mvp');
+    assert.ok(res.divergence && /other-area/.test(res.divergence));
+    assert.ok(/glance-2-mvp/.test(res.divergence!));
+  });
+});
+
+describe('assembleBriefForProject with prose-only area (Phase 12 AC1 integration)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-project-ac1-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('populates area-gated sections from a prose **Area**: line alone', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/glance-2-mvp/README.md',
+      `---
+title: Glance 2.0 MVP — POP Launch
+status: active
+started: 2026-04-14
+notion:
+  roadmap:
+    url: "https://example.com"
+---
+
+# Project: Glance 2.0 MVP — POP Launch
+
+**Area**: [Glance 2.0 MVP](../../../areas/glance-2-mvp.md)
+
+## Background
+Migrate POP to Glance 2.
+
+## Status Updates
+2026-05-15: Story mapping complete.
+`,
+    );
+
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-05-15-pop-sync.md',
+      `---
+title: POP sync
+date: 2026-05-15
+attendee_ids:
+  - john
+area: glance-2-mvp
+---
+
+## Summary
+POP migration sync.
+`,
+    );
+
+    writeFile(
+      tmpDir,
+      '.arete/commitments.json',
+      JSON.stringify({
+        commitments: [
+          {
+            id: 'ccc33333ccc33333ccc33333ccc33333ccc33333ccc33333ccc33333ccc33333',
+            text: 'Draft POP migration plan',
+            direction: 'i_owe_them',
+            personSlug: 'lindsay-gray',
+            personName: 'Lindsay',
+            source: '2026-05-15-pop-sync.md',
+            date: '2026-05-15',
+            status: 'open',
+            resolvedAt: null,
+            area: 'glance-2-mvp',
+          },
+        ],
+      }),
+    );
+
+    writeFile(
+      tmpDir,
+      '.arete/memory/items/decisions.md',
+      `# Decisions
+
+### 2026-05-15: POP first
+Area: glance-2-mvp
+
+POP is the first program to migrate.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('glance-2-mvp', paths);
+
+    assert.equal(brief.metadata.area, 'glance-2-mvp');
+    const headings = brief.sections.map((s) => s.heading);
+    assert.ok(headings.includes('Project context'), `got: ${headings.join(', ')}`);
+    assert.ok(headings.some((h) => h.startsWith('Recent activity')), `got: ${headings.join(', ')}`);
+    assert.ok(headings.some((h) => h.startsWith('Open work')), `got: ${headings.join(', ')}`);
+    assert.ok(
+      headings.some((h) => h.startsWith('Decisions & learnings')),
+      `got: ${headings.join(', ')}`,
+    );
   });
 });
