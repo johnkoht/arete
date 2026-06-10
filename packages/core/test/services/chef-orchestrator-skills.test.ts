@@ -1223,6 +1223,42 @@ describe('Chef-orchestrator skill prose (Phase 2 + Phase 4)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 13 AC2 — process-meetings area-proposal prose (prose-pinned,
+// soak-verified). Load-bearing rules: propose-not-auto-write,
+// confirm-or-skip optional never blocking, set-area BEFORE approve.
+// ---------------------------------------------------------------------------
+
+describe('process-meetings area-proposal prose (Phase 13 AC2)', () => {
+  const skillPath = join(SKILLS_DIR, 'process-meetings', 'SKILL.md');
+
+  it('carries the propose-not-auto-write rule', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /process itself\s*\n?# NEVER writes the area; it only proposes/i);
+    assert.match(prose, /Do NOT write the area yourself/);
+  });
+
+  it('carries the optional-never-blocking rule (phase-12 R6 shape)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /Confirm-or-skip is OPTIONAL and\s*\n?NEVER blocking/);
+    assert.match(prose, /stays area-less/);
+  });
+
+  it('orders set-area BEFORE approve so commitments inherit', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /set-area must run BEFORE approve/);
+    const setAreaIdx = prose.indexOf('arete meeting set-area $slug.md');
+    const approveIdx = prose.indexOf('arete meeting approve $slug');
+    assert.ok(setAreaIdx > -1 && approveIdx > -1);
+    assert.ok(setAreaIdx < approveIdx, 'set-area loop appears before the approve loop');
+  });
+
+  it('sources proposals from arete meeting process output', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /proposedArea/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Phase 12 — /project skill prose (NOT a chef skill; separate envelope).
 // Load-bearing rules: read-only open, no LLM in the data path, never
 // auto-load a disambiguation tie.
