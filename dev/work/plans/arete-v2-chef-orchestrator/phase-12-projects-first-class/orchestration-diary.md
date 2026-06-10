@@ -39,3 +39,35 @@ merge authority delegated contingent on all gates green incl. AC11. John checks 
 - Sub runs in background; prime gets notified on completion or BLOCKED report, then reviews wrap and
   runs the merge gate. John: read `build-diary.md` in the worktree path above if this lands before merge;
   post-merge it'll be in the plan dir on main.
+
+## 2026-06-10 ~01:30 — Sub returned READY-FOR-MERGE; merge gate run; MERGED
+
+- Sub completed phases 0→5.5 in ~47min: 9/9 tasks, 0 iterations (100% first-attempt), 17 per-task
+  commits, cross-model review (opus) approve-with-suggestions folded into PRD, final review READY.
+- **AC11 hard gate: PASS — glance-2-mvp brief 2 → 6 sections** (baseline was 2, not the plan's
+  estimated 1; gate threshold ≥4 cleared either way). MC3 shadow across all 11 live projects:
+  zero regressions, zero mislabels.
+- Prime merge-gate verification (independent, not rubber-stamped):
+  - typecheck re-run in worktree: green. 200/200 tests in the three new core suites re-run: pass.
+  - Scope boundary: no AC5/AC7/AC8 code or scaffolding in diff (grep-verified — `topics` fields,
+    update-project skill absent; Project type gains `area?`/`areaSetBy?` only).
+  - backfill CLI write-gating inspected: preview-by-default, writes only via `--apply`.
+  - Live workspace: zero project READMEs modified during build window (find -mmin verified).
+    Other recent arete-reserv mtimes = CLI brief-invocation instrumentation + John's own evening
+    activity; sub's status-hash before/after was identical.
+- Deviations accepted: LOC ~2.5× plan estimate (+842 src vs ~+240) — itemized in build-diary,
+  driven by mirroring the commitments backfill-area precedent + review-driven surface (qmd wiring,
+  --json, disambiguation). No parallel/speculative code; dark-code audit 0/9.
+  Task 6/7 order swap (dependency-driven). Reviews via headless `claude -p` (no subagent() in harness).
+- **Merged `c01efc32` (--no-ff); post-merge typecheck green; worktree + branch cleaned up.**
+- **Release NOT cut** — versioning (v0.13.0?) left for John; wiki-repair precedent was a
+  `chore(release)` commit. The publish decision is outward-facing → John's call.
+
+## For John (morning)
+
+1. Build diary (sub's, detailed): `build-diary.md` in this dir — now on main. Also `review.md`,
+   `final-review.md`, `prd.md`, `rollback.md`.
+2. Try it live (read-only): `arete brief --project glance-2-mvp` and `arete project open glance-2-mvp`.
+3. Post-merge sequence (amendment §Sequencing): extract child projects via the new area-aware
+   creation flow → rerun audit → `arete project backfill-area` (preview) → review MC3 table → `--apply`.
+4. Decide release cut (v0.13.0) when ready.
