@@ -122,3 +122,19 @@ Parallelizable: {W1+W5}, {W2+W3}, {W6} are disjoint file sets; W4 is script+data
 ## Rollback
 
 Per-work-item commit sets. W2 hook = single call-site addition (revert = one commit). W4 applies per-page (`add-aliases` reversible by removing the alias; archives reversible via the rollback ledger + `mv` back). W3/W7 revert = git revert.
+
+---
+
+## WRAP — 2026-06-09 (shipped)
+
+All code work items merged to main + pushed, MG-7 integrated suite GREEN (4,532 tests / 4,530 pass / 0 fail / 2 pre-existing skips):
+- **W6** (`569e1d6a`) — brief trio: S4 empty→127 live items (newest-first after review bounce), June meetings via topics-union, name fallback.
+- **W1+W5** (`dbdc4a08`) — rename-guarded exclusive lock takeover (review bounced the first TOCTOU attempt; respin per exact reviewer spec), loud approve-path surfacing (exit 0), ingest events, lossy-logger fix (explained BOTH the 6/08 missing event and "claude-md-regen stopped 5/11" — one bug), staleness labels on all brief wiki surfaces, refresh progress output, _synthesis fossil dropped, qmd tri-state verify.
+- **Wave 2** (`c7726704`) — summaries also-fire at approve (R4-independent), could_include persisted/consumed (D1), org-entity deleted (−1,295; greps 0; backend tsc clean), slack-thread shadow dropped (D3), per-call LLM timeout + retry (T5; ends the 3-occurrence wedge class).
+- **Ledger**: strongly negative net (wave 2 alone −840 source-level).
+
+Open (not code): **W4 rescue sitting** — `rescue-proposal.md` ready (144 bulk + 38 skim + ~33 hand; ~$0.45; AG-1..4 apply-day gates incl. snapshot, alias-uniqueness validator, resumable apply). 6/24 slip pre-authorized.
+
+Process notes for the record: pre-mortem gates earned their keep twice (MG-1.1 bounced a deliberately-tolerated TOCTOU; MG-2 predicted the W5/W6 file collision). The 600s agent watchdog killed 4 agents tonight (2 reviewers, 1 builder-at-wrap, 1 read-only reviewer) — all work survived via per-task commits; orchestrator completed wraps/reviews directly. Durable fix worth considering: split long reviews into smaller agent tasks; never put builds+suites in reviewer prompts.
+
+Live-workspace deltas applied during the phase (operational): stale seed lock removed ×3 (runs killed at wedge threshold), catch-up `topic refresh` runs 1–3 (run 3 in flight at wrap, progress-visible).
