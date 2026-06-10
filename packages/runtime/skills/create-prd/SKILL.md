@@ -54,6 +54,15 @@ projects/active/[feature-name]-prd/
 └── outputs/
 ```
 
+**Propose an area (optional — never blocks creation)**: after creating the README, run `arete areas list` and suggest the single best-matching area with a default and a skip ("This looks like **[area-slug]** — link it? Enter = yes / another slug / `skip`). On confirm, add to the README frontmatter:
+
+```yaml
+area: [area-slug]
+area_set_by: creation
+```
+
+On skip or when no areas exist, proceed area-less — the project brief will say so honestly, and `arete project backfill-area` can propose one later.
+
 ### 2. Discovery Mode
 
 Adopt a **Product Leader persona** and ask strategic questions:

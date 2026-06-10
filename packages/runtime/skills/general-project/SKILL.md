@@ -75,6 +75,26 @@ projects/active/[topic]-project/
 
 **Graceful degradation**: If no goals directory exists or no active goals are found, skip this step entirely without prompting.
 
+### 1.6. Propose an Area (optional — never blocks creation)
+
+**After the goal link**, propose which area this project belongs to. The area is the routing hub that lights up the project brief (meetings, commitments, wiki topics) — but it is always optional.
+
+1. Run `arete areas list` (or read `areas/*.md`) to see active areas.
+2. Suggest the **single best match** with a default and a skip:
+
+   > "This looks like it belongs to **[area-slug]** — link it? (Enter = yes / type another area slug / `skip`)"
+
+3. **On confirm**: add two keys to the README frontmatter:
+
+   ```yaml
+   area: [area-slug]
+   area_set_by: creation
+   ```
+
+4. **On skip or no areas exist**: create the project area-less — do not ask again. The project brief will say so honestly, and `arete project backfill-area` can propose one later.
+
+Never make this a blocking required field — one optional proposal, then move on.
+
 ### 2. Optional: Categorize Work Type
 
 Ask the user what type of work this is — but accept minimal answers or "just start":
