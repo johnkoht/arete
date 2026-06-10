@@ -53,3 +53,15 @@ Sources: memory/MEMORY.md (last-14-day entries + keyword matches), collaboration
 **PRD**: 9 tasks. Slice A = tasks 1-4 (read-path parser, AC6 line, skill prose, AC11 gate). Slice B = task 5 (backfill CLI). Slice C = tasks 6-8 (open flow, AC4 brief, /project skill). Task 9 = AC10/AC12 wrap-tier. Execution state initialized at `dev/executions/phase-12-projects-first-class/`.
 
 **Execution mode note**: I (suborchestrator) implement tasks directly with the full execute-prd discipline — recon done, mitigations embedded per task, per-task commits, typecheck+targeted tests each task, full suite at wrap, independent reviewer passes via headless claude at slice boundaries and final review. Rationale in 06:11Z entry (no subagent() tool in this harness; sequential-only constraint honored either way).
+
+## 2026-06-10T07:05Z — Slice A complete; AC11 HARD GATE: **PASS**
+
+Tasks 1-3 shipped (commits 77e10373, a15f9c69, 116f5e18): priority parser + AC6 note + creation-time proposal prose.
+
+**AC11 numbers (read-only runs against /Users/john/code/arete-reserv):**
+- `arete brief --project glance-2-mvp` — **before: 2 sections** (Project context, Related wiki pages), no area. **After (worktree build): 5 sections** (Project context, Recent activity (10), Open work (2), Decisions & learnings (139), Related wiki pages (2)), `metadata.area = glance-2-mvp`. Gate required ≥4 + correct area → **PASS**.
+- Workspace untouched: `git status --porcelain` byte-identical before/after (488 lines both).
+
+**MC3 shadow (all 11 live projects, before → after):** adjuster-shadowing-discovery 0→0 (no README at standard path — pre-existing), ai-tooling 0→0 (same), claims-review-generator 2→2, claims-workspace-discovery 0→0 (same), glance-2-mvp 2→5 ✦, glance-comms 2→2, inbound-emails-prd 4→5 (had fm.area already; picks up an extra populated section), notion-refactor 0→0 (same), product-analytics-playbook-project 1→1, status-letter-automation 5→5, task-management-v1 1→2 (wiki retrieval variance, no area claimed). **No project regressed; nothing mislabeled** — the parser only resolved an area where a real signal exists (glance-2-mvp's prose line). The wrong-area failure mode the reviewer worried about did not appear.
+
+Proceeding to Slice B (backfill CLI).
