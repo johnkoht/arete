@@ -94,3 +94,19 @@ merge authority delegated contingent on all gates green incl. AC11. John checks 
 - **Awaiting John:** review both plans + review.md files; decide P14 OQ1 (retro via items/+refresh,
   recommended) and the smaller OQs; then /approve each → delta pre-mortems (seeds pre-listed) → /ship
   phase 13 first.
+
+## 2026-06-10 night — John approved both; phase-13 ship launched
+
+- John: P14 OQ1 = items-mediated retro (recommended option); yes to all OQ leans; "approve and run
+  /ship". Approval notes + status flips committed (`af79eac3`).
+- Phase-13 suborchestrator launched (worktree, background, stop-at-5.5, same protocol as phase 12)
+  with two additions: ship 1.2 runs as a DELTA pre-mortem from the plan's seeds (0.8 name-match /
+  recall loss / phase-14 contamination — mitigation must land in AC3's build); review's 1.5×
+  slice-variance stop rule is binding on Slices B/C.
+- **Worktree base was genuinely stale this time** (cut at 74370a1e — phase-13 plan absent). Caught
+  at launch, fast-forwarded to af79eac3 before the agent's orientation reads; zero agent work
+  disturbed (clean tree pre-merge). Pattern now twice observed → harness worktree snapshots lag
+  main; ALWAYS verify base immediately after launching a worktree agent.
+- Plan: on phase-13 READY-FOR-MERGE → prime runs merge gate (independent re-verification, same as
+  phase 12) → merge → launch phase-14 suborchestrator (depends_on satisfied). Phase-14's live-soak
+  quality additionally wants John's meeting-backfill apply, which is post-merge operational.
