@@ -37,6 +37,21 @@ live day with /project, project open, backfill-area, and the two mega-project sp
 9. Recent-activity summaries show `<!-- merged from … -->` HTML comments instead of content
    (summary extraction should skip comment nodes).
 
+## Data-model gap (confirmed 2026-06-10, John's catch)
+12. **Meetings never get `area:` frontmatter — nothing writes it.** Verified: zero `area:` keys in
+    recent meeting files; `MeetingIndexEntry.area` reads `fm.area` (brief-assemblers.ts:1783) which
+    is always absent. Area-scoped meeting retrieval works ONLY via the W6 topics-union fallback
+    (`meetingsForArea`, :242): a meeting matches an area iff the area slug appears in its `topics:`
+    list — i.e. meeting→area mapping is de-facto delegated to the wiki extractor's topic tagging.
+    Two weaknesses: (a) only works where a same-named topic page exists and gets tagged (works for
+    glance-2-mvp / glance-communications; will NOT work for pm-operations-style areas without a
+    twin topic page); (b) topic-mention ≠ area-belonging — tangential meetings leak into area
+    recent-activity (BISR updates / claim-review-template under glance-2-mvp). Fix shape: propose
+    area at `meeting process/approve` time (suggestAreaForMeeting exists, Phase 8 f8) + a meeting
+    `backfill-area` mirroring the project one; then `meetingsForArea` prefers `area:`, topics stay
+    the fallback. Candidate for the follow-up phase — it makes area a real first-class edge on all
+    three entities (projects ✅, commitments ✅, meetings ❌).
+
 ## Watch items (not yet actionable)
 10. Morning-of-2026-06-10 `brief --project glance-2-mvp` had NO wiki section at the CLI layer;
     same-day post-index `project open task-management-v1` shows 6 well-ranked pages. Hypothesis:
