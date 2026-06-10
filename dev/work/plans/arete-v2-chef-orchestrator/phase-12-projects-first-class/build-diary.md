@@ -17,3 +17,39 @@ Orientation reading done: AGENTS.md, ship SKILL + build-log-protocol + orchestra
 Build log initialized at `dev/executions/phase-12-projects-first-class/build-log.md`.
 
 Scope locked from amendment: **Slices A+B+C only** (AC1, AC2, AC3, AC4, AC6, AC10, AC11, AC12). No AC5/AC7/AC8/AC9, no scaffolding for them. AC11 is the hard gate: glance-2-mvp brief section count 1 → 4+ or STOP.
+
+## 2026-06-10T06:25Z — Phase 1.3 dispatched + recon + AC11 baseline
+
+**Phases 1.1/1.2 skipped** (plan saved + `status: approved`; `has_pre_mortem: true`).
+
+**Cross-model review dispatched**: headless `claude -p` on **opus** (different model from me) with the review-plan skill protocol, the plan+amendment+pre-mortem, verified code refs, and both expertise profiles. Running in background; gate decision when it returns.
+
+**Recon (phantom-task check, execute-prd Phase 0)** — all in-scope work is real, nothing already exists:
+- Premise re-verified against live workspace (read-only): `arete brief --project glance-2-mvp --json` → **2 sections** (`Project context`, `Related wiki pages`). The three area-gated sections (Recent activity / Open work / Decisions & learnings) are dark. README has the prose `**Area**:` line at L22, no `area:` frontmatter. Exactly as the plan claims. **AC11 baseline = 2 sections** (plan said "1" — it undercounted the wiki section that doesn't need an area; gate target stays 4+).
+- `packages/cli/src/commands/` has NO `project.ts` — AC2/AC3 CLI group is greenfield. CONFIRMED.
+- `readProjectBySlug` (:927) + `listActiveProjects` (:897) both read `area` only from `fm.area`. CONFIRMED (line refs match amendment).
+- `arete commitments backfill-area` (commitments.ts:328-461) is the exact preview/--apply/--reset + provenance + 0.7-floor pattern to mirror. CONFIRMED reusable.
+- `EntityService.resolveAll(reference, 'project', paths, limit)` (entity.ts:975) already returns scored candidates — AC3 disambiguation needs no new resolver, just surface top-N. CONFIRMED reusable.
+- `StorageAdapter.getModified(path)` exists — "what's new since README mtime" needs no fs calls in services. CONFIRMED.
+- Frontmatter parse/serialize round-trip pattern exists (`meeting-lock.ts` parseYaml/stringifyYaml) — backfill `--apply` follows it; no new YAML machinery.
+- `brief-project.test.ts`, `area-parser.test.ts`, `chef-orchestrator-skills.test.ts` all exist — extend, don't create parallel suites.
+
+**Worktree env**: fresh `npm install` (no symlink — hygiene-pass lesson). Baseline `npm run typecheck` green; `brief-project.test.ts` green (fail 0).
+
+## 2026-06-10T06:30Z — Phase 2.1 memory review (synthesis)
+
+Sources: memory/MEMORY.md (last-14-day entries + keyword matches), collaboration.md, services LEARNINGS.md, cli/commands LEARNINGS.md. Actionable synthesis for this build:
+
+1. **Dark-code is my recurring failure mode** (topic-wiki 2026-04-23, services LEARNINGS): every new export needs a production call-site before wrap; the dark-code audit (Phase 4.3) is a distinct gate from tests.
+2. **Per-file `tsx --test` is structurally blind to cross-file conflicts** (2026-06-08 entry): run the FULL suite before wrap, not just touched files.
+3. **No direct `fs` in services; tests for memory ops use real fs + StorageAdapter** (services LEARNINGS + plan): `getModified()` covers mtime needs; temp dirs unique per test run (`pid+Date.now()`).
+4. **CLI conventions are load-bearing** (cli LEARNINGS): `findRoot()` guard, `--json` complete in ALL exit paths, formatters.ts helpers, register in index.ts; new commands must be routable (`arete route`) and documented in `.agents/sources/*/cli-commands.md` + AGENTS.md rebuild.
+5. **Embed pre-mortem mitigations in each task; sequential execution; per-task commits** (collaboration.md; W4 watchdog lesson).
+
+## 2026-06-10T06:48Z — Phases 1.3 → 2.3 complete; entering build
+
+**Gate decision (Phase 1.3): PASS.** Cross-model reviewer (opus, fresh context) returned **Approve with suggestions** — zero structural blockers, 5 suggestions. All five folded into the PRD as task-level ACs: (1) mtime mechanism — actually already exists (`StorageAdapter.getModified`), reviewer missed it, corrected in review.md; (2) qmd refresh + `--skip-qmd` on backfill `--apply`; (3) permissive prose-regex + variation tests; (4) archived-project handling on open; (5) `--json` everywhere. The reviewer's devil's-advocate flagged a sharp one: a *partial* regex mismatch could pass a naive section-count gate while serving wrong-area content — so the AC11 gate now ALSO asserts `metadata.area === "glance-2-mvp"`, not just section count.
+
+**PRD**: 9 tasks. Slice A = tasks 1-4 (read-path parser, AC6 line, skill prose, AC11 gate). Slice B = task 5 (backfill CLI). Slice C = tasks 6-8 (open flow, AC4 brief, /project skill). Task 9 = AC10/AC12 wrap-tier. Execution state initialized at `dev/executions/phase-12-projects-first-class/`.
+
+**Execution mode note**: I (suborchestrator) implement tasks directly with the full execute-prd discipline — recon done, mitigations embedded per task, per-task commits, typecheck+targeted tests each task, full suite at wrap, independent reviewer passes via headless claude at slice boundaries and final review. Rationale in 06:11Z entry (no subagent() tool in this harness; sequential-only constraint honored either way).
