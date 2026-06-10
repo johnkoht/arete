@@ -71,3 +71,26 @@ merge authority delegated contingent on all gates green incl. AC11. John checks 
 3. Post-merge sequence (amendment §Sequencing): extract child projects via the new area-aware
    creation flow → rerun audit → `arete project backfill-area` (preview) → review MC3 table → `--apply`.
 4. Decide release cut (v0.13.0) when ready.
+
+## 2026-06-10 evening/night — post-merge day 1 + follow-up planning round
+
+- v0.13.0 released (`301194f2`). Post-merge sequence COMPLETE: John split glance-2-mvp (5 children)
+  and glance-comms (under existing glance-communications area) via the new flows; backfill preview
+  → 0 confident matches (floor working); 2 hand-mapped (task-management-v1 → glance-2-mvp frontmatter,
+  product-analytics-playbook → pm-operations prose line — live-validated the prose parse path);
+  claims-review-generator deliberately unmapped. 14/15 actives resolve areas.
+- Dogfooding day-1 findings → `followup-punch-list.md` (#1–13). Biggest: John caught that meetings
+  never get `area:` (#12, topics-union is the only mapper) and that "load project X" doesn't trigger
+  /project (#13, routing miss → freestyle file-reads missed the assembled surface).
+- **Follow-up planning round (John-directed, suborchestrated):** planner agent drafted TWO plans —
+  `phase-13-area-edge-completion` (foundation, ~+685 LOC) and `phase-14-project-write-back` (flow,
+  ~+220 code/+310 md, depends_on: 13). Independent opus eng-lead review (code-grounded): **"Approve
+  pending pre-mortem" both**; all 11 findings adopted with disposition tables in the plans;
+  pre-mortem seeds recorded (sharpest: 0.8 name-substring match clears the 0.7 floor).
+  Committed `32f41161`. Ops note: the planner agent appeared to die mid-review (harness notified
+  completion while its headless opus review still ran); it self-resumed on its own background-task
+  notification and finished — I'd prepared to complete its steps and backed off when its edits
+  appeared. No work lost, no interleaving.
+- **Awaiting John:** review both plans + review.md files; decide P14 OQ1 (retro via items/+refresh,
+  recommended) and the smaller OQs; then /approve each → delta pre-mortems (seeds pre-listed) → /ship
+  phase 13 first.

@@ -52,6 +52,14 @@ live day with /project, project open, backfill-area, and the two mega-project sp
     the fallback. Candidate for the follow-up phase — it makes area a real first-class edge on all
     three entities (projects ✅, commitments ✅, meetings ❌).
 
+## Routing / discoverability (confirmed 2026-06-10 evening, John's catch)
+13. **"load project X" doesn't trigger `/project`** — the skill's trigger list (`open project`,
+    `work on project`, `pull up project`, …) misses "load/review/look at"; the agent freestyled
+    with manual file reads and missed the assembled surface (1 of 4 siblings, 0 wiki pages, no
+    what's-new). Cheap fix: broaden triggers → folded into phase-13 AC6. Deeper pattern to watch:
+    skill value is gated on invocation phrasing (same family as the forgotten `synthesize`);
+    collect further routing misses during dogfooding as evidence for intent-routing work.
+
 ## Watch items (not yet actionable)
 10. Morning-of-2026-06-10 `brief --project glance-2-mvp` had NO wiki section at the CLI layer;
     same-day post-index `project open task-management-v1` shows 6 well-ranked pages. Hypothesis:
