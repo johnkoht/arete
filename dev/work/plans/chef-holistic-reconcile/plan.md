@@ -147,7 +147,11 @@ winddown Step 2 scope. Behind config flag `reconcile_mode: inline | day-level`
   `status: 'skipped'` + `source: 'reconciled'` flips only** (no silent
   deletion of already-written decisions/learnings; day-level apply is
   post-write, so silent merge would be data loss).
-- daily-winddown SKILL.md: Step 1h drops `--reconcile` and Step 2 opens with
+- daily-winddown SKILL.md: Step 1h KEEPS passing `--reconcile` (as shipped —
+  the flag was not dropped); under `reconcile_mode: day-level` the CLI itself
+  defers the inline reconcile (skips the cross-meeting block +
+  batchLLMReview, prints an info line, and reports
+  `reconcileDeferred: 'day-level'` in `--json` output). Step 2 opens with
   `arete meeting reconcile-day` — gated on the config flag.
 Kills collapse-to-oldest within days, zero new engine machinery; the full
 engine (W1+) replaces it later and soaks against a cleaner baseline.

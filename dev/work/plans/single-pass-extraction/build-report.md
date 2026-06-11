@@ -27,8 +27,12 @@ NOT merged, NOT pushed — John reviews first.
 | `reconcile_mode` | `inline` (default) \| `day-level` | inline per-file reconcile untouched | after Gate A; one clean `reconcile-day --dry-run` over a real duplicate day; independently reversible |
 | `reconcile_shadow` | `false` (default) \| `true` | zero writes | flip ON at soak start (it is instrumentation, not behavior) |
 
-Invalid values are clamped to the safe default in `loadConfig` (a typo can
-never activate a half-configured pipeline). Behavior matrix: each flag is
+Invalid values for `extraction_mode` and `reconcile_mode` are clamped to the
+safe default in `loadConfig`/`normalizeConfig` (a typo can never activate a
+half-configured pipeline). `reconcile_shadow` is NOT clamped in
+`normalizeConfig` — its safety comes from the strict `=== true` gate at every
+call site (any non-`true` value, including typos, leaves it off; corrected per
+2026-06-11 review). Behavior matrix: each flag is
 independent; `extraction_mode` changes WHAT is extracted, `reconcile_mode`
 changes WHERE cross-meeting reconcile runs, `reconcile_shadow` only adds
 gitignored telemetry files.
@@ -107,6 +111,25 @@ Raw outputs in `eval/runs/` (local, gitignored).
   reviews as disciplined separate self-review passes over the diffs
   (weaker independence than briefed; logged in the diary both times).
 
+### Independent-review notes on record (2026-06-11 audit, NOTES 8/10/11)
+
+Substance reconstructed from the review findings (the review transcript
+itself is not in-repo); recorded here so the observations survive:
+
+- **NOTE 8 — single_pass empty-text drop point.** In the single_pass parse
+  path, decision/learning entries with no usable `text` field were silently
+  dropped (`if (!text) continue`) — the one AC8 drop point with no telemetry.
+  Fixed 2026-06-11: now fires an `unparseable_item` extraction-telemetry
+  event per dropped entry.
+- **NOTE 10 — open_questions truncation.** `open_questions` beyond
+  OPEN_QUESTIONS_MAX (20) were silently truncated. Fixed 2026-06-11: each
+  truncated question now fires a `category_limit` telemetry event
+  (itemType `open_question`).
+- **NOTE 11 — `reconcile_shadow` clamping claim.** This report originally
+  claimed all flag values are clamped in `loadConfig`; `reconcile_shadow`
+  is not clamped in `normalizeConfig` — only the strict `=== true`
+  activation gate protects it. Sentence corrected above (Flags section).
+
 ## AC status — what is satisfiable NOW vs awaiting soak/eval
 
 ### single-pass-extraction plan
@@ -116,7 +139,7 @@ Raw outputs in `eval/runs/` (local, gitignored).
 | AC1 recall ≥ legacy / ≥21/22 compliance | **AWAITING eval run** | smoke trend positive (26+9oq vs 16 items) |
 | AC2 blocker recall 100% | **SMOKE PASS**; full corpus awaiting eval | canary extracted + blocker-marked |
 | AC3 junk ≤15%, fab 0, ⚠ ≥80% | **AWAITING judge run** | rubric + manifest committed; 2 ⚠ w/ reasons on smoke |
-| AC4 direction integrity | **STRUCTURAL PARTS GREEN NOW** | D7 inertness tests ×3 layers (parser `·` skip, sync guard, dedup-canonical guard); mirror-pair human confirmation awaits soak |
+| AC4 direction integrity | **STRUCTURAL PARTS GREEN NOW** | D7 guards exist at 3 layers (parser `·` skip, sync guard, dedup-canonical guard); originally only layer 1 had tests — review fixes 2026-06-11 added tests for the sync guard (commitments.test.ts) and the dedup-canonical guard (extract-dedup-wiring.test.ts); mirror-pair human confirmation awaits soak |
 | AC5 closeability | **AWAITING judge run** | rubric carries the check |
 | AC6 series continuation + re-emit | **UNIT GREEN; chain replay awaiting eval** | resolver ±tests; prompt mark-don't-skip + banned-phrase test; NOTE: the double-join fix was load-bearing here — pre-fix, CLI series context never assembled |
 | AC7 blind-set ≥ B+ | **AWAITING judge run** | blind set defined in manifest |

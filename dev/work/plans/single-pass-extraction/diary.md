@@ -287,3 +287,90 @@ legacy double-join disposition call), (2) flip `reconcile_shadow: true` +
 `extraction_mode: single_pass` in arete-reserv when ready to start the
 soak per WINDDOWN-BENCHMARK § 0, (3) morning eval run (token spend) for
 AC1/AC3/AC5/AC7.
+
+---
+
+## 2026-06-11 review fixes (independent-review pass applied)
+
+An independent reviewer audited the whole branch; this entry applies every
+finding. Disposition per finding:
+
+**MUST-FIX 1 — W7 snapshot mode label (FIXED).** `meeting.ts` passed the
+PROMPT mode (`light|normal|thorough`) as `extractionMode`; the snapshot
+schema requires `legacy|single_pass`. Now `extractionMode: singlePassMode ?
+'single_pass' : 'legacy'`, with the prompt depth recorded separately as a
+new optional `promptMode` field (schema + writer updated in
+`reconcile-shadow.ts`). Added CLI-level tests
+(`meeting-extract-snapshot.test.ts`) that run the REAL `arete meeting
+extract` subprocess against a stubbed Anthropic fetch (NODE_OPTIONS
+preload, `test/fixtures/mock-anthropic-fetch.mjs` — zero network/LLM
+calls) and assert the snapshot on disk records `legacy` / `single_pass` +
+`promptMode` — the class of bug the literal-passing unit tests missed.
+
+**SHOULD-FIX 2 — D7 inertness test gaps (FIXED).** Guards existed at 3
+layers but only layer 1 (meeting-parser) was tested. Added: (a)
+`CommitmentsService.sync()` test with a direction:'none'-shaped item —
+asserts console.warn + skip, zero commitments created (commitments.test.ts);
+(b) `loadSameDayStagedItems` canonical-guard test with a `·`-marked /
+`direction: none` item — excluded from dedup canonicals
+(extract-dedup-wiring.test.ts). Fixed the overclaiming header comment in
+single-pass-extraction.test.ts (now says layer 1 only + points at where
+the other layers are tested) and the build-report AC4 row ("tests ×3
+layers" → guards ×3, tests originally ×1, now ×3 via these fixes).
+
+**SHOULD-FIX 3 — reconcile-day --dry-run fidelity (FIXED).** Dry-run
+returned before staged-line matching and user-decision checks, so it could
+not predict a real run (and the flip rule trusts dry-run). Now dry-run
+reads each file and runs the SAME `allStaged.find` + prior-status logic
+read-only, populating real ids, `unmatched`, and `skippedExisting` — no
+more `(dry-run)` placeholder ids. Test added (reconcile-day.test.ts):
+a Format-B (Approved-section) duplicate creates genuine text drift; the
+dry-run's `unmatched`/`applied`/`preservedUserDecisions` sets are asserted
+identical to a subsequent real run's, and files are byte-untouched.
+
+**SHOULD-FIX 4 — series resolver doc/impl mismatch (FIXED, impl
+tightened).** Comment claimed the attendee gate is skipped only when BOTH
+sides lack attendees; impl skipped when EITHER was empty. Adjudicated
+decision applied: when the TARGET has attendees but the candidate has
+none, the title bar tightens to Jaccard ≥ 0.7 (new exported
+`SERIES_TITLE_JACCARD_NO_ATTENDEE`; explicit shared recurring-config still
+passes); when the target lacks attendees, behavior is unchanged. Module
+header now describes exactly this. Asymmetric-case test added (blocks at
+J≈0.6 without candidate attendees; passes at J=1).
+
+**DOC/POLISH 5 — engine-spec §2/§3 boundaries (FIXED).** Aligned with
+shipped code: duplicates are strict `J > 0.7` (`findDuplicates` uses `>`);
+uncertain band is `0.5 ≤ J ≤ 0.7` INCLUSIVE both ends
+(`sim >= UNCERTAIN_BAND_FLOOR && sim <= NOMINATION_JACCARD_THRESHOLD`).
+§3 table rows updated; noted the clean partition at the 0.7 boundary.
+
+**DOC/POLISH 6 — AC8 residual telemetry (FIXED, code).** Two remaining
+silent drop points in the single_pass parse path now emit
+extraction-telemetry events: (a) empty-text decision/learning entries →
+`unparseable_item`; (b) open_questions truncation at OPEN_QUESTIONS_MAX →
+`category_limit` with new itemType `open_question` (one event per dropped
+question). Legacy path bit-identical (events are singlePass-gated). Test
+added to single-pass-extraction.test.ts.
+
+**DOC/POLISH 7 — WINDDOWN-BENCHMARK AC11 clause (FIXED).** `source: dedup`
+items are now explicitly EXCLUDED from the "any non-blocker auto-approval
+= breach" rule (they retain pre-existing 10b auto-approve semantics); both
+the §1 log-table row and the Gate-A checklist line carry the exclusion.
+
+**DOC/POLISH 8 — CHR plan.md W0 text (FIXED).** "Step 1h drops
+--reconcile" rewritten to describe what shipped: flag kept; CLI-side
+deferral under `reconcile_mode: day-level` (skips inline reconcile +
+batchLLMReview, info line, `reconcileDeferred: 'day-level'` in --json).
+
+**DOC/POLISH 9 — build-report corrections (FIXED).** The "invalid values
+are clamped" sentence now states that only `extraction_mode` /
+`reconcile_mode` are clamped in `normalizeConfig`; `reconcile_shadow` is
+protected by the strict `=== true` activation gate, not clamping. Reviewer
+NOTES 8/10/11 appended to the Known-gaps section (substance reconstructed
+from the findings — the review transcript itself is not in-repo; flagged
+as such in the report).
+
+**Process:** every fix verified by its package tests, then the full
+core+cli suite; dist/ rebuilt + committed for core and cli (house rule).
+Zero LLM calls (the new CLI snapshot tests stub fetch at the transport
+layer). Not merged, not pushed; arete-reserv untouched.

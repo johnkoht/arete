@@ -56,7 +56,7 @@ sidecar `WINDDOWN-BENCHMARK-LOG.md` if it gets long):
 | `wall-clock` | start→curated-view-rendered, minutes. The abort-trigger line |
 | `CT closures (by evidence class)` | proposed CTs split slack-ref / meeting-ref / calendar-ref / week.md — parity check vs the 6/09 baseline's 6 |
 | `mirror-pair events` | telemetry events + whether a human confirms each as a real parser pair (AC4 / AC10) |
-| `auto-approved` | count + tiers. ANY non-blocker auto-approval = AC11 breach, investigate same night |
+| `auto-approved` | count + tiers. ANY non-blocker auto-approval = AC11 breach, investigate same night. EXCLUDED from the breach rule: `source: dedup` items (Phase 10b reactive dedup) — they retain their pre-existing auto-approve semantics and are not single-pass tier approvals |
 | `unmerge/pull-back` | user corrections issued — false-collapse proxy (CHR AC6a) |
 | `notes` | anything weird: missing snapshot, LLM retries, deferred-meeting blocker, flag flips |
 
@@ -113,7 +113,8 @@ After **≥5 winddown days** on single_pass (and W4 view-ranking confirmed
 live in the same release — pre-mortem R3 ordering), flip when ALL hold:
 
 - [ ] **AC11 approval budget**: median pending-decisions/winddown ≤ 25 AND
-      **p90 ≤ 40** over the window; **zero non-blocker auto-approvals**.
+      **p90 ≤ 40** over the window; **zero non-blocker auto-approvals**
+      (excluding `source: dedup` items — pre-existing 10b semantics, see § 1).
 - [ ] **AC2**: no known blocker missed on any soaked day (spot-check
       against meeting outcomes; the license-assignment canary class).
 - [ ] **AC3 bars via § 2 sampling**: junk ≤ 15%, **fabrication = 0**,

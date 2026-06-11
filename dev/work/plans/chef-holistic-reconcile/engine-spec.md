@@ -133,9 +133,11 @@ batch loads via the W2 primitive's loader (status filter
 Pure function over the ledger file. Emits **candidate pairs only** —
 nomination is NEVER a decision:
 
-- **Jaccard ≥ 0.7** on normalized tokens within the ledger (same
+- **Jaccard > 0.7 (strict)** on normalized tokens within the ledger (same
   normalize-then-Jaccard as `CommitmentsService.reconcile()`;
-  `commitments.ts` `normalize()` + `utils/similarity.js`).
+  `commitments.ts` `normalize()` + `utils/similarity.js`; shipped
+  `findDuplicates` compares `similarity > threshold`, so J = 0.7 exactly
+  is NOT a duplicate — it lands in the uncertain band below).
 - **Memory match**: decisions/learnings vs recent committed memory
   (`matchRecentMemory` semantics).
 - **Completed-task match**: actions vs week.md/scratchpad completions
@@ -152,9 +154,12 @@ parameters and keep their deliberate values (§ 3). A naive
 one-constant-everywhere sweep would re-open the 2026-06-01 leak class
 Rule 4 was built to close (review F2).
 
-Nomination also emits **sub-band candidates** (0.5 ≤ J < 0.7) tagged
-`uncertain-band` so R3's Rule 4 fuzzy routing has its input — sub-band
-pairs are never collapse candidates, only Uncertain-surface candidates.
+Nomination also emits **sub-band candidates** (0.5 ≤ J ≤ 0.7, inclusive at
+BOTH ends — shipped code: `sim >= UNCERTAIN_BAND_FLOOR && sim <=
+NOMINATION_JACCARD_THRESHOLD`) tagged `uncertain-band` so R3's Rule 4 fuzzy
+routing has its input — sub-band pairs are never collapse candidates, only
+Uncertain-surface candidates. Duplicates (J > 0.7) and the band
+(0.5 ≤ J ≤ 0.7) partition cleanly with no gap at the boundary.
 
 ### R3 — Judgment pass (agent)
 
@@ -233,8 +238,8 @@ presence.
 
 | Parameter | Value | Owner | Why it is NOT the nomination constant |
 |---|---|---|---|
-| R2 nomination Jaccard | 0.7 | `arete reconcile nominate` | unified candidate filter (D5) |
-| R2 uncertain-band nomination | 0.5 ≤ J < 0.7 | `arete reconcile nominate` | feeds Rule 4 fuzzy routing; never a collapse candidate |
+| R2 nomination Jaccard | J > 0.7 (strict) | `arete reconcile nominate` | unified candidate filter (D5) |
+| R2 uncertain-band nomination | 0.5 ≤ J ≤ 0.7 (inclusive) | `arete reconcile nominate` | feeds Rule 4 fuzzy routing; never a collapse candidate |
 | Rule 4 concrete collapse | ≥ 0.7 + counterparty + direction | R3 judgment | pre-stage gate; over-collapse = silent data loss |
 | Rule 4 Uncertain band | 0.5–0.7 | R3 judgment | deliberate (SKILL.md:632–642); parser-bug-suspect routing |
 | `CommitmentsService.reconcile()` | 0.6 | primitive (post-approval) | survives as engine-called primitive (D1); leak-vs-loss tradeoff differs post-stage |
