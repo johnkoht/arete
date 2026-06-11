@@ -244,3 +244,46 @@ CHR W4: detector soak + day-level exercised + soak event minima + zero
 sampled false collapses + second golden day; independent day-level flip
 rule), and the five abort triggers verbatim incl. SP-rollback-resets-
 soak-clock. Log table seeded with the 06-09 baseline row.
+
+---
+
+## 2026-06-11 ~12:30 — Phase D: wrap (continuation orchestrator)
+
+**Test state across ALL packages:**
+- core+cli (root `npm test`): **4601 / 4599 pass / 0 fail / 2 skipped**
+  (pre-branch 4530; +69 branch tests).
+- backend: 363/367 — the 4 failures are PRE-EXISTING. Proven, not assumed:
+  ran the backend suite at the merge-base (74370a1e) in a throwaway
+  detached worktree (`git worktree add --detach /tmp/arete-main-check`,
+  removed after) → identical failure set. Branch touches zero backend
+  files. Also: root `npm test` does NOT include backend/web — the earlier
+  "full suite green" claims were core+cli only; build-report says so.
+- web: untouched by branch; vitest devDeps not installed in this monorepo
+  checkout, suite not runnable here (pre-existing condition).
+
+**Fresh-eyes review** — DEVIATION (same as Phase 0): no Agent/Task tool
+exists in this environment (re-verified via ToolSearch at Phase D), so the
+review was a disciplined separate pass over `git diff main...HEAD` rather
+than an independent subagent. What it checked + found:
+- Legacy invariance at every detector seam (telemetry-only is `if
+  (singlePass)`-gated; else-branches keep warn+continue verbatim); config
+  clamps; D7 inertness at all 3 layers; SKILL.md diffs additive.
+- W0 semantics parity with inline (ordering, visible-skip-only, user-
+  decisions-win, abstain-on-noop) re-verified post-fix.
+- Bugs found DURING the build (not after): the W0 draft's missing `setAt`
+  (reader silently drops the entry), the meetingsDir double-join family
+  (fixed in branch-new code, documented-not-fixed in legacy per the
+  invariant), and the suite-coverage blind spot above. Findings were fixed
+  before their commits; no post-hoc fixes were needed from the final pass.
+
+**Artifacts:** build-report.md (flags + flip rules, smoke results, AC
+status tables for BOTH plans, discoveries, known gaps incl. backend-stays-
+legacy), WINDDOWN-BENCHMARK.md (Phase C), engine-spec.md + PATTERNS entry
+(W1), this diary. dist/ rebuilt + committed for core and cli (house rule).
+
+**Branch ready-state:** all scope items committed, worktree clean, NOT
+merged/pushed. John's queue: (1) review build-report Discoveries #1 (the
+legacy double-join disposition call), (2) flip `reconcile_shadow: true` +
+`extraction_mode: single_pass` in arete-reserv when ready to start the
+soak per WINDDOWN-BENCHMARK § 0, (3) morning eval run (token spend) for
+AC1/AC3/AC5/AC7.
