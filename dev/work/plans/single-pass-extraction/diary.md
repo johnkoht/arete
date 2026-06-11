@@ -217,3 +217,30 @@ core + cli typecheck/build clean.
 - Shadow log: JSONL via the storage adapter's atomic `append` (O_APPEND —
   safe under the winddown's wave-of-4 parallel extracts), read-modify-write
   fallback for adapters without it.
+
+---
+
+## 2026-06-11 ~11:45 — Phase C: WINDDOWN-BENCHMARK.md
+
+Executable A/B checklist for John, grounded in the real artifacts: read the
+06-04 and 06-09 archived winddowns (READ-ONLY) for format + baseline numbers
+(06-09 = richest day: 6 CTs with evidence classes, 14-item sidecar, the
+de_002→de_004 supersession and the b0e57c25↔ce091a38 mirror pair both
+visible in Uncertain — i.e., the baseline already exhibits the exact
+phenomena the gates measure). Sections: setup (flags incl. reconcile_shadow,
+one-variable-at-a-time note on reconcile_mode, model-confound note),
+per-day metric table (tier counts, pending-decisions as THE AC11 number
+with p90 computed at gate time not nightly, blockers incl. override
+pull-ups, sidecar size, wall-clock, CT evidence classes, mirror events,
+auto-approvals, unmerge), weekly judge re-audit protocol (N=10 staged
+stratified + N=5 skipped; skipped-item false-collapse hard bar 0/5 no
+escape hatch per CHR AC6; one full-meeting human audit per gate per rubric
+rail; judge model id recorded; manifest withheld), what raw snapshots
+enable (offline engine replay via reconcile nominate, re-scoring after
+model bumps, arc reconstruction, second golden day), decision rules
+(Gate A = extraction_mode flip: AC11 median≤25 AND p90≤40 + zero
+non-blocker auto-approvals + AC2/AC3/AC9 + wall-clock + AC12; Gate B =
+CHR W4: detector soak + day-level exercised + soak event minima + zero
+sampled false collapses + second golden day; independent day-level flip
+rule), and the five abort triggers verbatim incl. SP-rollback-resets-
+soak-clock. Log table seeded with the 06-09 baseline row.
