@@ -32,6 +32,15 @@ export interface ProjectBackfillCandidate {
     inferenceSummary: string;
 }
 /**
+ * Parse a project README into frontmatter map + body (yaml round-trip
+ * input shape). Exported for the sibling topics writer (project-topics.ts)
+ * so both Phase-12/14 README write surfaces share ONE parse.
+ */
+export declare function parseProjectReadme(content: string): {
+    fm: Record<string, unknown>;
+    body: string;
+};
+/**
  * List active projects annotated with area resolution + inference text.
  * Used by `arete project backfill-area` (preview, apply, reset).
  */

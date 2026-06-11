@@ -14,7 +14,7 @@
  * refreshQmdIndex after workspace writes (+ `--skip-qmd`).
  */
 import chalk from 'chalk';
-import { createServices, loadConfig, refreshQmdIndex, listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, formatProjectBriefMarkdown, } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, formatProjectBriefMarkdown, computeProjectTopicsRefresh, applyProjectTopics, PROJECT_TOPICS_SCORE_FLOOR, } from '@arete/core';
 import { error, info, success, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 /** Confidence floor for area inference (pre-mortem R3 — non-negotiable). */
@@ -150,6 +150,97 @@ export function registerProjectCommand(program) {
         }
         else if (candidates.length === 0) {
             info('Every active project already resolves an area. Nothing to backfill.');
+        }
+    });
+    // ---------------------------------------------------------------------
+    // arete project refresh-topics <slug>  (Phase 14 AC2)
+    // ---------------------------------------------------------------------
+    projectCmd
+        .command('refresh-topics <slug>')
+        .description('Recompute the system-owned `topics:` cache for a project (top-5 wiki topics above the score floor). Default is preview (pure read); --apply writes ONLY when the slug set changed (R2: zero writes on a no-op).')
+        .option('--apply', 'Write the cache when changed (default: preview-only pure read)')
+        .option('--skip-qmd', 'Skip automatic qmd index update after an actual write')
+        .option('--json', 'Output as JSON')
+        .action(async (slug, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+                info('Run "arete install" to create a workspace');
+            }
+            process.exit(1);
+        }
+        const paths = services.workspace.getPaths(root);
+        const refresh = await computeProjectTopicsRefresh(services.storage, services.topicMemory, paths, slug);
+        if (!refresh) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `No active project '${slug}' (no README)` }));
+            }
+            else {
+                error(`No active project '${slug}' (projects/active/${slug}/README.md not found)`);
+            }
+            process.exit(1);
+        }
+        // --apply: change-gated write. Same slug set → applyProjectTopics
+        // performs ZERO write calls (R2 — tested in core + subprocess suites).
+        let written = false;
+        if (opts.apply && refresh.changed) {
+            const result = await applyProjectTopics(services.storage, refresh);
+            written = result.written;
+        }
+        // qmd refresh ONLY after an actual write (cli LEARNINGS: before the
+        // JSON return so JSON mode still indexes).
+        let qmdResult;
+        if (written && !opts.skipQmd) {
+            const config = await loadConfig(services.storage, root);
+            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                slug: refresh.slug,
+                area: refresh.area,
+                floor: PROJECT_TOPICS_SCORE_FLOOR,
+                computed: refresh.computed,
+                belowFloor: refresh.belowFloor,
+                current: refresh.current,
+                currentRefreshed: refresh.currentRefreshed,
+                changed: refresh.changed,
+                retrievalFailed: refresh.retrievalFailed ?? false,
+                applied: written,
+                qmd: qmdResult ?? { indexed: false, skipped: true },
+            }, null, 2));
+            return;
+        }
+        const mode = opts.apply ? (written ? 'APPLIED' : 'APPLY (no-op)') : 'PREVIEW (pure read)';
+        info(`Topics cache: ${mode}`);
+        listItem('Project', refresh.slug + (refresh.area ? `  (area: ${refresh.area})` : ''));
+        listItem('Cached set', refresh.current.length > 0 ? refresh.current.join(', ') : '(none)');
+        if (refresh.currentRefreshed)
+            listItem('Cache last changed', refresh.currentRefreshed);
+        listItem(`Computed top-${refresh.computed.length} (floor ${PROJECT_TOPICS_SCORE_FLOOR})`, refresh.computed.length > 0
+            ? refresh.computed.map((c) => `${c.slug} (${c.score})`).join(', ')
+            : '(none above floor)');
+        if (refresh.belowFloor.length > 0) {
+            listItem('Below floor (excluded)', refresh.belowFloor.map((c) => `${c.slug} (${c.score})`).join(', '));
+        }
+        if (refresh.retrievalFailed) {
+            error('Wiki retrieval failed — treating as no-change (a transient error never empties the cache).');
+        }
+        console.log('');
+        if (written) {
+            success('Wrote topics: + topics_refreshed: (slug set changed).');
+            displayQmdResult(qmdResult);
+        }
+        else if (refresh.changed) {
+            info('Slug set differs from the cache. Re-run with --apply to write.');
+        }
+        else {
+            info('Slug set unchanged — nothing to write (R2: zero write calls).');
         }
     });
     // ---------------------------------------------------------------------
