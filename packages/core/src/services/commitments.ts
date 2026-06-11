@@ -799,7 +799,13 @@ export class CommitmentsService {
     // hand-completed already, or the workspace may not have a task
     // linked to this commitment. The commitment write above is the
     // source of truth either way.
-    if (this.completeTaskFromCommitmentFn) {
+    //
+    // ONLY for status 'resolved'. Dropped ≠ done: dropping a commitment
+    // (e.g. winddown dedup marking a mirror duplicate) must NOT check off
+    // its linked tasks — the work was not completed. Regression fired
+    // live 2026-06-10: a batch-drop of 6 duplicates falsely marked 7
+    // week.md tasks [x].
+    if (status === 'resolved' && this.completeTaskFromCommitmentFn) {
       try {
         await this.completeTaskFromCommitmentFn(target.id.slice(0, 8));
       } catch {
