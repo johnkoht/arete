@@ -1,6 +1,6 @@
 # Chef holistic reconcile — one reconciliation brain for the winddown
 
-Status: DRAFT (2026-06-10, overnight investigation)
+Status: APPROVED-WITH-ADJUDICATIONS (2026-06-11, John) — see § Adjudications applied at bottom
 Depends on: `dev/work/plans/single-pass-extraction/plan.md` (W1–W5 must ship + stabilize first)
 Investigation inputs: winddown architecture map + reconcile consumer audit (2 agents, 2026-06-10; key findings inlined below)
 
@@ -129,6 +129,29 @@ different horizon.
 
 ## Work items
 
+**W0 — Stage-0 day-level reconcile (2026-06-11 adjudication: YES — reviewer's
+"simpler path", built first)**
+Move the EXISTING `reconcileMeetingBatch` invocation from per-file extract time
+(the `meeting.ts` `--reconcile` block, Step 1h) to ONE day-level call at
+winddown Step 2 scope. Behind config flag `reconcile_mode: inline | day-level`
+(default `inline`; the flip is John's call). Mechanics:
+- `reconcile_mode: day-level` ⇒ `arete meeting extract --reconcile` SKIPS the
+  inline cross-meeting reconcile + batchLLMReview (extraction stays pure;
+  completed-task/open-task matching inside `processMeetingExtraction` is
+  unaffected — that's same-file, not cross-meeting).
+- New CLI `arete meeting reconcile-day [--date YYYY-MM-DD] [--days 7] --json`:
+  loads the day's processed meetings + the 7-day batch + reconciliation
+  context, runs `reconcileMeetingBatch` ONCE over the whole day, runs ONE
+  `batchLLMReview` over the day's surviving action items, and applies
+  decisions to the meeting files via `writeWithLock` — **as visible
+  `status: 'skipped'` + `source: 'reconciled'` flips only** (no silent
+  deletion of already-written decisions/learnings; day-level apply is
+  post-write, so silent merge would be data loss).
+- daily-winddown SKILL.md: Step 1h drops `--reconcile` and Step 2 opens with
+  `arete meeting reconcile-day` — gated on the config flag.
+Kills collapse-to-oldest within days, zero new engine machinery; the full
+engine (W1+) replaces it later and soaks against a cleaner baseline.
+
 **W1 — Engine spec (`reconcile-engine`)**
 The shared specification both winddowns reference: ledger shape, R0–R4 phases,
 rule definitions (lifted verbatim from daily SKILL.md Step 2, extended with
@@ -137,7 +160,9 @@ jira), arc-assembly rules (D4), provenance vocabulary (D5), idempotency rails
 SKILL.mds shrink to "invoke the engine with horizon=day|week".
 
 **W2 — CLI primitives for R2 (mechanical nomination)**
-`arete reconcile nominate --ledger <json> --days 7 --json`: deterministic
+`arete reconcile nominate --ledger <file.json> --days 7 --json` (ledger is a
+FILE PATH, not an inline JSON arg — review F7 nit: a real day's ledger won't
+survive argv): deterministic
 candidate pairs (Jaccard 0.7, memory match, batch load with excludePath,
 status filter). Pure function over inputs — fully unit-testable. This is the
 *testable core* extracted from `meeting-reconciliation.ts` (findDuplicates,
@@ -163,7 +188,9 @@ Step 1h drops `--reconcile`; Step 2 becomes "run engine R0–R4"; Step 3.5/4
 consume engine output (provenance fields render as the existing CT/skip
 visibility). Chef-skip log, deferred sidecar, directive scanning unchanged.
 
-**W5 — Weekly winddown rewire**
+**W5 — Weekly winddown rewire** *(DECOUPLED, 2026-06-11 — pre-mortem risk 11 /
+review F2: ships only after daily has ≥2 clean weeks post-W6; AC12's weekly
+replay is downgraded from gate to smoke — no week-scale ground truth exists)*
 Weekly Step 1h drops `--reconcile`; weekly judgment consumes the same engine
 over the week horizon. Weekly-only passes (thread arcs, orphan-agenda GC) stay
 weekly. This closes the Phase-7 parity stall.
@@ -173,8 +200,15 @@ Remove `--reconcile`/`--reconcile-days` flags, backend `agent.ts` reconcile
 blocks (3 call sites), `wireExtractDedup` per-file wiring. `meeting-
 reconciliation.ts` functions either move into the W2 primitive or are deleted
 with their tests; `load-recent-meeting-batch.test.ts` (excludePath regression)
-MUST survive, repointed at the W2 loader. `source: 'reconciled'` readers
-migrate to `'chef-dedup'` (consumer audit: item-fates, staging view).
+MUST survive, repointed at the W2 loader. **Provenance migration is
+writer-side only (2026-06-11, pre-mortem risk 14): writers emit
+`'chef-dedup'`; readers accept `'reconciled'` FOREVER** (months of historical
+meeting files carry it — item-fates analytics, staging view, and the
+LEARNINGS.md diagnostic tell all read history). Add a reader test against a
+historical-frontmatter fixture. Also add the UI-approval interleaving test
+(pre-mortem risk 17): user approves item X in the web UI concurrent with an
+engine skip of X under `writeWithLock` — last-writer state must be coherent
+and user-visible.
 
 **W7 — Dual-run soak (shadow mode)**
 For ≥5 winddown days before deletion (W6 lands last): engine runs in shadow
@@ -188,6 +222,21 @@ gitignored) and the shadow engine runs on those + the raw gather ledger.
 Nightly diff: agreement rate, engine-only catches, inline-only catches,
 arc-assembly events — each disagreement classified by hand. W6 is gated on the
 soak report.
+
+**Soak validity + abort rules (2026-06-11 adjudication; pre-mortem risk 2 part
+3 + risk 3, review F2/F6):**
+- *Event minima*: the soak window must contain ≥2 real-cross-meeting-duplicate
+  days and ≥1 same-day supersession-arc day; if the calendar is quiet, replay a
+  synthetic day — otherwise the soak passes vacuously and does NOT gate W6.
+- *SP-rollback-pauses-soak*: if `extraction_mode` is reverted to `legacy`
+  mid-soak, the shadow engine auto-pauses and the soak clock RESETS (degraded
+  mode keeps the winddown alive, but legacy-shaped soak days must not
+  contaminate the report that gates irreversible W6).
+- *Abort triggers*: 3 consecutive winddowns with wall-clock > 1.5× baseline OR
+  any data-loss event ⇒ revert the active flag(s) immediately, log the incident
+  in the build diary, postmortem before retry.
+- *Inline-only catches* get the same hand-review rigor as engine-only catches
+  (pre-mortem risk 7 — review symmetry).
 
 ## Testing strategy
 
@@ -220,8 +269,12 @@ through the engine and scores against the recorded outcome:
   continuation_of verification, not duplicate-collapse
 - NO item that the human kept gets engine-skipped (zero false collapses against
   ground truth)
-Add a second golden day recorded during the W7 soak (a "boring" day, to test
-the engine doesn't manufacture work on low-signal days).
+Add a second golden day recorded during the W7 soak. **The second golden day is
+the representative-input gate** (2026-06-11, review F5 / pre-mortem risk 10): it
+MUST be recorded with single-pass-shaped extraction output (tiers/⚠/volume) and
+carries teeth — zero false collapses + sidecar tier sanity on that day gate W6
+alongside the legacy-shaped 6/9 replay. Pick a boring/low-signal day so it also
+tests that the engine doesn't manufacture work.
 
 **Layer 3 — Shadow-mode soak telemetry (W7).**
 Production-data comparison, no user impact: agreement rate vs inline path
@@ -346,3 +399,30 @@ scripts and shadow logs are kept until one full month of clean operation.
 - `project: supersession gap` — D4/AC3 implement the structural half
   ("winddown sees the arc"); recommendation UX continues there.
 - `project: winddown shared engine` (weekly parity) — W1/W5 are that fix.
+
+## Adjudications applied (2026-06-11, John — via overnight build)
+
+1. **W0 Stage-0 added** (reviewer's "simpler path"): YES — surgical move of the
+   existing `reconcileMeetingBatch` call to day level, behind
+   `reconcile_mode: inline | day-level` (default `inline`). Built tonight.
+2. **Built tonight (partial scope)**: W0, W1 (engine spec + PATTERNS entry),
+   W2 (nominate primitive + Layer-1 tests), W7 infra (raw snapshots + shadow
+   log scaffolding). W4/W5/W6 + soaks remain sequenced as written.
+3. **Pre-mortem checklist closure (CHR side)** — disposition per dropped box:
+   - Threshold band (risk 12): ALREADY FOLDED in this revision (Layer-1
+     threshold-unity scoped to nomination only; Rule 4's 0.6 + 0.5–0.7 band
+     preserved as engine-spec parameters with fixtures). Engine spec (W1)
+     carries the band definition.
+   - Weekly decoupling (risk 11): FOLDED — W5 edit (ships after ≥2 clean weeks
+     post-W6; AC12 weekly replay = smoke, not gate).
+   - Soak event minima (risk 2 pt 3): FOLDED — W7 soak-validity rules.
+   - SP-rollback-pauses-soak (risk 3): FOLDED — W7 soak-validity rules.
+   - 'reconciled' provenance forever-reader + test (risk 14): FOLDED — W6 edit.
+   - UI-approval interleaving test (risk 17): FOLDED — W6 edit.
+   - Second golden day single-pass-shaped with teeth (risk 10 / review F5):
+     FOLDED — Layer 2 edit.
+   - Jira (risk 9): ALREADY RESOLVED in this revision (workspace APPEND
+     concern; W3 deleted; no Atlassian MCP connector exists).
+4. **Soak abort triggers** added (W7 soak-validity rules) — mirror of the SP
+   plan's triggers.
+5. **W2 `--ledger` is a file path** (review F7 nit) — inline edit applied.
