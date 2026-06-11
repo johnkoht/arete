@@ -96,6 +96,8 @@
 |arete status:Check workspace health
 |arete update:Update workspace structure and refresh core runtime assets
 |arete index:Re-index the search collection after workspace file changes
+|arete areas list:List areas with summary fields; `areas epics` lists Jira epic watchlists
+|arete areas check [--json]:Integrity diagnostic — dangling `area:` refs, duplicate/shadowing aliases, orphan area-keyed memory (report-only; exit 1 on problems). Area files may declare former slugs in `aliases:` frontmatter so renames don't orphan history
 |arete skill list:List available skills
 |arete skill install <url>:Install skill from URL (e.g. skills.sh)
 |arete tool list:List available tools
