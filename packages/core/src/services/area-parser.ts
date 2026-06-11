@@ -79,6 +79,22 @@ export interface SuggestAreaInput {
 }
 
 /**
+ * Canonicalize an `area:` value read from a user file: an alias maps to
+ * its canonical slug, anything else passes through unchanged (including
+ * unknown slugs — dangling refs are `arete areas check`'s job, not the
+ * read path's). Apply at LOAD BOUNDARIES (where meetings/projects/
+ * commitments/topic pages are parsed into memory) so every downstream
+ * slug `===` join works on canonical values without per-join patches.
+ */
+export function canonicalizeAreaSlug(
+  value: string | undefined,
+  aliasMap: Map<string, string>,
+): string | undefined {
+  if (!value) return value;
+  return aliasMap.get(value) ?? value;
+}
+
+/**
  * Result of frontmatter parsing.
  */
 interface ParsedFrontmatter {
@@ -216,6 +232,16 @@ export class AreaParserService {
         )
       : [];
 
+    // Former slugs — same tolerance as jira_epics. Trimmed; a self-alias
+    // (entry equal to the area's own slug) is dropped — it's meaningless
+    // and would pollute the alias map.
+    const aliases: string[] = Array.isArray(frontmatter.aliases)
+      ? frontmatter.aliases
+          .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+          .map(entry => entry.trim())
+          .filter(entry => entry !== slug)
+      : [];
+
     // Extract markdown sections
     const goal = extractSection(body, 'Goal');
     const focus = extractSection(body, 'Focus');
@@ -234,6 +260,7 @@ export class AreaParserService {
       status: typeof frontmatter.status === 'string' ? frontmatter.status : 'active',
       recurringMeetings,
       jiraEpics,
+      aliases,
       filePath,
       sections: {
         goal,
@@ -344,14 +371,63 @@ export class AreaParserService {
   }
 
   /**
-   * Get parsed context for an area by slug.
+   * Get parsed context for an area by slug or former slug (alias).
    *
-   * @param areaSlug - The area slug (filename without .md)
+   * Direct filename lookup first (the happy path is unchanged); on miss,
+   * falls back to scanning areas for one whose `aliases:` include the
+   * given slug. Callers that WRITE an area reference must persist the
+   * returned context's `slug`, never their input — the input may be an
+   * alias (compare via `context.slug !== areaSlug`).
+   *
+   * @param areaSlug - The area slug (filename without .md) or an alias
    * @returns AreaContext or null if not found
    */
   async getAreaContext(areaSlug: string): Promise<AreaContext | null> {
     const filePath = join(this.areasDir, `${areaSlug}.md`);
-    return this.parseAreaFile(filePath);
+    const direct = await this.parseAreaFile(filePath);
+    if (direct) return direct;
+
+    const aliasMap = await this.getAliasMap();
+    const canonical = aliasMap.get(areaSlug);
+    if (!canonical) return null;
+    return this.parseAreaFile(join(this.areasDir, `${canonical}.md`));
+  }
+
+  /**
+   * Build the alias → canonical-slug map from all area files.
+   *
+   * Deterministic: areas are processed in slug order, first claim of an
+   * alias wins and later collisions warn (a typo in one area file must
+   * not break resolution everywhere — `arete areas check` surfaces
+   * collisions loudly). An alias that shadows another area's canonical
+   * slug is dropped here too: direct filename lookup always wins, so
+   * honoring it anywhere would make joins disagree with resolution.
+   */
+  async getAliasMap(): Promise<Map<string, string>> {
+    const areas = await this.listAreas();
+    areas.sort((a, b) => a.slug.localeCompare(b.slug));
+    const canonicalSlugs = new Set(areas.map(a => a.slug));
+
+    const map = new Map<string, string>();
+    for (const area of areas) {
+      for (const alias of area.aliases) {
+        if (canonicalSlugs.has(alias)) {
+          console.warn(
+            `[area-parser] Alias "${alias}" on area "${area.slug}" shadows an existing area's slug — ignored`,
+          );
+          continue;
+        }
+        const existing = map.get(alias);
+        if (existing && existing !== area.slug) {
+          console.warn(
+            `[area-parser] Alias "${alias}" claimed by both "${existing}" and "${area.slug}" — keeping "${existing}"`,
+          );
+          continue;
+        }
+        map.set(alias, area.slug);
+      }
+    }
+    return map;
   }
 
   /**
