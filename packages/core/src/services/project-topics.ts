@@ -47,16 +47,20 @@ export const PROJECT_TOPICS_CAP = 5;
  * threshold — never "top-5 regardless of score", so weak-corpus projects
  * cache nothing instead of garbage.
  *
- * Calibrated 2026-06-11 against the 23 wiki-rescue-W4 project-fed
- * landing-pad topics in the live arete-reserv workspace (the phase-12
- * amendment's designated validation material; full table in the phase-14
- * build-report). On the qmd backend the score is
- * `qmd_score × 0.6 + recency(0/0.1/0.2) + area(0.1)`; observed landing-pad
- * hits for their feeding projects scored ≥ ~0.45 while unrelated topics
- * scored ≤ ~0.25. On the token-fallback backend the score is
- * alias-jaccard (0..1) + area bonus, where one-shared-token noise sits
- * ≤ ~0.25 and genuine alias overlap ≥ ~0.5. 0.35 separates both scales
- * with margin (pre-mortem D6).
+ * Calibrated 2026-06-11 against the live arete-reserv workspace with the
+ * 23 wiki-rescue-W4 project-fed landing-pad topics as validation material
+ * (the phase-12 amendment's designated set; full per-project table in the
+ * phase-14 build-report). On the qmd backend the score is
+ * `qmd_score × 0.6 + recency(0/0.1/0.2) + area(0.1)`. Observed across all
+ * 11 active projects: clearly-relevant topics scored 0.41–0.76; the weak
+ * tail (one-token/coincidental matches on thin-corpus projects) scored
+ * 0.29–0.32. 0.35 keeps every ≥0.41 relevant hit plus the stronger
+ * landing-pad hit (declination-letters 0.376) and caches NOTHING for the
+ * thin-corpus projects (pop-belongings-estimate's best was 0.292) —
+ * precision over recall, per review finding 3. On the no-provider
+ * fallback scale (alias-jaccard + area bonus) one-shared-token noise
+ * sits ≤ ~0.25 and genuine slug/alias overlap ≥ ~0.6, so the same
+ * constant separates both scales with ≥0.1 margin (pre-mortem D6).
  */
 export const PROJECT_TOPICS_SCORE_FLOOR = 0.35;
 
