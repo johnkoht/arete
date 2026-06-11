@@ -110,3 +110,25 @@ merge authority delegated contingent on all gates green incl. AC11. John checks 
 - Plan: on phase-13 READY-FOR-MERGE → prime runs merge gate (independent re-verification, same as
   phase 12) → merge → launch phase-14 suborchestrator (depends_on satisfied). Phase-14's live-soak
   quality additionally wants John's meeting-backfill apply, which is post-merge operational.
+
+## 2026-06-11 ~02:00 — Phase 13 MERGED (`24b0f816`); phase 14 launched
+
+- Phase-13 builder was **watchdog-killed at wrap** (600s no-output) — root cause: full suite now
+  runs ~64 minutes. All 15 tasks had landed via per-task commits; ZERO work lost. Prime completed
+  the wrap directly: suite 4646/0 green (+70 new tests), typecheck clean, dark-code 0, memory entry
+  + LEARNINGS + rollback committed (`a37d4c7c`).
+- Build highlights from its diary: delta pre-mortem no-CRITICAL with D1 (signal-typed name matches:
+  summary-only refused, title-only flagged + grouped last) and D4 (mtime-guard abstains surfaced)
+  landed in code; Slice-A gate PASS with zero AC1-attributable live diffs (workspace hash identical);
+  calibration 1.03× vs ledger — the review's actuals-anchoring fixed phase-12's 2.5× problem;
+  punch #10 (qmd-warmth wiki-section variance) directly observed in baseline reruns.
+- Prime merge gate: independent typecheck + full-suite verification, dark-code call-site audit,
+  diff review. Merged `24b0f816`; post-merge typecheck green; worktree auto-cleaned by harness
+  after the agent failure (safe — everything already merged), branch deleted.
+- **Phase-14 suborchestrator launched**; worktree base verified correct (24b0f816) — first launch
+  of the night with a fresh base. Carries: delta pre-mortem from seeds, PATTERNS-before-skill
+  commit order, R1/R2 hard stops, june-fixation fixture, and the detached-suite lesson baked into
+  its instructions.
+- **For John's morning:** (1) `meeting backfill-area` preview table awaits review before live apply
+  — phase-14 soak wants it applied first; (2) origin push still pending (now ~15 commits ahead incl.
+  v0.13.0); (3) phase-14 outcome will be in this diary + its build-diary.
