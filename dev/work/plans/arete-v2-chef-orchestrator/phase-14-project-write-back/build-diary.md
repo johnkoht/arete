@@ -34,3 +34,7 @@ Pre-mortem saved (`pre-mortem.md`, 7 risks: 4 seeded + 3 new from recon). The he
 Build-changing decisions from the other risks: D2 → proposals sourced from `area_set_by: backfill` meetings carry a visible verify hint (prose-pinned); D3 → empty-scan message must cite the README-mtime date + the day-granularity caveat; D6 → floor calibrated on the qmd scale, exclusion fixture designed with wide margins on BOTH backend scales; D7 → ownership-comment dedup by stable substring, not position.
 
 Phase 1.3 skipped (`has_review: true`). Next: Phase 2.1 memory synthesis + 2.2 PRD.
+
+## 2026-06-11T02:05Z — Phase 2 complete: memory synthesis + PRD (9 tasks)
+
+Memory review distilled to 7 binding bullets (in prd.md): detached full suite, dual-layer zero-write assertions, CLI verb conventions, phantom-task checks, dark-code audit, memory-item live format for the retro, and the byte-frozen phase-12 test files. PRD: 9 tasks across the plan's 4 slices + wrap; prd.json mirrors. Worktree guard re-verified (`git rev-parse --git-dir` → `.git/worktrees/...`). Slice 0 next — PATTERNS entry as its own first commit, per MC4.
