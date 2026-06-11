@@ -55,3 +55,22 @@ Builder: ship suborchestrator (Claude Fable 5)
 **W2**: judgment-first prompt keeps the legacy prompt's proven pieces verbatim-in-spirit (delta directive + confirmation-of-uncertainty escape hatch, topic bias block, context bundle) and replaces IS/IS-NOT lists with 8 judgment rules. Known-items block is MARK-don't-skip (review F1) — asserts "Never omit a superseding item" and the exclusion phrase is test-banned from the prompt.
 
 **Verification**: typecheck green; full suite 4569 pass / 0 fail (incl. 39 new tests: single-pass parsing, tier approval, AC8 persistence, D7 inertness ×3 layers, prompt content, series resolver ±, golden legacy fixture byte-stable).
+
+---
+
+## 2026-06-11 ~02:30 — SP W4 + W5 (commits 6e9?+: W4 SKILL.md, W5 eval)
+
+**W4** (daily-winddown SKILL.md, additive): tier-ranking spec added to Step 4 "Stage for approval" — sort blocker→high→normal, `[BLOCKER]`/⚠/link markers read from the W1 frontmatter maps, normal-collapse (>5 normals from a routine meeting → first 2 + count line; never collapse blockers/highs/⚠), blocker-never-hidden incl. sidecar pull-out, direction:none follows sidecar rules, oq_NNN render as informational list. Plus an item-tier override rule in Importance handling: blocker items override per-meeting deferral in ONE direction only (promote item, never demote; never promote whole meeting). No core renderer change needed — the curated view is chef-composed in-context; the W1 frontmatter maps are the data contract. Gated on `staged_item_importance` presence; legacy renders as today.
+
+**W5**: manifest derived from benchmark-evidence.md + the POST-AUDIT Approved sections of the corpus files (read-only). Notable: the compliance file's approved sections already include the license-assignment gate decision — i.e., the audit misses were approved into the file after the audit; I used the post-audit sections as canonical ground truth and marked origin (pipeline vs audit-miss vs naive-new-real) per item. Blind set: lindsay-11 6/3, doi-sync 5/28, cx-deep-dive 6/1, genesys vendor demo 6/4; F5 extension candidates (boring + observer) listed but not gating. Rubric: anchored verdict taxonomy (REAL/REAL-MISTYPED/VERBOSE/JUNK/FABRICATION), computed meeting grades, B+ bar = "A-/B+" row; judge enumerates expected items from the transcript BEFORE seeing the extraction (anti-leak); manifest withheld from the judge on blind meetings.
+
+**SMOKE TEST (the night's headline)** — compliance-0609, real `callLLM` path, workspace tier routing (extraction: frontier = claude-opus-4-6), READ-ONLY:
+- legacy: 3 ai / 7 de / 6 le in 62.3s. Decisions sat at EXACTLY the 7-cap — the cap is demonstrably binding on this meeting on today's model.
+- single_pass: 5 ai / 13 de / 8 le / **9 open questions**, **3 blocker-tier** items, 2 ⚠ (both with crisp reasons — e.g., "Jamie relayed James is working on it this week but no firm commitment made in this meeting"), 2 direction:none, in 86.4s (+39% wall).
+- **AC2 canary PASS on the smoke**: "Automated claim assignment by adjuster license profile MUST exist before Snapsheet sunset; interim plan..." extracted AND tier-marked blocker — the exact item the legacy cap loses.
+- Volume is ~26 items + 9 oq vs legacy 16 — consistent with the benchmark's volume expectations and the reason AC11/W4 collapse exist.
+- Production-model (Opus) behavior matches the Fable-observed benchmark on the load-bearing behaviors (⚠ self-flagging, none-refusal, blocker cue pickup) — pre-mortem risk 6's first real datapoint.
+
+Raw outputs in eval/runs/ (local, gitignored). Full corpus run + judge pass = John's morning call (token spend).
+
+**Housekeeping**: harness + runs gitignored (house rule); manifest/rubric/scorecards-README committed.
