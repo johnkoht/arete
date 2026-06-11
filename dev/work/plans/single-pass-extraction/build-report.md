@@ -113,22 +113,26 @@ Raw outputs in `eval/runs/` (local, gitignored).
 
 ### Independent-review notes on record (2026-06-11 audit, NOTES 8/10/11)
 
-Substance reconstructed from the review findings (the review transcript
-itself is not in-repo); recorded here so the observations survive:
+Recorded verbatim from the independent review so the observations survive
+(items 6/12 of the same review — empty-text drop telemetry, oq-truncation
+telemetry, clamping sentence — were FIXED in dff33c12/ca95508d and are
+covered in the sections above):
 
-- **NOTE 8 — single_pass empty-text drop point.** In the single_pass parse
-  path, decision/learning entries with no usable `text` field were silently
-  dropped (`if (!text) continue`) — the one AC8 drop point with no telemetry.
-  Fixed 2026-06-11: now fires an `unparseable_item` extraction-telemetry
-  event per dropped entry.
-- **NOTE 10 — open_questions truncation.** `open_questions` beyond
-  OPEN_QUESTIONS_MAX (20) were silently truncated. Fixed 2026-06-11: each
-  truncated question now fires a `category_limit` telemetry event
-  (itemType `open_question`).
-- **NOTE 11 — `reconcile_shadow` clamping claim.** This report originally
-  claimed all flag values are clamped in `loadConfig`; `reconcile_shadow`
-  is not clamped in `normalizeConfig` — only the strict `=== true`
-  activation gate protects it. Sentence corrected above (Flags section).
+- **NOTE 8 — reconcile-day stats display.** The JSON/human output reports
+  window-wide `reconciliation.stats` (duplicates among the 7-day context
+  meetings count too) beside day-scoped `applied` — the numbers won't
+  reconcile visually. Cosmetic; tighten when reconcile-day gets real use.
+- **NOTE 10 — rollback hygiene edge.** A legacy-mode re-extract of a
+  meeting file WRITTEN by single_pass treats `## Open Questions` /
+  `## Parser-flagged` as user notes (dedup source → auto-approve via
+  `source: dedup`) and leaves the stale sections in place (legacy
+  `updateMeetingContent` deliberately does not replace them). Not a
+  flags-off violation — such files only exist after a flip — but if the
+  soak is rolled back, expect this on re-extracts of soak-era files.
+- **NOTE 11 — `NONE_DIRECTION_MARKER` raw-line scope.** The marker regex
+  (`[([]\s*@?slug\s*·`) tests the whole raw line, so legacy free text
+  containing a "(word ·" shape would be skipped from commitments parsing.
+  The middle-dot makes this vanishingly rare; on record for completeness.
 
 ## AC status — what is satisfiable NOW vs awaiting soak/eval
 
