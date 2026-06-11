@@ -48,3 +48,13 @@ Task 4 (calibration, run early because the floor feeds the CLI fixtures): scored
 ## 2026-06-11T03:10Z — Slice 1 complete (AC2 shipped end-to-end)
 
 Task 3 (commit 6654fc31): `arete project refresh-topics` CLI verb — preview default, change-gated `--apply`, `--json` complete in every exit path, qmd refresh only on actual writes. Subprocess suite 5/5 in a NEW file, including the AC8 hard-gate shape (apply → apply again with unchanged wiki → workspace byte-identical) and the stale-cache-removal proposal path. The phase-12 `project.test.ts` remains byte-untouched. Slice 2 next: the review-heavy prose.
+
+## 2026-06-11T03:40Z — Slice 2 complete (AC1 + AC3 + AC4)
+
+Task 5 (9ba1661f): `/update-project` SKILL.md — six-type proposal menu (commitment claim in v1 per OQ3), winddown proposed surface, June-fixation worked example verbatim, D2 backfill hint, D3 empty-scan rule, conversational entry, honest verification split stated in the skill itself. 15 prose tests appended; chef suite 180/180; the diff is provably append-only (+107/−0).
+
+Task 6 (66f29803): `june-fixation` named integration test — all four substrate assertions green, PLUS a second test that pins the day-granularity exclusion itself (a same-day meeting provably absent from the scan) so the first live "nothing new" gets read as the OQ5 artifact, not over-conservatism.
+
+Task 7: regression wall verified — frozen phase-12 test files show a 0-line diff vs the merge base; both suites pass unmodified (6/6, 9/9). README-writers grep captured verbatim in build-report.md: exactly three writer functions across two modules, all flag-gated (phase-12's two backfill-area writers + this phase's topics writer). R10 guards shipped earlier in task 2.
+
+Slice 3 (AC5 stretch) next, with the D5 mechanism adaptation.

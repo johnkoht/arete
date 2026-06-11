@@ -31,9 +31,23 @@
 2. Fresh + area-matched bonuses sum to 0.3, so the floor's discriminating power over the qmd base score is real but modest (a fresh area-matched page needs base ≥ 0.083); rank order + cap-5 carry the rest of the precision. Both noted for soak: first-write topics diffs per project are the MC3 obligation.
 3. Fallback-backend scale (no provider: alias-jaccard + area bonus): strong slug/alias overlap ≥ ~0.6, one-shared-token noise ≤ ~0.25 — the same 0.35 separates with ≥0.1 margin on both scales (pre-mortem D6), asserted by the unit fixture's margin assertions.
 
-## AC4 — R10 grep artifact (task 7)
+## AC4 — regression wall + R10 artifacts (task 7)
 
-*(filled at task 7)*
+**Frozen-file proof**: `git diff 24b0f816..HEAD -- packages/core/test/services/project-area.test.ts packages/cli/test/commands/project.test.ts` → **0 lines** (byte-untouched). Both suites pass unmodified: project-area 6/6, cli project 9/9. `chef-orchestrator-skills.test.ts` change is append-only (+107/−0, verified in the task-5 commit).
+
+**README-writers grep (verbatim, 2026-06-11)** — the only `storage.write` call sites in core services targeting a project README:
+
+```
+$ grep -rn "readmePath" packages/core/src/services/*.ts | grep -i "write"
+packages/core/src/services/project-topics.ts:243:  await storage.write(refresh.readmePath, `---\n${fmText}\n---\n\n${normalizedBody}`);
+packages/core/src/services/project-area.ts:123:  await storage.write(readmePath, `---\n${fmText}\n---\n\n${body.replace(/^\n+/, '')}`);
+```
+
+(project-area.ts:144 is `resetBackfilledProjectAreas` — the phase-12 `--reset` writer, also README-targeting, also preview/flag-gated. So three writer FUNCTIONS across two modules: `applyAreaToProjectReadme` + `resetBackfilledProjectAreas` (phase 12, both `backfill-area` verbs) and `applyProjectTopics` (this phase, `refresh-topics --apply`). No other core code writes a project README.)
+
+**R10 automated guards (shipped in project-topics.test.ts)**:
+1. *Behavioral*: `assembleBriefForProject` output (sections + metadata) is deep-equal for the same project with and without the `topics:` cache.
+2. *Source tripwire*: brief-assemblers/brief-formatters contain no `project.topics` / `topicsRefreshed` reads — fails loudly when a future consumer appears without first making the cache authoritative.
 
 ## AC8 — gate result (wrap)
 
