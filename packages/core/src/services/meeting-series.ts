@@ -14,8 +14,13 @@
  *      `recurring_meetings[].title` entry from area config (substring,
  *      case-insensitive — same convention as area-parser).
  *   2. Attendee overlap: overlap coefficient (|∩| / min size) ≥
- *      SERIES_ATTENDEE_OVERLAP. Skipped only when BOTH sides have no
- *      attendee metadata (title match alone then decides).
+ *      SERIES_ATTENDEE_OVERLAP, evaluated whenever BOTH sides carry
+ *      attendee metadata. When the TARGET has attendees but the candidate
+ *      has none, the overlap gate cannot run and the title gate is
+ *      tightened to Jaccard ≥ SERIES_TITLE_JACCARD_NO_ATTENDEE (0.7) to
+ *      compensate (an explicit shared recurring-config match still passes).
+ *      When the TARGET itself has no attendee metadata, the title gate
+ *      alone decides (current behavior, unchanged).
  *
  * Window: candidates strictly BEFORE the target date, within
  * SERIES_WINDOW_DAYS (~35 days — catches biweeklies and a skipped week).
@@ -39,6 +44,13 @@ import { extractIntelligenceFromFrontmatter } from './meeting-reconciliation.js'
 
 export const SERIES_WINDOW_DAYS = 35;
 export const SERIES_TITLE_JACCARD = 0.5;
+/**
+ * Stricter title bar for the asymmetric attendee case (review should-fix 4):
+ * when the target carries attendee metadata but a candidate has none, the
+ * attendee gate cannot corroborate the match, so the title must clear this
+ * higher bar instead of SERIES_TITLE_JACCARD.
+ */
+export const SERIES_TITLE_JACCARD_NO_ATTENDEE = 0.7;
 export const SERIES_ATTENDEE_OVERLAP = 0.5;
 /** Max prior same-series meetings returned (newest first). */
 export const SERIES_MAX_PRIOR = 2;
@@ -232,6 +244,8 @@ export async function resolveMeetingSeries(
   const targetDate = dateFromMeeting(target.frontmatter, meetingPath);
   if (!targetDate) return null;
   const targetAttendees = attendeesFromFrontmatter(target.frontmatter);
+  const targetHasAttendees =
+    targetAttendees.map(normalizeAttendee).filter((s) => s.length > 0).length > 0;
   const targetRecurring = matchesRecurringTitle(targetTitle, recurringTitles);
 
   const cutoff = new Date(targetDate + 'T00:00:00');
@@ -269,8 +283,17 @@ export async function resolveMeetingSeries(
     if (sim < SERIES_TITLE_JACCARD && !sharedRecurring) continue;
 
     // Gate 2: attendee overlap (when both sides carry attendee metadata).
+    // Asymmetric case (review should-fix 4): when the TARGET has attendees
+    // but the candidate has none, the overlap gate cannot corroborate —
+    // require the stricter title bar instead (explicit shared recurring
+    // config still passes). When the TARGET has no attendee metadata, the
+    // title gate alone decides (unchanged).
     const overlap = attendeeOverlap(targetAttendees, candidateAttendees);
-    if (overlap !== null && overlap < SERIES_ATTENDEE_OVERLAP) continue;
+    if (overlap !== null) {
+      if (overlap < SERIES_ATTENDEE_OVERLAP) continue;
+    } else if (targetHasAttendees) {
+      if (!sharedRecurring && sim < SERIES_TITLE_JACCARD_NO_ATTENDEE) continue;
+    }
 
     candidates.push({
       path: filePath,

@@ -158,7 +158,7 @@ export type ExtractionTelemetryEvent = {
     | 'near_duplicate'
     | 'category_limit'
     | 'unparseable_item';
-  itemType: 'action' | 'decision' | 'learning';
+  itemType: 'action' | 'decision' | 'learning' | 'open_question';
   /** Preview of the flagged item's text (truncated). */
   item: string;
   detail: string;
@@ -1978,7 +1978,19 @@ export function parseMeetingExtractionResponse(
         }
         if (singlePass) judgment = parseJudgmentFields(decision);
       }
-      if (!text) continue;
+      if (!text) {
+        // AC8 residual (review fix): the empty-text drop is the one remaining
+        // silent drop point in the single_pass path — make it telemetry-visible.
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'unparseable_item',
+            itemType: 'decision',
+            item: previewOf(JSON.stringify(decision) ?? ''),
+            detail: 'decision entry had no usable text field — dropped',
+          });
+        }
+        continue;
+      }
 
       // Apply garbage filter (lighter check — no action-item length limit).
       // single_pass (D4): telemetry-only — item is KEPT.
@@ -2044,7 +2056,18 @@ export function parseMeetingExtractionResponse(
         }
         if (singlePass) judgment = parseJudgmentFields(learning);
       }
-      if (!text) continue;
+      if (!text) {
+        // AC8 residual (review fix): see the decision-loop twin above.
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'unparseable_item',
+            itemType: 'learning',
+            item: previewOf(JSON.stringify(learning) ?? ''),
+            detail: 'learning entry had no usable text field — dropped',
+          });
+        }
+        continue;
+      }
 
       // Apply garbage filter (lighter check — no action-item length limit).
       // single_pass (D4): telemetry-only — item is KEPT.
@@ -2100,7 +2123,20 @@ export function parseMeetingExtractionResponse(
       if (typeof q !== 'string') continue;
       const trimmedQ = q.trim();
       if (!trimmedQ) continue;
-      if (openQuestions.length >= OPEN_QUESTIONS_MAX) break;
+      if (openQuestions.length >= OPEN_QUESTIONS_MAX) {
+        // AC8 residual (review fix): truncation at the cap was a silent drop —
+        // emit one telemetry event per dropped question.
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'category_limit',
+            itemType: 'open_question',
+            item: previewOf(trimmedQ),
+            detail: `open_questions truncated at OPEN_QUESTIONS_MAX (${OPEN_QUESTIONS_MAX})`,
+          });
+          continue;
+        }
+        break;
+      }
       openQuestions.push(trimmedQ);
     }
   }

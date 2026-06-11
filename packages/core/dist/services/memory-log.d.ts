@@ -106,7 +106,7 @@ export interface ExtractionTelemetryRecord {
     type: 'extraction_telemetry';
     ts: string;
     detector: string;
-    item_kind: 'action_item' | 'decision' | 'learning';
+    item_kind: 'action_item' | 'decision' | 'learning' | 'open_question';
     item_text: string;
     detail: string;
     source_path: string;

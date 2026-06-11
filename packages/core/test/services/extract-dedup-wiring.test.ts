@@ -297,6 +297,42 @@ describe('loadSameDayStagedItems', () => {
     }
   });
 
+  it('D7 (single-pass): excludes direction "none" items from dedup canonicals', async () => {
+    const ws = createWorkspace();
+    try {
+      writeMeetingFile(
+        ws.meetingsDir,
+        '2026-06-01-meeting-a',
+        `## Staged Action Items
+- ai_001: [@tim-eng ·] Tim to fix case-sensitivity bug in state abbreviations
+- ai_002: [@john → @sarah] Send Sarah the deck
+`,
+        {
+          staged_item_owner: {
+            ai_001: { ownerSlug: 'tim-eng', direction: 'none' },
+            ai_002: {
+              ownerSlug: 'john',
+              direction: 'i_owe_them',
+              counterpartySlug: 'sarah',
+            },
+          },
+        },
+      );
+      const storage = createFsAdapter();
+      const out = await loadSameDayStagedItems(
+        storage,
+        ws.meetingsDir,
+        '2026-06-01',
+        '2026-06-01-other',
+      );
+      assert.equal(out.length, 1, `none item must not become a canonical; got ${out.length}`);
+      assert.ok(out[0].id.endsWith('::ai_002'));
+      assert.equal(out[0].direction, 'i_owe_them');
+    } finally {
+      ws.cleanup();
+    }
+  });
+
   it('drops items whose status is "skipped"', async () => {
     const ws = createWorkspace();
     try {

@@ -59,6 +59,7 @@ export async function writeRawExtractionSnapshot(storage, workspaceRoot, args) {
         date: parsed.date,
         slug: parsed.slug,
         extractionMode: args.extractionMode,
+        ...(args.promptMode ? { promptMode: args.promptMode } : {}),
         intelligence: args.intelligence,
         ...(args.validationWarnings && args.validationWarnings.length > 0
             ? { validationWarnings: args.validationWarnings }

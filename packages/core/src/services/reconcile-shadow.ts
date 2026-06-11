@@ -46,6 +46,9 @@ export type RawExtractionSnapshot = {
   slug: string;
   /** 'legacy' | 'single_pass' — segments soak analysis (see header). */
   extractionMode: string;
+  /** Prompt depth mode ('light' | 'normal' | 'thorough') — distinct from
+   * extractionMode, which records the pipeline shape. Optional. */
+  promptMode?: string;
   /** The PURE extraction result — pre-reconcile, pre-processing. */
   intelligence: MeetingIntelligence;
   /** Parse-time validation warnings (pre-persistence). */
@@ -84,6 +87,7 @@ export async function writeRawExtractionSnapshot(
   args: {
     meetingPath: string;
     extractionMode: string;
+    promptMode?: string;
     intelligence: MeetingIntelligence;
     validationWarnings?: ValidationWarning[];
   },
@@ -101,6 +105,7 @@ export async function writeRawExtractionSnapshot(
     date: parsed.date,
     slug: parsed.slug,
     extractionMode: args.extractionMode,
+    ...(args.promptMode ? { promptMode: args.promptMode } : {}),
     intelligence: args.intelligence,
     ...(args.validationWarnings && args.validationWarnings.length > 0
       ? { validationWarnings: args.validationWarnings }

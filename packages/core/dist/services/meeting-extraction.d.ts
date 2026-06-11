@@ -131,7 +131,7 @@ export type RawExtractedItem = {
  */
 export type ExtractionTelemetryEvent = {
     detector: 'garbage_prefix' | 'length_limit' | 'multi_sentence' | 'trivial_pattern' | 'invalid_direction' | 'mirror_pair' | 'near_duplicate' | 'category_limit' | 'unparseable_item';
-    itemType: 'action' | 'decision' | 'learning';
+    itemType: 'action' | 'decision' | 'learning' | 'open_question';
     /** Preview of the flagged item's text (truncated). */
     item: string;
     detail: string;

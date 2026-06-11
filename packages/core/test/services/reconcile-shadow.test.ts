@@ -128,6 +128,26 @@ describe('writeRawExtractionSnapshot (CHR-W7)', () => {
     assert.equal(storage.files.size, 0);
   });
 
+  it('round-trips promptMode when provided and omits it when absent (review must-fix 1)', async () => {
+    const storage = createMockStorage();
+    const out = await writeRawExtractionSnapshot(storage, '/ws', {
+      meetingPath: 'resources/meetings/2026-06-09-y.md',
+      extractionMode: 'single_pass',
+      promptMode: 'thorough',
+      intelligence: INTEL,
+    });
+    const snapshot = JSON.parse(storage.files.get(out!)!) as RawExtractionSnapshot;
+    assert.equal(snapshot.promptMode, 'thorough');
+
+    const out2 = await writeRawExtractionSnapshot(storage, '/ws', {
+      meetingPath: 'resources/meetings/2026-06-09-z.md',
+      extractionMode: 'legacy',
+      intelligence: INTEL,
+    });
+    const snapshot2 = JSON.parse(storage.files.get(out2!)!) as RawExtractionSnapshot;
+    assert.ok(!('promptMode' in snapshot2));
+  });
+
   it('omits validationWarnings when empty', async () => {
     const storage = createMockStorage();
     const out = await writeRawExtractionSnapshot(storage, '/ws', {

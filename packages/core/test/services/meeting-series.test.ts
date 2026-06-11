@@ -20,6 +20,7 @@ import {
   attendeeOverlap,
   parseOpenQuestionsSection,
   SERIES_TITLE_JACCARD,
+  SERIES_TITLE_JACCARD_NO_ATTENDEE,
 } from '../../src/services/meeting-series.js';
 import type { StorageAdapter, ListOptions } from '../../src/storage/adapter.js';
 
@@ -220,6 +221,37 @@ describe('resolveMeetingSeries', () => {
     }));
     const res = await resolveMeetingSeries(storage, DIR, p('2026-06-09-email-templates-weekly.md'));
     assert.equal(res, null);
+  });
+
+  it('asymmetric attendees (review should-fix 4): candidate without attendees needs the stricter 0.7 title bar', async () => {
+    const storage = createMockStorage();
+    // Target HAS attendees. Candidate A: moderately similar title
+    // (0.5 ≤ J < 0.7) but NO attendee metadata — the overlap gate cannot
+    // corroborate, so the match must be REJECTED at the stricter bar.
+    storage.files.set(p('2026-06-02-glance-compliance-letters-planning.md'), meeting({
+      title: 'Glance Compliance Letters Planning', date: '2026-06-02',
+      attendees: [],
+    }));
+    storage.files.set(p('2026-06-09-glance-compliance-letters-review.md'), meeting({
+      title: 'Glance Compliance Letters Review', date: '2026-06-09',
+      attendees: ['John Koht', 'Heather K'],
+    }));
+    // Sanity: the pair would have passed the old 0.5-only gate.
+    const j = titleSimilarity('Glance Compliance Letters Review', 'Glance Compliance Letters Planning');
+    assert.ok(j >= SERIES_TITLE_JACCARD && j < SERIES_TITLE_JACCARD_NO_ATTENDEE,
+      `fixture must sit in the [0.5, 0.7) band; got ${j}`);
+
+    const rejected = await resolveMeetingSeries(storage, DIR, p('2026-06-09-glance-compliance-letters-review.md'));
+    assert.equal(rejected, null, 'attendee-less candidate below 0.7 title bar must not match');
+
+    // Candidate B: identical title (J = 1 ≥ 0.7) and no attendees — passes.
+    storage.files.set(p('2026-06-02-glance-compliance-letters-planning.md'), meeting({
+      title: 'Glance Compliance Letters Review', date: '2026-06-02',
+      attendees: [],
+    }));
+    const accepted = await resolveMeetingSeries(storage, DIR, p('2026-06-09-glance-compliance-letters-review.md'));
+    assert.ok(accepted, 'attendee-less candidate clearing the 0.7 title bar matches');
+    assert.equal(accepted.meetings[0].date, '2026-06-02');
   });
 
   it('recurring_meetings config rescues a drifted title', async () => {

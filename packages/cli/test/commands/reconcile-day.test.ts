@@ -157,3 +157,142 @@ describe('meeting reconcile-day (CHR-W0)', () => {
     assert.equal(out.dayMeetings, 0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Review fix (should-fix 3) — dry-run fidelity: a dry-run must run the same
+// staged-line matching + user-decision checks as a real run (read-only) so a
+// clean dry-run actually predicts a clean real run (the flip rule trusts it).
+// ---------------------------------------------------------------------------
+
+describe('meeting reconcile-day --dry-run fidelity (review should-fix 3)', () => {
+  let tmpDir: string;
+  let meetingsDir: string;
+  const today = isoDay(0);
+  const yesterday = isoDay(-1);
+  const env = { ARETE_NO_LLM: '1' };
+
+  const DUP_A = 'We decided to adopt PostgreSQL over MongoDB for the claims store';
+  const DUP_B = 'We decided to standardize on TypeScript for all new services';
+  const DUP_DRIFT = 'We decided to sunset the legacy reporting dashboard this quarter';
+
+  before(() => {
+    tmpDir = createTmpDir('arete-reconcile-day-dryrun');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    meetingsDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingsDir, { recursive: true });
+
+    // Yesterday: canonical occurrences of all three decisions.
+    writeFileSync(
+      join(meetingsDir, `${yesterday}-planning-sync.md`),
+      meetingFile({
+        title: 'Planning Sync',
+        date: yesterday,
+        status: 'processed',
+        decisions: [
+          { id: 'de_001', text: DUP_A },
+          { id: 'de_002', text: DUP_B },
+          { id: 'de_003', text: DUP_DRIFT },
+        ],
+      }),
+    );
+
+    // Today, file 1: a pending duplicate (de_001) + a user-APPROVED duplicate
+    // (de_002 — must surface as preservedUserDecisions, never applied).
+    writeFileSync(
+      join(meetingsDir, `${today}-weekly-review.md`),
+      meetingFile({
+        title: 'Weekly Review',
+        date: today,
+        status: 'processed',
+        decisions: [
+          { id: 'de_001', text: DUP_A },
+          { id: 'de_002', text: DUP_B },
+        ],
+      }),
+    );
+    // Approve de_002 (meetingFile writes all staged ids as pending).
+    const wr = join(meetingsDir, `${today}-weekly-review.md`);
+    writeFileSync(wr, readFileSync(wr, 'utf8').replace('de_002: pending', 'de_002: approved'));
+
+    // Today, file 2: the duplicate lives in an APPROVED body section (Format
+    // B), so applyToFile's staged-line matching finds no `- de_NNN:` line —
+    // the text-drift / `unmatched` case.
+    writeFileSync(
+      join(meetingsDir, `${today}-design-sync.md`),
+      [
+        '---',
+        'title: "Design Sync"',
+        `date: "${today}"`,
+        'status: approved',
+        '---',
+        '',
+        '## Approved Decisions',
+        `- ${DUP_DRIFT}`,
+        '',
+      ].join('\n'),
+    );
+
+    appendFileSync(join(tmpDir, 'arete.yaml'), '\nreconcile_mode: day-level\n');
+  });
+
+  after(() => cleanupTmpDir(tmpDir));
+
+  it('dry-run reports real ids, preserved user decisions, and the same unmatched set as a real run', () => {
+    const file1 = join(meetingsDir, `${today}-weekly-review.md`);
+    const file2 = join(meetingsDir, `${today}-design-sync.md`);
+    const before1 = readFileSync(file1, 'utf8');
+    const before2 = readFileSync(file2, 'utf8');
+
+    // 1. Dry-run: full prediction, zero writes.
+    const dry = JSON.parse(
+      runCli(['meeting', 'reconcile-day', '--date', today, '--dry-run', '--json'], { cwd: tmpDir, env }),
+    );
+    assert.equal(dry.success, true);
+    assert.equal(dry.dryRun, true);
+    assert.equal(readFileSync(file1, 'utf8'), before1, 'dry-run must not modify files');
+    assert.equal(readFileSync(file2, 'utf8'), before2, 'dry-run must not modify files');
+
+    // Real staged-line matching ran: real id, no '(dry-run)' placeholders.
+    assert.ok(
+      dry.applied.some((a: { id: string; text: string }) => a.id === 'de_001' && a.text === DUP_A),
+      `dry-run applied must carry the real staged id; got ${JSON.stringify(dry.applied)}`,
+    );
+    assert.ok(
+      !dry.applied.some((a: { id: string }) => a.id === '(dry-run)'),
+      'no (dry-run) placeholder ids',
+    );
+    // User-decision check ran: the approved duplicate is preserved, not applied.
+    assert.ok(
+      dry.preservedUserDecisions.some((p: { id: string; priorStatus: string }) => p.id === 'de_002' && p.priorStatus === 'approved'),
+      `approved duplicate must be reported preserved; got ${JSON.stringify(dry.preservedUserDecisions)}`,
+    );
+    assert.ok(!dry.applied.some((a: { id: string }) => a.id === 'de_002'));
+    // Text drift surfaced: the Format-B duplicate has no staged line.
+    assert.ok(
+      dry.unmatched.some((u: { text: string }) => u.text === DUP_DRIFT),
+      `drifted item must be reported unmatched; got ${JSON.stringify(dry.unmatched)}`,
+    );
+
+    // 2. Real run on the same state: identical prediction.
+    const real = JSON.parse(
+      runCli(['meeting', 'reconcile-day', '--date', today, '--json'], { cwd: tmpDir, env }),
+    );
+    assert.equal(real.success, true);
+    const key = (x: { file?: string; id?: string; text?: string }) => `${x.file ?? ''}|${x.id ?? ''}|${x.text ?? ''}`;
+    assert.deepEqual(
+      dry.unmatched.map(key).sort(),
+      real.unmatched.map(key).sort(),
+      'dry-run unmatched set must equal the real run\'s',
+    );
+    assert.deepEqual(
+      dry.applied.map(key).sort(),
+      real.applied.map(key).sort(),
+      'dry-run applied set must equal the real run\'s',
+    );
+    assert.deepEqual(
+      dry.preservedUserDecisions.map(key).sort(),
+      real.preservedUserDecisions.map(key).sort(),
+      'dry-run preserved set must equal the real run\'s',
+    );
+  });
+});

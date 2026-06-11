@@ -9,8 +9,10 @@
  * - no caps + telemetry-only detectors in single_pass mode (D1/D4)
  * - tier-derived auto-approval (pre-mortem risk 1)
  * - low-confidence items persist pending instead of silently dropping (AC8)
- * - direction `none` inertness (D7): meeting-parser skip, commitments.sync
- *   guard, staged-items `·` round-trip
+ * - direction `none` inertness (D7), layer 1 only: meeting-parser skip +
+ *   staged-items `·` round-trip. The other two guard layers are tested where
+ *   they live: commitments.sync (commitments.test.ts) and the dedup-canonical
+ *   guard (extract-dedup-wiring.test.ts).
  * - single-pass prompt content (W2): mark-don't-skip framing, closeability,
  *   tiers, ⚠ channel
  */
@@ -213,6 +215,31 @@ describe('parseMeetingExtractionResponse — single_pass mode', () => {
     // Visibility contract: the staged render flags the suspects.
     const staged = formatStagedSections(result);
     assert.ok(staged.includes('## Parser-flagged (mirror-pair suspects)'));
+  });
+
+  it('AC8 residuals (review fix): empty-text drops and open_questions truncation fire telemetry', () => {
+    const response = JSON.stringify({
+      summary: 's',
+      action_items: [],
+      next_steps: [],
+      decisions: [{ confidence: 0.9 }], // no text field → dropped
+      learnings: [{ text: '   ', confidence: 0.8 }], // blank text → dropped
+      open_questions: Array.from({ length: 22 }, (_v, i) => `Question number ${i + 1}?`),
+    });
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, undefined, { singlePass: true });
+    const events = result.telemetryEvents ?? [];
+    assert.ok(
+      events.some(e => e.detector === 'unparseable_item' && e.itemType === 'decision'),
+      'empty-text decision drop must be telemetry-visible',
+    );
+    assert.ok(
+      events.some(e => e.detector === 'unparseable_item' && e.itemType === 'learning'),
+      'empty-text learning drop must be telemetry-visible',
+    );
+    // 22 questions, cap 20 → 2 truncation events.
+    const truncs = events.filter(e => e.detector === 'category_limit' && e.itemType === 'open_question');
+    assert.equal(truncs.length, 2, 'each truncated open question fires one event');
+    assert.equal(result.intelligence.openQuestions?.length, 20);
   });
 
   it('renders Open Questions as oq_NNN section', () => {

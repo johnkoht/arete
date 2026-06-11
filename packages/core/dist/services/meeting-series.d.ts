@@ -14,8 +14,13 @@
  *      `recurring_meetings[].title` entry from area config (substring,
  *      case-insensitive — same convention as area-parser).
  *   2. Attendee overlap: overlap coefficient (|∩| / min size) ≥
- *      SERIES_ATTENDEE_OVERLAP. Skipped only when BOTH sides have no
- *      attendee metadata (title match alone then decides).
+ *      SERIES_ATTENDEE_OVERLAP, evaluated whenever BOTH sides carry
+ *      attendee metadata. When the TARGET has attendees but the candidate
+ *      has none, the overlap gate cannot run and the title gate is
+ *      tightened to Jaccard ≥ SERIES_TITLE_JACCARD_NO_ATTENDEE (0.7) to
+ *      compensate (an explicit shared recurring-config match still passes).
+ *      When the TARGET itself has no attendee metadata, the title gate
+ *      alone decides (current behavior, unchanged).
  *
  * Window: candidates strictly BEFORE the target date, within
  * SERIES_WINDOW_DAYS (~35 days — catches biweeklies and a skipped week).
@@ -31,6 +36,13 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { MeetingIntelligence } from './meeting-extraction.js';
 export declare const SERIES_WINDOW_DAYS = 35;
 export declare const SERIES_TITLE_JACCARD = 0.5;
+/**
+ * Stricter title bar for the asymmetric attendee case (review should-fix 4):
+ * when the target carries attendee metadata but a candidate has none, the
+ * attendee gate cannot corroborate the match, so the title must clear this
+ * higher bar instead of SERIES_TITLE_JACCARD.
+ */
+export declare const SERIES_TITLE_JACCARD_NO_ATTENDEE = 0.7;
 export declare const SERIES_ATTENDEE_OVERLAP = 0.5;
 /** Max prior same-series meetings returned (newest first). */
 export declare const SERIES_MAX_PRIOR = 2;

@@ -1415,7 +1415,10 @@ export function registerMeetingCommands(program: Command): void {
         try {
           await writeRawExtractionSnapshot(services.storage, root, {
             meetingPath,
-            extractionMode: mode,
+            // Schema requires 'legacy' | 'single_pass' (pipeline shape) —
+            // NOT the prompt depth mode, which is recorded separately.
+            extractionMode: singlePassMode ? 'single_pass' : 'legacy',
+            promptMode: mode,
             intelligence: extractionResult.intelligence,
             validationWarnings: extractionResult.validationWarnings,
           });
@@ -1895,7 +1898,7 @@ export function registerMeetingCommands(program: Command): void {
           // effort; never blocks the extract write.
           if (singlePassMode && extractionResult.telemetryEvents && extractionResult.telemetryEvents.length > 0) {
             try {
-              const kindMap = { action: 'action_item', decision: 'decision', learning: 'learning' } as const;
+              const kindMap = { action: 'action_item', decision: 'decision', learning: 'learning', open_question: 'open_question' } as const;
               for (const ev of extractionResult.telemetryEvents) {
                 await services.memoryLog.appendExtractionTelemetry(paths, {
                   detector: ev.detector,
@@ -2229,8 +2232,35 @@ export function registerMeetingCommands(program: Command): void {
       ): Promise<void> => {
         if (decisions.length === 0) return;
         if (dryRun) {
+          // Review fix (should-fix 3): dry-run must run the SAME staged-line
+          // matching + user-decision checks as the real run, READ-ONLY — the
+          // flip rule trusts a clean dry-run to predict a clean real run, so
+          // it must populate real ids, `unmatched`, and `skippedExisting`
+          // exactly as the write path would.
+          const content = await services.storage.read(filePath);
+          if (content === null) {
+            for (const d of decisions) {
+              unmatched.push({ file: filePath, text: d.text });
+            }
+            return;
+          }
+          const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+          const body = fmMatch ? fmMatch[2] : content;
+          const sections = parseStagedSections(body);
+          const allStaged = [...sections.actionItems, ...sections.decisions, ...sections.learnings];
+          const currentStatus = parseStagedItemStatus(content);
           for (const d of decisions) {
-            applied.push({ file: filePath, id: '(dry-run)', text: d.text, reason: d.reason, evidence: d.evidence });
+            const match = allStaged.find((s) => s.text === d.text);
+            if (!match) {
+              unmatched.push({ file: filePath, text: d.text });
+              continue;
+            }
+            const prior = currentStatus[match.id];
+            if (prior === 'approved' || prior === 'skipped') {
+              skippedExisting.push({ file: filePath, id: match.id, priorStatus: prior });
+              continue;
+            }
+            applied.push({ file: filePath, id: match.id, text: d.text, reason: d.reason, evidence: d.evidence });
           }
           return;
         }
