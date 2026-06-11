@@ -1,0 +1,159 @@
+{
+  "$comment": "Ground-truth manifest for the W5 eval gate (single-pass-extraction). Committed per 2026-06-11 adjudication (review F3: ACs scored against a chat transcript are unfalsifiable). Sources: benchmark-evidence.md (6/9 audit + compliance benchmark + junk test) and the post-audit Approved sections of the corpus meeting files in arete-reserv (READ-ONLY). Matching is SEMANTIC (judge-driven, see judge-rubric.md): an extracted item matches an expected item when a reasonable reader says they record the same fact/commitment, regardless of wording. Tier labels: expected_tier is the tier a correct single-pass run should assign; 'any' = tier not load-bearing for the gate.",
+  "version": "2026-06-11",
+  "workspace": "/Users/john/code/arete-reserv",
+  "meetings_dir": "resources/meetings",
+  "sets": {
+    "ground_truth": [
+      {
+        "id": "compliance-0609",
+        "file": "2026-06-09-glance-20-compliance-workshop-heather-kim.md",
+        "pipeline_baseline": { "ai": 4, "de": 7, "le": 6, "source": "staged sections pre-approval (benchmark-evidence.md)" },
+        "ac1_target": "≥ 21/22 of combined ground truth (pipeline 17 + 5 audit misses)",
+        "expected_items": [
+          { "type": "decision", "tier": "blocker", "canary": true, "origin": "audit-miss", "text": "Automated claim assignment by adjuster license profile MUST exist in Glance before Snapsheet sunset (hard rollout gate); interim: assignment keeps running in Snapsheet with licensing team maintaining profiles, Glance allows manual override", "note": "AC2 canary — the exact item the cap sliced; raised in closing remarks" },
+          { "type": "decision", "tier": "high", "origin": "audit-miss", "text": "Liability decision UX: draft → final workflow with edit/retraction audit trail; finalization triggers downstream compliance actions (e.g., CA adverse-decision letters); decisions changeable later with history visible" },
+          { "type": "decision", "tier": "high", "origin": "audit-miss", "text": "Subrogation / adverse-carrier (pending TPC) exposures are excluded from status letters — carriers do not receive them" },
+          { "type": "action", "tier": "high", "origin": "audit-miss", "text": "Kim's quality-audit-of-letters ask — involve Kim in pre-launch quality review of multi-agent letters (3-tier send/don't-send/high-risk flag, open-to-send time, replaced-party approval, complaint routing)" },
+          { "type": "action", "tier": "high", "origin": "audit-miss", "text": "James to validate claim-narrative source data (this week)" },
+          { "type": "action", "tier": "high", "origin": "pipeline", "text": "Draft a Claude prompt with guardrails/rules for how multi-agent should write status letters (Kim ← John)" },
+          { "type": "action", "tier": "normal", "origin": "pipeline", "text": "Schedule follow-up session next month to walk through full POP claim lifecycle for compliance gate mapping" },
+          { "type": "action", "tier": "high", "origin": "pipeline", "text": "Add policy state field to Glance for compliance routing (insured vs. claimant state logic)" },
+          { "type": "decision", "tier": "high", "origin": "pipeline", "text": "Status letter cadence: first letter at day 15, then every 30 days from the due date (not actual send date if late)" },
+          { "type": "decision", "tier": "high", "origin": "pipeline", "text": "V1 status letters drafted by multi-agent, surfaced to assigned adjuster for review/send — no auto-send in V1" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Attorney-rep claims: V1 flags and presents draft for manual handling; future state sends BI letter to attorney + PD letter to claimant per exposure" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Status letters sent per-exposure grouped by adjuster: one letter per unique adjuster covering all their exposures on a claim" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Status letters go to the party with insurable interest on the exposure, not necessarily the payment recipient" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Note soft-delete approved with required deletion reason; permission scoped to team lead or above preferred" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "No hidden notes in Glance — all notes discoverable; access differentiation is portal-visible vs internal-only" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Recipient edge rules for V1: minors → legal guardian; org claimants → named POC on recipient table; medical-lien payees get no letter; non-claimant family members get nothing unless legal guardian; adjuster finalizes list at review" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Early sending is always compliant — letters may go out any time before the due date; late or missing is the only violation" },
+          { "type": "learning", "tier": "high", "origin": "pipeline", "text": "Compliance for insureds follows policy/base state while claimant compliance follows loss-location state — Reserv currently applies loss location for both, which is incorrect for insureds" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Status letters: zero official complaints in 2.5 years, but DOI market conduct exams run 3 years retroactive and can fine $1K per missed letter per month per state" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "'Automated' status letters at prior companies were actually offshore manual teams — failed repeatedly due to lack of claim familiarity" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Deceased claimant handling: letters address 'estate of [name]'; communication pauses until power of attorney established (can take months)" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "15/30-day cadence is a deliberate Reserv-wide standard satisfying all 36 state requirements simultaneously" }
+        ],
+        "bonus_real_items_naive_found": [
+          "Letter-content minimum (what + from whom — compliance-mandatory)",
+          "Don't tell adjusters the automation end-goal",
+          "Track recommendation-vs-adjuster-behavior",
+          "John → Kim template precondition"
+        ],
+        "known_open_questions": [
+          "Does the CA adverse-decision trigger apply to subrogation exposures?"
+        ]
+      },
+      {
+        "id": "anthony-0609",
+        "file": "2026-06-09-anthony-john-weekly.md",
+        "pipeline_baseline": { "ai": 7, "de": 3, "le": 3, "skips": 2, "source": "reconstructed pre-approval staged list (benchmark-evidence.md)" },
+        "expected_items": [
+          { "type": "decision", "tier": "high", "origin": "pipeline", "text": "PRDs get a UX section (was ai_001, correctly a decision per closeability rule; closeable first instance may emit as the action)", "closeability_fixture": true },
+          { "type": "action", "tier": "normal", "origin": "pipeline", "text": "Review status-letter user stories + mockups" },
+          { "type": "action", "tier": "normal", "origin": "pipeline", "text": "Ping Jess re FE tickets + send epic" },
+          { "type": "action", "tier": "normal", "origin": "pipeline", "text": "Tech spike with Nick + James (recipient table)" },
+          { "type": "action", "tier": "normal", "origin": "pipeline", "text": "Talk to Phil re Anthony scope" },
+          { "type": "action", "tier": "normal", "origin": "pipeline", "text": "Confirm consolidation rules with Compliance (answered same-day at workshop — chef-skip OK)" },
+          { "type": "action", "tier": "high", "origin": "pipeline", "continuation_fixture": "acc2a220", "text": "Start recipient-table TDD — MUST carry continuation_of for existing commitment acc2a220 in the series-context run (AC6)" },
+          { "type": "decision", "tier": "high", "origin": "pipeline", "supersession_fixture": "workshop de_004", "text": "V1 may default per-exposure no consolidation — superseded same-day by the compliance workshop; the WORKSHOP run must re-emit the superseding decision WITH a supersedes marker (AC6 inverse)" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Kafka event-driven recipient table" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "PRDs without UX force eng-written user stories" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Kafka serial consumers" },
+          { "type": "learning", "tier": "high", "origin": "pipeline", "text": "Anthony isolation costs velocity + morale" },
+          { "type": "learning", "tier": "blocker", "origin": "naive-new-real", "text": "John owns all of Glance 2.0 (biggest fact of the meeting — pipeline missed entirely)", "note": "tier judgment: at minimum 'high'; grade tier=blocker OR high as pass" },
+          { "type": "decision", "tier": "normal", "origin": "naive-new-real", "text": "3-4 eng team build" },
+          { "type": "decision", "tier": "normal", "origin": "naive-new-real", "text": "Auto-enroll recipient decision" },
+          { "type": "action", "tier": "normal", "origin": "naive-new-real", "text": "Manager-check action" }
+        ],
+        "transcript_contradiction_fixture": "Krisp summary says Anthony 'chose to get blocked' — transcript contradicts; extraction must follow the transcript (judgment rule 7)"
+      },
+      {
+        "id": "nate-0608",
+        "file": "2026-06-08-john-nate.md",
+        "pipeline_baseline": { "ai": 1, "de": 3, "le": 2, "skips": 1, "source": "Approved sections in file" },
+        "expected_items": [
+          { "type": "action", "tier": "high", "origin": "pipeline", "text": "Nate to create initial task management V1 design mockups (WIP by Wed/Thu, finalized by Friday)" },
+          { "type": "decision", "tier": "high", "origin": "pipeline", "text": "Task Management V1 is Snapsheet parity (replicate existing task categories), not a Glance 2.0 redesign" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Task completion UX simplified to single checkbox action, removing multi-step save flow" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Calendar view, work queue, subtasks, and manual reassignment all deferred from V1" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Snapsheet only shows 10 tasks per category — showing all tasks with counts is a meaningful UX improvement even within parity scope" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Whether Snapsheet task objects link directly to associated emails/objects (vs just claims) is a prerequisite for previews/shortcuts in the task UI" }
+        ],
+        "known_skips": [
+          "Add Nate to noon Phil meeting — already done + moot (chef-skip 2026-06-08)"
+        ]
+      },
+      {
+        "id": "sprint-0604",
+        "file": "2026-06-04-glance-sprint-planning-and-retro.md",
+        "pipeline_baseline": { "ai": 2, "de": 2, "le": 2, "source": "Approved sections in file" },
+        "ac4_fixture": "no-John-stake meeting: ALL action items must be direction none; zero i_owe_them/they_owe_me; zero commitments created",
+        "expected_items": [
+          { "type": "action", "tier": "normal", "origin": "pipeline", "expected_direction": "none", "text": "Add full-stack volunteers to front-end code review rotation once front-end team defines eligible-PR criteria (Dave)" },
+          { "type": "action", "tier": "normal", "origin": "pipeline", "expected_direction": "none", "text": "Investigate auto-prepending Jira ticket links to PR descriptions (Eric)" },
+          { "type": "decision", "tier": "high", "origin": "pipeline", "text": "All user-impacting changes behind feature flags for controlled rollout; granularity per-feature with manager + product" },
+          { "type": "decision", "tier": "normal", "origin": "pipeline", "text": "Engineers split Jira tasks into smaller units so each PR maps to a single task" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Of ~100 open PRs only 10-20 are developer-owned — headline number dramatically overstates the review backlog" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "GitHub weighted scheduling can't filter by PR complexity or line count" }
+        ],
+        "known_junk_class": "GitHub-OOO-setting class learnings (judged junk in the naive run — should be absent or ⚠-flagged)"
+      },
+      {
+        "id": "shadowing-0604",
+        "file": "2026-06-04-adjuster-shadowing-session-amanda-handy.md",
+        "pipeline_baseline": { "ai": 0, "de": 0, "le": 5, "source": "Approved sections in file (4 visible post-approval)" },
+        "caveat": "transcript truncated mid-session (~27 min)",
+        "ac4_fixture": "observer meeting: any routine-work actions (Amanda's Copart updates etc.) must be direction none and ⚠-flagged 'not John's'",
+        "expected_items": [
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Total loss adjusters manually transcribe valuation breakdowns from Mitchell PDFs into notes AND the total loss card — double-entry Copilot cannot yet automate" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Experienced adjusters trust Copilot for structured lookups but bypass it for launch note drafting (verification makes manual faster)" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "Vehicle location entered redundantly — launch note + Snapsheet field + pending note (triple entry)" },
+          { "type": "learning", "tier": "normal", "origin": "pipeline", "text": "APD staffing bottleneck: total loss adjusters clean up missing/inaccurate earlier-lifecycle data" }
+        ],
+        "known_junk_class": "Amanda's personal habits (judged junk); 8-external-systems map + Copilot-skip rationale are GOOD discovery material, not junk"
+      }
+    ],
+    "series": [
+      {
+        "id": "anthony-chain",
+        "files": ["2026-05-26-anthony-john-weekly.md", "2026-06-02-anthony-john-weekly.md", "2026-06-09-anthony-john-weekly.md"],
+        "run_order": "date order, each run gets W1.5 series context from prior runs",
+        "ac6_assertions": [
+          "6/9 run marks recipient-table TDD continuation_of the existing commitment (acc2a220) instead of re-emitting fresh",
+          "repeat topics across runs produce continuation/supersession markers, not unmarked duplicates (target: 0 unmarked cross-run duplicates)"
+        ]
+      },
+      {
+        "id": "email-templates-chain",
+        "files": ["2026-05-26-email-templates-weekly.md", "2026-06-02-email-templates-weekly.md", "2026-06-09-email-templates-weekly.md"],
+        "run_order": "date order, each run gets W1.5 series context from prior runs",
+        "ac6_assertions": ["repeat topics produce continuation/supersession markers, not fresh duplicates"]
+      }
+    ],
+    "blind": [
+      { "id": "lindsay-11", "file": "2026-06-03-john-lindsay-11.md", "shape": "1:1" },
+      { "id": "doi-sync", "file": "2026-05-28-doi-sync.md", "shape": "cross-team sync" },
+      { "id": "cx-deep-dive", "file": "2026-06-01-rayshard-john-inbound-emails-cx-deep-dive.md", "shape": "deep-dive" },
+      { "id": "vendor-demo", "file": "2026-06-04-reserv-genesys-cloud-demo.md", "shape": "vendor demo" }
+    ],
+    "blind_extensions_f5": {
+      "$comment": "Review F5: add one boring/low-signal meeting + one John-as-pure-observer meeting. Recommended; John's call whether they gate.",
+      "candidates": [
+        { "id": "bisr-updates", "file": "2026-06-04-bisr-updates.md", "shape": "low-signal status" },
+        { "id": "apd-leaders-sync", "file": "2026-06-01-apd-leaders-and-team-leads-sync.md", "shape": "observer/all-hands" }
+      ]
+    }
+  },
+  "acceptance_criteria_map": {
+    "AC1": "recall vs expected_items (semantic match, judge-adjudicated); compliance ≥ 21/22",
+    "AC2": "every tier=blocker expected item extracted AND tier-marked blocker (canary: license-profile assignment)",
+    "AC3": "junk ≤ 15%, fabrication = 0, ⚠ coverage ≥ 80% of judged-junk",
+    "AC4": "sprint + shadowing: zero directional items where expected_direction=none; zero commitments from none items",
+    "AC5": "zero staged actions without completion condition; 'UX section in PRDs' emits as decision (closeability_fixture)",
+    "AC6": "series chains: continuation/supersession markers per ac6_assertions; AC6-inverse: workshop run re-emits superseding consolidation decision WITH marker",
+    "AC7": "blind set: judge grade ≥ B+ per judge-rubric.md",
+    "AC12": "per-meeting extraction spend ≤ 2× legacy (token usage in scorecard)"
+  },
+  "human_audit_requirement": "One full meeting per gate run audited end-to-end by John against its transcript (not only judge-flagged items) — 2026-06-11 adjudication."
+}

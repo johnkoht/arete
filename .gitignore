@@ -151,3 +151,9 @@ dev/executions/*/
 dev/work/plans/_overwrite-*
 dev/work/plans/fresh-plan-test
 dev/plans-test/
+
+# single-pass-extraction eval (house rule: one-off eval scripts stay local-only;
+# the manifest/rubric/scorecards in dev/work/plans/single-pass-extraction/eval/
+# ARE committed — raw run outputs and the harness are not)
+scripts/eval-extraction-2026-06.ts
+dev/work/plans/single-pass-extraction/eval/runs/
