@@ -94,6 +94,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **Owner-only staged action items (`[@owner →]` with no counterparty) create NO commitment at approve** (2026-06-10, phase-13). The approve path's commitment creation derives `personSlug` from the counterparty (i_owe_them) or owner (they_owe_me) and silently `continue`s when it's absent — so a staged item without a counterparty produces tasks/memory entries but never lands in `.arete/commitments.json`. Integration tests that assert commitment creation MUST use full arrow notation (`[@owner → @counterparty]`); a missing commitments.json after approve is the diagnostic tell.
 
+- **Validate-via-resolver then write must persist `context.slug`, never the user's input** (2026-06-11, area-aliases). `getAreaContext()` (and any future resolver) also resolves *aliases* — so the old pattern "call resolver to validate, then write `opts.area`" silently launders a former slug into fresh frontmatter/JSON the moment aliases exist. Both `meeting set-area` and `commitments create --area` had this shape and were fixed to write `areaContext.slug`; detect alias input via `areaContext.slug !== input` and `info(...)` the resolution (suppressed under `--json`). Unknown values still pass through unchanged where validation is deliberately lax (`commitments create`). Apply this to any new command that accepts an area/entity slug and writes it.
+
 ## Pre-Edit Checklist
 
 - [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command

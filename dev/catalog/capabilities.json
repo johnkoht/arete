@@ -996,6 +996,41 @@
         "projectSlug is NOT part of the commitment dedup hash (pinned test)"
       ],
       "lastVerified": "2026-06-10"
+    },
+    {
+      "id": "area-aliases",
+      "name": "Area Aliases + Integrity Check (rename safety)",
+      "type": "cli-command",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "v0.15.0: area files declare former slugs in `aliases:` frontmatter so renames don't orphan history. Resolution (`getAreaContext`) falls back to the alias map; all cross-document joins canonicalize via `canonicalizeAreaSlug` at load boundaries (briefs, area memory, commitments listOpen, manifest, memory-index); write paths (meeting set-area, commitments create --area, area-memory keying) persist canonical slugs only — stored history is never rewritten. `arete areas check` is the report-only diagnostic: dangling area: refs, duplicate aliases, shadowing aliases, orphan area-keyed memory artifacts.",
+      "implementationPaths": [
+        "packages/core/src/services/area-parser.ts",
+        "packages/core/src/services/area-integrity.ts",
+        "packages/core/src/services/brief-assemblers.ts",
+        "packages/cli/src/commands/areas.ts"
+      ],
+      "entrypoints": [
+        "arete areas check [--json]"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/LEARNINGS.md",
+        "packages/cli/src/commands/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npx tsx --test packages/core/test/services/area-parser.test.ts packages/core/test/services/area-integrity.test.ts packages/core/test/services/brief-area.test.ts"
+      ],
+      "notes": [
+        "Invariant (core LEARNINGS): canonicalize at load boundaries/comparisons; write canonical only; NEVER rewrite stored area values",
+        "Alias-map policy: sorted slug order, duplicate alias first-claim-wins (warn), alias shadowing a canonical slug is dropped",
+        "Known raw-compare exclusions: task @area() filter, topic-retrieval score bonuses (bounded impact; documented)",
+        "First live use: glance-2-mvp -> glance-operations rename (2026-06-11, arete-reserv)"
+      ],
+      "lastVerified": "2026-06-11"
     }
   ]
 }
