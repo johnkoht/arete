@@ -148,3 +148,42 @@ contract table (tier→normal, confidence-as-staging-signal semantics noted
 per review F8, claims→nomination-only). R7 idempotency as a four-mechanism
 stack. Jira: generic `workspace-evidence` APPEND extension point, NOT core
 (per 2026-06-11 adjudication; no core CLI/MCP ever). Scope fence § 9.
+
+---
+
+## 2026-06-11 ~10:45 — CHR-W2: `arete reconcile nominate` primitive
+
+Pure-function core (`packages/core/src/services/reconcile-nominate.ts`)
++ thin CLI (`arete reconcile nominate --ledger <file.json> [--days 7]
+--json`, per review F7 the ledger is a FILE) + 16 Layer-1 unit tests +
+2 CLI smoke tests. NOTHING deleted: findDuplicates / matchRecentMemory /
+matchCompletedTasks / scoreRelevance are REUSED from
+meeting-reconciliation.ts (FlattenedItem recovered structurally via
+`Parameters<typeof findDuplicates>[0][number]` — no export widening);
+reconcileMeetingBatch and the inline path untouched.
+
+Design notes for reviewers:
+- Nomination semantics inherit findDuplicates exactly (strict > 0.7,
+  same-type only, different-owners-never) — exactly-0.7 lands in the
+  0.5–0.7 `uncertain-band` (complementary inclusive bounds), which exists
+  to FEED Rule 4's fuzzy routing, never as a collapse candidate.
+- Threshold-unity test is nomination-scoped per review F2, and there is a
+  test that FAILS if someone "unifies" matchCompletedTasks' deliberate 0.6
+  band into the constant (a 0.65 pair must complete-match but NOT
+  duplicate-nominate).
+- Window-coverage invariant: same fixture through reconcileMeetingBatch
+  (inline) and nominateCandidates — every inline duplicate must be covered
+  by a nomination, canonical placement must match first-occurrence-wins.
+- excludePath regression repointed at the W2 loader pathway
+  (loadRecentMeetingBatch IS the loader, reused not rewritten): exact-match
+  excludes; `./`-prefix and symlink-alias do NOT (trap documented). CLI
+  generalizes excludePath to a strict-=== source_ref SET (ledger meetings
+  filtered from the batch — the self-nomination guard, ledger edition).
+- Degraded mode: `degraded: true` iff extraction entries exist and none
+  carry `tier` — legacy-shaped fixture verifies dupes/memory/completed
+  still nominate after an SP rollback.
+- continuation_of / supersedes nominate unconditionally as `claimed`
+  (claims to VERIFY in R3, per D3).
+
+**Verification**: 16+2 new tests green; meeting-reconciliation (122) green;
+core + cli typecheck/build clean.

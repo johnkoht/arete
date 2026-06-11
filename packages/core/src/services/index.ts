@@ -567,6 +567,21 @@ export type {
 export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview, parseApprovedSection } from './meeting-reconciliation.js';
 export type { MeetingExtractionBatch } from './meeting-reconciliation.js';
 
+// Reconcile-engine R2 nomination primitive (CHR W2)
+export {
+  nominateCandidates,
+  ledgerEntriesFromBatch,
+  NOMINATION_JACCARD_THRESHOLD,
+  UNCERTAIN_BAND_FLOOR,
+} from './reconcile-nominate.js';
+export type {
+  ReconcileLedger,
+  ReconcileLedgerEntry,
+  NominationCandidate,
+  NominationRef,
+  NominationResult,
+} from './reconcile-nominate.js';
+
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
