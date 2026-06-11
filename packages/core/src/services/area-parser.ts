@@ -95,6 +95,73 @@ export function canonicalizeAreaSlug(
 }
 
 /**
+ * Build the alias → canonical-slug map by scanning `areas/*.md`
+ * frontmatter only (no section/memory parsing — cheap enough to call
+ * per operation without caching, which would risk staleness).
+ *
+ * Deterministic: areas are processed in slug order, first claim of an
+ * alias wins and later collisions warn (a typo in one area file must
+ * not break resolution everywhere — `arete areas check` surfaces
+ * collisions loudly). An alias that shadows another area's canonical
+ * slug is dropped: direct filename lookup always wins, so honoring it
+ * anywhere would make joins disagree with resolution.
+ */
+export async function loadAreaAliasMap(
+  storage: StorageAdapter,
+  workspaceRoot: string,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const areasDir = join(workspaceRoot, 'areas');
+  let files: string[];
+  try {
+    files = await storage.list(areasDir, { extensions: ['.md'] });
+  } catch {
+    return map;
+  }
+
+  const entries: Array<{ slug: string; aliases: string[] }> = [];
+  for (const filePath of files) {
+    const base = basename(filePath);
+    if (base.startsWith('_')) continue;
+    const content = await storage.read(filePath);
+    if (!content) continue;
+    const parsed = parseFrontmatter(content);
+    if (!parsed) continue;
+    const slug = slugFromFilename(base);
+    const aliases = Array.isArray(parsed.frontmatter.aliases)
+      ? parsed.frontmatter.aliases
+          .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+          .map(a => a.trim())
+          .filter(a => a !== slug)
+      : [];
+    entries.push({ slug, aliases });
+  }
+
+  entries.sort((a, b) => a.slug.localeCompare(b.slug));
+  const canonicalSlugs = new Set(entries.map(e => e.slug));
+
+  for (const entry of entries) {
+    for (const alias of entry.aliases) {
+      if (canonicalSlugs.has(alias)) {
+        console.warn(
+          `[area-parser] Alias "${alias}" on area "${entry.slug}" shadows an existing area's slug — ignored`,
+        );
+        continue;
+      }
+      const existing = map.get(alias);
+      if (existing && existing !== entry.slug) {
+        console.warn(
+          `[area-parser] Alias "${alias}" claimed by both "${existing}" and "${entry.slug}" — keeping "${existing}"`,
+        );
+        continue;
+      }
+      map.set(alias, entry.slug);
+    }
+  }
+  return map;
+}
+
+/**
  * Result of frontmatter parsing.
  */
 interface ParsedFrontmatter {
@@ -395,39 +462,10 @@ export class AreaParserService {
 
   /**
    * Build the alias → canonical-slug map from all area files.
-   *
-   * Deterministic: areas are processed in slug order, first claim of an
-   * alias wins and later collisions warn (a typo in one area file must
-   * not break resolution everywhere — `arete areas check` surfaces
-   * collisions loudly). An alias that shadows another area's canonical
-   * slug is dropped here too: direct filename lookup always wins, so
-   * honoring it anywhere would make joins disagree with resolution.
+   * See {@link loadAreaAliasMap} for semantics.
    */
   async getAliasMap(): Promise<Map<string, string>> {
-    const areas = await this.listAreas();
-    areas.sort((a, b) => a.slug.localeCompare(b.slug));
-    const canonicalSlugs = new Set(areas.map(a => a.slug));
-
-    const map = new Map<string, string>();
-    for (const area of areas) {
-      for (const alias of area.aliases) {
-        if (canonicalSlugs.has(alias)) {
-          console.warn(
-            `[area-parser] Alias "${alias}" on area "${area.slug}" shadows an existing area's slug — ignored`,
-          );
-          continue;
-        }
-        const existing = map.get(alias);
-        if (existing && existing !== area.slug) {
-          console.warn(
-            `[area-parser] Alias "${alias}" claimed by both "${existing}" and "${area.slug}" — keeping "${existing}"`,
-          );
-          continue;
-        }
-        map.set(alias, area.slug);
-      }
-    }
-    return map;
+    return loadAreaAliasMap(this.storage, this.workspaceRoot);
   }
 
   /**
