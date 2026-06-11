@@ -160,3 +160,18 @@ merge authority delegated contingent on all gates green incl. AC11. John checks 
   4. The live June-fixation analog (meeting ≥1 day after README mtime)
   5. v0.14.0 release cut (13+14 are user-facing) — John's word
   6. Origin push (~18 commits ahead)
+
+## 2026-06-11 morning — hotfix (dropped ≠ done) merged; v0.14.0 cut
+
+- arete-reserv agent caught a live false-completion bug: winddown batch-dropping 6 mirror-dupe
+  commitments auto-checked 7 week.md tasks. Prime diagnosed (resolve() back-prop ignored status —
+  Phase 8 F1 code, predates this program), hotfix suborchestrator shipped the one-line gate +
+  3 regression tests (proven fail-on-pre-fix) + LEARNINGS; caller audit clean. Merged `66bb9a8f`.
+  Scope-outs → punch #16 (@from re-pointing at dedup) + text-hash collision documented.
+- **v0.14.0 released (`78fbdaac`)** — phases 13+14 + the hotfix.
+- Meeting backfill preview reviewed by prime: 10 comms rows + the 0.8 story-mapping row are good
+  (set-area commands handed to John); the 8 john-lindsay-11→reserv-onboarding rows REJECTED
+  (recurring-title learned the onboarding-era series; June 1:1s are Glance 2.0 — the also-via-topics
+  arm disagreed and was right; applying would fire the recall-loss trade-off on live briefs).
+  Punch #14 (MANIFEST.md candidate wart), #15 (recency-bound recurring-title), #17 (soak logging).
+- Origin push still pending (John's word) — now ~21 commits ahead incl. two releases.
