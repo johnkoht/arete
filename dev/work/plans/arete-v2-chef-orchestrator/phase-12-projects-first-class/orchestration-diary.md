@@ -132,3 +132,31 @@ merge authority delegated contingent on all gates green incl. AC11. John checks 
 - **For John's morning:** (1) `meeting backfill-area` preview table awaits review before live apply
   — phase-14 soak wants it applied first; (2) origin push still pending (now ~15 commits ahead incl.
   v0.13.0); (3) phase-14 outcome will be in this diary + its build-diary.
+
+## 2026-06-11 ~03:00 — Phase 14 MERGED (`d16c74e5`). Read-in/write-back loop CLOSED.
+
+- Phase-14 ship: 9/9 tasks, 20 commits, READY-FOR-MERGE first try. It dodged both prior failure
+  modes on its own: self-fixed the stale worktree base (74370a1e → 24b0f816, the trap fired a 4th
+  time) and ran the full suite detached (4685/0 pre-merge).
+- **D5 — premise correction worth knowing (flagged for John):** the plan said retro entries reach
+  the wiki via `arete topic refresh` consuming items/decisions.md — FALSE; `discoverTopicSources`
+  never read items/ (dark channel, zero callers). AC5 adapted spirit-faithfully: still items/-
+  mediated per John's OQ1, zero new wiki-write code, R7 stays dissolved — but the regen verb is
+  `arete memory refresh` and the tested surface is the brief's decisions section. Opus final review:
+  "a legitimate correction, not a dodge." Recorded here because the parent plan text now disagrees
+  with shipped reality on that one mechanism.
+- AC2 floor calibrated LIVE (read-only) on the 23 W4 landing-pad topics → 0.35 absolute retrieveWiki
+  score. AC8 gate PASS (apply-twice byte-identical + zero write calls). AC4: phase-12 test files
+  0-line diff. Found+recorded a third README writer (phase-12's own `resetBackfilledProjectAreas`).
+  LOC 281 logic = 1.28× (under tripwire); prose 0.56×.
+- Prime merge gate: independent suite-log check, typecheck, frozen-file diff, PATTERNS-before-skill
+  commit-order proof (1202b771 → 9ba1661f → 25cb4d9a), writer audit. Merged `d16c74e5`.
+- **PROGRAM STATUS: phases 12+13+14 all merged within ~26 hours.** Projects are first-class:
+  area edge on all three entities, /project read-in, /update-project write-back, topics cache,
+  close→retro. Remaining = operational soak, all John-gated:
+  1. `arete meeting backfill-area` preview → review (eyeball `name-only` flags) → `--apply`
+  2. Three observed `/update-project` runs (record proposed/approved/hand-edited-after)
+  3. First-write topics diff per project; first live finalize-with-retro
+  4. The live June-fixation analog (meeting ≥1 day after README mtime)
+  5. v0.14.0 release cut (13+14 are user-facing) — John's word
+  6. Origin push (~18 commits ahead)
