@@ -1232,7 +1232,9 @@ export function registerMeetingCommands(program: Command): void {
       // importance-skip short-circuit so `--importance skip` exits cleanly on
       // workspaces missing the tier. Still runs before any LLM call, so no
       // extraction tier cost is paid if config is bad.
-      if (opts.reconcile && !config.ai?.tiers?.standard) {
+      // CHR-W0: in day-level mode batchLLMReview runs in `reconcile-day`,
+      // not here — the standard tier is not needed at extract time.
+      if (opts.reconcile && config.reconcile_mode !== 'day-level' && !config.ai?.tiers?.standard) {
         const msg = '`--reconcile` requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
         if (opts.json) {
           console.log(JSON.stringify({ success: false, error: msg }));
@@ -1326,7 +1328,13 @@ export function registerMeetingCommands(program: Command): void {
         // questions. recurring_meetings titles from area config rescue
         // drifted titles.
         try {
-          const seriesMeetingsDir = join(root, paths.resources, 'meetings');
+          // NOTE: paths.resources is ALREADY absolute (getPaths joins the
+          // workspace root) — joining root again doubles the prefix and
+          // storage.list silently returns [] for the nonexistent dir. The
+          // legacy inline-reconcile block below carries that exact doubled
+          // join (pre-existing, left untouched for flags-off bit-identity —
+          // see build-report).
+          const seriesMeetingsDir = join(paths.resources, 'meetings');
           let recurringTitles: string[] = [];
           try {
             const areaParser = new AreaParserService(services.storage, root);
@@ -1393,10 +1401,22 @@ export function registerMeetingCommands(program: Command): void {
         process.exit(1);
       }
 
+      // CHR-W0 (Stage-0 day-level reconcile): when `reconcile_mode:
+      // day-level`, the inline per-file cross-meeting reconcile (this block)
+      // AND the per-file batchLLMReview below are SKIPPED — extraction stays
+      // pure and the winddown runs ONE `arete meeting reconcile-day` call at
+      // Step 2 scope instead. This is the surgical fix for the
+      // collapse-to-oldest artifact: the chef sees the undeduped day.
+      // Default 'inline' keeps today's behavior bit-identical.
+      const dayLevelReconcile = config.reconcile_mode === 'day-level';
+      if (opts.reconcile && dayLevelReconcile && !opts.json) {
+        info('reconcile_mode: day-level — inline reconcile deferred to `arete meeting reconcile-day`');
+      }
+
       // Run cross-meeting reconciliation if requested
       let reconciliationResult: ReconciliationResult | undefined;
       let cachedReconciliationContext: ReconciliationContext | undefined;
-      if (opts.reconcile) {
+      if (opts.reconcile && !dayLevelReconcile) {
         try {
           // Load reconciliation context (area memories + committed items)
           cachedReconciliationContext = await loadReconciliationContext(
@@ -1542,7 +1562,9 @@ export function registerMeetingCommands(program: Command): void {
         // decision is a point-in-time fact — neither has a "done" state. For
         // those types, duplicate detection happens via cross-meeting matching
         // above and is handled as silent merge into committed memory.
-        if (opts.reconcile && processed) {
+        // CHR-W0: in day-level mode this moves into `reconcile-day` (one
+        // batched review over the whole day instead of N per-file calls).
+        if (opts.reconcile && !dayLevelReconcile && processed) {
           try {
             const proc = processed;
             const reviewItems = proc.filteredItems
@@ -1933,6 +1955,9 @@ export function registerMeetingCommands(program: Command): void {
         silentlyMerged,
         crossMeetingDedup,
         qmd: qmdResult ?? { indexed: false, skipped: true },
+        // CHR-W0: tells the winddown that --reconcile was deferred to the
+        // day-level call (`arete meeting reconcile-day` at Step 2).
+        ...(opts.reconcile && dayLevelReconcile ? { reconcileDeferred: 'day-level' } : {}),
       };
 
       // Add reconciliation stats when reconciliation was run
@@ -2068,6 +2093,269 @@ export function registerMeetingCommands(program: Command): void {
         } else {
           warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
         }
+      }
+    });
+
+  // CHR-W0 (Stage-0) — day-level cross-meeting reconcile.
+  //
+  // Moves the EXISTING reconcileMeetingBatch + batchLLMReview invocations from
+  // per-file extract time to ONE call over the whole day, run by the winddown
+  // at Step 2 scope when `reconcile_mode: day-level`. Differences from the
+  // inline path, by design:
+  //   - the chef/user sees the full undeduped day first (extraction is pure);
+  //   - NO silent merges: decisions/learnings that the inline path silently
+  //     deleted are instead flipped to visible `status: 'skipped'` +
+  //     `staged_item_skip_reason` (day-level apply is post-write, so silent
+  //     merge would be data loss);
+  //   - one batched LLM review instead of N per-file calls;
+  //   - user decisions win: items already 'approved' or 'skipped' are never
+  //     touched (idempotent re-runs).
+  meetingCmd
+    .command('reconcile-day')
+    .description('Day-level cross-meeting reconcile (reconcile_mode: day-level; CHR-W0)')
+    .option('--date <date>', 'Day to reconcile, YYYY-MM-DD (default: today)')
+    .option('--days <n>', 'Context window of recent meetings in days (default: 7)', '7')
+    .option('--dry-run', 'Compute and report decisions without writing')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { date?: string; days?: string; dryRun?: boolean; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        else error('Not in an Areté workspace');
+        process.exit(1);
+      }
+      const config = await loadConfig(services.storage, root);
+      const paths = services.workspace.getPaths(root);
+
+      const date = opts.date ?? (() => {
+        const d = new Date();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${mm}-${dd}`;
+      })();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        if (opts.json) console.log(JSON.stringify({ success: false, error: `Invalid --date: ${date}` }));
+        else error(`Invalid --date: ${date}`);
+        process.exit(1);
+      }
+      const days = parseInt(opts.days || '7', 10);
+      const dryRun = Boolean(opts.dryRun);
+
+      // paths.resources is already absolute — do NOT join root again (the
+      // legacy inline path's doubled join silently empties the batch; this
+      // command must actually see the day).
+      const meetingsDir = join(paths.resources, 'meetings');
+
+      // Load batch (the day's meetings + lookback context) and sort by date
+      // prefix ASC so first-occurrence-wins keeps the OLDEST as canonical —
+      // identical semantics to the inline path's [...recent, current] order.
+      const batch = await loadRecentMeetingBatch(services.storage, meetingsDir, days);
+      batch.sort((a, b) => {
+        const da = a.meetingPath.split('/').pop() ?? '';
+        const db = b.meetingPath.split('/').pop() ?? '';
+        return da < db ? -1 : da > db ? 1 : 0;
+      });
+
+      const dayPaths = new Set(
+        batch.map((b) => b.meetingPath).filter((p) => (p.split('/').pop() ?? '').startsWith(date)),
+      );
+      if (dayPaths.size === 0) {
+        const out = { success: true, date, dayMeetings: 0, applied: {}, note: 'No processed meetings for the date' };
+        if (opts.json) console.log(JSON.stringify(out, null, 2));
+        else info(`No processed meetings found for ${date} — nothing to reconcile.`);
+        return;
+      }
+
+      const context = await loadReconciliationContext(services.storage, root);
+      const reconciliation = reconcileMeetingBatch(batch, context);
+
+      // Collect per-file decisions for TODAY's meetings only.
+      type DayDecision = {
+        text: string;
+        type: 'action' | 'decision' | 'learning';
+        status: 'duplicate' | 'completed';
+        reason: string;
+        evidence: string;
+      };
+      const byFile = new Map<string, DayDecision[]>();
+      for (const item of reconciliation.items) {
+        if (item.status !== 'duplicate' && item.status !== 'completed') continue;
+        if (!dayPaths.has(item.meetingPath)) continue;
+        const text = typeof item.original === 'string' ? item.original : item.original.description;
+        const list = byFile.get(item.meetingPath) ?? [];
+        list.push({
+          text,
+          type: item.type,
+          status: item.status,
+          reason: item.status === 'completed' ? 'already completed (day-level reconcile)' : 'duplicate (day-level reconcile)',
+          evidence: item.annotations.duplicateOf ?? item.annotations.completedOn ?? item.annotations.why ?? '',
+        });
+        byFile.set(item.meetingPath, list);
+      }
+
+      // Apply mechanical decisions per file via writeWithLock. User decisions
+      // win: approved/skipped items are never touched.
+      const applied: Array<{ file: string; id: string; text: string; reason: string; evidence: string }> = [];
+      const skippedExisting: Array<{ file: string; id: string; priorStatus: string }> = [];
+      const unmatched: Array<{ file: string; text: string }> = [];
+
+      const applyToFile = async (
+        filePath: string,
+        decisions: Array<{ text: string; reason: string; evidence: string }>,
+      ): Promise<void> => {
+        if (decisions.length === 0) return;
+        if (dryRun) {
+          for (const d of decisions) {
+            applied.push({ file: filePath, id: '(dry-run)', text: d.text, reason: d.reason, evidence: d.evidence });
+          }
+          return;
+        }
+        await writeWithLock(
+          services.storage,
+          filePath,
+          async (current) => {
+            const sections = parseStagedSections(current.body);
+            const allStaged = [...sections.actionItems, ...sections.decisions, ...sections.learnings];
+            const currentStatus = (current.frontmatter['staged_item_status'] ?? {}) as Record<string, string>;
+            const currentSkipReason = (current.frontmatter['staged_item_skip_reason'] ?? {}) as Record<string, unknown>;
+            const currentSource = (current.frontmatter['staged_item_source'] ?? {}) as Record<string, string>;
+
+            const mergedStatus = { ...currentStatus };
+            const mergedSkipReason = { ...currentSkipReason };
+            const mergedSource = { ...currentSource };
+            let changed = false;
+
+            for (const d of decisions) {
+              const match = allStaged.find((s) => s.text === d.text);
+              if (!match) {
+                unmatched.push({ file: filePath, text: d.text });
+                continue;
+              }
+              const prior = mergedStatus[match.id];
+              if (prior === 'approved' || prior === 'skipped') {
+                skippedExisting.push({ file: filePath, id: match.id, priorStatus: prior });
+                continue;
+              }
+              mergedStatus[match.id] = 'skipped';
+              mergedSource[match.id] = 'reconciled';
+              // NOTE: `setAt` is REQUIRED — parseStagedItemSkipReason drops
+              // entries without it (shape-validated reader).
+              mergedSkipReason[match.id] = {
+                reason: d.reason,
+                evidence: d.evidence,
+                setBy: 'chef',
+                setAt: new Date().toISOString(),
+              };
+              changed = true;
+              applied.push({ file: filePath, id: match.id, text: d.text, reason: d.reason, evidence: d.evidence });
+            }
+
+            if (!changed) {
+              // Nothing to write — abstain so the file is untouched (no
+              // mtime churn, no frontmatter re-serialization).
+              return { abstain: 'no day-level changes for this file' };
+            }
+            return {
+              frontmatter: {
+                staged_item_status: mergedStatus,
+                staged_item_source: mergedSource,
+                staged_item_skip_reason: mergedSkipReason,
+              },
+              body: current.body,
+            };
+          },
+          { mtimeGuardSeconds: 0 },
+        );
+      };
+
+      for (const [filePath, decisions] of byFile) {
+        await applyToFile(filePath, decisions);
+      }
+
+      // ONE batched LLM quality review over the day's surviving action items
+      // (replaces N per-file batchLLMReview calls). Degrades gracefully when
+      // the standard tier is missing.
+      let llmDrops: Array<{ file: string; id: string; text: string; reason: string }> = [];
+      const canLLM = services.ai.isConfigured() && Boolean(config.ai?.tiers?.standard) && process.env.ARETE_NO_LLM !== '1';
+      if (canLLM) {
+        try {
+          const reviewItems: Array<{ text: string; type: string; id: string; file: string }> = [];
+          for (const filePath of dayPaths) {
+            const content = await services.storage.read(filePath);
+            if (!content) continue;
+            const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+            const body = fmMatch ? fmMatch[2] : content;
+            const statusMap = parseStagedItemStatus(content);
+            const sections = parseStagedSections(body);
+            for (const item of sections.actionItems) {
+              const st = statusMap[item.id];
+              if (st === 'skipped' || st === 'approved') continue;
+              reviewItems.push({ text: item.text, type: 'action', id: `${filePath}::${item.id}`, file: filePath });
+            }
+          }
+          if (reviewItems.length > 0) {
+            const callLLMReconciliation = async (prompt: string) => {
+              const r = await services.ai.call('reconciliation', prompt);
+              return r.text;
+            };
+            const drops = await batchLLMReview(
+              reviewItems.map((r) => ({ text: r.text, type: r.type, id: r.id })),
+              context.recentCommittedItems,
+              callLLMReconciliation,
+            );
+            // Group drops by file and apply.
+            const dropsByFile = new Map<string, Array<{ text: string; reason: string; evidence: string }>>();
+            for (const drop of drops) {
+              const sep = drop.id.lastIndexOf('::');
+              const filePath = drop.id.slice(0, sep);
+              const item = reviewItems.find((r) => r.id === drop.id);
+              if (!item) continue;
+              const list = dropsByFile.get(filePath) ?? [];
+              list.push({ text: item.text, reason: `batch LLM review: ${drop.reason}`, evidence: 'day-level batchLLMReview' });
+              dropsByFile.set(filePath, list);
+              llmDrops.push({ file: filePath, id: drop.id.slice(sep + 2), text: item.text, reason: drop.reason });
+            }
+            for (const [filePath, decisions] of dropsByFile) {
+              await applyToFile(filePath, decisions);
+            }
+          }
+        } catch {
+          if (!opts.json) warn('Day-level batch LLM review skipped due to error');
+          llmDrops = [];
+        }
+      } else if (!opts.json) {
+        info('Batch LLM review skipped (AI not configured, standard tier missing, or ARETE_NO_LLM=1)');
+      }
+
+      const out = {
+        success: true,
+        date,
+        dryRun,
+        windowDays: days,
+        batchMeetings: batch.length,
+        dayMeetings: dayPaths.size,
+        stats: reconciliation.stats,
+        applied,
+        llmDrops,
+        preservedUserDecisions: skippedExisting,
+        unmatched,
+      };
+      if (opts.json) {
+        console.log(JSON.stringify(out, null, 2));
+        return;
+      }
+      success(`Day-level reconcile for ${date}${dryRun ? ' (dry run)' : ''}`);
+      info(`Batch: ${batch.length} meetings (${dayPaths.size} on ${date})`);
+      info(`Duplicates: ${reconciliation.stats.duplicatesRemoved} · Completed: ${reconciliation.stats.completedMatched} · LLM drops: ${llmDrops.length}`);
+      for (const a of applied) {
+        listItem(`${a.file.split('/').pop()} ${a.id}: ${a.text.slice(0, 60)} ← ${a.reason}`);
+      }
+      if (skippedExisting.length > 0) {
+        info(`${skippedExisting.length} item(s) untouched (already approved/skipped by user)`);
+      }
+      if (unmatched.length > 0) {
+        warn(`${unmatched.length} reconciled item(s) had no matching staged line (text drift)`);
       }
     });
 

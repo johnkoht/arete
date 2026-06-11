@@ -297,6 +297,14 @@ arete meeting extract <file> --context /tmp/<slug>-context.json --stage --reconc
 # Process up to 4 in parallel; for batches larger than 4, process in waves of 4
 # (start the next wave when the previous wave completes; do not skip files).
 # This stages items but does NOT approve them — approval is user-driven below.
+#
+# CHR-W0 — if arete.yaml sets `reconcile_mode: day-level` (default: inline):
+# keep passing `--reconcile` exactly as above (the CLI defers it and reports
+# `reconcileDeferred: 'day-level'` in the JSON); the per-file cross-meeting
+# reconcile + batchLLMReview are SKIPPED at extract time so extraction stays
+# pure and the chef sees the full undeduped day. The day-level reconcile runs
+# ONCE at the top of Step 2 instead (see Step 2). With the default `inline`,
+# behavior is exactly as documented above — nothing changes.
 
 # 1i. List open commitments + recent area state
 arete commitments list --json
@@ -497,6 +505,23 @@ gate — the soak window is where recurring violations get flagged for
 sub-skill tightening.
 
 ### Step 2 — Reconcile (before staging, judgment in-context)
+
+**CHR-W0 (only when arete.yaml sets `reconcile_mode: day-level`;
+default `inline` = skip this paragraph):** open Step 2 by running the
+deferred cross-meeting reconcile ONCE over the whole day:
+
+```bash
+arete meeting reconcile-day --date <today> --json
+```
+
+This runs the same mechanical `reconcileMeetingBatch` + ONE batched
+LLM review that Step 1h would have run per file, but over the full
+undeduped day — duplicates of prior-day items flip to visible
+`status: 'skipped'` + `staged_item_skip_reason` (never silent
+deletion), and items the user already approved/skipped are never
+touched. Report its `applied` / `llmDrops` counts in `## Notes`.
+Then proceed with the four skip rules below as normal — they operate
+on the merged ledger and are unchanged by the flag.
 
 **New in Phase 8 (per AC2 / spec §3).** Before Step 3 applies
 defer/stage/Uncertain judgment, the chef reads the merged loop

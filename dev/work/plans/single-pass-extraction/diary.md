@@ -74,3 +74,49 @@ Builder: ship suborchestrator (Claude Fable 5)
 Raw outputs in eval/runs/ (local, gitignored). Full corpus run + judge pass = John's morning call (token spend).
 
 **Housekeeping**: harness + runs gitignored (house rule); manifest/rubric/scorecards-README committed.
+
+---
+
+## 2026-06-11 ~09:40 — CHR-W0: day-level reconcile (continuation orchestrator)
+
+Resumed after the previous orchestrator died on API limits mid-W0. Inspected
+the uncommitted draft rather than trusting it; found and fixed real bugs:
+
+1. **`setAt` missing from `staged_item_skip_reason` writes** —
+   `parseStagedItemSkipReason` shape-validates and silently DROPS entries
+   without `setAt` (staged-items.ts:291). The draft's skips would have been
+   honored by status but invisible to every skip_reason reader. Added.
+2. **Doubled meetingsDir join** — `join(root, paths.resources, 'meetings')`
+   where `paths.resources` is ALREADY absolute (getPaths joins root) →
+   `/ws/ws/resources/meetings`, and `storage.list` returns `[]` silently for
+   missing dirs. Fixed in reconcile-day AND in the W1.5 series-resolver
+   block (our branch's new code — series context was always empty).
+   **Discovery with reach**: the LEGACY inline `--reconcile` (meeting.ts:1006)
+   and CLI `wireExtractDedup` (:1217) carry the same doubled join since
+   46152a75 — the CLI inline cross-meeting recent-batch has been a silent
+   no-op (memory/completed-task matching still worked; they use context, not
+   the batch). The production collapse-to-oldest came via the BACKEND twin
+   (packages/apps/backend agent.ts:550,685), which joins correctly. LEFT
+   UNTOUCHED in legacy per the flags-off bit-identity invariant; documented
+   for build-report + a comment at the series-resolver fix site.
+3. **No-change writes now abstain** instead of rewriting the file
+   (writeWithLock `{abstain}`) — no mtime churn on idempotent re-runs.
+4. Finished the test file (3 tests: visible-skip + user-decisions-win +
+   idempotent re-run + clean no-meetings) and added the extract-side gating
+   test (day-level skips the `--reconcile` standard-tier fail-fast) as an
+   inversion of the existing tier test in meeting-extract.test.ts.
+5. SKILL.md wiring per plan W0: Step 1h note (keep `--reconcile`; CLI defers
+   + reports `reconcileDeferred`) and Step 2 opens with
+   `arete meeting reconcile-day` — both gated on `reconcile_mode: day-level`,
+   default `inline` text untouched.
+
+Semantics kept from the draft (verified against source): batch sorted ASC by
+filename = first-occurrence-wins oldest-canonical, identical to inline's
+`[...recent, current]`; visible `status: 'skipped'` + `source: 'reconciled'`
+flips ONLY (no silent merge — day-level apply is post-write); approved/
+skipped never touched; ONE batched LLM review over the day's surviving
+actions, gated on isConfigured + standard tier + ARETE_NO_LLM, graceful
+degrade.
+
+**Verification**: full suite 4575 tests / 4573 pass / 0 fail / 2 skipped
+(+4 new). cli rebuild clean.
