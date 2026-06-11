@@ -1,6 +1,16 @@
 # Changelog
 
-## [0.14.0] — 2026-06-11 — Projects first-class: write-back loop + area edge on meetings
+## [0.15.0] — 2026-06-11 — Area aliases: rename safety + integrity check
+
+Areas can now be renamed without orphaning history. An area file declares its former slugs in `aliases:` frontmatter; historical `area:` references in meetings, projects, goals, topic pages, memory items, and commitments keep resolving and joining — stored data is never rewritten (point-in-time records stay as written).
+
+### Added
+- **`aliases:` frontmatter on areas** — `getAreaContext()` resolves former slugs (direct filename lookup always wins; duplicate aliases resolve first-claim-wins in slug order with a warning; an alias shadowing another area's canonical slug is ignored). New primitives `loadAreaAliasMap()` / `canonicalizeAreaSlug()`.
+- **Canonical joins everywhere** — briefs (person/project/area/meeting), `meetingsForArea` (both the `area:` and `topics:` arms), `unionProjectCommitments`, `commitments listOpen --area`, area-memory aggregation, meeting-manifest generation, memory-index topic counts, and person-memory area stamping all compare canonicalized slugs, so old-slug content surfaces under the renamed area.
+- **Write paths persist canonical only** — `arete meeting set-area`, `arete commitments create --area`, and area-memory file keying write the canonical slug even when given an alias (no alias laundering into new data).
+- **`arete areas check`** — report-only integrity diagnostic: dangling `area:` references grouped by value (meetings, active+archived projects incl. prose `**Area**:` lines, notes, goals, topic pages), duplicate aliases, shadowing aliases, orphan area-keyed memory artifacts. `--json` supported; exit 1 on problems.
+
+
 
 Completes the projects-first-class program (phases 13+14; plans under `dev/work/plans/arete-v2-chef-orchestrator/`). Projects now have a full read-in/write-back loop, and `area:` is a first-class edge on all three entities (projects, commitments, meetings).
 
