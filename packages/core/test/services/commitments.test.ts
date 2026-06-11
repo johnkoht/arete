@@ -2483,3 +2483,53 @@ describe('CommitmentsService + TaskService integration (FU1)', () => {
     );
   });
 });
+
+describe('CommitmentsService.listOpen() — area alias canonicalization', () => {
+  function makeAliasStore(commitments: Commitment[]): StorageAdapter {
+    const areaPath = join(WORKSPACE_ROOT, 'areas/glance-operations.md');
+    const store: MockStore = new Map();
+    store.set(COMMITMENTS_PATH, makeFile(commitments));
+    // Renamed area declaring its former slug — listOpen loads this map.
+    store.set(
+      areaPath,
+      '---\narea: Glance Operations\naliases:\n  - glance-2-mvp\n---\n\n# Glance Operations\n',
+    );
+    const base = createMockStorage(store);
+    // This file's shared mock hardcodes list() → []; the alias map needs
+    // to enumerate areas/.
+    return {
+      ...base,
+      async list(dir: string): Promise<string[]> {
+        return dir === join(WORKSPACE_ROOT, 'areas') ? [areaPath] : [];
+      },
+    };
+  }
+
+  it('matches commitments stamped with a former slug when filtering by canonical', async () => {
+    const old = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Stamped before the rename',
+      personSlug: 'alice',
+      area: 'glance-2-mvp',
+    });
+    const svc = new CommitmentsService(makeAliasStore([old]), WORKSPACE_ROOT);
+
+    const result = await svc.listOpen({ area: 'glance-operations' });
+    assert.equal(result.length, 1);
+    // Stored value is untouched — comparison is canonicalized, data is not.
+    assert.equal(result[0].area, 'glance-2-mvp');
+  });
+
+  it('matches canonical-stamped commitments when filtering by the alias', async () => {
+    const fresh = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'Stamped after the rename',
+      personSlug: 'alice',
+      area: 'glance-operations',
+    });
+    const svc = new CommitmentsService(makeAliasStore([fresh]), WORKSPACE_ROOT);
+
+    const result = await svc.listOpen({ area: 'glance-2-mvp' });
+    assert.equal(result.length, 1);
+  });
+});

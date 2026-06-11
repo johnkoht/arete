@@ -9,6 +9,10 @@
  * (e.g., `list`, `epics`), not `arete areas <verb>`. Verbs go on
  * subcommand options. This keeps the namespace open for future area
  * work (focus, sync, refresh) without forcing awkward renaming.
+ * Sanctioned exception: `check` — the report-only integrity diagnostic
+ * (dangling `area:` refs, alias collisions). Diagnostics read as verbs
+ * everywhere in the CLI ecosystem (`git fsck`, `npm audit`); forcing a
+ * noun here would hurt discoverability more than it preserves symmetry.
  *
  * Future subcommand sketches (not implemented in 7a):
  *   - `arete areas show <slug>` — detailed view of one area
@@ -19,13 +23,15 @@
  * `epics`.
  */
 
-import { createServices } from '@arete/core';
+import { createServices, checkAreaIntegrity } from '@arete/core';
 import type { Command } from 'commander';
 import {
   header,
   listItem,
   error,
   info,
+  success,
+  warn,
 } from '../formatters.js';
 import chalk from 'chalk';
 
@@ -226,4 +232,112 @@ export function registerAreasCommands(program: Command): void {
         console.log('');
       },
     );
+
+  // ---------------------------------------------------------------------
+  // arete areas check [--json]
+  //
+  // Report-only integrity scan: dangling `area:` references across
+  // meetings/projects/notes/goals/topic pages, duplicate + shadowing
+  // aliases, and orphan area-keyed artifacts. Exits 1 when dangling refs,
+  // duplicate aliases, or shadowing aliases are found (orphans are
+  // informational — they may be intentional leftovers pending cleanup).
+  // ---------------------------------------------------------------------
+  areasCmd
+    .command('check')
+    .description('Scan for dangling area references and alias problems (report-only)')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(
+            JSON.stringify({ success: false, error: 'Not in an Areté workspace' }),
+          );
+        } else {
+          error('Not in an Areté workspace');
+          info('Run "arete install" to create a workspace');
+        }
+        process.exit(1);
+      }
+
+      const paths = services.workspace.getPaths(root);
+      const report = await checkAreaIntegrity(services.storage, paths);
+
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, report }, null, 2));
+        if (!report.clean) process.exitCode = 1;
+        return;
+      }
+
+      header('Areas — integrity check');
+      console.log('');
+      listItem('Areas', String(report.canonicalSlugs.length));
+      listItem('Known aliases', String(report.aliasCount));
+      listItem('Files scanned', String(report.scannedFiles));
+
+      if (report.dangling.length > 0) {
+        console.log('');
+        console.log(chalk.bold('  Dangling area references'));
+        for (const ref of report.dangling) {
+          console.log(
+            `    ${chalk.red(ref.value)} ${chalk.dim(`(${ref.count} file${ref.count === 1 ? '' : 's'})`)}`,
+          );
+          for (const file of ref.files) {
+            console.log(chalk.dim(`      - ${file}`));
+          }
+        }
+      }
+
+      if (report.duplicateAliases.length > 0) {
+        console.log('');
+        console.log(chalk.bold('  Duplicate aliases'));
+        for (const dup of report.duplicateAliases) {
+          console.log(
+            `    ${chalk.red(dup.alias)} ${chalk.dim('claimed by: ' + dup.areas.join(', '))}`,
+          );
+        }
+      }
+
+      if (report.shadowingAliases.length > 0) {
+        console.log('');
+        console.log(chalk.bold('  Shadowing aliases (dead — direct lookup wins)'));
+        for (const shadow of report.shadowingAliases) {
+          console.log(
+            `    ${chalk.red(shadow.alias)} ${chalk.dim(`on "${shadow.declaredBy}" shadows area "${shadow.shadows}"`)}`,
+          );
+        }
+      }
+
+      if (report.orphans.length > 0) {
+        console.log('');
+        console.log(chalk.bold('  Orphan area-keyed artifacts (informational)'));
+        for (const orphan of report.orphans) {
+          console.log(`    ${chalk.yellow(orphan.slug)} ${chalk.dim(orphan.path)}`);
+        }
+      }
+
+      console.log('');
+      if (report.clean) {
+        success('Area integrity clean — all references resolve.');
+        if (report.orphans.length > 0) {
+          warn(`${report.orphans.length} orphan artifact(s) found (does not affect exit code).`);
+        }
+      } else {
+        const problems: string[] = [];
+        if (report.dangling.length > 0) {
+          problems.push(`${report.dangling.length} dangling value(s)`);
+        }
+        if (report.duplicateAliases.length > 0) {
+          problems.push(`${report.duplicateAliases.length} duplicate alias(es)`);
+        }
+        if (report.shadowingAliases.length > 0) {
+          problems.push(`${report.shadowingAliases.length} shadowing alias(es)`);
+        }
+        error(`Area integrity problems: ${problems.join(', ')}.`);
+        info('Fix area frontmatter or add the missing slug to an area\'s aliases: list.');
+        process.exitCode = 1;
+      }
+      console.log('');
+    });
 }

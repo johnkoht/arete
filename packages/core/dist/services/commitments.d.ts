@@ -194,6 +194,7 @@ export declare class LockBootstrapError extends Error {
 export declare class CommitmentsService {
     private readonly storage;
     private readonly filePath;
+    private readonly workspaceRoot;
     private createTaskFn?;
     private completeTaskFromCommitmentFn?;
     private hasOpenTaskReferencesFn?;

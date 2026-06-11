@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile, access } from 'node:fs/promises';
 import { lock as lockfileLock } from 'proper-lockfile';
 import { jaccardSimilarity } from '../utils/similarity.js';
+import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -344,12 +345,14 @@ async function ensureLockTarget(filePath) {
 export class CommitmentsService {
     storage;
     filePath;
+    workspaceRoot;
     createTaskFn;
     completeTaskFromCommitmentFn;
     hasOpenTaskReferencesFn;
     constructor(storage, workspaceRoot) {
         this.storage = storage;
         this.filePath = join(workspaceRoot, COMMITMENTS_FILE);
+        this.workspaceRoot = workspaceRoot;
     }
     /**
      * Set the task creation function. Called by factory after TaskService is created.
@@ -549,6 +552,11 @@ export class CommitmentsService {
      */
     async listOpen(opts) {
         const all = await this.load();
+        // Stored `area` values are historical data and may predate an area
+        // rename — canonicalize both sides at compare time, never rewrite.
+        const aliasMap = opts?.area
+            ? await loadAreaAliasMap(this.storage, this.workspaceRoot)
+            : undefined;
         return all.filter((c) => {
             if (c.status !== 'open')
                 return false;
@@ -558,8 +566,12 @@ export class CommitmentsService {
                 if (!opts.personSlugs.includes(c.personSlug))
                     return false;
             }
-            if (opts?.area && c.area !== opts.area)
+            if (opts?.area &&
+                aliasMap &&
+                canonicalizeAreaSlug(c.area, aliasMap) !==
+                    canonicalizeAreaSlug(opts.area, aliasMap)) {
                 return false;
+            }
             return true;
         });
     }

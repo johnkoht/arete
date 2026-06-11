@@ -9,7 +9,7 @@
 
 import { join, basename } from 'node:path';
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { AreaParserService } from './area-parser.js';
+import { canonicalizeAreaSlug, loadAreaAliasMap, type AreaParserService } from './area-parser.js';
 import type { CommitmentsService } from './commitments.js';
 import type { MemoryService } from './memory.js';
 import type { TopicMemoryService } from './topic-memory.js';
@@ -438,7 +438,9 @@ export class AreaMemoryService {
     if (!options.dryRun) {
       const outputDir = join(workspacePaths.root, AREA_MEMORY_DIR);
       await this.storage.mkdir(outputDir);
-      const outPath = join(outputDir, `${areaSlug}.md`);
+      // Key the memory file by the CANONICAL slug — an alias input must not
+      // mint a split-brain `.arete/memory/areas/{alias}.md` next to the real one.
+      const outPath = join(outputDir, `${areaContext.slug}.md`);
       // Idempotent write — no git noise when content byte-equals existing.
       // Falls back to plain write when adapter doesn't implement writeIfChanged.
       if (this.storage.writeIfChanged !== undefined) {
@@ -462,10 +464,14 @@ export class AreaMemoryService {
     let updated = 0;
     let skipped = 0;
 
-    // If targeting a specific area, filter
-    const targetAreas = options.areaSlug
-      ? areas.filter(a => a.slug === options.areaSlug)
-      : areas;
+    // If targeting a specific area, filter. Canonicalize first so an alias
+    // input doesn't silently match zero areas.
+    let targetAreas = areas;
+    if (options.areaSlug) {
+      const aliasMap = await this.areaParser.getAliasMap();
+      const canonical = canonicalizeAreaSlug(options.areaSlug, aliasMap);
+      targetAreas = areas.filter(a => a.slug === canonical);
+    }
 
     for (const area of targetAreas) {
       const success = await this.refreshAreaMemory(area.slug, workspacePaths, options);
@@ -754,6 +760,10 @@ export class AreaMemoryService {
 
     const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
 
+    // Meetings carry raw (possibly pre-rename) `area:` values — build the
+    // alias map once per refresh and canonicalize at compare time.
+    const aliasMap = await loadAreaAliasMap(this.storage, workspacePaths.root);
+
     const people = new Set<string>();
     // Aggregate topics: slug → { count, openItems, lastReferenced }
     const topicMap = new Map<string, { count: number; openItems: number; lastReferenced: string }>();
@@ -775,7 +785,7 @@ export class AreaMemoryService {
       const fm = parsed.frontmatter;
 
       // Match via area: frontmatter field OR recurring meeting title
-      let matchesArea = fm.area === areaContext.slug;
+      let matchesArea = canonicalizeAreaSlug(fm.area, aliasMap) === areaContext.slug;
       if (!matchesArea && areaContext.recurringMeetings.length > 0) {
         const title = fm.title.toLowerCase();
         for (const recurring of areaContext.recurringMeetings) {

@@ -213,6 +213,7 @@ describe('MemoryIndexService.refreshMemoryIndex', () => {
         { slug: 'area1', name: 'Area 1', recurringMeetings: [], keywords: [] },
         { slug: 'area2', name: 'Area 2', recurringMeetings: [], keywords: [] },
       ],
+      getAliasMap: async () => new Map<string, string>(),
     } as unknown as import('../../src/services/area-parser.js').AreaParserService;
 
     const commitments = {

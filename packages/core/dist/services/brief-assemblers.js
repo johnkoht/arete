@@ -14,6 +14,7 @@
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { tokenizeSlug } from './topic-memory.js';
+import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 import { jaccardSimilarity } from '../utils/similarity.js';
 // ---------------------------------------------------------------------------
 // Constants
@@ -105,7 +106,11 @@ function firstSectionExcerpt(body) {
     }
     return undefined;
 }
-export async function loadMeetingIndex(storage, paths) {
+export async function loadMeetingIndex(storage, paths, 
+// Alias → canonical-slug map (loadAreaAliasMap). Canonicalizing here —
+// the load boundary — keeps every downstream `===` join on entry.area /
+// entry.topics correct for meetings that predate an area rename.
+aliasMap = new Map()) {
     const meetingsDir = join(paths.resources, 'meetings');
     const exists = await storage.exists(meetingsDir);
     if (!exists)
@@ -138,16 +143,19 @@ export async function loadMeetingIndex(storage, paths) {
                     .map((s) => s.trim().toLowerCase())
                     .filter((s) => s.length > 0)
                 : [];
-        const area = typeof fm.area === 'string' ? fm.area : undefined;
+        const area = canonicalizeAreaSlug(typeof fm.area === 'string' ? fm.area : undefined, aliasMap);
         const topicsRaw = fm.topics;
-        const topics = Array.isArray(topicsRaw)
+        // Topics canonicalize through the same map: an area-shaped topic slug
+        // is a join key (meetingsForArea's fallback arm), non-alias slugs pass
+        // through untouched.
+        const topics = (Array.isArray(topicsRaw)
             ? topicsRaw.map((t) => String(t).trim()).filter((t) => t.length > 0)
             : typeof topicsRaw === 'string'
                 ? topicsRaw
                     .split(',')
                     .map((t) => t.trim())
                     .filter((t) => t.length > 0)
-                : [];
+                : []).map((t) => canonicalizeAreaSlug(t, aliasMap) ?? t);
         const projectSlug = typeof fm.project === 'string' ? fm.project : undefined;
         // Pull a short excerpt from the body — first non-empty line of the
         // first `## …` section. HTML-comment lines (`<!-- merged from … -->`
@@ -557,8 +565,9 @@ export async function assembleBriefForPerson(slug, paths, deps) {
         category: personFile.category,
     };
     const sections = [];
+    const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
     // 1. Recent meetings (most recent first)
-    const index = await loadMeetingIndex(deps.storage, paths);
+    const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
     const personMeetings = meetingsForPerson(index, slug, personName).slice(0, RECENT_MEETINGS_PER_PERSON);
     if (personMeetings.length > 0) {
         const bullets = personMeetings.map((m) => {
@@ -637,7 +646,7 @@ export async function assembleBriefForPerson(slug, paths, deps) {
         if (m.area)
             sharedAreas.add(m.area);
     }
-    const projects = await listActiveProjects(deps.storage, paths);
+    const projects = await listActiveProjects(deps.storage, paths, aliasMap);
     const sharedProjects = projects.filter((p) => p.area && sharedAreas.has(p.area));
     if (sharedAreas.size > 0 || sharedProjects.length > 0) {
         const bullets = [];
@@ -845,7 +854,7 @@ export function projectDisplayName(fm, slug) {
     }
     return slug;
 }
-async function listActiveProjects(storage, paths) {
+async function listActiveProjects(storage, paths, aliasMap = new Map()) {
     const activeDir = join(paths.projects, 'active');
     const exists = await storage.exists(activeDir);
     if (!exists)
@@ -865,7 +874,7 @@ async function listActiveProjects(storage, paths) {
         projects.push({
             slug,
             name,
-            area: areaRes.area,
+            area: canonicalizeAreaSlug(areaRes.area, aliasMap),
             areaSetBy: areaRes.areaSetBy,
             areaDivergence: areaRes.divergence,
             status: typeof fm.status === 'string' ? fm.status : undefined,
@@ -878,7 +887,7 @@ async function listActiveProjects(storage, paths) {
     }
     return projects;
 }
-async function readProjectBySlug(storage, paths, slug) {
+async function readProjectBySlug(storage, paths, slug, aliasMap = new Map()) {
     const readmePath = join(paths.projects, 'active', slug, 'README.md');
     const content = await storage.read(readmePath);
     if (!content)
@@ -889,7 +898,7 @@ async function readProjectBySlug(storage, paths, slug) {
     return {
         slug,
         name: projectDisplayName(fm, slug),
-        area: areaRes.area,
+        area: canonicalizeAreaSlug(areaRes.area, aliasMap),
         areaSetBy: areaRes.areaSetBy,
         areaDivergence: areaRes.divergence,
         status: typeof fm.status === 'string' ? fm.status : undefined,
@@ -980,10 +989,12 @@ export function buildProjectWikiQuery(name, area, body) {
  * commitments not yet claimed by ANY project (a sibling's claim excludes
  * them). Deduped by id, projectSlug-claimed first. Pure; exported for tests.
  */
-export function unionProjectCommitments(open, slug, area) {
+export function unionProjectCommitments(open, slug, area, aliasMap = new Map()) {
     const own = open.filter((c) => c.projectSlug === slug);
+    // Commitment areas are compared canonicalized, never rewritten —
+    // stored data stays as written; only joins see canonical slugs.
     const areaUnclaimed = area
-        ? open.filter((c) => c.area === area && !c.projectSlug)
+        ? open.filter((c) => canonicalizeAreaSlug(c.area, aliasMap) === area && !c.projectSlug)
         : [];
     const seen = new Set();
     const out = [];
@@ -1044,7 +1055,8 @@ export async function resolveArchivedProjectReadme(storage, paths, slug) {
 }
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export async function assembleBriefForProject(slug, paths, deps) {
-    const project = await readProjectBySlug(deps.storage, paths, slug);
+    const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
+    const project = await readProjectBySlug(deps.storage, paths, slug, aliasMap);
     if (!project) {
         return {
             mode: 'project',
@@ -1104,7 +1116,7 @@ export async function assembleBriefForProject(slug, paths, deps) {
         });
     }
     // 2. Recent activity — meetings tagged to project's area
-    const index = await loadMeetingIndex(deps.storage, paths);
+    const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
     if (project.area) {
         const areaMeetings = meetingsForArea(index, project.area).slice(0, RECENT_MEETINGS_PER_PROJECT);
         if (areaMeetings.length > 0) {
@@ -1127,7 +1139,7 @@ export async function assembleBriefForProject(slug, paths, deps) {
     // commitments not claimed by a sibling (Phase 12 AC4).
     {
         const allOpen = await deps.commitments.listOpen();
-        const openCommitments = unionProjectCommitments(allOpen, slug, project.area);
+        const openCommitments = unionProjectCommitments(allOpen, slug, project.area, aliasMap);
         if (openCommitments.length > 0) {
             // Group by direction.
             const iOwe = openCommitments.filter((c) => c.direction === 'i_owe_them');
@@ -1154,8 +1166,8 @@ export async function assembleBriefForProject(slug, paths, deps) {
     }
     // 4. Decisions & learnings — area-tagged items
     if (project.area) {
-        const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths);
-        const items = await readAreaTaggedMemoryItems(deps.storage, paths, project.area, topicAreaBySlug);
+        const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths, aliasMap);
+        const items = await readAreaTaggedMemoryItems(deps.storage, paths, project.area, topicAreaBySlug, aliasMap);
         if (items.length > 0) {
             const bullets = items.map((it) => {
                 sources.push(relativeToRoot(it.path, paths.root));
@@ -1202,7 +1214,7 @@ export async function assembleBriefForProject(slug, paths, deps) {
         const bullets = [];
         const seen = new Set();
         if (project.area) {
-            const actives = await listActiveProjects(deps.storage, paths);
+            const actives = await listActiveProjects(deps.storage, paths, aliasMap);
             for (const p of actives) {
                 if (p.slug === slug || !p.area || p.area !== project.area)
                     continue;
@@ -1257,7 +1269,8 @@ export async function assembleBriefForProject(slug, paths, deps) {
  * services/LEARNINGS.md).
  */
 export async function assembleProjectWhatsNew(slug, paths, deps) {
-    const project = await readProjectBySlug(deps.storage, paths, slug);
+    const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
+    const project = await readProjectBySlug(deps.storage, paths, slug, aliasMap);
     if (!project)
         return null;
     const mtime = await deps.storage.getModified(project.readmePath);
@@ -1269,7 +1282,7 @@ export async function assembleProjectWhatsNew(slug, paths, deps) {
     // Meetings in the project's area, dated after the README was touched.
     const meetings = [];
     if (project.area) {
-        const index = await loadMeetingIndex(deps.storage, paths);
+        const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
         for (const m of meetingsForArea(index, project.area)) {
             if (m.date > sinceDay) {
                 meetings.push({ title: m.title, date: m.date, path: relativeToRoot(m.path, paths.root) });
@@ -1282,7 +1295,7 @@ export async function assembleProjectWhatsNew(slug, paths, deps) {
         try {
             const { topics: pages } = await deps.topicMemory.listAll(paths);
             for (const page of pages) {
-                if (page.frontmatter.area !== project.area)
+                if (canonicalizeAreaSlug(page.frontmatter.area, aliasMap) !== project.area)
                     continue;
                 const refreshed = page.frontmatter.last_refreshed ?? '';
                 if (refreshed > sinceDay) {
@@ -1296,7 +1309,7 @@ export async function assembleProjectWhatsNew(slug, paths, deps) {
     }
     // Newly-opened commitments in the project-grained scope (AC4 union).
     const open = await deps.commitments.listOpen();
-    const scoped = unionProjectCommitments(open, slug, project.area);
+    const scoped = unionProjectCommitments(open, slug, project.area, aliasMap);
     const commitments = [];
     for (const c of scoped) {
         const created = c.createdAt ?? '';
@@ -1376,13 +1389,14 @@ export function parseMemoryItemEntries(content) {
  * (the same surface `ActiveTopicEntry.area` is derived from). Best-effort:
  * returns an empty map on any failure.
  */
-export async function loadTopicAreaMap(topicMemory, paths) {
+export async function loadTopicAreaMap(topicMemory, paths, aliasMap = new Map()) {
     const map = new Map();
     try {
         const { topics } = await topicMemory.listAll(paths);
         for (const t of topics) {
-            if (t.frontmatter.area)
-                map.set(t.frontmatter.topic_slug, t.frontmatter.area);
+            if (t.frontmatter.area) {
+                map.set(t.frontmatter.topic_slug, canonicalizeAreaSlug(t.frontmatter.area, aliasMap) ?? t.frontmatter.area);
+            }
         }
     }
     catch {
@@ -1390,7 +1404,7 @@ export async function loadTopicAreaMap(topicMemory, paths) {
     }
     return map;
 }
-export async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaBySlug) {
+export async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaBySlug, aliasMap = new Map()) {
     const items = [];
     for (const [type, file] of [
         ['decision', 'decisions.md'],
@@ -1406,9 +1420,11 @@ export async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaB
             //      carry `glance-communications` directly), or maps to the area
             //      via topic-page `area:` frontmatter.
             //   2. Legacy explicit `Area:` line / `[area:]` tag.
-            const matches = entry.topics.includes(area) ||
+            // Entry slugs are raw user text — canonicalize before comparing
+            // against the (canonical) area slug.
+            const matches = entry.topics.some((t) => canonicalizeAreaSlug(t, aliasMap) === area) ||
                 entry.topics.some((t) => topicAreaBySlug.get(t) === area) ||
-                entry.area === area;
+                canonicalizeAreaSlug(entry.area, aliasMap) === area;
             if (!matches)
                 continue;
             items.push({
@@ -1426,6 +1442,11 @@ export async function readAreaTaggedMemoryItems(storage, paths, area, topicAreaB
 }
 /** Assemble an AreaBrief — pure aggregator. AC3. */
 export async function assembleBriefForArea(slug, paths, deps) {
+    // Canonicalize first — `slug` may be a former slug (alias), and every
+    // join below (memory page path, project/meeting/commitment filters)
+    // keys off the canonical one.
+    const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
+    slug = canonicalizeAreaSlug(slug, aliasMap) ?? slug;
     // 1. Read area memory page
     const areaMemoryPath = join(paths.memory, 'areas', `${slug}.md`);
     const areaMemoryContent = await deps.storage.read(areaMemoryPath);
@@ -1454,7 +1475,7 @@ export async function assembleBriefForArea(slug, paths, deps) {
         });
     }
     // 2. Active projects in this area
-    const projects = await listActiveProjects(deps.storage, paths);
+    const projects = await listActiveProjects(deps.storage, paths, aliasMap);
     const areaProjects = projects.filter((p) => p.area === slug);
     if (areaProjects.length > 0) {
         const bullets = areaProjects.map((p) => {
@@ -1468,7 +1489,7 @@ export async function assembleBriefForArea(slug, paths, deps) {
         });
     }
     // 3. Recent meetings
-    const index = await loadMeetingIndex(deps.storage, paths);
+    const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
     const areaMeetings = meetingsForArea(index, slug).slice(0, RECENT_MEETINGS_PER_PROJECT);
     if (areaMeetings.length > 0) {
         const bullets = areaMeetings.map((m) => {
@@ -1498,8 +1519,8 @@ export async function assembleBriefForArea(slug, paths, deps) {
         });
     }
     // 5. Decisions & learnings
-    const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths);
-    const items = await readAreaTaggedMemoryItems(deps.storage, paths, slug, topicAreaBySlug);
+    const topicAreaBySlug = await loadTopicAreaMap(deps.topicMemory, paths, aliasMap);
+    const items = await readAreaTaggedMemoryItems(deps.storage, paths, slug, topicAreaBySlug, aliasMap);
     if (items.length > 0) {
         const bullets = items.map((it) => {
             sources.push(relativeToRoot(it.path, paths.root));
@@ -1620,7 +1641,8 @@ export async function resolveMeetingInput(input, paths, storage, index, calendar
 }
 /** Assemble a MeetingBrief — pure aggregator. AC4 / AC4a / AC4b / AC4c / AC4d. */
 export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
-    const index = await loadMeetingIndex(deps.storage, paths);
+    const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
+    const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
     const resolution = await resolveMeetingInput(input, paths, deps.storage, index, opts.calendarEvents);
     if (resolution.kind === 'unresolved') {
         return await buildUnresolvedMeetingBrief(input, paths, deps);
@@ -1635,7 +1657,9 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
     if (resolution.kind === 'meeting-file') {
         title = resolution.entry.title;
         date = resolution.entry.date || undefined;
-        area = resolution.entry.area;
+        // Index entries are canonical already; the synthesized agenda-file
+        // entry (resolveMeetingInput) carries raw frontmatter — canonicalize.
+        area = canonicalizeAreaSlug(resolution.entry.area, aliasMap);
         attendeeIds = resolution.entry.attendeeIds;
         attendeeNamesRaw = resolution.entry.attendeeNames;
         meetingPath = resolution.entry.path;
@@ -1683,7 +1707,7 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
     let inferredArea;
     let resolvedProjects = [];
     if (opts.projectOverride) {
-        const proj = await readProjectBySlug(deps.storage, paths, opts.projectOverride);
+        const proj = await readProjectBySlug(deps.storage, paths, opts.projectOverride, aliasMap);
         if (proj) {
             resolvedProjects = [proj];
             projectOverride = opts.projectOverride;
@@ -1692,7 +1716,7 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
     }
     else if (area) {
         explicitArea = area;
-        const projects = await listActiveProjects(deps.storage, paths);
+        const projects = await listActiveProjects(deps.storage, paths, aliasMap);
         resolvedProjects = projects.filter((p) => p.area === area).slice(0, 2);
     }
     else if (deps.areaParser) {
@@ -1700,7 +1724,7 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
             const match = await deps.areaParser.suggestAreaForMeeting({ title });
             if (match && match.confidence >= 0.5) {
                 inferredArea = { slug: match.areaSlug, confidence: match.confidence };
-                const projects = await listActiveProjects(deps.storage, paths);
+                const projects = await listActiveProjects(deps.storage, paths, aliasMap);
                 resolvedProjects = projects.filter((p) => p.area === match.areaSlug).slice(0, 2);
             }
         }

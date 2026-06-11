@@ -7,7 +7,7 @@
  * All I/O via StorageAdapter — no direct fs imports.
  */
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { AreaParserService } from './area-parser.js';
+import { type AreaParserService } from './area-parser.js';
 import type { CommitmentsService } from './commitments.js';
 import type { MemoryService } from './memory.js';
 import type { TopicMemoryService } from './topic-memory.js';

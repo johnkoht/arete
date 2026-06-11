@@ -235,3 +235,118 @@ We decided to phase POP migration over two quarters.
     assert.equal(brief.sections.length, 0);
   });
 });
+
+describe('assembleBriefForArea — alias canonicalization (rename safety)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'brief-area-alias-'));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('meetings and projects tagged with a former slug surface in the renamed area brief', async () => {
+    writeFile(
+      tmpDir,
+      'areas/glance-operations.md',
+      `---
+area: Glance Operations
+status: active
+aliases:
+  - glance-2-mvp
+---
+
+## Focus
+Operations.
+`,
+    );
+    // Historical meeting tagged with the OLD slug.
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-05-01-roadmap-review.md',
+      `---
+title: Roadmap Review
+date: 2026-05-01
+area: glance-2-mvp
+attendee_ids: []
+---
+
+## Summary
+Reviewed the roadmap.
+`,
+    );
+    // Meeting with no area: but a topics: entry carrying the old slug
+    // (June-style) — the topics arm of meetingsForArea.
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-02-ops-sync.md',
+      `---
+title: Ops Sync
+date: 2026-06-02
+topics:
+  - glance-2-mvp
+attendee_ids: []
+---
+
+## Summary
+Ops sync notes.
+`,
+    );
+    // Active project still pointing at the old slug.
+    writeFile(
+      tmpDir,
+      'projects/active/tasks-v1/README.md',
+      `---
+project: Tasks v1
+area: glance-2-mvp
+status: active
+---
+
+# Tasks v1
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForArea('glance-operations', paths);
+
+    const rendered = JSON.stringify(brief);
+    assert.ok(
+      rendered.includes('Roadmap Review'),
+      'old-slug meeting should surface via area: canonicalization',
+    );
+    assert.ok(
+      rendered.includes('Ops Sync'),
+      'old-slug topics: entry should surface via the topics arm',
+    );
+    assert.ok(
+      rendered.includes('Tasks v1'),
+      'old-slug project should surface via project loader canonicalization',
+    );
+  });
+
+  it('briefing by the former slug resolves to the renamed area', async () => {
+    writeFile(
+      tmpDir,
+      'areas/glance-operations.md',
+      `---
+area: Glance Operations
+status: active
+aliases:
+  - glance-2-mvp
+---
+
+## Focus
+Operations.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForArea('glance-2-mvp', paths);
+
+    assert.equal(brief.subject, 'Glance Operations');
+  });
+});

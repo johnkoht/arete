@@ -431,6 +431,14 @@ export type AreaFrontmatter = {
     area?: string;
     /** Area status (active, inactive, archived) */
     status?: string;
+    /**
+     * Former slugs this area was known by. Lets an area file be renamed
+     * without rewriting historical `area:` references — old refs are
+     * point-in-time records and stay as written; joins canonicalize via
+     * the alias map instead. Resolution keys only: aliases never
+     * participate in name/keyword inference (suggestAreaForMeeting).
+     */
+    aliases?: string[];
     /** Recurring meetings associated with this area */
     recurring_meetings?: Array<{
         title?: string;
@@ -521,6 +529,11 @@ export type AreaContext = {
      * Malformed entries (non-strings) are dropped at parse time.
      */
     jiraEpics: string[];
+    /**
+     * Former slugs (frontmatter `aliases:`). Defaults to empty array.
+     * Malformed entries (non-strings/empty) are dropped at parse time.
+     */
+    aliases: string[];
     /** Path to the area file */
     filePath: string;
     /** Parsed markdown sections */

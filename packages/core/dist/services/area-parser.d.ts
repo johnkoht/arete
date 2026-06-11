@@ -34,6 +34,28 @@ export interface SuggestAreaInput {
     transcript?: string;
 }
 /**
+ * Canonicalize an `area:` value read from a user file: an alias maps to
+ * its canonical slug, anything else passes through unchanged (including
+ * unknown slugs — dangling refs are `arete areas check`'s job, not the
+ * read path's). Apply at LOAD BOUNDARIES (where meetings/projects/
+ * commitments/topic pages are parsed into memory) so every downstream
+ * slug `===` join works on canonical values without per-join patches.
+ */
+export declare function canonicalizeAreaSlug(value: string | undefined, aliasMap: Map<string, string>): string | undefined;
+/**
+ * Build the alias → canonical-slug map by scanning `areas/*.md`
+ * frontmatter only (no section/memory parsing — cheap enough to call
+ * per operation without caching, which would risk staleness).
+ *
+ * Deterministic: areas are processed in slug order, first claim of an
+ * alias wins and later collisions warn (a typo in one area file must
+ * not break resolution everywhere — `arete areas check` surfaces
+ * collisions loudly). An alias that shadows another area's canonical
+ * slug is dropped: direct filename lookup always wins, so honoring it
+ * anywhere would make joins disagree with resolution.
+ */
+export declare function loadAreaAliasMap(storage: StorageAdapter, workspaceRoot: string): Promise<Map<string, string>>;
+/**
  * AreaParserService provides parsing and lookup for area files.
  *
  * @example
@@ -88,12 +110,23 @@ export declare class AreaParserService {
      */
     getAreaForMeeting(meetingTitle: string): Promise<AreaMatch | null>;
     /**
-     * Get parsed context for an area by slug.
+     * Get parsed context for an area by slug or former slug (alias).
      *
-     * @param areaSlug - The area slug (filename without .md)
+     * Direct filename lookup first (the happy path is unchanged); on miss,
+     * falls back to scanning areas for one whose `aliases:` include the
+     * given slug. Callers that WRITE an area reference must persist the
+     * returned context's `slug`, never their input — the input may be an
+     * alias (compare via `context.slug !== areaSlug`).
+     *
+     * @param areaSlug - The area slug (filename without .md) or an alias
      * @returns AreaContext or null if not found
      */
     getAreaContext(areaSlug: string): Promise<AreaContext | null>;
+    /**
+     * Build the alias → canonical-slug map from all area files.
+     * See {@link loadAreaAliasMap} for semantics.
+     */
+    getAliasMap(): Promise<Map<string, string>>;
     /**
      * List all areas in the workspace.
      *

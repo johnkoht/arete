@@ -15,7 +15,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createTestWorkspace } from '../fixtures/index.js';
-import { AreaParserService } from '../../src/services/area-parser.js';
+import {
+  AreaParserService,
+  canonicalizeAreaSlug,
+  loadAreaAliasMap,
+} from '../../src/services/area-parser.js';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 
 describe('AreaParserService', () => {
@@ -1407,5 +1411,123 @@ Active partnership.
     assert.equal(context.name, 'Glance Communications');
     assert.ok(context.sections.focus);
     assert.ok(context.sections.backlog);
+  });
+});
+
+describe('area aliases', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+  let parser: AreaParserService;
+
+  const RENAMED_AREA = `---
+area: Glance Operations
+status: active
+aliases:
+  - glance-2-mvp
+  - "  glance-v2  "
+  - glance-operations
+recurring_meetings: []
+---
+
+# Glance Operations
+
+## Focus
+Operations work.
+`;
+
+  const OTHER_AREA = `---
+area: Platform
+status: active
+recurring_meetings: []
+---
+
+# Platform
+`;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'area-alias-'));
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile('areas/glance-operations.md', RENAMED_AREA);
+    fixture.writeFile('areas/platform.md', OTHER_AREA);
+    storage = new FileStorageAdapter();
+    parser = new AreaParserService(storage, tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('parses aliases from frontmatter, trimming and dropping self-alias', async () => {
+    const context = await parser.getAreaContext('glance-operations');
+    assert.ok(context);
+    // "glance-operations" (self) dropped; "  glance-v2  " trimmed.
+    assert.deepEqual(context.aliases, ['glance-2-mvp', 'glance-v2']);
+  });
+
+  it('defaults aliases to empty array when frontmatter has none', async () => {
+    const context = await parser.getAreaContext('platform');
+    assert.ok(context);
+    assert.deepEqual(context.aliases, []);
+  });
+
+  it('getAreaContext resolves a former slug via alias fallback', async () => {
+    const context = await parser.getAreaContext('glance-2-mvp');
+    assert.ok(context);
+    assert.equal(context.slug, 'glance-operations');
+    assert.equal(context.name, 'Glance Operations');
+  });
+
+  it('getAreaContext still returns null for unknown slugs', async () => {
+    assert.equal(await parser.getAreaContext('nope'), null);
+  });
+
+  it('getAliasMap maps aliases to canonical slugs', async () => {
+    const map = await parser.getAliasMap();
+    assert.equal(map.get('glance-2-mvp'), 'glance-operations');
+    assert.equal(map.get('glance-v2'), 'glance-operations');
+    assert.equal(map.size, 2);
+  });
+
+  it('canonicalizeAreaSlug maps aliases and passes everything else through', async () => {
+    const map = await parser.getAliasMap();
+    assert.equal(canonicalizeAreaSlug('glance-2-mvp', map), 'glance-operations');
+    assert.equal(canonicalizeAreaSlug('platform', map), 'platform');
+    assert.equal(canonicalizeAreaSlug('unknown-thing', map), 'unknown-thing');
+    assert.equal(canonicalizeAreaSlug(undefined, map), undefined);
+  });
+
+  it('duplicate alias across areas: first claim in slug order wins', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/aaa-first.md',
+      '---\narea: AAA\naliases:\n  - glance-2-mvp\n---\n\n# AAA\n',
+    );
+    const map = await parser.getAliasMap();
+    // "aaa-first" sorts before "glance-operations" — first claim wins.
+    assert.equal(map.get('glance-2-mvp'), 'aaa-first');
+  });
+
+  it('alias shadowing another area canonical slug is ignored', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/shady.md',
+      '---\narea: Shady\naliases:\n  - platform\n---\n\n# Shady\n',
+    );
+    const map = await parser.getAliasMap();
+    assert.equal(map.has('platform'), false);
+    // Direct lookup still wins for the real area.
+    const context = await parser.getAreaContext('platform');
+    assert.ok(context);
+    assert.equal(context.slug, 'platform');
+  });
+
+  it('loadAreaAliasMap tolerates a missing areas directory', async () => {
+    const emptyDir = mkdtempSync(join(tmpdir(), 'area-alias-empty-'));
+    try {
+      const map = await loadAreaAliasMap(storage, emptyDir);
+      assert.equal(map.size, 0);
+    } finally {
+      rmSync(emptyDir, { recursive: true, force: true });
+    }
   });
 });

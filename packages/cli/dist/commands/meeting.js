@@ -610,6 +610,13 @@ export function registerMeetingCommands(program) {
             }
             process.exit(1);
         }
+        // Always WRITE the canonical slug — getAreaContext() resolves
+        // aliases, so the input may be an alias; writing it as-is would
+        // mint fresh non-canonical refs.
+        const canonicalSlug = areaContext.slug;
+        if (canonicalSlug !== areaSlug && !opts.json) {
+            info(`Alias '${areaSlug}' resolved to canonical area slug '${canonicalSlug}'.`);
+        }
         // Resolve the meeting file: absolute → as-is; has a slash →
         // workspace-relative; bare name → resources/meetings/.
         const meetingPath = file.startsWith('/')
@@ -626,7 +633,7 @@ export function registerMeetingCommands(program) {
             }
             process.exit(1);
         }
-        const result = await applyAreaToMeeting(services.storage, meetingPath, areaSlug, setBy);
+        const result = await applyAreaToMeeting(services.storage, meetingPath, canonicalSlug, setBy);
         // D4: a lock abstain is an ERROR, never silent — the approve step
         // would not inherit the area.
         if (!result.written && !result.noop) {
@@ -646,7 +653,7 @@ export function registerMeetingCommands(program) {
             console.log(JSON.stringify({
                 success: true,
                 meeting: meetingPath,
-                area: areaSlug,
+                area: canonicalSlug,
                 areaSetBy: setBy,
                 written: result.written,
                 noop: result.noop,
@@ -654,10 +661,10 @@ export function registerMeetingCommands(program) {
             return;
         }
         if (result.noop) {
-            info(`Meeting already carries area: ${areaSlug} (${setBy}) — nothing to write.`);
+            info(`Meeting already carries area: ${canonicalSlug} (${setBy}) — nothing to write.`);
         }
         else {
-            success(`Set area: ${areaSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
+            success(`Set area: ${canonicalSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
         }
     });
     // Extract subcommand - uses AIService for LLM-based extraction

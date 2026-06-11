@@ -182,11 +182,19 @@ export function registerCommitmentsCommand(program) {
             }
             process.exit(1);
         }
+        // Persist the canonical slug when --area is a former slug (alias);
+        // unknown values pass through unchanged (validation stays lax).
+        let area = opts.area;
+        if (area) {
+            const areaContext = await services.areaParser.getAreaContext(area);
+            if (areaContext)
+                area = areaContext.slug;
+        }
         let result;
         try {
             result = await services.commitments.create(text, opts.person, personName, direction, {
                 goalSlug: opts.goal,
-                area: opts.area,
+                area,
                 date,
                 source: opts.source,
             });

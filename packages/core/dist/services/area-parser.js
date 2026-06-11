@@ -53,6 +53,79 @@ export function tokenizeWithStopWords(text) {
         .filter(word => word.length > 0 && !STOP_WORDS.has(word));
 }
 /**
+ * Canonicalize an `area:` value read from a user file: an alias maps to
+ * its canonical slug, anything else passes through unchanged (including
+ * unknown slugs — dangling refs are `arete areas check`'s job, not the
+ * read path's). Apply at LOAD BOUNDARIES (where meetings/projects/
+ * commitments/topic pages are parsed into memory) so every downstream
+ * slug `===` join works on canonical values without per-join patches.
+ */
+export function canonicalizeAreaSlug(value, aliasMap) {
+    if (!value)
+        return value;
+    return aliasMap.get(value) ?? value;
+}
+/**
+ * Build the alias → canonical-slug map by scanning `areas/*.md`
+ * frontmatter only (no section/memory parsing — cheap enough to call
+ * per operation without caching, which would risk staleness).
+ *
+ * Deterministic: areas are processed in slug order, first claim of an
+ * alias wins and later collisions warn (a typo in one area file must
+ * not break resolution everywhere — `arete areas check` surfaces
+ * collisions loudly). An alias that shadows another area's canonical
+ * slug is dropped: direct filename lookup always wins, so honoring it
+ * anywhere would make joins disagree with resolution.
+ */
+export async function loadAreaAliasMap(storage, workspaceRoot) {
+    const map = new Map();
+    const areasDir = join(workspaceRoot, 'areas');
+    let files;
+    try {
+        files = await storage.list(areasDir, { extensions: ['.md'] });
+    }
+    catch {
+        return map;
+    }
+    const entries = [];
+    for (const filePath of files) {
+        const base = basename(filePath);
+        if (base.startsWith('_'))
+            continue;
+        const content = await storage.read(filePath);
+        if (!content)
+            continue;
+        const parsed = parseFrontmatter(content);
+        if (!parsed)
+            continue;
+        const slug = slugFromFilename(base);
+        const aliases = Array.isArray(parsed.frontmatter.aliases)
+            ? parsed.frontmatter.aliases
+                .filter((a) => typeof a === 'string' && a.trim().length > 0)
+                .map(a => a.trim())
+                .filter(a => a !== slug)
+            : [];
+        entries.push({ slug, aliases });
+    }
+    entries.sort((a, b) => a.slug.localeCompare(b.slug));
+    const canonicalSlugs = new Set(entries.map(e => e.slug));
+    for (const entry of entries) {
+        for (const alias of entry.aliases) {
+            if (canonicalSlugs.has(alias)) {
+                console.warn(`[area-parser] Alias "${alias}" on area "${entry.slug}" shadows an existing area's slug — ignored`);
+                continue;
+            }
+            const existing = map.get(alias);
+            if (existing && existing !== entry.slug) {
+                console.warn(`[area-parser] Alias "${alias}" claimed by both "${existing}" and "${entry.slug}" — keeping "${existing}"`);
+                continue;
+            }
+            map.set(alias, entry.slug);
+        }
+    }
+    return map;
+}
+/**
  * Parse frontmatter from a markdown file.
  * Returns null if no valid frontmatter found.
  */
@@ -168,6 +241,15 @@ export class AreaParserService {
         const jiraEpics = Array.isArray(frontmatter.jira_epics)
             ? frontmatter.jira_epics.filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
             : [];
+        // Former slugs — same tolerance as jira_epics. Trimmed; a self-alias
+        // (entry equal to the area's own slug) is dropped — it's meaningless
+        // and would pollute the alias map.
+        const aliases = Array.isArray(frontmatter.aliases)
+            ? frontmatter.aliases
+                .filter((entry) => typeof entry === 'string' && entry.trim().length > 0)
+                .map(entry => entry.trim())
+                .filter(entry => entry !== slug)
+            : [];
         // Extract markdown sections
         const goal = extractSection(body, 'Goal');
         const focus = extractSection(body, 'Focus');
@@ -184,6 +266,7 @@ export class AreaParserService {
             status: typeof frontmatter.status === 'string' ? frontmatter.status : 'active',
             recurringMeetings,
             jiraEpics,
+            aliases,
             filePath,
             sections: {
                 goal,
@@ -284,14 +367,34 @@ export class AreaParserService {
         return matches[0];
     }
     /**
-     * Get parsed context for an area by slug.
+     * Get parsed context for an area by slug or former slug (alias).
      *
-     * @param areaSlug - The area slug (filename without .md)
+     * Direct filename lookup first (the happy path is unchanged); on miss,
+     * falls back to scanning areas for one whose `aliases:` include the
+     * given slug. Callers that WRITE an area reference must persist the
+     * returned context's `slug`, never their input — the input may be an
+     * alias (compare via `context.slug !== areaSlug`).
+     *
+     * @param areaSlug - The area slug (filename without .md) or an alias
      * @returns AreaContext or null if not found
      */
     async getAreaContext(areaSlug) {
         const filePath = join(this.areasDir, `${areaSlug}.md`);
-        return this.parseAreaFile(filePath);
+        const direct = await this.parseAreaFile(filePath);
+        if (direct)
+            return direct;
+        const aliasMap = await this.getAliasMap();
+        const canonical = aliasMap.get(areaSlug);
+        if (!canonical)
+            return null;
+        return this.parseAreaFile(join(this.areasDir, `${canonical}.md`));
+    }
+    /**
+     * Build the alias → canonical-slug map from all area files.
+     * See {@link loadAreaAliasMap} for semantics.
+     */
+    async getAliasMap() {
+        return loadAreaAliasMap(this.storage, this.workspaceRoot);
     }
     /**
      * List all areas in the workspace.

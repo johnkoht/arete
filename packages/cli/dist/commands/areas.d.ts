@@ -9,6 +9,10 @@
  * (e.g., `list`, `epics`), not `arete areas <verb>`. Verbs go on
  * subcommand options. This keeps the namespace open for future area
  * work (focus, sync, refresh) without forcing awkward renaming.
+ * Sanctioned exception: `check` — the report-only integrity diagnostic
+ * (dangling `area:` refs, alias collisions). Diagnostics read as verbs
+ * everywhere in the CLI ecosystem (`git fsck`, `npm audit`); forcing a
+ * noun here would hurt discoverability more than it preserves symmetry.
  *
  * Future subcommand sketches (not implemented in 7a):
  *   - `arete areas show <slug>` — detailed view of one area
