@@ -70,3 +70,7 @@ Full suite (detached nohup + monitor, per the phase-13 lesson): **4687 tests, 46
 ## 2026-06-11T04:40Z — Final review: READY (Phase 4.2 gate PASS)
 
 Independent headless review (opus, fresh context, read-only): **READY**. Highlights: "R1/R2 are real, not prose"; the D5 adaptation ruled "a legitimate correction, not a dodge"; the honest-verification split "stated everywhere it should be." Five minor non-blocking items — AC5's area-memory-pointer claim is untested (brief surface IS tested), apply-to-empty lacks a direct assertion, cap-cut strong matches are invisible in preview, the R10 regex tripwire is name-coupled (behavioral test is the real guard), and the cross-backend single floor is the likeliest future split. Per the reviewer: folded 1–2 into soak observation targets, 3 noted as a fast-follow candidate; all recorded in build-report. Ship report next; merge gate belongs to the prime.
+
+## 2026-06-11T04:50Z — SHIP REPORT generated; READY-FOR-MERGE (prime owns the gate)
+
+19 commits on `worktree-agent-a0e5ef1fddde3721c`, working tree clean. All gated ACs green pre-merge, AC5 stretch shipped, full suite 4687/4685/0, final review READY. Stopping here per protocol — no merge, no cleanup; the prime orchestrator runs the merge gate. For John's morning read: the three things worth your eyes are (1) the D5 mechanism correction on AC5, (2) the calibration honest-notes (only 2/23 landing pads surface for current actives — published-doc-sync signal), and (3) the soak observation targets the final reviewer added.
