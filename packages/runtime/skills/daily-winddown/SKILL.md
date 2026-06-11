@@ -1077,9 +1077,38 @@ Items chef has confirmed-skipped (`staged_item_status: 'skipped'` +
 `setBy: 'chef'`) also do NOT appear here — surfaced under "Chef
 already-skipped" below.}
 
-- [ ] Send API spec to Anthony — open commitment to Anthony, 9d old
+{TIER RANKING (single-pass extraction W4 — ONLY when meetings carry
+`staged_item_importance` in frontmatter, i.e. `extraction_mode:
+single_pass`; legacy meetings render exactly as before):
+
+1. Sort: blocker → high → normal. Within a tier, keep meeting order.
+2. Render markers: `[BLOCKER]` prefix on blocker lines; `⚠ (reason)`
+   suffix for items with a `staged_item_uncertain` entry; `↩ continues
+   <ref>` / `⤴ supersedes <ref>` annotations from `staged_item_links`.
+3. **Collapse normals for routine meetings**: when a meeting
+   (`importance: normal` or `light`) contributes > 5 `normal`-tier
+   items, show the blockers + highs + first 2 normals, then ONE count
+   line: `+ N normal items — expand in <meeting file path>`. Never
+   collapse blocker or high items, and never collapse ⚠ items (they
+   need eyes).
+4. **Blockers are never hidden**: a `blocker`-tier item ALWAYS renders
+   here even if its meeting was deferred to the sidecar (an all-hands
+   can carry a blocker), even if the meeting is `importance: light`,
+   and regardless of collapse rules. Pull it out of the sidecar with a
+   `(from deferred: <meeting>)` label.
+5. `direction: none` items (`·` marker / `staged_item_owner` direction
+   `none`) follow the existing sidecar deferral rules — they are
+   visibility-only (NEVER commitments) and default to the sidecar
+   unless blocker-tier or customer-touching.
+6. `## Open Questions` items (oq_NNN) from today's meetings render as
+   a short bullet list at the END of this section under a "Open
+   questions raised today" subheading — informational, no checkbox.}
+
+- [ ] [BLOCKER] Glance can't roll out without license-profile assignment — compliance workshop
+- [ ] Send API spec to Anthony — open commitment to Anthony, 9d old (high)
 - Decision: Adopt Sonnet for reconciliation tier — matches week focus #2 (cost gate)
-- Learning: Customer X validates pricing assumption — high-importance meeting, novel insight
+- Learning: Customer X validates pricing assumption — high-importance meeting, novel insight ⚠ (may be common knowledge)
+- + 9 normal items — expand in resources/meetings/2026-06-09-sprint-planning.md
 
 ## Chef already-skipped (post-week-1)
 
@@ -1365,6 +1394,13 @@ needed — the chef reads frontmatter inline. The canonical taxonomy is
 - `importance: light` → defer unless customer-touching or in APPEND
   active initiatives
 - `importance: skip` → defer always
+
+**Item-tier override (single-pass W4)**: per-ITEM
+`staged_item_importance` (when present) overrides the per-MEETING
+deferral default in one direction only — a `blocker`-tier item from
+ANY meeting (light, deferred, sidecar-bound) always surfaces in
+`## Stage for approval`. Meeting-level importance never demotes a
+blocker item; item tiers never promote a whole meeting.
 
 **When in doubt, surface to Uncertain rather than auto-defer.** This
 is especially important on the first few runs — the APPEND file may
