@@ -24,3 +24,13 @@ Code recon (read-only) confirmed the plan's load-bearing claims, with one signif
 Build log initialized. Scope locked: Slice 0 (AC6 PATTERNS entry, FIRST commit before any skill prose — MC4), Slice 1 (AC2 refresh-topics), Slice 2 (AC1 skill + AC3 june-fixation + AC4 wall), Slice 3 stretch (AC5), wrap (AC7/8/9). New tests go in NEW files — the phase-12 zero-write test files (`project-area.test.ts`, `cli project.test.ts`) stay byte-untouched per the hard constraint.
 
 Next: Phase 1.2 — delta pre-mortem (4 seeded risks + the AC5 finding + anything else from recon).
+
+## 2026-06-11T01:55Z — Phase 1.2 delta pre-mortem: VERDICT no CRITICAL, proceed (one build-changing find)
+
+Pre-mortem saved (`pre-mortem.md`, 7 risks: 4 seeded + 3 new from recon). The headline:
+
+**D5 (NEW — plan-premise correction on AC5)**: `arete topic refresh` does not — and never did — integrate `items/decisions.md` into topic pages. Source discovery is meetings + slack digests only; the `relevantL2` prompt channel is dark (no production caller). The OQ1-approved mechanism survives in spirit (items/-mediated, standard format, idempotency scan, zero new code, R7 stays dissolved) but the substrate test + prose verb adapt: the retro's real integration surfaces are the brief's Decisions & learnings section (Topics-bullet matched, deterministic) and `arete memory refresh` area-memory pointers. Flagged for John/prime — if true topic-page integration is wanted, that's the deferred direct-writer (or wiring relevantL2), both out of scope.
+
+Build-changing decisions from the other risks: D2 → proposals sourced from `area_set_by: backfill` meetings carry a visible verify hint (prose-pinned); D3 → empty-scan message must cite the README-mtime date + the day-granularity caveat; D6 → floor calibrated on the qmd scale, exclusion fixture designed with wide margins on BOTH backend scales; D7 → ownership-comment dedup by stable substring, not position.
+
+Phase 1.3 skipped (`has_review: true`). Next: Phase 2.1 memory synthesis + 2.2 PRD.
