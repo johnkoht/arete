@@ -81,6 +81,18 @@ Convention: logic lines (added, non-comment/non-blank), tests excluded; vs plan 
 
 ## Deviations from plan (all flagged in diary/pre-mortem)
 
-1. **AC5 mechanism correction (pre-mortem D5)**: `arete topic refresh` does not consume `items/decisions.md` (verified in code; the `relevantL2` channel has no production caller). Retro stays items/-mediated per OQ1, but the regen verb is `arete memory refresh` and the verified integration surfaces are briefs + area memory pointers, not topic pages. Needs John's eyes at review.
+1. **AC5 mechanism correction (pre-mortem D5)**: `arete topic refresh` does not consume `items/decisions.md` (verified in code; the `relevantL2` channel has no production caller). Retro stays items/-mediated per OQ1, but the regen verb is `arete memory refresh`. **CI-verified surface: the brief's Decisions & learnings section** (format-contract test); the area-memory Recent-Decisions pointer claim is code-grounded but untested — soak step 4 checks it (final-review item 1). Needs John's eyes at review.
 2. **`retrievalFailed` safety field** (unplanned, +~10 LOC): a wiki-retrieval ERROR forces `changed:false` so a transient failure can never empty a legitimate cache under `--apply`.
 3. **`resetBackfilledProjectAreas` is a third README writer** — the plan's grep expectation named two ("applyAreaToProjectReadme + the topics writer"); the phase-12 `--reset` writer also targets READMEs. Recorded verbatim above; all three are flag-gated.
+
+## Final review (independent, headless opus) — READY
+
+Verdict: **READY** ("ship it; the items below are minor and none block"). R1/R2 called "real, not prose"; D5 ruled "a correct, honest correction... the right way to handle a plan premise that doesn't survive contact with the code." Five minor observations, folded into soak per the reviewer's own recommendation:
+
+1. AC5's area-memory-pointer surface is code-grounded but untested (only the brief surface has a test) → **soak step 4 observation target**.
+2. Apply-to-empty (`changed:true` with empty computed set) writes `topics_refreshed:` + ownership comment with no `topics:` key — harmless, R10-contained, but only the preview of this case is tested → **soak observation target**.
+3. Preview omits above-floor matches cut by the cap (neither `computed` nor `belowFloor`) — incomplete preview for >5-strong-match projects → known limitation, candidate one-liner for a fast-follow.
+4. The R10 source tripwire is variable-name-coupled (`project.topics`); the behavioral deep-equal test is the real guard.
+5. The single 0.35 constant spanning two score scales is the likeliest future per-backend split — first-write topics diffs per project (already the MC3 instrument) is the watch.
+
+Full review text: /tmp/p14-final-review.log (reproduced in diary summary).
