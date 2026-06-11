@@ -57,6 +57,18 @@ export type Project = {
   area?: string;
   /** Provenance for `area` — `manual` | `creation` | `backfill` (Phase 12 AC2). */
   areaSetBy?: string;
+  /**
+   * System-owned topics cache from README frontmatter (Phase 14 AC2).
+   * Display/convenience ONLY — written exclusively by
+   * `arete project refresh-topics --apply`; never hand-edited; NO
+   * consumer may branch behavior on it without first making it
+   * authoritative with its own freshness contract (pre-mortem R10 —
+   * the ownership comment the writer stamps into the README is the
+   * user-facing copy of this rule).
+   */
+  topics?: string[];
+  /** Date the topics cache last changed (bumped ONLY on slug-set change, R2). */
+  topicsRefreshed?: string;
 };
 
 /** Goal status for tracking progress */

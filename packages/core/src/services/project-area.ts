@@ -39,6 +39,18 @@ export interface ProjectBackfillCandidate {
 
 const FM_BLOCK = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 
+/**
+ * Parse a project README into frontmatter map + body (yaml round-trip
+ * input shape). Exported for the sibling topics writer (project-topics.ts)
+ * so both Phase-12/14 README write surfaces share ONE parse.
+ */
+export function parseProjectReadme(content: string): {
+  fm: Record<string, unknown>;
+  body: string;
+} {
+  return parseReadme(content);
+}
+
 function parseReadme(content: string): { fm: Record<string, unknown>; body: string } {
   const match = content.match(FM_BLOCK);
   if (!match) return { fm: {}, body: content };
