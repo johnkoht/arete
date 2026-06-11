@@ -97,9 +97,10 @@ const ITEM_PATTERN = /^-\s+((?:ai|de|le)_\d+):\s+(.+)$/;
  * Pattern to extract owner/direction/counterparty from action item text.
  * Matches: [@owner-slug → @counterparty-slug] description
  * Or: [@owner-slug →] description (no counterparty)
- * Direction: → means i_owe_them, ← means they_owe_me
+ * Direction: → means i_owe_them, ← means they_owe_me,
+ * · means none (team-internal, single-pass D3 — never a commitment, D7)
  */
-const OWNER_PATTERN = /^\[@([a-z0-9-]+)\s*([→←])\s*(?:@([a-z0-9-]+))?\]\s*(.+)$/i;
+const OWNER_PATTERN = /^\[@([a-z0-9-]+)\s*([→←·])\s*(?:@([a-z0-9-]+))?\]\s*(.+)$/i;
 
 /**
  * Parse owner/direction/counterparty from action item text.
@@ -107,7 +108,7 @@ const OWNER_PATTERN = /^\[@([a-z0-9-]+)\s*([→←])\s*(?:@([a-z0-9-]+))?\]\s*(.
  */
 function parseOwnerFromText(text: string): {
   ownerSlug?: string;
-  direction?: 'i_owe_them' | 'they_owe_me';
+  direction?: 'i_owe_them' | 'they_owe_me' | 'none';
   counterpartySlug?: string;
   description: string;
 } {
@@ -115,10 +116,10 @@ function parseOwnerFromText(text: string): {
   if (!match) {
     return { description: text };
   }
-  
+
   const [, ownerSlug, arrow, counterpartySlug, description] = match;
-  const direction = arrow === '→' ? 'i_owe_them' : 'they_owe_me';
-  
+  const direction = arrow === '→' ? 'i_owe_them' : arrow === '·' ? 'none' : 'they_owe_me';
+
   return {
     ownerSlug,
     direction,
@@ -241,7 +242,7 @@ export function parseStagedItemOwner(content: string): StagedItemOwner {
     if (typeof m['ownerSlug'] === 'string') {
       ownerMeta.ownerSlug = m['ownerSlug'];
     }
-    if (m['direction'] === 'i_owe_them' || m['direction'] === 'they_owe_me') {
+    if (m['direction'] === 'i_owe_them' || m['direction'] === 'they_owe_me' || m['direction'] === 'none') {
       ownerMeta.direction = m['direction'];
     }
     if (typeof m['counterpartySlug'] === 'string') {
@@ -371,7 +372,11 @@ function formatActionItemWithOwner(item: StagedItem): string {
     return item.text;
   }
 
-  const arrow = item.direction === 'they_owe_me' ? '←' : '→';
+  // `·` = direction none (single-pass D3): deliberately NOT an arrow so the
+  // commitment-creating parsers (meeting-parser.ts ARROW_PATTERN /
+  // APPROVED_OWNER_PATTERN) never read an approved none-item as a
+  // directional commitment (D7 inertness).
+  const arrow = item.direction === 'they_owe_me' ? '←' : item.direction === 'none' ? '·' : '→';
 
   if (item.counterpartySlug) {
     return `${item.text} (@${item.ownerSlug} ${arrow} @${item.counterpartySlug})`;

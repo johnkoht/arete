@@ -1,11 +1,11 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
-// Phase 13 AC2/AC3 — meeting area write surface
-listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, 
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, SINGLE_PASS_STAGED_HEADERS, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
 // Phase 10b-min wiring — reactive cross-meeting dedup
-wireExtractDedup, adaptFilteredItemsForDedup, decorateStagedSectionsWithDupeBadges, } from '@arete/core';
+wireExtractDedup, adaptFilteredItemsForDedup, decorateStagedSectionsWithDupeBadges, 
+// single-pass-extraction (W1.5/W2)
+resolveMeetingSeries, renderSeriesContext, AreaParserService, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -81,13 +81,6 @@ const DEFAULT_TEMPLATE = `# {title}
 ## Transcript
 {transcript}
 `;
-/**
- * Confidence floor for meeting area inference (Phase 13 AC2/AC3 — inherited
- * from the phase-12 backfill contract; pre-mortem R3, non-negotiable).
- * Per-signal qualification (`qualifyMeetingAreaMatch`) is applied ON TOP of
- * this floor for backfill — stricter, never looser.
- */
-const MEETING_BACKFILL_CONFIDENCE_FLOOR = 0.7;
 export function registerMeetingCommands(program) {
     const meetingCmd = program.command('meeting').description('Add meetings');
     meetingCmd
@@ -230,39 +223,6 @@ export function registerMeetingCommands(program) {
             }
             process.exit(1);
         }
-        // -----------------------------------------------------------------
-        // Phase 13 AC2 — propose an area when the meeting lacks one.
-        // PROPOSAL ONLY: process performs ZERO area writes. The
-        // process-meetings skill presents this; on confirm,
-        // `arete meeting set-area` writes BEFORE approve so commitments
-        // inherit. ≥0.7 floor; below floor → proposedArea: null in JSON,
-        // silent in human output.
-        // -----------------------------------------------------------------
-        const { frontmatter: meetingFm, body: meetingBody } = extractFrontmatter(content);
-        let proposedArea = null;
-        const hasExplicitArea = typeof meetingFm['area'] === 'string' && meetingFm['area'].trim().length > 0;
-        if (!hasExplicitArea) {
-            try {
-                const areaMatch = await services.areaParser.suggestAreaForMeeting({
-                    title: typeof meetingFm['title'] === 'string' && meetingFm['title'].trim()
-                        ? meetingFm['title']
-                        : meetingPath.replace(/^.*\//, '').replace(/\.md$/, ''),
-                    summary: typeof meetingFm['summary'] === 'string' ? meetingFm['summary'] : undefined,
-                    transcript: meetingBody,
-                });
-                if (areaMatch && areaMatch.confidence >= MEETING_BACKFILL_CONFIDENCE_FLOOR) {
-                    proposedArea = {
-                        slug: areaMatch.areaSlug,
-                        confidence: Number(areaMatch.confidence.toFixed(2)),
-                        signal: areaMatch.signal,
-                        corroborated: Boolean(areaMatch.corroborated),
-                    };
-                }
-            }
-            catch {
-                // Inference failure is non-fatal — process continues without a proposal.
-            }
-        }
         const attendees = extractAttendeesFromMeeting(content, meetingPath, root);
         if (attendees.length === 0) {
             if (opts.json) {
@@ -344,9 +304,6 @@ export function registerMeetingCommands(program) {
             digest,
             dryRun,
             applied,
-            // Phase 13 AC2: null when the meeting already has an area, no
-            // confident match exists, or inference failed.
-            proposedArea,
             unknownQueue: unknownQueue.map((u) => ({
                 name: u.candidate.name ?? null,
                 confidence: u.confidence,
@@ -362,310 +319,10 @@ export function registerMeetingCommands(program) {
         info(`Candidates: ${attendees.length}`);
         info(`Applied: ${applied.length}`);
         info(`Unknown queue: ${unknownQueue.length}`);
-        if (proposedArea) {
-            info(`Proposed area: ${proposedArea.slug} (confidence ${proposedArea.confidence}) — confirm with \`arete meeting set-area <file> ${proposedArea.slug}\``);
-        }
         if (unknownQueue.length > 0) {
             warn('Some attendees remain in unknown_queue and require review.');
         }
         displayQmdResult(qmdResult);
-    });
-    // ---------------------------------------------------------------------------
-    // arete meeting backfill-area  (Phase 13 AC3)
-    //
-    // Third instantiation of the backfill contract (commitments, projects,
-    // now meetings): preview by default, --apply gated, --reset scoped to
-    // `area_set_by: backfill` provenance, 0.7 floor, --json complete in all
-    // exit paths, qmd refresh after apply. Meeting-specific additions:
-    // per-signal qualification (pre-mortem D1 — summary-only name matches
-    // refused, title-only flagged `name-only`), the D2
-    // `also-via-topics` recall-loss column, and surfaced lock abstains (D4).
-    // ---------------------------------------------------------------------------
-    meetingCmd
-        .command('backfill-area')
-        .description('Backfill `area:` on meetings missing it by inferring from title + summary + transcript. Default is preview (dry-run); pass --apply to write.')
-        .option('--apply', 'Write changes (default: preview-only dry-run)')
-        .option('--reset', 'Clear `area`/`area_set_by` ONLY on meetings where area_set_by="backfill"; approval/manual/legacy areas stay intact')
-        .option('--days <n>', 'Limit candidates to meetings from the last N days (default: all history)')
-        .option('--skip-qmd', 'Skip automatic qmd index update after --apply')
-        .option('--json', 'Output as JSON')
-        .action(async (opts) => {
-        const services = await createServices(process.cwd());
-        const root = await services.workspace.findRoot();
-        if (!root) {
-            if (opts.json) {
-                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
-            }
-            else {
-                error('Not in an Areté workspace');
-                info('Run "arete install" to create a workspace');
-            }
-            process.exit(1);
-        }
-        const paths = services.workspace.getPaths(root);
-        // --reset path: clear backfill-stamped areas only.
-        if (opts.reset) {
-            const result = await resetBackfilledMeetingAreas(services.storage, paths);
-            if (opts.json) {
-                console.log(JSON.stringify({ success: true, reset: result.reset }));
-            }
-            else {
-                success(`Cleared area on ${result.reset.length} backfilled meeting(s).`);
-                for (const file of result.reset)
-                    listItem('Reset', file);
-                if (result.reset.length === 0) {
-                    info('No meeting carried the backfill provenance marker. Nothing to reset.');
-                }
-            }
-            return;
-        }
-        // Optional --days candidate limiter (OQ1: default all history).
-        let sinceDay;
-        if (opts.days !== undefined) {
-            const days = Number(opts.days);
-            if (!Number.isFinite(days) || days <= 0) {
-                if (opts.json) {
-                    console.log(JSON.stringify({ success: false, error: '--days must be a positive number' }));
-                }
-                else {
-                    error('--days must be a positive number');
-                }
-                process.exit(1);
-            }
-            sinceDay = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-        }
-        const areas = await services.areaParser.listAreas();
-        const candidates = await listMeetingsForBackfill(services.storage, paths, {
-            sinceDay,
-            areaSlugs: areas.map((a) => a.slug),
-        });
-        const proposals = [];
-        const unmatched = [];
-        for (const candidate of candidates) {
-            try {
-                const match = await services.areaParser.suggestAreaForMeeting({
-                    title: candidate.title,
-                    summary: candidate.summary,
-                    transcript: candidate.body,
-                });
-                if (match) {
-                    const q = qualifyMeetingAreaMatch(match, MEETING_BACKFILL_CONFIDENCE_FLOOR);
-                    if (q.qualified) {
-                        proposals.push({
-                            file: candidate.file,
-                            path: candidate.path,
-                            area: match.areaSlug,
-                            confidence: Number(match.confidence.toFixed(2)),
-                            signal: match.signal,
-                            corroborated: Boolean(match.corroborated),
-                            nameOnly: q.nameOnly,
-                            alsoMatchesViaTopics: candidate.alsoMatchesViaTopics,
-                        });
-                        continue;
-                    }
-                    unmatched.push({ file: candidate.file, reason: q.reason ?? 'unqualified' });
-                    continue;
-                }
-            }
-            catch {
-                // Inference failure is non-fatal — the meeting stays unmatched.
-            }
-            unmatched.push({ file: candidate.file, reason: 'no-match' });
-        }
-        // D1: name-only rows grouped LAST so the spot-check tail is visible.
-        proposals.sort((a, b) => Number(a.nameOnly) - Number(b.nameOnly));
-        const nameOnlyCount = proposals.filter((p) => p.nameOnly).length;
-        // --apply path. Lock abstains are surfaced, never silent (D4).
-        let applied = false;
-        const unwritten = [];
-        if (opts.apply && proposals.length > 0) {
-            for (const proposal of proposals) {
-                const res = await applyAreaToMeeting(services.storage, proposal.path, proposal.area, 'backfill');
-                if (!res.written && !res.noop) {
-                    unwritten.push({ file: proposal.file, reason: res.abstainReason ?? 'unknown' });
-                }
-            }
-            applied = true;
-        }
-        // qmd refresh after workspace writes — before the JSON return so
-        // JSON mode still indexes (cli LEARNINGS).
-        let qmdResult;
-        if (applied && !opts.skipQmd) {
-            const config = await loadConfig(services.storage, root);
-            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
-        }
-        if (opts.json) {
-            console.log(JSON.stringify({
-                success: true,
-                applied,
-                candidates: candidates.length,
-                matched: proposals.length,
-                nameOnly: nameOnlyCount,
-                proposals: proposals.map(({ path: _p, ...rest }) => rest),
-                unmatched,
-                unwritten,
-                qmd: qmdResult ?? { indexed: false, skipped: true },
-            }, null, 2));
-            return;
-        }
-        const mode = applied ? 'APPLIED' : 'PREVIEW (dry-run)';
-        info(`Backfill: ${mode}`);
-        listItem('Candidates (no `area:` frontmatter)', String(candidates.length));
-        listItem(`Qualified at ≥${MEETING_BACKFILL_CONFIDENCE_FLOOR} + signal policy`, String(proposals.length));
-        if (proposals.length > 0) {
-            console.log('');
-            console.log(chalk.bold('Proposed areas:'));
-            for (const p of proposals) {
-                const flags = [`confidence ${p.confidence}`];
-                if (p.signal)
-                    flags.push(p.signal);
-                if (p.nameOnly)
-                    flags.push(chalk.yellow('name-only'));
-                const alsoVia = p.alsoMatchesViaTopics.length > 0
-                    ? chalk.magenta(`  [also-via-topics: ${p.alsoMatchesViaTopics.join(', ')}]`)
-                    : '';
-                console.log(`  ${chalk.dim(p.file.padEnd(52))} ${chalk.cyan(p.area)} ${chalk.dim(`(${flags.join(', ')})`)}${alsoVia}`);
-            }
-            if (nameOnlyCount > 0) {
-                console.log('');
-                warn(`${nameOnlyCount} of ${proposals.length} proposals are name-only title matches — eyeball these before --apply (MC3 long-tail spot-check).`);
-            }
-        }
-        if (unmatched.length > 0) {
-            console.log('');
-            console.log(chalk.bold('No qualified match (left area-less — honest):'));
-            for (const u of unmatched)
-                console.log(`  ${chalk.dim(u.file)} (${u.reason})`);
-        }
-        if (unwritten.length > 0) {
-            console.log('');
-            for (const u of unwritten) {
-                warn(`NOT written (lock abstain): ${u.file} — ${u.reason}`);
-            }
-        }
-        console.log('');
-        if (proposals.length > 0 && !applied) {
-            info('Re-run with --apply to write changes.');
-            info('Use `arete meeting backfill-area --reset` to undo backfill-set areas later.');
-        }
-        else if (applied) {
-            success(`Applied area to ${proposals.length - unwritten.length} meeting(s); stamped area_set_by: backfill provenance.`);
-            displayQmdResult(qmdResult);
-        }
-        else if (candidates.length === 0) {
-            info('Every meeting already carries an `area:`. Nothing to backfill.');
-        }
-    });
-    // ---------------------------------------------------------------------------
-    // arete meeting set-area <file> <area-slug>  (Phase 13 AC2)
-    //
-    // The confirm-time writer in the propose→confirm→approve flow:
-    // `meeting process` PROPOSES (zero area writes), the process-meetings
-    // skill presents the proposal, and on John's confirm this verb writes
-    // `area:` + `area_set_by:` BEFORE `meeting approve` so created
-    // commitments inherit the area (meeting.ts approve path reads
-    // frontmatter.area). Default provenance `approval` (OQ2); `--set-by
-    // manual` for hand-corrections (e.g. re-stamping a legacy carrier).
-    // ---------------------------------------------------------------------------
-    meetingCmd
-        .command('set-area <file> <area-slug>')
-        .description('Write `area:` + `area_set_by:` into a meeting\'s frontmatter (body preserved). Area slug must match a file in areas/.')
-        .option('--set-by <provenance>', 'Provenance marker: approval | manual', 'approval')
-        .option('--json', 'Output as JSON')
-        .action(async (file, areaSlug, opts) => {
-        const services = await createServices(process.cwd());
-        const root = await services.workspace.findRoot();
-        if (!root) {
-            if (opts.json) {
-                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
-            }
-            else {
-                error('Not in an Areté workspace');
-            }
-            process.exit(1);
-        }
-        const setBy = opts.setBy ?? 'approval';
-        if (setBy !== 'approval' && setBy !== 'manual') {
-            if (opts.json) {
-                console.log(JSON.stringify({ success: false, error: '--set-by must be approval or manual' }));
-            }
-            else {
-                error('--set-by must be approval or manual');
-            }
-            process.exit(1);
-        }
-        // Validate the area slug against areas/*.md BEFORE any write —
-        // an unknown slug is an error, never a write (AC2).
-        const areaContext = await services.areaParser.getAreaContext(areaSlug);
-        if (!areaContext) {
-            if (opts.json) {
-                console.log(JSON.stringify({
-                    success: false,
-                    error: `Unknown area slug '${areaSlug}' — no areas/${areaSlug}.md`,
-                }));
-            }
-            else {
-                error(`Unknown area slug '${areaSlug}' — no areas/${areaSlug}.md`);
-                info('Run `ls areas/` to see valid slugs.');
-            }
-            process.exit(1);
-        }
-        // Always WRITE the canonical slug — getAreaContext() resolves
-        // aliases, so the input may be an alias; writing it as-is would
-        // mint fresh non-canonical refs.
-        const canonicalSlug = areaContext.slug;
-        if (canonicalSlug !== areaSlug && !opts.json) {
-            info(`Alias '${areaSlug}' resolved to canonical area slug '${canonicalSlug}'.`);
-        }
-        // Resolve the meeting file: absolute → as-is; has a slash →
-        // workspace-relative; bare name → resources/meetings/.
-        const meetingPath = file.startsWith('/')
-            ? file
-            : file.includes('/')
-                ? join(root, file)
-                : join(root, 'resources', 'meetings', file);
-        if (!(await services.storage.exists(meetingPath))) {
-            if (opts.json) {
-                console.log(JSON.stringify({ success: false, error: `Meeting not found: ${meetingPath}` }));
-            }
-            else {
-                error(`Meeting not found: ${meetingPath}`);
-            }
-            process.exit(1);
-        }
-        const result = await applyAreaToMeeting(services.storage, meetingPath, canonicalSlug, setBy);
-        // D4: a lock abstain is an ERROR, never silent — the approve step
-        // would not inherit the area.
-        if (!result.written && !result.noop) {
-            if (opts.json) {
-                console.log(JSON.stringify({
-                    success: false,
-                    error: `Area not written (lock abstain: ${result.abstainReason ?? 'unknown'})`,
-                    abstainReason: result.abstainReason ?? 'unknown',
-                }));
-            }
-            else {
-                error(`Area not written (lock abstain: ${result.abstainReason ?? 'unknown'})`);
-            }
-            process.exit(1);
-        }
-        if (opts.json) {
-            console.log(JSON.stringify({
-                success: true,
-                meeting: meetingPath,
-                area: canonicalSlug,
-                areaSetBy: setBy,
-                written: result.written,
-                noop: result.noop,
-            }));
-            return;
-        }
-        if (result.noop) {
-            info(`Meeting already carries area: ${canonicalSlug} (${setBy}) — nothing to write.`);
-        }
-        else {
-            success(`Set area: ${canonicalSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
-        }
     });
     // Extract subcommand - uses AIService for LLM-based extraction
     meetingCmd
@@ -1035,6 +692,10 @@ export function registerMeetingCommands(program) {
         const mode = (currentStatus === 'processed' || currentStatus === 'approved')
             ? 'thorough'
             : (effectiveImportance === 'light' ? 'light' : 'normal');
+        // single-pass-extraction (W2): pipeline mode from arete.yaml
+        // (`extraction_mode: single_pass`). Default legacy = bit-identical
+        // behavior. Light-importance meetings keep the light prompt either way.
+        const singlePassMode = config.extraction_mode === 'single_pass' && mode !== 'light';
         // Create LLM call wrapper using AIService
         const callLLM = async (prompt) => {
             const result = await services.ai.call('extraction', prompt);
@@ -1071,6 +732,55 @@ export function registerMeetingCommands(program) {
         catch {
             activeTopicSlugs = undefined;
         }
+        // single-pass Layer-1 context assembly (W1.5 series + open commitments).
+        // Best-effort: every block degrades to absent on failure — extraction
+        // proceeds with whatever context assembled.
+        let singlePassContext;
+        if (singlePassMode) {
+            singlePassContext = {};
+            // Series context (W1.5): prior same-series meetings' items + open
+            // questions. recurring_meetings titles from area config rescue
+            // drifted titles.
+            try {
+                const seriesMeetingsDir = join(root, paths.resources, 'meetings');
+                let recurringTitles = [];
+                try {
+                    const areaParser = new AreaParserService(services.storage, root);
+                    const areas = await areaParser.listAreas();
+                    recurringTitles = areas.flatMap((a) => (a.recurringMeetings ?? [])
+                        .map((m) => m.title)
+                        .filter((t) => typeof t === 'string' && t.length > 0));
+                }
+                catch {
+                    // no area config — title+attendee matching still applies
+                }
+                const series = await resolveMeetingSeries(services.storage, seriesMeetingsDir, meetingPath, { recurringTitles });
+                if (series) {
+                    singlePassContext.seriesContext = renderSeriesContext(series);
+                }
+            }
+            catch {
+                // series context degrades to absent
+            }
+            // Open commitments filtered to attendees — dedup at source: the model
+            // marks continuation_of instead of re-emitting (Layer-1 table row 4).
+            try {
+                const attendeeSlugs = attendees.map((name) => slugifyPersonName(name));
+                if (attendeeSlugs.length > 0) {
+                    const open = await services.commitments.listOpen({ personSlugs: attendeeSlugs });
+                    const MAX_COMMITMENTS_IN_PROMPT = 20;
+                    if (open.length > 0) {
+                        singlePassContext.openCommitments = open
+                            .slice(0, MAX_COMMITMENTS_IN_PROMPT)
+                            .map((c) => `- ${c.id.slice(0, 8)}: ${c.text} (@${c.personSlug}, ${c.direction}, since ${c.date})`)
+                            .join('\n');
+                    }
+                }
+            }
+            catch {
+                // commitments context degrades to absent
+            }
+        }
         // Extract intelligence
         let extractionResult;
         try {
@@ -1080,6 +790,8 @@ export function registerMeetingCommands(program) {
                 priorItems,
                 mode,
                 activeTopicSlugs,
+                singlePass: singlePassMode,
+                singlePassContext,
             });
         }
         catch (err) {
@@ -1141,8 +853,12 @@ export function registerMeetingCommands(program) {
         // mutates `processed`.
         const dismissedSnapshots = [];
         if (shouldStage) {
-            // Extract user notes and process extraction (filtering, dedup, metadata)
-            const userNotes = extractUserNotes(body);
+            // Extract user notes and process extraction (filtering, dedup, metadata).
+            // single-pass: exclude the extractor-written sections that didn't exist
+            // pre-W1 so a re-extract doesn't read its own output as user notes.
+            const userNotes = extractUserNotes(body, singlePassMode
+                ? ['open questions', 'parser-flagged (mirror-pair suspects)']
+                : undefined);
             // Read completed items from week.md and scratchpad.md for reconciliation,
             // and read OPEN tasks from week.md and tasks.md for existing-task dedup.
             const weekContent = await services.storage.read(join(paths.now, 'week.md')) ?? '';
@@ -1161,6 +877,8 @@ export function registerMeetingCommands(program) {
                 completedItems,
                 openTasks,
                 importance: effectiveImportance,
+                // W1 (risk 1): tier-derived approval + keep low-confidence items.
+                singlePass: singlePassMode,
             });
             // Merge reconciliation decisions into processed items.
             // silentlyMerged counts surface to the user via JSON output and the
@@ -1299,7 +1017,14 @@ export function registerMeetingCommands(program) {
             // extraction) so the formatter emits `## Core` + `## Could include`
             // when the LLM populates them. Falls back to `## Summary` when absent
             // (formatter handles the precedence — see meeting-processing.ts:625).
-            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include, extractionResult.validationWarnings);
+            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include, extractionResult.validationWarnings, 
+            // single-pass: persist open questions + mirror-pair flag section.
+            singlePassMode
+                ? {
+                    openQuestions: extractionResult.intelligence.openQuestions,
+                    telemetryEvents: extractionResult.telemetryEvents,
+                }
+                : undefined);
             // Phase 10b-min wiring — decorate staged sections with `↪ canonical
             // in <slug>` badges (definite-dupe) and `↪ possibly merges with
             // <slug>` flags (possibly-mergeable). Idempotent against re-extract.
@@ -1379,6 +1104,24 @@ export function registerMeetingCommands(program) {
                     if (proc.stagedItemMatchedText && Object.keys(proc.stagedItemMatchedText).length > 0) {
                         patch['staged_item_matched_text'] = proc.stagedItemMatchedText;
                     }
+                    // single-pass judgment maps (W1/D3). Explicit `undefined` when
+                    // empty so a re-extract clears stale maps under the partial-
+                    // merge contract (same pattern as could_include above). Legacy
+                    // mode never mentions these keys — existing files untouched.
+                    if (singlePassMode) {
+                        patch['staged_item_importance'] =
+                            proc.stagedItemImportance && Object.keys(proc.stagedItemImportance).length > 0
+                                ? proc.stagedItemImportance
+                                : undefined;
+                        patch['staged_item_uncertain'] =
+                            proc.stagedItemUncertainReason && Object.keys(proc.stagedItemUncertainReason).length > 0
+                                ? proc.stagedItemUncertainReason
+                                : undefined;
+                        patch['staged_item_links'] =
+                            proc.stagedItemLinks && Object.keys(proc.stagedItemLinks).length > 0
+                                ? proc.stagedItemLinks
+                                : undefined;
+                    }
                     // Phase 10b-min wiring — merge cross-meeting dedup skip_reason
                     // entries on top of any existing entries. We explicitly merge
                     // here (not relying on partial-merge) because adding NEW IDs
@@ -1396,7 +1139,11 @@ export function registerMeetingCommands(program) {
                     // reflects whatever the file held when the lock was acquired;
                     // `updateMeetingContent` rewrites only the staged sections so
                     // user edits to other body regions are preserved.
-                    const updatedBody = updateMeetingContent(current.body, stagedSections);
+                    const updatedBody = updateMeetingContent(current.body, stagedSections, 
+                    // single-pass: extractor owns Open Questions / Parser-flagged
+                    // sections, so re-extract replaces them. Legacy: omitted, so
+                    // user sections with those names are preserved (invariant).
+                    singlePassMode ? SINGLE_PASS_STAGED_HEADERS : undefined);
                     return { frontmatter: patch, body: updatedBody };
                 }, { mtimeGuardSeconds: 0 });
                 // Fallback: a vanished/raced file makes `writeWithLock` abstain;
@@ -1423,6 +1170,27 @@ export function registerMeetingCommands(program) {
                 }
                 catch {
                     // best-effort instrumentation
+                }
+                // single-pass W3 (D4): detector telemetry → item-fates stream.
+                // The mechanical filters no longer gate items; their fires are
+                // recorded here as `type: 'extraction_telemetry'` events. Best
+                // effort; never blocks the extract write.
+                if (singlePassMode && extractionResult.telemetryEvents && extractionResult.telemetryEvents.length > 0) {
+                    try {
+                        const kindMap = { action: 'action_item', decision: 'decision', learning: 'learning' };
+                        for (const ev of extractionResult.telemetryEvents) {
+                            await services.memoryLog.appendExtractionTelemetry(paths, {
+                                detector: ev.detector,
+                                item_kind: kindMap[ev.itemType],
+                                item_text: ev.item,
+                                detail: ev.detail,
+                                source_path: meetingPath,
+                            });
+                        }
+                    }
+                    catch {
+                        // best-effort telemetry
+                    }
                 }
                 // Refresh qmd index unless --skip-qmd
                 if (!opts.skipQmd) {

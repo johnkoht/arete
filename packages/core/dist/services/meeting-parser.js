@@ -106,6 +106,13 @@ const ARROW_PATTERN = buildArrowPattern();
  * Examples: "Review the proposal (@john-koht)", "Store config (@anthony-avina ←)"
  */
 const OWNER_ONLY_PATTERN = /\(\s*@?([a-z0-9-]+)\s*(?:[→←])?\s*\)$/i;
+/**
+ * `direction: none` marker (single-pass-extraction D3/D7): `(@slug ·)` /
+ * `[@slug ·]`. Lines carrying it are SKIPPED by this parser entirely —
+ * `none` items are visibility-only and must never produce a
+ * ParsedActionItem (which would flow into commitments + person memory).
+ */
+const NONE_DIRECTION_MARKER = /[([]\s*@?[a-z0-9-]+\s*·/i;
 function parseActionItemLine(line) {
     const trimmed = line.trim();
     // Match checkbox: - [ ] or - [x] or - [X]
@@ -260,6 +267,13 @@ export function parseActionItemsFromMeeting(content, personSlug, ownerSlug, sour
     const items = [];
     const lines = section.split('\n');
     for (const line of lines) {
+        // D7 guard (single-pass-extraction): `·` marks `direction: none` —
+        // team-internal items that must NEVER become commitments or person-memory
+        // action items. Checked on the RAW line, before arrow parsing and before
+        // the no-notation owner-name heuristics could infer a direction for it.
+        // Formats: "(@slug ·)" (approved sections) / "[@slug ·]" (staged sections).
+        if (NONE_DIRECTION_MARKER.test(line))
+            continue;
         const parsed = parseActionItemLine(line);
         if (!parsed)
             continue;

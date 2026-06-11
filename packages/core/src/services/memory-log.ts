@@ -115,6 +115,24 @@ export interface AppendItemFateOptions {
   now?: Date;
 }
 
+/**
+ * Detector telemetry record (single-pass W3 / D4). Written to the SAME
+ * `item-fates.jsonl` stream as ItemFateEvent, distinguished by
+ * `type: 'extraction_telemetry'` — consumers filtering on
+ * `type === 'item_fate'` are unaffected. These are the log-only events the
+ * legacy mechanical filters (garbage/trivial/mirror-pair/near-dup) emit in
+ * single_pass mode instead of dropping items.
+ */
+export interface ExtractionTelemetryRecord {
+  type: 'extraction_telemetry';
+  ts: string;
+  detector: string;
+  item_kind: 'action_item' | 'decision' | 'learning';
+  item_text: string;
+  detail: string;
+  source_path: string;
+}
+
 export class MemoryLogService {
   constructor(private readonly storage: StorageAdapter) {}
 
@@ -198,6 +216,41 @@ export class MemoryLogService {
     if (event.pulled_back_at !== undefined) {
       record.pulled_back_at = event.pulled_back_at;
     }
+    const line = JSON.stringify(record) + '\n';
+
+    if (this.storage.append !== undefined) {
+      await this.storage.append(path, line);
+      return;
+    }
+
+    const existing = await this.storage.read(path);
+    const next = (existing ?? '') + line;
+    await this.storage.write(path, next);
+  }
+
+  /**
+   * Append a single extraction-telemetry event (single-pass W3 / D4) to
+   * `.arete/memory/item-fates.jsonl`. One JSON line per event; same
+   * atomic-append semantics as `appendItemFate`.
+   */
+  async appendExtractionTelemetry(
+    workspacePaths: WorkspacePaths,
+    event: Omit<ExtractionTelemetryRecord, 'type' | 'ts'> & { ts?: string },
+    options: AppendItemFateOptions = {},
+  ): Promise<void> {
+    const path = join(workspacePaths.memory, ITEM_FATES_RELATIVE_PATH);
+    const ts = event.ts !== undefined && event.ts.length > 0
+      ? event.ts
+      : nowIsoSeconds(options.now);
+    const record: ExtractionTelemetryRecord = {
+      type: 'extraction_telemetry',
+      ts,
+      detector: event.detector,
+      item_kind: event.item_kind,
+      item_text: event.item_text,
+      detail: event.detail,
+      source_path: event.source_path,
+    };
     const line = JSON.stringify(record) + '\n';
 
     if (this.storage.append !== undefined) {

@@ -36,8 +36,37 @@ export type LLMCallFn = (prompt: string) => Promise<string>;
 /** Extraction mode determining prompt style and category limits. */
 export type ExtractionMode = 'light' | 'normal' | 'thorough';
 
-/** Direction of an action item relative to the owner. */
-export type ActionItemDirection = 'i_owe_them' | 'they_owe_me';
+/**
+ * Direction of an action item relative to the owner.
+ *
+ * `'none'` (single-pass D3): team-internal / not-owner-relative. Only emitted
+ * by the single_pass pipeline; legacy parsing still rejects it. `none` items
+ * NEVER become commitments (D7) — they stage for visibility only.
+ */
+export type ActionItemDirection = 'i_owe_them' | 'they_owe_me' | 'none';
+
+/**
+ * Importance tier (single-pass D3). Tier — not confidence — drives
+ * auto-approval in single_pass mode: only `blocker` may auto-approve
+ * (pre-mortem risk 1).
+ */
+export type ItemImportance = 'blocker' | 'high' | 'normal';
+
+/**
+ * Judgment metadata shared by all single-pass item kinds (D3).
+ * All fields optional — absent on legacy extractions, which keeps old
+ * parsers/consumers bit-identical.
+ */
+export type ItemJudgment = {
+  importance?: ItemImportance;
+  /** The ⚠ channel — model self-flagged uncertainty. Always stages pending. */
+  uncertain?: boolean;
+  uncertaintyReason?: string;
+  /** Claim: this item continues an existing tracked item/commitment (id or text ref). */
+  continuationOf?: string;
+  /** Claim: this item supersedes a prior item/decision (id or text ref). */
+  supersedes?: string;
+};
 
 /** A structured action item extracted from a meeting. */
 export type ActionItem = {
@@ -49,7 +78,7 @@ export type ActionItem = {
   due?: string;
   /** LLM confidence score (0-1) for this item. */
   confidence?: number;
-};
+} & ItemJudgment;
 
 /** Item from a prior meeting in the same processing batch, used for deduplication. */
 export interface PriorItem {
@@ -84,6 +113,16 @@ export type MeetingIntelligence = {
    * of raw `---` lines per entry (R7 mitigation).
    */
   could_include?: string[];
+  /**
+   * Open questions raised but not resolved in the meeting (single-pass D3).
+   * Feeds the wiki Open Questions surface (full wiring deferred to F2 —
+   * persist-don't-render-everywhere interim). Absent on legacy extractions.
+   */
+  openQuestions?: string[];
+  /** Judgment metadata for decisions, parallel array indexed same as decisions. */
+  decisionMeta?: (ItemJudgment | undefined)[];
+  /** Judgment metadata for learnings, parallel array indexed same as learnings. */
+  learningMeta?: (ItemJudgment | undefined)[];
 };
 
 /** Validation warning for rejected items. */
@@ -101,17 +140,54 @@ export type RawExtractedItem = {
   confidence?: number;
 };
 
+/**
+ * Telemetry event from a mechanical detector running in log-only mode
+ * (single-pass D4). In single_pass mode the legacy filters/caps no longer
+ * gate items — they fire these events instead, which flow to the item-fates
+ * stream. Detectors are PERMANENT drift telemetry (2026-06-11 adjudication):
+ * if silent, demote to sampled logging, never delete.
+ */
+export type ExtractionTelemetryEvent = {
+  detector:
+    | 'garbage_prefix'
+    | 'length_limit'
+    | 'multi_sentence'
+    | 'trivial_pattern'
+    | 'invalid_direction'
+    | 'mirror_pair'
+    | 'near_duplicate'
+    | 'category_limit'
+    | 'unparseable_item';
+  itemType: 'action' | 'decision' | 'learning';
+  /** Preview of the flagged item's text (truncated). */
+  item: string;
+  detail: string;
+};
+
 /** Result of parsing extraction response (includes validation warnings). */
 export type MeetingExtractionResult = {
   intelligence: MeetingIntelligence;
   validationWarnings: ValidationWarning[];
   /** All items parsed from LLM response before validation filtering (for debugging). */
   rawItems: RawExtractedItem[];
+  /**
+   * Detector telemetry (single_pass mode only — D4 log-only flip). Absent in
+   * legacy mode so legacy result shape is unchanged.
+   */
+  telemetryEvents?: ExtractionTelemetryEvent[];
 };
 
 /**
  * Raw JSON shape returned by the LLM (snake_case to match prompt).
  */
+type RawJudgmentFields = {
+  importance?: string;
+  uncertain?: boolean;
+  uncertainty_reason?: string;
+  continuation_of?: string;
+  supersedes?: string;
+};
+
 type RawExtractionResult = {
   summary?: string;
   action_items?: Array<{
@@ -122,10 +198,11 @@ type RawExtractionResult = {
     counterparty_slug?: string;
     due?: string;
     confidence?: number;
-  }>;
+  } & RawJudgmentFields>;
   next_steps?: string[];
-  decisions?: Array<string | { text?: string; confidence?: number }>;
-  learnings?: Array<string | { text?: string; confidence?: number }>;
+  decisions?: Array<string | ({ text?: string; confidence?: number } & RawJudgmentFields)>;
+  learnings?: Array<string | ({ text?: string; confidence?: number } & RawJudgmentFields)>;
+  open_questions?: unknown;
   topics?: unknown;
   core?: string;
   could_include?: unknown;
@@ -182,6 +259,44 @@ const GARBAGE_PREFIXES = [
 ];
 
 const VALID_DIRECTIONS = new Set<string>(['i_owe_them', 'they_owe_me']);
+
+/**
+ * single_pass mode accepts `none` (D3). Legacy keeps the binary set so the
+ * legacy parse path is bit-identical (a stray `none` still drops with the
+ * same "invalid direction" warning it produces today).
+ */
+const VALID_DIRECTIONS_SINGLE_PASS = new Set<string>(['i_owe_them', 'they_owe_me', 'none']);
+
+const VALID_IMPORTANCE = new Set<string>(['blocker', 'high', 'normal']);
+
+/** Max open questions parsed per meeting (sanity guard, not a category cap). */
+const OPEN_QUESTIONS_MAX = 20;
+
+/**
+ * Parse the shared judgment fields (D3) off a raw LLM item. Pure; returns
+ * undefined when no judgment field is present so legacy-shaped items carry
+ * no extra keys.
+ */
+function parseJudgmentFields(raw: RawJudgmentFields): ItemJudgment | undefined {
+  const out: ItemJudgment = {};
+  if (typeof raw.importance === 'string') {
+    const imp = raw.importance.trim().toLowerCase();
+    if (VALID_IMPORTANCE.has(imp)) out.importance = imp as ItemImportance;
+  }
+  if (raw.uncertain === true) out.uncertain = true;
+  if (typeof raw.uncertainty_reason === 'string' && raw.uncertainty_reason.trim()) {
+    out.uncertaintyReason = raw.uncertainty_reason.trim();
+    // A reason implies the flag even if the model forgot the boolean.
+    out.uncertain = true;
+  }
+  if (typeof raw.continuation_of === 'string' && raw.continuation_of.trim()) {
+    out.continuationOf = raw.continuation_of.trim();
+  }
+  if (typeof raw.supersedes === 'string' && raw.supersedes.trim()) {
+    out.supersedes = raw.supersedes.trim();
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 const TOPIC_SLUG_REGEX = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
 const TOPIC_BANNED = new Set([
@@ -405,7 +520,11 @@ export function dedupMirrorPairs(
       const a = items[i];
       const b = items[j];
 
-      // Mirror pair gate: opposite direction + different owners
+      // Mirror pair gate: opposite direction + different owners.
+      // `none` (single-pass D3) never participates — a mirror pair is by
+      // definition the i_owe_them/they_owe_me false binary; pairing a
+      // team-internal item against a directional one would be a false positive.
+      if (a.direction === 'none' || b.direction === 'none') continue;
       if (a.direction === b.direction) continue;
       if (a.ownerSlug === b.ownerSlug) continue;
 
@@ -994,6 +1113,304 @@ If the transcript mentions anything semantically equivalent to the above, SKIP I
 Exception: Extract if the transcript contains an UPDATE to an existing item (e.g., status change, deadline moved, decision reversed).`;
 }
 
+// ---------------------------------------------------------------------------
+// Single-pass prompt (W2) — known-items section + Layer-1 context + builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Pre-rendered Layer-1 context blocks for the single-pass prompt. All
+ * optional; absent blocks are simply omitted. Assembled by the caller (CLI /
+ * winddown path) so this module stays storage-free.
+ */
+export type SinglePassContextSections = {
+  /** "Who John is / how direction works" — enables `direction: none`. */
+  identityFrame?: string;
+  /**
+   * Open commitments filtered to present counterparties — dedup at source:
+   * the model marks `continuation_of` instead of re-emitting.
+   */
+  openCommitments?: string;
+  /** Prior same-series meetings' items + open questions (W1.5 resolver). */
+  seriesContext?: string;
+};
+
+/**
+ * Build the single-pass "known items" section (W2 — review finding 1).
+ *
+ * REPLACES `buildExclusionListSection`'s "SKIP these" framing in single_pass
+ * mode with **mark-don't-skip**: prior items are presented as already-known;
+ * the model RE-EMITS matching items WITH `continuation_of`/`supersedes`
+ * markers and never omits a superseding item. This is what keeps same-day
+ * supersession arcs alive for the day-level reconcile (CHR D3/D4/AC3 — the
+ * Anthony de_002 → workshop de_004 fixture).
+ *
+ * Same sources and budgets as the exclusion list (priorItems +
+ * recentDecisions/recentLearnings, MAX_EXCLUSION_CHARS, 10/category).
+ * Legacy mode keeps `buildExclusionListSection` untouched.
+ */
+export function buildKnownItemsSection(
+  context?: MeetingContextBundle,
+  priorItems?: PriorItem[],
+): string {
+  const actionItems: Array<{ text: string; source: string }> = [];
+  const decisions: Array<{ text: string; source: string }> = [];
+  const learnings: Array<{ text: string; source: string }> = [];
+
+  if (priorItems && priorItems.length > 0) {
+    for (const item of priorItems) {
+      const source = item.source || 'Prior Meeting';
+      const entry = { text: item.text, source };
+      switch (item.type) {
+        case 'action': actionItems.push(entry); break;
+        case 'decision': decisions.push(entry); break;
+        case 'learning': learnings.push(entry); break;
+      }
+    }
+  }
+
+  if (context?.relatedContext) {
+    const { recentDecisions, recentLearnings } = context.relatedContext;
+    if (recentDecisions) for (const text of recentDecisions) decisions.push({ text, source: 'Recent Decision' });
+    if (recentLearnings) for (const text of recentLearnings) learnings.push({ text, source: 'Recent Learning' });
+  }
+
+  if (actionItems.length === 0 && decisions.length === 0 && learnings.length === 0) {
+    return '';
+  }
+
+  const sections: string[] = [];
+  let totalChars = 0;
+  const addItemsSection = (title: string, items: Array<{ text: string; source: string }>): void => {
+    if (items.length === 0) return;
+    const header = `**${title}:**\n`;
+    let sectionContent = header;
+    const itemsToShow = items.slice(-MAX_EXCLUSION_ITEMS_PER_CATEGORY);
+    for (let i = 0; i < itemsToShow.length; i++) {
+      const item = itemsToShow[i];
+      const line = `${i + 1}. "${item.text}" — source: ${item.source}\n`;
+      if (totalChars + sectionContent.length + line.length > MAX_EXCLUSION_CHARS) break;
+      sectionContent += line;
+    }
+    if (sectionContent !== header) {
+      sections.push(sectionContent.trim());
+      totalChars += sectionContent.length;
+    }
+  };
+
+  addItemsSection('Known Action Items', actionItems);
+  addItemsSection('Known Decisions', decisions);
+  addItemsSection('Known Learnings', learnings);
+
+  if (sections.length === 0) return '';
+
+  return `
+
+## Already-known items (MARK, don't skip)
+
+The following items are ALREADY tracked from earlier meetings/memory. They are
+context, NOT an exclusion list:
+
+${sections.join('\n\n')}
+
+Rules for items that overlap with the list above:
+- Same item, no new information → re-emit it WITH \`"continuation_of": "<known item text or id>"\`. Do NOT silently omit it.
+- This meeting CHANGES, reverses, narrows, or replaces a known item → emit the NEW version WITH \`"supersedes": "<known item text or id>"\`. **Never omit a superseding item** — a dropped supersession silently leaves the stale version in force.
+- Genuinely new item → emit normally, no marker.`;
+}
+
+/**
+ * Build the single-pass extraction prompt (W2 — judgment-first).
+ *
+ * Replaces the accreted IS/IS-NOT pattern lists with the benchmark prompt
+ * shape that recovered 5/5 audited misses + 17/17 staged items on the
+ * compliance transcript: closeability rule, one-utterance-one-type,
+ * ⚠-if-unsure, importance tiers with blocker cues, open questions, direction
+ * `none`, continuation/supersedes markers, "don't pad". Keeps the parts of
+ * the legacy prompt that carry the win: topic-wiki context + delta directive
+ * (incl. the open-question-resolution escape hatch), topic-bias block, and
+ * the meeting-context bundle (attendee stances / goals / agenda / area).
+ *
+ * Layer-1 context blocks (identity frame, open commitments, series context)
+ * arrive pre-rendered via `sections` — assembled by the caller.
+ *
+ * Only used when `extraction_mode: single_pass`; the legacy
+ * `buildMeetingExtractionPrompt` is untouched.
+ */
+export function buildSinglePassExtractionPrompt(
+  transcript: string,
+  opts?: {
+    attendees?: string[];
+    ownerSlug?: string;
+    ownerName?: string;
+    context?: MeetingContextBundle;
+    priorItems?: PriorItem[];
+    activeTopicSlugs?: string;
+    sections?: SinglePassContextSections;
+  },
+): string {
+  const attendees = opts?.attendees;
+  const ownerSlug = opts?.ownerSlug;
+  const ownerName = opts?.ownerName;
+  const context = opts?.context;
+  const sections = opts?.sections;
+
+  const attendeeContext = attendees?.length
+    ? `\n\nMeeting attendees: ${attendees.join(', ')}`
+    : '';
+
+  const speakingRatio = ownerName ? calculateSpeakingRatio(transcript, ownerName) : undefined;
+
+  // Identity frame: caller-provided block wins; otherwise a minimal default
+  // built from owner info so `direction: none` is always explainable.
+  const identityFrame = sections?.identityFrame
+    ? `\n\n## Who is reading this\n${sections.identityFrame}`
+    : ownerSlug
+      ? `\n\n## Who is reading this
+The workspace owner is @${ownerSlug}${ownerName ? ` (${ownerName})` : ''}.${speakingRatio !== undefined ? ` Speaking ratio in this meeting: ${(speakingRatio * 100).toFixed(0)}%.` : ''}
+Direction on action items is relative to the owner. The owner attends some
+meetings as an observer — when neither side of an action item is the owner
+and the work is team-internal, the correct direction is "none". Do NOT force
+i_owe_them/they_owe_me onto items that are not owner-relative.`
+      : '';
+
+  const enhancedContext = context ? buildContextSection(context) : '';
+
+  const rawWikiCtx = context?.topicWikiContext;
+  const hasWikiContext = !!rawWikiCtx && rawWikiCtx.detectedTopics.length > 0;
+  const wikiContextSection = hasWikiContext
+    ? buildTopicWikiContextSection(
+        truncateTopicWikiContextToBudget(rawWikiCtx, MAX_TOPIC_WIKI_CONTEXT_CHARS).ctx,
+      )
+    : '';
+
+  const deltaDirective = hasWikiContext
+    ? `
+## Delta-only extraction
+The "Topic Wiki" section below shows what is ALREADY captured for the topics
+this meeting touches. Treat all of it as known by the reader.
+
+Extract a learning, decision, action, or open question ONLY when it is a DELTA:
+- NEW decision: a choice made in this meeting that the wiki doesn't already record
+- CHANGED plan: this meeting reverses, narrows, or rescopes something the wiki shows
+- NEW risk or gap raised
+- NEW open question raised (not already in the wiki's Open questions)
+- CONFIRMATION ONLY when the wiki shows a prior plan as uncertain and this meeting
+  pins it down (record as a new decision; cite what was uncertain)
+
+Do NOT emit restatements of what the wiki already records. When in doubt,
+INCLUDE with the ⚠ flag — a flagged borderline item is reviewable; a missed
+real delta is invisible and lost.
+
+### Example: CONFIRMATION-of-uncertainty (the load-bearing escape hatch)
+
+Wiki shows under Open questions: "Pricing tier — $99 or $149?"
+Meeting transcript: "We're going with $149 — Sara confirmed the margin model works."
+→ Emit as a NEW decision: "Pricing tier set to $149 (resolves prior open question
+  on margin model)." Cite the wiki's uncertainty.
+
+Counter-example: Wiki shows under Current state: "Pricing tier locked at $149."
+Meeting transcript: "Yeah, pricing is $149." → Do NOT emit. Already committed.
+`
+    : '';
+
+  const openCommitmentsBlock = sections?.openCommitments
+    ? `\n\n## Open commitments with people in this meeting (already tracked)\n${sections.openCommitments}\n\nIf the transcript advances, restates, or closes one of these, emit the item WITH \`"continuation_of": "<commitment text or id>"\` rather than as a fresh item.`
+    : '';
+
+  const seriesBlock = sections?.seriesContext
+    ? `\n\n## Possibly related: prior meetings in this series (advisory — verify before marking continuation)\n${sections.seriesContext}`
+    : '';
+
+  const knownItems = buildKnownItemsSection(context, opts?.priorItems);
+
+  return `You are extracting structured intelligence from a meeting transcript for the
+workspace owner's knowledge system. Read the FULL transcript before emitting
+anything — judgments at minute 50 supersede tentative statements at minute 5.
+${attendeeContext}${identityFrame}
+
+Return ONLY valid JSON with no markdown formatting, no code fences, no explanation.
+
+JSON schema:
+{
+  "summary": "string — 2-3 sentence summary. If the workspace owner participated, include their perspective.",
+  "core": "Free-form prose. Lead with the most actionable, decided, or changed thing. Do not restate wiki content.",
+  "could_include": ["Up to 8 self-contained one-line headlines for side threads worth knowing about, ordered by importance."],
+  "action_items": [
+    {
+      "owner": "string — full name of the person who owns this action",
+      "owner_slug": "string — lowercase-hyphenated (e.g., 'john-smith')",
+      "description": "string — concise action WITH ITS COMPLETION CONDITION (what done looks like)",
+      "direction": "i_owe_them | they_owe_me | none — relative to the workspace owner; 'none' = team-internal / not owner-relative",
+      "counterparty_slug": "string (optional)",
+      "due": "string (optional)",
+      "confidence": "number (0-1)",
+      "importance": "blocker | high | normal",
+      "uncertain": "boolean — true if you are unsure this should be recorded (the ⚠ flag)",
+      "uncertainty_reason": "string (only when uncertain) — one short clause why",
+      "continuation_of": "string (optional) — known item/commitment this continues",
+      "supersedes": "string (optional) — known item this replaces or reverses"
+    }
+  ],
+  "next_steps": ["string — each agreed-upon next step"],
+  "decisions": [{ "text": "string", "confidence": "number (0-1)", "importance": "blocker | high | normal", "uncertain": "boolean", "uncertainty_reason": "string (optional)", "continuation_of": "string (optional)", "supersedes": "string (optional)" }],
+  "learnings": [{ "text": "string", "confidence": "number (0-1)", "importance": "blocker | high | normal", "uncertain": "boolean", "uncertainty_reason": "string (optional)" }],
+  "open_questions": ["string — questions raised but NOT resolved in this meeting; things the team still needs to answer"],
+  "topics": ["string — 3-6 slugified keywords for what this meeting was substantively about"]
+}
+${opts?.activeTopicSlugs !== undefined && opts.activeTopicSlugs.length > 0 ? `
+${TOPIC_BIAS_BLOCK_PROMPT}
+
+${opts.activeTopicSlugs}
+` : ''}${deltaDirective}
+## Judgment rules (these replace pattern lists — use your judgment)
+
+1. **Closeability.** An action item must have a completion condition — a
+   reader should be able to say unambiguously "this is now done". A standing
+   policy or way-of-working ("PRDs will include a UX section from now on") is
+   a DECISION, not an action item; if the conversation also names a concrete
+   first instance, emit that instance as the action item.
+
+2. **One utterance, one type.** A single statement is ONE item of ONE type —
+   the strongest applicable. Do not emit the same utterance as an action AND
+   a decision AND a learning. Exception: a decision plus a separate learning
+   is fine when the insight outlives the decision (the general principle vs
+   the specific call).
+
+3. **⚠ if unsure.** When you are not confident an item belongs — marginal
+   relevance, possible duplicate, observational noise, unclear owner — emit
+   it WITH "uncertain": true and a short "uncertainty_reason". Do not silently
+   drop borderline real items, and do not launder doubt into confident items.
+
+4. **Importance tiers.**
+   - "blocker": blocks a launch, a person, or a dependency; legal/compliance
+     gates; "X can't happen until Y" — even if mentioned once in passing or in
+     closing remarks. Missing a blocker is the worst failure this system has.
+   - "high": decisions that change plans, commitments the owner must act on,
+     deadlines, escalations.
+   - "normal": everything else worth recording.
+
+5. **Direction honesty.** "none" is correct for team-internal work the owner
+   merely observed. Never force i_owe_them/they_owe_me onto a third-party
+   item, and never emit two mirror copies (same sentence, opposite
+   directions, different owners) — one utterance, one item.
+
+6. **Don't pad.** Every item must trace to something actually said in the
+   transcript. No filler, no restating context blocks, no inventing owners or
+   dates. If the transcript garbles a word, repair it only when the meaning
+   is unambiguous from context.
+
+7. **Trust the transcript over any recorder summary.** If a provided summary
+   contradicts what was actually said, the transcript wins.
+
+8. **Open questions are first-class.** A real question raised and left
+   unresolved goes in "open_questions" — not forced into a decision or
+   dropped.
+${enhancedContext}${wikiContextSection}${openCommitmentsBlock}${seriesBlock}${knownItems}
+
+Transcript:
+${transcript}`;
+}
+
 /**
  * Build attendee slug lookup from context for owner resolution.
  * Returns a map of lowercase name -> slug.
@@ -1300,12 +1717,21 @@ ${transcript}`;
  * @param ownerSlug - Optional workspace owner slug; used by the mirror-pair
  *                    dedup pass (Phase 8 followup-6) to break ties between
  *                    candidate canonical items.
+ * @param opts.singlePass - single-pass mode (W1/W3): accepts the new schema
+ *   (importance tiers, ⚠ fields, direction `none`, open_questions,
+ *   continuation/supersedes markers), applies NO category caps, and flips
+ *   every mechanical filter (garbage/trivial/mirror-pair/near-dup) to
+ *   telemetry-only — items are kept and the detector fires an
+ *   `ExtractionTelemetryEvent` instead (D4). Legacy path (default) is
+ *   bit-identical to the pre-W1 behavior.
  */
 export function parseMeetingExtractionResponse(
   response: string,
   limits: CategoryLimits = CATEGORY_LIMITS,
   ownerSlug?: string,
+  opts?: { singlePass?: boolean },
 ): MeetingExtractionResult {
+  const singlePass = opts?.singlePass === true;
   const emptyResult: MeetingExtractionResult = {
     intelligence: {
       summary: '',
@@ -1348,6 +1774,8 @@ export function parseMeetingExtractionResponse(
   const validationWarnings: ValidationWarning[] = [];
   const actionItems: ActionItem[] = [];
   const rawItems: RawExtractedItem[] = [];
+  const telemetryEvents: ExtractionTelemetryEvent[] = [];
+  const previewOf = (t: string): string => t.slice(0, 50) + (t.length > 50 ? '...' : '');
 
   // Parse summary
   const summary = typeof raw.summary === 'string' ? raw.summary.trim() : '';
@@ -1412,8 +1840,20 @@ export function parseMeetingExtractionResponse(
         ? item.confidence
         : undefined;
 
-      // Skip items missing required fields
-      if (!description || !owner) continue;
+      // Skip items missing required fields. This is the one unavoidable drop
+      // in single_pass mode (an item with no text/owner cannot be staged) —
+      // it fires telemetry instead of vanishing (AC8 enumeration #2).
+      if (!description || !owner) {
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'unparseable_item',
+            itemType: 'action',
+            item: previewOf(description || JSON.stringify(item).slice(0, 50)),
+            detail: !description ? 'missing description' : 'missing owner',
+          });
+        }
+        continue;
+      }
 
       // Store raw item BEFORE validation filtering (for debugging/analysis)
       rawItems.push({
@@ -1424,49 +1864,88 @@ export function parseMeetingExtractionResponse(
         confidence,
       });
 
-      // Validate against garbage patterns
+      // Validate against garbage patterns.
+      // single_pass (D4): telemetry-only — item is KEPT.
       const garbageReason = isGarbageItem(description);
       if (garbageReason) {
-        validationWarnings.push({
-          item: description.slice(0, 50) + (description.length > 50 ? '...' : ''),
-          reason: garbageReason,
-        });
-        continue;
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: garbageReason.startsWith('starts with')
+              ? 'garbage_prefix'
+              : garbageReason.startsWith('exceeds')
+                ? 'length_limit'
+                : 'multi_sentence',
+            itemType: 'action',
+            item: previewOf(description),
+            detail: garbageReason,
+          });
+        } else {
+          validationWarnings.push({
+            item: previewOf(description),
+            reason: garbageReason,
+          });
+          continue;
+        }
       }
 
-      // Check for trivial patterns
+      // Check for trivial patterns. single_pass (D4): telemetry-only.
       const trivialReason = isTrivialItem(description);
       if (trivialReason) {
-        validationWarnings.push({
-          item: description.slice(0, 50) + (description.length > 50 ? '...' : ''),
-          reason: trivialReason,
-        });
-        continue;
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'trivial_pattern',
+            itemType: 'action',
+            item: previewOf(description),
+            detail: trivialReason,
+          });
+        } else {
+          validationWarnings.push({
+            item: previewOf(description),
+            reason: trivialReason,
+          });
+          continue;
+        }
       }
 
-      // Validate direction
-      if (!VALID_DIRECTIONS.has(direction)) {
+      // Validate direction. single_pass accepts `none`; an invalid/missing
+      // direction defaults to `none` (the safe, commitment-inert value —
+      // defaulting to i_owe_them would fabricate commitments) + telemetry.
+      let finalDirection = direction;
+      if (singlePass) {
+        if (!VALID_DIRECTIONS_SINGLE_PASS.has(direction)) {
+          telemetryEvents.push({
+            detector: 'invalid_direction',
+            itemType: 'action',
+            item: previewOf(description),
+            detail: `invalid direction "${direction}" — defaulted to none`,
+          });
+          finalDirection = 'none';
+        }
+      } else if (!VALID_DIRECTIONS.has(direction)) {
         validationWarnings.push({
-          item: description.slice(0, 50) + (description.length > 50 ? '...' : ''),
+          item: previewOf(description),
           reason: `invalid direction "${direction}"`,
         });
         continue;
       }
 
-      const ownerSlug = typeof item.owner_slug === 'string' 
-        ? item.owner_slug.trim() 
+      const ownerSlug = typeof item.owner_slug === 'string'
+        ? item.owner_slug.trim()
         : slugify(owner);
+
+      const judgment = singlePass ? parseJudgmentFields(item) : undefined;
 
       actionItems.push({
         owner,
         ownerSlug,
         description,
-        direction: direction as ActionItemDirection,
-        counterpartySlug: typeof item.counterparty_slug === 'string' 
+        direction: finalDirection as ActionItemDirection,
+        counterpartySlug: typeof item.counterparty_slug === 'string'
           ? item.counterparty_slug.trim() || undefined
           : undefined,
         due: typeof item.due === 'string' ? item.due.trim() || undefined : undefined,
         confidence,
+        ...(judgment ?? {}),
       });
     }
   }
@@ -1484,10 +1963,12 @@ export function parseMeetingExtractionResponse(
   // Parse decisions (supports both string and { text, confidence } objects)
   const decisions: string[] = [];
   const decisionConfidences: (number | undefined)[] = [];
+  const decisionMeta: (ItemJudgment | undefined)[] = [];
   if (Array.isArray(raw.decisions)) {
     for (const decision of raw.decisions) {
       let text: string | undefined;
       let confidence: number | undefined;
+      let judgment: ItemJudgment | undefined;
       if (typeof decision === 'string') {
         text = decision.trim();
       } else if (decision && typeof decision === 'object') {
@@ -1495,42 +1976,65 @@ export function parseMeetingExtractionResponse(
         if (typeof decision.confidence === 'number') {
           confidence = Math.max(0, Math.min(1, decision.confidence));
         }
+        if (singlePass) judgment = parseJudgmentFields(decision);
       }
       if (!text) continue;
 
-      // Apply garbage filter (lighter check — no action-item length limit)
+      // Apply garbage filter (lighter check — no action-item length limit).
+      // single_pass (D4): telemetry-only — item is KEPT.
       const garbageReason = isGarbageDecisionOrLearning(text);
       if (garbageReason) {
-        validationWarnings.push({
-          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
-          reason: `decision: ${garbageReason}`,
-        });
-        continue;
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'garbage_prefix',
+            itemType: 'decision',
+            item: previewOf(text),
+            detail: garbageReason,
+          });
+        } else {
+          validationWarnings.push({
+            item: previewOf(text),
+            reason: `decision: ${garbageReason}`,
+          });
+          continue;
+        }
       }
 
-      // Apply trivial decision filter
+      // Apply trivial decision filter. single_pass (D4): telemetry-only.
       const trivialReason = isTrivialDecision(text);
       if (trivialReason) {
-        validationWarnings.push({
-          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
-          reason: trivialReason,
-        });
-        continue;
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'trivial_pattern',
+            itemType: 'decision',
+            item: previewOf(text),
+            detail: trivialReason,
+          });
+        } else {
+          validationWarnings.push({
+            item: previewOf(text),
+            reason: trivialReason,
+          });
+          continue;
+        }
       }
 
       rawItems.push({ type: 'decision', text, confidence });
       decisions.push(text);
       decisionConfidences.push(confidence);
+      decisionMeta.push(judgment);
     }
   }
 
   // Parse learnings (supports both string and { text, confidence } objects)
   const learnings: string[] = [];
   const learningConfidences: (number | undefined)[] = [];
+  const learningMeta: (ItemJudgment | undefined)[] = [];
   if (Array.isArray(raw.learnings)) {
     for (const learning of raw.learnings) {
       let text: string | undefined;
       let confidence: number | undefined;
+      let judgment: ItemJudgment | undefined;
       if (typeof learning === 'string') {
         text = learning.trim();
       } else if (learning && typeof learning === 'object') {
@@ -1538,32 +2042,66 @@ export function parseMeetingExtractionResponse(
         if (typeof learning.confidence === 'number') {
           confidence = Math.max(0, Math.min(1, learning.confidence));
         }
+        if (singlePass) judgment = parseJudgmentFields(learning);
       }
       if (!text) continue;
 
-      // Apply garbage filter (lighter check — no action-item length limit)
+      // Apply garbage filter (lighter check — no action-item length limit).
+      // single_pass (D4): telemetry-only — item is KEPT.
       const garbageReason = isGarbageDecisionOrLearning(text);
       if (garbageReason) {
-        validationWarnings.push({
-          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
-          reason: `learning: ${garbageReason}`,
-        });
-        continue;
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'garbage_prefix',
+            itemType: 'learning',
+            item: previewOf(text),
+            detail: garbageReason,
+          });
+        } else {
+          validationWarnings.push({
+            item: previewOf(text),
+            reason: `learning: ${garbageReason}`,
+          });
+          continue;
+        }
       }
 
-      // Apply trivial learning filter
+      // Apply trivial learning filter. single_pass (D4): telemetry-only.
       const trivialReason = isTrivialLearning(text);
       if (trivialReason) {
-        validationWarnings.push({
-          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
-          reason: trivialReason,
-        });
-        continue;
+        if (singlePass) {
+          telemetryEvents.push({
+            detector: 'trivial_pattern',
+            itemType: 'learning',
+            item: previewOf(text),
+            detail: trivialReason,
+          });
+        } else {
+          validationWarnings.push({
+            item: previewOf(text),
+            reason: trivialReason,
+          });
+          continue;
+        }
       }
 
       rawItems.push({ type: 'learning', text, confidence });
       learnings.push(text);
       learningConfidences.push(confidence);
+      learningMeta.push(judgment);
+    }
+  }
+
+  // Parse open questions (single_pass D3). Legacy responses never include
+  // the field; parsing is mode-independent but inert for legacy.
+  const openQuestions: string[] = [];
+  if (Array.isArray(raw.open_questions)) {
+    for (const q of raw.open_questions) {
+      if (typeof q !== 'string') continue;
+      const trimmedQ = q.trim();
+      if (!trimmedQ) continue;
+      if (openQuestions.length >= OPEN_QUESTIONS_MAX) break;
+      openQuestions.push(trimmedQ);
     }
   }
 
@@ -1582,6 +2120,10 @@ export function parseMeetingExtractionResponse(
 
   // ---------------------------------------------------------------------------
   // Post-processing filters (order: mirror-pair dedup → near-dup → category limits)
+  //
+  // single_pass mode (W3 / D4): every detector below runs DETECT-ONLY — items
+  // are kept, the detector emits an ExtractionTelemetryEvent, and category
+  // limits are not applied (there is no cap, so there is no overflow loss).
   // ---------------------------------------------------------------------------
 
   // 0. Mirror-pair dedup (Phase 8 followup-6): drop "John to X" (i_owe_them,
@@ -1589,79 +2131,134 @@ export function parseMeetingExtractionResponse(
   //    emitted from a single compound sentence. Runs BEFORE same-direction
   //    dedup so the canonical-side selection logic sees the original pair.
   const { kept: postMirrorPairs, dropped: mirrorPairsDropped } = dedupMirrorPairs(actionItems, ownerSlug);
-  for (const { item, reason, canonicalDescription } of mirrorPairsDropped) {
-    const droppedPreview = item.description.slice(0, 50) + (item.description.length > 50 ? '...' : '');
-    const canonicalPreview = canonicalDescription.slice(0, 50) + (canonicalDescription.length > 50 ? '...' : '');
-    validationWarnings.push({
-      item: droppedPreview,
-      reason: `${reason}: "${canonicalPreview}"`,
-    });
+  if (singlePass) {
+    for (const { item, canonicalDescription } of mirrorPairsDropped) {
+      telemetryEvents.push({
+        detector: 'mirror_pair',
+        itemType: 'action',
+        item: previewOf(item.description),
+        detail: `mirror-pair suspect of: "${previewOf(canonicalDescription)}" (kept — flagged for review)`,
+      });
+    }
+  } else {
+    for (const { item, reason, canonicalDescription } of mirrorPairsDropped) {
+      const droppedPreview = previewOf(item.description);
+      const canonicalPreview = previewOf(canonicalDescription);
+      validationWarnings.push({
+        item: droppedPreview,
+        reason: `${reason}: "${canonicalPreview}"`,
+      });
+    }
   }
+  const postMirrorActionItems = singlePass ? actionItems : postMirrorPairs;
 
   // 1. Near-duplicate deduplication for action items (Jaccard > 0.8)
-  const { kept: dedupedActionItems, filtered: dedupedFiltered } = deduplicateItems(postMirrorPairs);
+  const { kept: dedupedActionItems, filtered: dedupedFiltered } = deduplicateItems(postMirrorActionItems);
   for (const { item, reason } of dedupedFiltered) {
-    validationWarnings.push({
-      item: item.description.slice(0, 50) + (item.description.length > 50 ? '...' : ''),
-      reason,
-    });
+    if (singlePass) {
+      telemetryEvents.push({
+        detector: 'near_duplicate',
+        itemType: 'action',
+        item: previewOf(item.description),
+        detail: `${reason} (kept)`,
+      });
+    } else {
+      validationWarnings.push({
+        item: previewOf(item.description),
+        reason,
+      });
+    }
   }
+  const finalActionItems = singlePass ? postMirrorActionItems : dedupedActionItems;
 
-  // 2. Near-duplicate deduplication for decisions (carry confidence through)
+  // 2. Near-duplicate deduplication for decisions (carry confidence + meta through)
   const { kept: dedupedDecisions, filtered: dedupedDecisionsFiltered } = deduplicateItems(
-    decisions.map((d, i) => ({ text: d, conf: decisionConfidences[i] }))
+    decisions.map((d, i) => ({ text: d, conf: decisionConfidences[i], meta: decisionMeta[i] }))
   );
   for (const { item, reason } of dedupedDecisionsFiltered) {
-    validationWarnings.push({
-      item: item.text.slice(0, 50) + (item.text.length > 50 ? '...' : ''),
-      reason,
-    });
+    if (singlePass) {
+      telemetryEvents.push({
+        detector: 'near_duplicate',
+        itemType: 'decision',
+        item: previewOf(item.text),
+        detail: `${reason} (kept)`,
+      });
+    } else {
+      validationWarnings.push({
+        item: previewOf(item.text),
+        reason,
+      });
+    }
   }
-  const finalDecisions = dedupedDecisions.map(d => d.text);
-  const finalDecisionConfidences = dedupedDecisions.map(d => d.conf);
+  const keptDecisions = singlePass
+    ? decisions.map((d, i) => ({ text: d, conf: decisionConfidences[i], meta: decisionMeta[i] }))
+    : dedupedDecisions;
+  const finalDecisions = keptDecisions.map(d => d.text);
+  const finalDecisionConfidences = keptDecisions.map(d => d.conf);
+  const finalDecisionMeta = keptDecisions.map(d => d.meta);
 
-  // 3. Near-duplicate deduplication for learnings (carry confidence through)
+  // 3. Near-duplicate deduplication for learnings (carry confidence + meta through)
   const { kept: dedupedLearnings, filtered: dedupedLearningsFiltered } = deduplicateItems(
-    learnings.map((l, i) => ({ text: l, conf: learningConfidences[i] }))
+    learnings.map((l, i) => ({ text: l, conf: learningConfidences[i], meta: learningMeta[i] }))
   );
   for (const { item, reason } of dedupedLearningsFiltered) {
-    validationWarnings.push({
-      item: item.text.slice(0, 50) + (item.text.length > 50 ? '...' : ''),
-      reason,
-    });
-  }
-  const finalLearnings = dedupedLearnings.map(l => l.text);
-  const finalLearningConfidences = dedupedLearnings.map(l => l.conf);
-
-  // 4. Apply category limits (keep first N in LLM response order)
-  const limitedActionItems = dedupedActionItems.slice(0, limits.actionItems);
-  const limitedDecisions = finalDecisions.slice(0, limits.decisions);
-  const limitedDecisionConfidences = finalDecisionConfidences.slice(0, limits.decisions);
-  const limitedLearnings = finalLearnings.slice(0, limits.learnings);
-  const limitedLearningConfidences = finalLearningConfidences.slice(0, limits.learnings);
-
-  // Add warnings for items exceeding limits
-  if (dedupedActionItems.length > limits.actionItems) {
-    for (let i = limits.actionItems; i < dedupedActionItems.length; i++) {
+    if (singlePass) {
+      telemetryEvents.push({
+        detector: 'near_duplicate',
+        itemType: 'learning',
+        item: previewOf(item.text),
+        detail: `${reason} (kept)`,
+      });
+    } else {
       validationWarnings.push({
-        item: dedupedActionItems[i].description.slice(0, 50) + 
-          (dedupedActionItems[i].description.length > 50 ? '...' : ''),
+        item: previewOf(item.text),
+        reason,
+      });
+    }
+  }
+  const keptLearnings = singlePass
+    ? learnings.map((l, i) => ({ text: l, conf: learningConfidences[i], meta: learningMeta[i] }))
+    : dedupedLearnings;
+  const finalLearnings = keptLearnings.map(l => l.text);
+  const finalLearningConfidences = keptLearnings.map(l => l.conf);
+  const finalLearningMeta = keptLearnings.map(l => l.meta);
+
+  // 4. Apply category limits (keep first N in LLM response order).
+  //    single_pass (D1): NO caps — the cap slice is the documented blocker-loss
+  //    mechanism (benchmark-evidence failure-mode map, meeting-extraction:1637).
+  const limitedActionItems = singlePass ? finalActionItems : finalActionItems.slice(0, limits.actionItems);
+  const limitedDecisions = singlePass ? finalDecisions : finalDecisions.slice(0, limits.decisions);
+  const limitedDecisionConfidences = singlePass
+    ? finalDecisionConfidences
+    : finalDecisionConfidences.slice(0, limits.decisions);
+  const limitedDecisionMeta = singlePass ? finalDecisionMeta : finalDecisionMeta.slice(0, limits.decisions);
+  const limitedLearnings = singlePass ? finalLearnings : finalLearnings.slice(0, limits.learnings);
+  const limitedLearningConfidences = singlePass
+    ? finalLearningConfidences
+    : finalLearningConfidences.slice(0, limits.learnings);
+  const limitedLearningMeta = singlePass ? finalLearningMeta : finalLearningMeta.slice(0, limits.learnings);
+
+  // Add warnings for items exceeding limits (legacy only — single_pass has no caps)
+  if (!singlePass && finalActionItems.length > limits.actionItems) {
+    for (let i = limits.actionItems; i < finalActionItems.length; i++) {
+      validationWarnings.push({
+        item: previewOf(finalActionItems[i].description),
         reason: `exceeds action item limit (${limits.actionItems})`,
       });
     }
   }
-  if (finalDecisions.length > limits.decisions) {
+  if (!singlePass && finalDecisions.length > limits.decisions) {
     for (let i = limits.decisions; i < finalDecisions.length; i++) {
       validationWarnings.push({
-        item: finalDecisions[i].slice(0, 50) + (finalDecisions[i].length > 50 ? '...' : ''),
+        item: previewOf(finalDecisions[i]),
         reason: `exceeds decision limit (${limits.decisions})`,
       });
     }
   }
-  if (finalLearnings.length > limits.learnings) {
+  if (!singlePass && finalLearnings.length > limits.learnings) {
     for (let i = limits.learnings; i < finalLearnings.length; i++) {
       validationWarnings.push({
-        item: finalLearnings[i].slice(0, 50) + (finalLearnings[i].length > 50 ? '...' : ''),
+        item: previewOf(finalLearnings[i]),
         reason: `exceeds learning limit (${limits.learnings})`,
       });
     }
@@ -1670,6 +2267,8 @@ export function parseMeetingExtractionResponse(
   // Build confidence arrays — only include if at least one value is defined
   const hasDecisionConf = limitedDecisionConfidences.some(c => c !== undefined);
   const hasLearningConf = limitedLearningConfidences.some(c => c !== undefined);
+  const hasDecisionMeta = limitedDecisionMeta.some(m => m !== undefined);
+  const hasLearningMeta = limitedLearningMeta.some(m => m !== undefined);
 
   return {
     intelligence: {
@@ -1680,12 +2279,16 @@ export function parseMeetingExtractionResponse(
       learnings: limitedLearnings,
       ...(hasDecisionConf && { decisionConfidences: limitedDecisionConfidences }),
       ...(hasLearningConf && { learningConfidences: limitedLearningConfidences }),
+      ...(hasDecisionMeta && { decisionMeta: limitedDecisionMeta }),
+      ...(hasLearningMeta && { learningMeta: limitedLearningMeta }),
       topics,
       ...(core !== undefined && { core }),
       ...(couldInclude !== undefined && { could_include: couldInclude }),
+      ...(singlePass && openQuestions.length > 0 && { openQuestions }),
     },
     validationWarnings,
     rawItems,
+    ...(singlePass && { telemetryEvents }),
   };
 }
 
@@ -1722,6 +2325,19 @@ export async function extractMeetingIntelligence(
      * full rationale.
      */
     activeTopicSlugs?: string;
+    /**
+     * single-pass extraction (W1/W2/W3): judgment-first prompt + new schema,
+     * no caps, detectors telemetry-only. Driven by `extraction_mode:
+     * single_pass` in arete.yaml. Default false = legacy, bit-identical.
+     */
+    singlePass?: boolean;
+    /**
+     * Pre-rendered Layer-1 context blocks for the single-pass prompt
+     * (identity frame, open commitments, series context, known-items
+     * mark-don't-skip). Built by the caller (CLI) via
+     * `buildSinglePassContextSections`. Ignored in legacy mode.
+     */
+    singlePassContext?: SinglePassContextSections;
   },
 ): Promise<MeetingExtractionResult> {
   if (!transcript || transcript.trim() === '') {
@@ -1750,9 +2366,47 @@ export async function extractMeetingIntelligence(
     options?.context?.topicWikiContext?.detectedTopics.map(t => t.slug),
   );
 
+  // single-pass (W2): judgment-first prompt, no caps, telemetry-only
+  // detectors. Light-importance meetings keep the light prompt even in
+  // single_pass mode — importance triage is orthogonal to pipeline mode.
+  const singlePass = options?.singlePass === true && (options?.mode ?? 'normal') !== 'light';
+
   // Select prompt and limits based on mode
   let prompt: string;
   let limits: CategoryLimits;
+
+  if (singlePass) {
+    prompt = buildSinglePassExtractionPrompt(transcript, {
+      attendees: options?.attendees,
+      ownerSlug: options?.ownerSlug,
+      ownerName: options?.ownerName,
+      context: options?.context,
+      priorItems: options?.priorItems,
+      activeTopicSlugs: mergedActiveTopicSlugs,
+      sections: options?.singlePassContext,
+    });
+    // Limits are unused in single-pass parsing (no caps) — pass the default
+    // for signature compatibility.
+    try {
+      const response = await callLLM(prompt);
+      return parseMeetingExtractionResponse(response, CATEGORY_LIMITS, options?.ownerSlug, {
+        singlePass: true,
+      });
+    } catch {
+      return {
+        intelligence: {
+          summary: '',
+          actionItems: [],
+          nextSteps: [],
+          decisions: [],
+          learnings: [],
+        },
+        validationWarnings: [],
+        rawItems: [],
+        telemetryEvents: [],
+      };
+    }
+  }
 
   switch (mode) {
     case 'light':
@@ -1825,7 +2479,11 @@ export async function extractMeetingIntelligence(
  */
 function formatActionItem(item: ActionItem, index: number): string {
   const id = `ai_${String(index + 1).padStart(3, '0')}`;
-  const arrow = item.direction === 'i_owe_them' ? '→' : '←';
+  // `·` = direction none (team-internal, single-pass D3). The marker is
+  // deliberately NOT an arrow so the commitment-creating parsers
+  // (meeting-parser.ts, APPROVED_OWNER_PATTERN) never read it as a
+  // directional commitment (D7 inertness).
+  const arrow = item.direction === 'i_owe_them' ? '→' : item.direction === 'none' ? '·' : '←';
   const counterparty = item.counterpartySlug ? ` @${item.counterpartySlug}` : '';
   const dueStr = item.due ? ` (${item.due})` : '';
   
@@ -1926,6 +2584,35 @@ export function formatStagedSections(result: MeetingExtractionResult): string {
     lines.push('');
   }
 
+  // Open Questions (single-pass D3) — persist-don't-render-everywhere interim:
+  // questions live on the meeting file; wiki feed wiring is F2. Legacy
+  // extractions never populate openQuestions, so legacy output is unchanged.
+  if (intelligence.openQuestions && intelligence.openQuestions.length > 0) {
+    lines.push('## Open Questions');
+    intelligence.openQuestions.forEach((q, index) => {
+      const id = `oq_${String(index + 1).padStart(3, '0')}`;
+      lines.push(`- ${id}: ${q}`);
+    });
+    lines.push('');
+  }
+
+  // Parser-flagged (single-pass W3): the mirror-pair detector's visibility
+  // contract survives the telemetry flip — suspects are KEPT in the staged
+  // list and flagged here, instead of dropped and listed in Parser-dropped.
+  const mirrorPairEvents = (result.telemetryEvents ?? []).filter(e => e.detector === 'mirror_pair');
+  if (mirrorPairEvents.length > 0) {
+    lines.push('## Parser-flagged (mirror-pair suspects)');
+    lines.push(
+      '_The mirror-pair detector flagged these staged action items as possible ' +
+      'mirror duplicates (Jaccard ≥ 0.90 + opposite direction + different owner). ' +
+      'Both items were KEPT — review and skip the wrong one._',
+    );
+    mirrorPairEvents.forEach(e => {
+      lines.push(`- ${e.item} — ${e.detail}`);
+    });
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 
@@ -1944,6 +2631,18 @@ const STAGED_HEADERS = new Set([
 ]);
 
 /**
+ * Extractor-written headers that only exist in single_pass mode (W1/W3).
+ * Deliberately NOT in the legacy STAGED_HEADERS set: a legacy-mode
+ * re-extract must never strip a USER-authored "## Open Questions" section
+ * (legacy bit-identical invariant). single_pass callers pass these via
+ * `updateMeetingContent`'s `extraStagedHeaders`.
+ */
+export const SINGLE_PASS_STAGED_HEADERS = [
+  'Open Questions',
+  'Parser-flagged (mirror-pair suspects)',
+] as const;
+
+/**
  * Replace or insert staged sections in meeting content.
  * Preserves content before the lead-prose heading (## Summary or ## Core)
  * and content after staged sections. Accepts either heading as the anchor
@@ -1952,9 +2651,21 @@ const STAGED_HEADERS = new Set([
  *
  * @param originalContent - The original meeting file content
  * @param stagedSections - The formatted staged sections to insert
+ * @param extraStagedHeaders - Additional extractor-owned headers to treat as
+ *   staged (single_pass passes SINGLE_PASS_STAGED_HEADERS so its own
+ *   `## Open Questions` / `## Parser-flagged` sections are replaced on
+ *   re-extract; legacy callers omit this and user sections with those names
+ *   are preserved as before)
  * @returns Updated content with staged sections replaced/inserted
  */
-export function updateMeetingContent(originalContent: string, stagedSections: string): string {
+export function updateMeetingContent(
+  originalContent: string,
+  stagedSections: string,
+  extraStagedHeaders?: readonly string[],
+): string {
+  const stagedHeaders = extraStagedHeaders && extraStagedHeaders.length > 0
+    ? new Set([...STAGED_HEADERS, ...extraStagedHeaders])
+    : STAGED_HEADERS;
   // Find where the lead-prose heading starts. Accept either ## Summary
   // (legacy / backward-compat) or ## Core (new shape). Pick whichever
   // appears first in the file.
@@ -1981,7 +2692,7 @@ export function updateMeetingContent(originalContent: string, stagedSections: st
     const line = lines[i];
     if (line.startsWith('## ')) {
       const headerName = line.replace(/^## /, '').trim();
-      if (STAGED_HEADERS.has(headerName)) {
+      if (stagedHeaders.has(headerName)) {
         // This is a staged section header - skip until next header
         continue;
       } else {

@@ -55,12 +55,34 @@ export type QmdScope = 'all' | 'memory' | 'meetings' | 'context' | 'projects' | 
 /** Map of scope to collection name. Partial because some scopes may be skipped if path doesn't exist. */
 export type QmdCollections = Partial<Record<QmdScope, string>>;
 
+/**
+ * Extraction pipeline mode (single-pass-extraction plan, W1/W2).
+ * - 'legacy' (default): accreted harness — caps, regex filters, exclusion list.
+ * - 'single_pass': judgment-first single pass — tiers, ⚠ channel,
+ *   direction:none, open questions, mark-don't-skip prior items; mechanical
+ *   detectors flip to telemetry-only.
+ * Legacy behavior is bit-identical when this is absent or 'legacy'.
+ */
+export type ExtractionPipelineMode = 'legacy' | 'single_pass';
+
+/**
+ * Cross-meeting reconcile placement (chef-holistic-reconcile plan, W0).
+ * - 'inline' (default): `--reconcile` runs per-file at extract time (today).
+ * - 'day-level': extract skips inline cross-meeting reconcile; the winddown
+ *   runs ONE `arete meeting reconcile-day` call over the whole day at Step 2.
+ */
+export type ReconcileMode = 'inline' | 'day-level';
+
 /** Shape of the resolved config object */
 export type AreteConfig = {
   schema: number;
   version: string | null;
   source: string;
   created?: string;
+  /** Extraction pipeline mode — see ExtractionPipelineMode. Default 'legacy'. */
+  extraction_mode?: ExtractionPipelineMode;
+  /** Cross-meeting reconcile placement — see ReconcileMode. Default 'inline'. */
+  reconcile_mode?: ReconcileMode;
   /** Agent mode: builder (building Areté) or guide (end-user workspace) */
   agent_mode?: AgentMode;
   /** Target IDE: cursor or claude */

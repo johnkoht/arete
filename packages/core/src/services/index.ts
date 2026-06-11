@@ -493,10 +493,13 @@ export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 export {
   buildMeetingExtractionPrompt,
   buildLightExtractionPrompt,
+  buildSinglePassExtractionPrompt,
+  buildKnownItemsSection,
   parseMeetingExtractionResponse,
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
+  SINGLE_PASS_STAGED_HEADERS,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   TOPIC_BIAS_BLOCK_PROMPT,
@@ -505,6 +508,10 @@ export type {
   MeetingIntelligence,
   ActionItem,
   ActionItemDirection,
+  ItemImportance,
+  ItemJudgment,
+  ExtractionTelemetryEvent,
+  SinglePassContextSections,
   MeetingExtractionResult,
   ValidationWarning,
   LLMCallFn as MeetingLLMCallFn,
@@ -516,6 +523,22 @@ export type {
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
+
+// Meeting series resolution (single-pass W1.5)
+export {
+  resolveMeetingSeries,
+  renderSeriesContext,
+  normalizeTitleTokens,
+  titleSimilarity,
+  attendeeOverlap,
+  matchesRecurringTitle,
+  parseOpenQuestionsSection,
+  SERIES_WINDOW_DAYS,
+  SERIES_TITLE_JACCARD,
+  SERIES_ATTENDEE_OVERLAP,
+  SERIES_MAX_PRIOR,
+} from './meeting-series.js';
+export type { SeriesMeeting, SeriesResolution } from './meeting-series.js';
 
 // Meeting processing
 export {

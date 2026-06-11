@@ -820,9 +820,11 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
  * - "description (@ownerSlug ←)" — they_owe_me, no counterparty
  * - "description (@ownerSlug)" — no arrow, defaults to i_owe_them
  *
- * Capture groups: [1] description, [2] ownerSlug, [3] arrow (→ or ←), [4] counterpartySlug
+ * - "description (@ownerSlug ·)" — direction none (team-internal, single-pass D3)
+ *
+ * Capture groups: [1] description, [2] ownerSlug, [3] arrow (→, ← or ·), [4] counterpartySlug
  */
-const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*([→←])\s*(?:@([a-z0-9-]+))?)?\)\s*$/i;
+const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*([→←·])\s*(?:@([a-z0-9-]+))?)?\)\s*$/i;
 
 /**
  * Parse a `## Approved <SectionName>` body section into a list of strings.
@@ -957,8 +959,8 @@ function extractIntelligenceFromFrontmatter(
   for (const text of actionTexts) {
     const match = text.match(APPROVED_OWNER_PATTERN);
     if (match) {
-      const arrow = match[3]; // '→', '←', or undefined
-      const direction = arrow === '←' ? 'they_owe_me' : 'i_owe_them';
+      const arrow = match[3]; // '→', '←', '·', or undefined
+      const direction = arrow === '←' ? 'they_owe_me' : arrow === '·' ? 'none' : 'i_owe_them';
       actionItems.push({
         owner: '',
         ownerSlug: match[2],

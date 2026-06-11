@@ -200,9 +200,12 @@ export async function loadSameDayStagedItems(
       if (statusMap[item.id] === 'skipped') continue;
 
       const ownerMeta = ownerMap[item.id];
-      const direction: CommitmentDirection | undefined =
-        ownerMeta?.direction ?? item.direction;
-      if (!direction) continue;
+      const rawDirection = ownerMeta?.direction ?? item.direction;
+      if (!rawDirection) continue;
+      // D7 (single-pass): `direction: none` items never participate in the
+      // commitment domain — not as commitments, not as dedup canonicals.
+      if (rawDirection !== 'i_owe_them' && rawDirection !== 'they_owe_me') continue;
+      const direction: CommitmentDirection = rawDirection;
 
       const personSlugs: string[] = [];
       const ownerSlug = ownerMeta?.ownerSlug ?? item.ownerSlug;

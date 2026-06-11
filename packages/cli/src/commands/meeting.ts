@@ -13,6 +13,7 @@ import {
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
+  SINGLE_PASS_STAGED_HEADERS,
   processMeetingExtraction,
   applyReconciliationDecision,
   extractUserNotes,
@@ -51,6 +52,10 @@ import {
   wireExtractDedup,
   adaptFilteredItemsForDedup,
   decorateStagedSectionsWithDupeBadges,
+  // single-pass-extraction (W1.5/W2)
+  resolveMeetingSeries,
+  renderSeriesContext,
+  AreaParserService,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -71,6 +76,7 @@ import type {
   ReconciliationResult,
   ReconciliationContext,
   WireExtractDedupResult,
+  SinglePassContextSections,
 } from '@arete/core';
 import { execSync } from 'child_process';
 import type { Command } from 'commander';
@@ -1266,6 +1272,11 @@ export function registerMeetingCommands(program: Command): void {
           ? 'thorough'
           : (effectiveImportance === 'light' ? 'light' : 'normal');
 
+      // single-pass-extraction (W2): pipeline mode from arete.yaml
+      // (`extraction_mode: single_pass`). Default legacy = bit-identical
+      // behavior. Light-importance meetings keep the light prompt either way.
+      const singlePassMode = config.extraction_mode === 'single_pass' && mode !== 'light';
+
       // Create LLM call wrapper using AIService
       const callLLM: MeetingLLMCallFn = async (prompt: string) => {
         const result = await services.ai.call('extraction', prompt);
@@ -1304,6 +1315,62 @@ export function registerMeetingCommands(program: Command): void {
         activeTopicSlugs = undefined;
       }
 
+      // single-pass Layer-1 context assembly (W1.5 series + open commitments).
+      // Best-effort: every block degrades to absent on failure — extraction
+      // proceeds with whatever context assembled.
+      let singlePassContext: SinglePassContextSections | undefined;
+      if (singlePassMode) {
+        singlePassContext = {};
+
+        // Series context (W1.5): prior same-series meetings' items + open
+        // questions. recurring_meetings titles from area config rescue
+        // drifted titles.
+        try {
+          const seriesMeetingsDir = join(root, paths.resources, 'meetings');
+          let recurringTitles: string[] = [];
+          try {
+            const areaParser = new AreaParserService(services.storage, root);
+            const areas = await areaParser.listAreas();
+            recurringTitles = areas.flatMap((a) =>
+              (a.recurringMeetings ?? [])
+                .map((m) => m.title)
+                .filter((t): t is string => typeof t === 'string' && t.length > 0),
+            );
+          } catch {
+            // no area config — title+attendee matching still applies
+          }
+          const series = await resolveMeetingSeries(
+            services.storage,
+            seriesMeetingsDir,
+            meetingPath,
+            { recurringTitles },
+          );
+          if (series) {
+            singlePassContext.seriesContext = renderSeriesContext(series);
+          }
+        } catch {
+          // series context degrades to absent
+        }
+
+        // Open commitments filtered to attendees — dedup at source: the model
+        // marks continuation_of instead of re-emitting (Layer-1 table row 4).
+        try {
+          const attendeeSlugs = attendees.map((name) => slugifyPersonName(name));
+          if (attendeeSlugs.length > 0) {
+            const open = await services.commitments.listOpen({ personSlugs: attendeeSlugs });
+            const MAX_COMMITMENTS_IN_PROMPT = 20;
+            if (open.length > 0) {
+              singlePassContext.openCommitments = open
+                .slice(0, MAX_COMMITMENTS_IN_PROMPT)
+                .map((c) => `- ${c.id.slice(0, 8)}: ${c.text} (@${c.personSlug}, ${c.direction}, since ${c.date})`)
+                .join('\n');
+            }
+          }
+        } catch {
+          // commitments context degrades to absent
+        }
+      }
+
       // Extract intelligence
       let extractionResult: MeetingExtractionResult;
       try {
@@ -1313,6 +1380,8 @@ export function registerMeetingCommands(program: Command): void {
           priorItems,
           mode,
           activeTopicSlugs,
+          singlePass: singlePassMode,
+          singlePassContext,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1393,8 +1462,15 @@ export function registerMeetingCommands(program: Command): void {
         reason?: string;
       }> = [];
       if (shouldStage) {
-        // Extract user notes and process extraction (filtering, dedup, metadata)
-        const userNotes = extractUserNotes(body);
+        // Extract user notes and process extraction (filtering, dedup, metadata).
+        // single-pass: exclude the extractor-written sections that didn't exist
+        // pre-W1 so a re-extract doesn't read its own output as user notes.
+        const userNotes = extractUserNotes(
+          body,
+          singlePassMode
+            ? ['open questions', 'parser-flagged (mirror-pair suspects)']
+            : undefined,
+        );
 
         // Read completed items from week.md and scratchpad.md for reconciliation,
         // and read OPEN tasks from week.md and tasks.md for existing-task dedup.
@@ -1415,6 +1491,8 @@ export function registerMeetingCommands(program: Command): void {
           completedItems,
           openTasks,
           importance: effectiveImportance,
+          // W1 (risk 1): tier-derived approval + keep low-confidence items.
+          singlePass: singlePassMode,
         });
 
         // Merge reconciliation decisions into processed items.
@@ -1582,6 +1660,13 @@ export function registerMeetingCommands(program: Command): void {
           extractionResult.intelligence.core,
           extractionResult.intelligence.could_include,
           extractionResult.validationWarnings,
+          // single-pass: persist open questions + mirror-pair flag section.
+          singlePassMode
+            ? {
+                openQuestions: extractionResult.intelligence.openQuestions,
+                telemetryEvents: extractionResult.telemetryEvents,
+              }
+            : undefined,
         );
 
         // Phase 10b-min wiring — decorate staged sections with `↪ canonical
@@ -1679,6 +1764,25 @@ export function registerMeetingCommands(program: Command): void {
                 patch['staged_item_matched_text'] = proc.stagedItemMatchedText;
               }
 
+              // single-pass judgment maps (W1/D3). Explicit `undefined` when
+              // empty so a re-extract clears stale maps under the partial-
+              // merge contract (same pattern as could_include above). Legacy
+              // mode never mentions these keys — existing files untouched.
+              if (singlePassMode) {
+                patch['staged_item_importance'] =
+                  proc.stagedItemImportance && Object.keys(proc.stagedItemImportance).length > 0
+                    ? proc.stagedItemImportance
+                    : undefined;
+                patch['staged_item_uncertain'] =
+                  proc.stagedItemUncertainReason && Object.keys(proc.stagedItemUncertainReason).length > 0
+                    ? proc.stagedItemUncertainReason
+                    : undefined;
+                patch['staged_item_links'] =
+                  proc.stagedItemLinks && Object.keys(proc.stagedItemLinks).length > 0
+                    ? proc.stagedItemLinks
+                    : undefined;
+              }
+
               // Phase 10b-min wiring — merge cross-meeting dedup skip_reason
               // entries on top of any existing entries. We explicitly merge
               // here (not relying on partial-merge) because adding NEW IDs
@@ -1697,7 +1801,14 @@ export function registerMeetingCommands(program: Command): void {
               // reflects whatever the file held when the lock was acquired;
               // `updateMeetingContent` rewrites only the staged sections so
               // user edits to other body regions are preserved.
-              const updatedBody = updateMeetingContent(current.body, stagedSections);
+              const updatedBody = updateMeetingContent(
+                current.body,
+                stagedSections,
+                // single-pass: extractor owns Open Questions / Parser-flagged
+                // sections, so re-extract replaces them. Legacy: omitted, so
+                // user sections with those names are preserved (invariant).
+                singlePassMode ? SINGLE_PASS_STAGED_HEADERS : undefined,
+              );
 
               return { frontmatter: patch, body: updatedBody };
             },
@@ -1731,6 +1842,27 @@ export function registerMeetingCommands(program: Command): void {
             }
           } catch {
             // best-effort instrumentation
+          }
+
+          // single-pass W3 (D4): detector telemetry → item-fates stream.
+          // The mechanical filters no longer gate items; their fires are
+          // recorded here as `type: 'extraction_telemetry'` events. Best
+          // effort; never blocks the extract write.
+          if (singlePassMode && extractionResult.telemetryEvents && extractionResult.telemetryEvents.length > 0) {
+            try {
+              const kindMap = { action: 'action_item', decision: 'decision', learning: 'learning' } as const;
+              for (const ev of extractionResult.telemetryEvents) {
+                await services.memoryLog.appendExtractionTelemetry(paths, {
+                  detector: ev.detector,
+                  item_kind: kindMap[ev.itemType],
+                  item_text: ev.item,
+                  detail: ev.detail,
+                  source_path: meetingPath,
+                });
+              }
+            } catch {
+              // best-effort telemetry
+            }
           }
 
           // Refresh qmd index unless --skip-qmd

@@ -94,6 +94,23 @@ export interface AppendItemFateOptions {
     /** Optional clock override for tests. */
     now?: Date;
 }
+/**
+ * Detector telemetry record (single-pass W3 / D4). Written to the SAME
+ * `item-fates.jsonl` stream as ItemFateEvent, distinguished by
+ * `type: 'extraction_telemetry'` — consumers filtering on
+ * `type === 'item_fate'` are unaffected. These are the log-only events the
+ * legacy mechanical filters (garbage/trivial/mirror-pair/near-dup) emit in
+ * single_pass mode instead of dropping items.
+ */
+export interface ExtractionTelemetryRecord {
+    type: 'extraction_telemetry';
+    ts: string;
+    detector: string;
+    item_kind: 'action_item' | 'decision' | 'learning';
+    item_text: string;
+    detail: string;
+    source_path: string;
+}
 export declare class MemoryLogService {
     private readonly storage;
     constructor(storage: StorageAdapter);
@@ -124,6 +141,14 @@ export declare class MemoryLogService {
      * downstream tooling.
      */
     appendItemFate(workspacePaths: WorkspacePaths, event: Omit<ItemFateEvent, 'type' | 'ts'> & {
+        ts?: string;
+    }, options?: AppendItemFateOptions): Promise<void>;
+    /**
+     * Append a single extraction-telemetry event (single-pass W3 / D4) to
+     * `.arete/memory/item-fates.jsonl`. One JSON line per event; same
+     * atomic-append semantics as `appendItemFate`.
+     */
+    appendExtractionTelemetry(workspacePaths: WorkspacePaths, event: Omit<ExtractionTelemetryRecord, 'type' | 'ts'> & {
         ts?: string;
     }, options?: AppendItemFateOptions): Promise<void>;
 }

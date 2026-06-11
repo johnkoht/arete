@@ -13,6 +13,10 @@ const DEFAULT_CONFIG = {
     source: 'npm',
     agent_mode: undefined,
     ide_target: undefined,
+    // Single-pass-extraction plan: both flags default to legacy behavior.
+    // Flipping is John's call after the W5 eval gate / CHR-W0 review.
+    extraction_mode: 'legacy',
+    reconcile_mode: 'inline',
     ai: {
         tiers: {
             fast: undefined,
@@ -92,6 +96,14 @@ function normalizeConfig(config) {
     const pp = config.settings?.conversations?.peopleProcessing;
     if (!VALID_PEOPLE_PROCESSING.has(pp)) {
         config.settings.conversations.peopleProcessing = 'off';
+    }
+    // Clamp invalid mode flags to their safe (legacy-behavior) defaults so a
+    // typo in arete.yaml can never activate a half-configured pipeline.
+    if (config.extraction_mode !== 'legacy' && config.extraction_mode !== 'single_pass') {
+        config.extraction_mode = 'legacy';
+    }
+    if (config.reconcile_mode !== 'inline' && config.reconcile_mode !== 'day-level') {
+        config.reconcile_mode = 'inline';
     }
     /**
      * Migration: qmd_collection (singular) → qmd_collections (map)

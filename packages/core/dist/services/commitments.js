@@ -654,6 +654,15 @@ export class CommitmentsService {
         const toAdd = [];
         for (const [personSlug, items] of freshItems) {
             for (const item of items) {
+                // D7 belt-and-suspenders (single-pass-extraction): `direction: none`
+                // items are visibility-only and must never become commitments. The
+                // primary guard is upstream (meeting-parser skips `·`-marked lines);
+                // this catches any future producer that leaks a non-binary direction
+                // into the sync input.
+                if (item.direction !== 'i_owe_them' && item.direction !== 'they_owe_me') {
+                    console.warn(`[commitments] sync skipped non-directional item for ${personSlug}: "${item.text.slice(0, 60)}" (direction: ${String(item.direction)})`);
+                    continue;
+                }
                 // Compute commitment hash (mirrors computeActionItemHash)
                 const hash = computeCommitmentHash(item.text, personSlug, item.direction);
                 // Skip if we've already seen this hash (preserve existing status)

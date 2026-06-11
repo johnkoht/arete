@@ -551,7 +551,8 @@ export type ReconciliationActionItem = {
     owner: string;
     ownerSlug: string;
     description: string;
-    direction: 'i_owe_them' | 'they_owe_me';
+    /** `'none'` = team-internal (single-pass D3); inert in commitments (D7). */
+    direction: 'i_owe_them' | 'they_owe_me' | 'none';
     counterpartySlug?: string;
     due?: string;
     confidence?: number;

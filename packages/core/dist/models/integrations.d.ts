@@ -82,8 +82,14 @@ export type StagedItemOwnerMeta = {
 };
 /** Map of itemId → owner metadata (for action items) */
 export type StagedItemOwner = Record<string, StagedItemOwnerMeta>;
-/** Direction of an action item relative to the user. */
-export type StagedItemDirection = 'i_owe_them' | 'they_owe_me';
+/**
+ * Direction of an action item relative to the user.
+ *
+ * `'none'` (single-pass-extraction D3): team-internal / not-user-relative.
+ * Never creates a commitment (D7) — visibility-only in staging. Rendered
+ * with a `·` marker instead of a direction arrow.
+ */
+export type StagedItemDirection = 'i_owe_them' | 'they_owe_me' | 'none';
 /** A single staged item extracted from a meeting file */
 export type StagedItem = {
     id: string;
