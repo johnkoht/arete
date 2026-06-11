@@ -1430,3 +1430,36 @@ describe('/update-project skill prose (Phase 14 AC1)', () => {
     assert.doesNotMatch(projectProse, /future phase/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 14 AC5 (stretch) — finalize-project closed-project retro prose.
+// Mechanism per phase-14 pre-mortem D5: items/-mediated (OQ1), surfacing
+// through briefs + area memory; `arete memory refresh` is the regen verb
+// (topic refresh does not consume memory items).
+// ---------------------------------------------------------------------------
+
+describe('finalize-project retro prose (Phase 14 AC5)', () => {
+  const skillPath = join(SKILLS_DIR, 'finalize-project', 'SKILL.md');
+
+  it('carries the retro step with the exact entry format', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /Closed-Project Retro/);
+    assert.match(prose, /## Closed project: Visioning Deck/);
+    assert.match(prose, /- \*\*Date\*\*: 2026-06-10/);
+    assert.match(prose, /- \*\*Topics\*\*: glance-2-mvp, vision-deck/);
+    assert.match(prose, /- \*\*Project\*\*: visioning-deck/);
+    assert.match(prose, /MUST include the project's area slug/);
+  });
+
+  it('carries the idempotency-scan rule (rerunning finalize never duplicates)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /scan before write/i);
+    assert.match(prose, /never duplicate the retro/i);
+  });
+
+  it('runs arete memory refresh (NOT topic refresh) and states why (pre-mortem D5)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /arete memory refresh/);
+    assert.match(prose, /`arete topic refresh` does NOT integrate memory items/);
+  });
+});
