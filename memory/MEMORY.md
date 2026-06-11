@@ -1,5 +1,7 @@
 # Build memory (Arete project)
 
+- [Phase 13 area-edge build](entries/2026-06-11_phase-13-area-edge-completion-learnings.md) — 1.03× calibration via actuals-anchoring; watchdog-vs-64min-suite lesson; owner-only action items create no commitment
+
 Index of significant changes to **Arete’s build, tooling, and architecture**. Detail lives in dated entries; this file is the index.
 
 > **Note**: Paths in entries before 2026-02-09 reference pre-reorganization structure (`.cursor/build/` = now `dev/`).

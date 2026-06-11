@@ -186,7 +186,7 @@
       ],
       "notes": [
         "OAuth callback uses localhost dynamic port and requires browser consent.",
-        "If Google shows an unverified-app warning, users continue via Advanced -> Go to Aret\u00e9 (unsafe).",
+        "If Google shows an unverified-app warning, users continue via Advanced -> Go to Areté (unsafe).",
         "JSON output (--json) includes: importance ('light'|'normal'|'important'), organizer ({name,email,self}|null), notes (string|null), hasAgenda (boolean)"
       ],
       "lastVerified": "2026-03-30"
@@ -363,8 +363,8 @@
         "suggestAreaForMeeting() in area-parser.ts provides content-based area suggestions with confidence scores",
         "Area context (current state, recent decisions) is injected into extraction prompt when area is set",
         "Wiki-aware extraction: when topics are detected on a transcript, injects topic-page sections + topic-tagged L2 items as 'already known'; LLM emits only deltas via verbatim delta directive",
-        "Recap: ## Core (free-form, principle-based) + ## Could include (\u22648 prioritized headlines); ## Summary retained for backward compat \u2014 both headings parse permanently",
-        "Topic detection (lexical pre-pass): detectTopicsLexical / detectTopicsLexicalDetailed; stop-token list + \u22652 non-stop slug tokens + \u22650.5 coverage; cap 3 at rollout",
+        "Recap: ## Core (free-form, principle-based) + ## Could include (≤8 prioritized headlines); ## Summary retained for backward compat — both headings parse permanently",
+        "Topic detection (lexical pre-pass): detectTopicsLexical / detectTopicsLexicalDetailed; stop-token list + ≥2 non-stop slug tokens + ≥0.5 coverage; cap 3 at rollout",
         "--dry-run-topics flag prints detected topics with score + matched tokens for empirical threshold tuning before A/B rollout",
         "L2 entries (learnings.md, decisions.md) gain **Topics**: bullet for per-topic queryability via getMemoryItemsForTopics(paths, slugs, opts)"
       ],
@@ -503,7 +503,7 @@
       "id": "signal-patterns",
       "name": "Signal Pattern Detection",
       "type": "service",
-      "description": "Cross-person signal pattern detection \u2014 identifies topics appearing in 2+ meetings across 2+ distinct people. Used for intelligence dashboard and daily brief.",
+      "description": "Cross-person signal pattern detection — identifies topics appearing in 2+ meetings across 2+ distinct people. Used for intelligence dashboard and daily brief.",
       "provenance": "built",
       "status": "active",
       "owner": "build",
@@ -652,7 +652,7 @@
         "npm test"
       ],
       "notes": [
-        "Top-level orchestrator \u2014 never touches StorageAdapter directly",
+        "Top-level orchestrator — never touches StorageAdapter directly",
         "routeToSkill() uses stop words, trigger matching, description overlap, work type keywords",
         "Service composition pattern: IntelligenceService(context, memory, entity)"
       ],
@@ -690,8 +690,8 @@
       ],
       "notes": [
         "Requires ical-buddy binary installed via Homebrew: brew install ical-buddy",
-        "macOS only \u2014 use google-calendar-provider for cross-platform",
-        "Provider alias: 'macos' \u2192 'apple-calendar' in registry",
+        "macOS only — use google-calendar-provider for cross-platform",
+        "Provider alias: 'macos' → 'apple-calendar' in registry",
         "JSON output (--json) includes: importance ('light'|'normal'|'important'), organizer ({name,email,self}|null), notes (string|null), hasAgenda (boolean)"
       ],
       "lastVerified": "2026-03-30"
@@ -815,7 +815,7 @@
       "notes": [
         "API key from notion.so/profile/integrations (internal integration)",
         "Stored in NOTION_API_KEY env var or .credentials/credentials.yaml",
-        "Thin fetch wrapper \u2014 no @notionhq/client SDK (567KB saved)",
+        "Thin fetch wrapper — no @notionhq/client SDK (567KB saved)",
         "Rate limit: 3 req/sec with timestamp-based windowing",
         "File URLs expire ~1 hour (S3 pre-signed URLs)",
         "Supports 20+ block types; unknown types emit HTML comments"
@@ -850,7 +850,7 @@
       ],
       "notes": [
         "Task IDs are 8-char sha256 hash of normalized text (same pattern as CommitmentsService)",
-        "Bucket mapping: inbox/must/should/could \u2192 week.md, anytime/someday \u2192 tasks.md",
+        "Bucket mapping: inbox/must/should/could → week.md, anytime/someday → tasks.md",
         "Auto-resolution: completing task with @from(commitment:id) resolves linked commitment",
         "Scoring service is stateless (pure functions)",
         "Scoring dimensions: due date (0-40), commitment (0-25), meeting relevance (0-20), week priority (0-15)"
@@ -953,6 +953,43 @@
         "open is contractually zero-write (counting-adapter + tree-snapshot tests)",
         "area resolution priority: fm.area -> areas[0] -> prose **Area**: line -> unresolved (resolveProjectArea)"
       ]
+    },
+    {
+      "id": "meeting-area-cli",
+      "name": "Meeting Area CLI (set-area / backfill-area / process proposal)",
+      "type": "cli-command",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "Phase 13: area: as a first-class edge on meetings. `meeting process` PROPOSES an area (>=0.7, zero writes); `meeting set-area` writes area: + area_set_by: approval|manual on confirm (run BEFORE approve so commitments inherit); `meeting backfill-area` mirrors the project backfill (preview default, --apply with backfill provenance, --reset scoped to backfill, --days limiter) with per-signal qualification (summary-only name matches refused; title-only flagged name-only) and an alsoMatchesViaTopics recall-loss column. `commitments claim` stamps projectSlug (the writer for the field unionProjectCommitments already consumes).",
+      "implementationPaths": [
+        "packages/core/src/services/meeting-area.ts",
+        "packages/cli/src/commands/meeting.ts",
+        "packages/cli/src/commands/commitments.ts",
+        "packages/core/src/services/area-parser.ts"
+      ],
+      "entrypoints": [
+        "arete meeting set-area <file> <area-slug> [--set-by approval|manual]",
+        "arete meeting backfill-area [--apply|--reset|--days N]",
+        "arete commitments claim <id> --project <slug> | --clear"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/LEARNINGS.md",
+        "packages/cli/src/commands/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npx tsx --test packages/core/test/services/meeting-area.test.ts packages/cli/test/commands/meeting-area-cli.test.ts packages/cli/test/commands/commitments.test.ts"
+      ],
+      "notes": [
+        "Writes go through writeWithLock with mtimeGuardSeconds:0 (explicit user-gated, owns 2 keys) — lock abstains are surfaced, never silent",
+        "Same-values rerun = ZERO write calls (pre-serialization abstain), stronger than the project backfill's identical-content guarantee",
+        "meetingsForArea: explicit area: wins per meeting; topics-union only for area-less meetings (documented R4-bounded recall trade-off)",
+        "projectSlug is NOT part of the commitment dedup hash (pinned test)"
+      ],
+      "lastVerified": "2026-06-10"
     }
   ]
 }

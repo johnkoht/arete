@@ -72,6 +72,10 @@
   - `--yes` - Skip confirmation prompt (for skill/automation use)
   - `--skip-qmd` - Skip qmd index refresh
   - `--json` - Output as JSON
+- `arete commitments claim <id>` - Claim a commitment for a project (stamps `projectSlug`; the project brief's Open-work section moves it from unclaimed-area to project-claimed; the sibling briefs stop showing it)
+  - `--project <slug>` - Project slug (validated against projects/active/ and projects/archive/, both naming shapes)
+  - `--clear` - Release the claim instead
+  - `--json` - Output as JSON
 
 ## Projects
 
@@ -110,6 +114,16 @@
   - `--threshold <n>` - Confidence threshold override (default from policy or 0.65)
   - `--dry-run` - Analyze only; do not write people files or attendee_ids
   - `--json` - Output as JSON
+  - When the meeting lacks `area:` frontmatter, returns `proposedArea: {slug, confidence}` at ≥0.7 confidence (null below). PROPOSAL ONLY — process never writes the area; confirm with `arete meeting set-area`
+- `arete meeting set-area <file> <area-slug>` - Write `area:` + `area_set_by:` into a meeting's frontmatter (body preserved; slug validated against areas/). Run BEFORE `meeting approve` so created commitments inherit the area
+  - `--set-by <provenance>` - `approval` (default) or `manual`
+  - `--json` - Output as JSON
+- `arete meeting backfill-area` - Propose an `area:` for meetings missing one (inferred from title + summary + transcript at ≥0.7 confidence + signal policy: summary-only name matches refused, title-only flagged `name-only`). Default is preview (dry-run)
+  - `--apply` - Write changes (`area_set_by: backfill` provenance)
+  - `--reset` - Clear area ONLY on meetings stamped `area_set_by: backfill`
+  - `--days <n>` - Limit candidates to the last N days (default: all history)
+  - `--skip-qmd` - Skip automatic qmd index update after --apply
+  - `--json` - Output as JSON (proposals carry signal/corroborated/alsoMatchesViaTopics)
 
 ## Integrations
 

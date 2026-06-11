@@ -63,3 +63,12 @@ Meeting-area write surface shipped: AreaMatch signal provenance (9aebe3d7), meet
 **One test-fixture stumble, fixed**: the inheritance integration first used `[@john-doe →]` (no counterparty) — approve's commitment creation silently skips items without a personSlug, so commitments.json never appeared. Notation `[@john-doe → @anthony]` fixed it. Worth knowing: an owner-only action item produces NO commitment at approve.
 
 **Calibration vs ledger (AC2/AC3 were the flagged overrun rows)**: AC3 = meeting-area.ts ~160 logic + CLI verb ~210 ≈ 370 vs ~310 est (1.2×); AC2 = set-area ~120 + process block ~50 + prose ~20 ≈ 190 vs ~170 est (1.1×). Both under the 1.5× tripwire — the review's re-anchoring did its job. Slice C next.
+
+## 2026-06-11 ~01:30Z — WRAP (completed by prime orchestrator)
+
+Builder agent was watchdog-killed (600s no-output) while running the full suite at wrap — root cause:
+the suite now takes ~64 minutes. All build work had landed via per-task commits; zero loss. Prime
+completed the wrap directly: full suite **4646 pass / 0 fail** (+70 new, 2 pre-existing skips, exit 0);
+typecheck clean; dark-code audit 0/4 new export groups dark (all CLI-wired); memory entry + LEARNINGS
+committed; rollback.md in place. Net logic ≈ +702 vs ~685 ledger (1.03×). READY-FOR-MERGE → prime
+merge gate next. Standing lesson recorded: never block an agent stream on `npm test` — detach it.
