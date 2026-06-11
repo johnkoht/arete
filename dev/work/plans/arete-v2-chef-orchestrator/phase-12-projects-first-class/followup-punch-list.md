@@ -68,3 +68,20 @@ live day with /project, project open, backfill-area, and the two mega-project sp
 11. Wiki landing-pads validated: rescue-checklist keeps (`pop-adjuster-workflow`,
     `snapsheet-task-replacement`) re-ranked into the task-management-v1 brief on day 1 —
     the "activity ≠ importance" call was right.
+
+## Soak findings — 2026-06-11 (meeting backfill preview + hotfix scope-outs)
+14. **MANIFEST.md appears as a backfill candidate** — the meeting-area candidate filter should skip
+    non-meeting files in resources/meetings/. Cosmetic, one-line filter.
+15. **Recurring-title signal needs recency-bounding** — `john-lindsay-11` series proposed
+    `reserv-onboarding` at confidence 1 for JUNE meetings because the series was born in the
+    onboarding era; the 1:1's content moved on (June = Glance 2.0 roadmap). Series identity ≠
+    current content. Candidate fix: window the recurring-title evidence (e.g. last N occurrences'
+    area evidence, not all-time) or decay confidence with drift in the also-via-topics arm.
+    Live evidence: 2026-06-03-john-lindsay-11 carries also-via-topics glance-2-mvp — the two arms
+    disagree and the topics arm is right.
+16. **Dedup should re-point task `@from` refs to the surviving sibling** — hotfix 2026-06-11
+    scope-out; without it, dropping a dupe orphans the task's commitment link (and the text-hash
+    task-ID collision means mirror tasks can share IDs). Pairs with #5 claim tooling.
+17. **/update-project soak runs have no automatic record** — proposals live only in the session;
+    applied edits visible as workspace git diffs. If manual paste-back proves annoying, add a
+    one-line append to an .arete/ soak log in the skill prose. Optional.
