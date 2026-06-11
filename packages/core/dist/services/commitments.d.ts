@@ -396,6 +396,27 @@ export declare class CommitmentsService {
         applied: boolean;
     }>;
     /**
+     * Claim or release a commitment for a project (Phase 13 AC5).
+     *
+     * Stamps `projectSlug` on the commitment matched by `id` (8-char prefix
+     * or full hash — same resolution semantics as `resolve()`: 0 matches →
+     * error; 2+ → error listing matches, no write). Passing `null` clears
+     * the claim (`--clear`).
+     *
+     * Always an explicit act (John or an approval-gated skill step), so no
+     * provenance/reset machinery — unlike inferred areas there is no "undo
+     * the machine's guesses" story to support (plan design decision 5).
+     *
+     * Hash invariance: `projectSlug` is metadata only and is NOT part of
+     * the dedup hash (see `computeCommitmentHash` — same contract as
+     * `area`). Commitment IDs are preserved; pinned by an explicit unit
+     * assertion (review finding 5).
+     *
+     * `save()` runs under the service lock (re-entrant `runWithLock`), the
+     * same write path every other mutation uses.
+     */
+    setProjectSlug(id: string, projectSlug: string | null): Promise<Commitment>;
+    /**
      * Reset `area` to undefined for every commitment carrying the
      * `areaSetBy: 'backfill'` provenance marker.
      *

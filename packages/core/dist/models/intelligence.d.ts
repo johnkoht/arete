@@ -125,6 +125,13 @@ export type ProjectBrief = BriefBase & {
          * signals disagree (frontmatter wins). Rendered like areaNote.
          */
         areaWarning?: string;
+        /**
+         * Phase 13 AC7 — read-only surfacing of the README's `jira:`
+         * frontmatter block (e.g. `jira: {idea: GL-12}`). Values
+         * stringified, arrays comma-joined; absent when missing/malformed.
+         * Rendered as one `**Jira:** …` line. No write path, no validation.
+         */
+        jira?: Record<string, string>;
     };
 };
 /** Area brief — `arete brief --area <slug>` */

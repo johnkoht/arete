@@ -1,0 +1,209 @@
+{
+  "name": "phase-13-area-edge-completion",
+  "branchName": "worktree-agent-a15c3d497095120ed",
+  "goal": "Make area: a first-class edge on meetings (leak/miss fix, propose-at-process, set-area, backfill under the inherited contract), ship the commitment claim verb, and finish the project-brief read surface so Phase 14 scans clean inputs.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "AC1+AC10: meetingsForArea prefers explicit area:",
+      "description": "Change brief-assemblers.ts:238 filter to per-meeting preference (m.area ? m.area===areaSlug : m.topics.includes(areaSlug)); doc comment update; leak/miss/trade-off fixtures.",
+      "acceptanceCriteria": [
+        "Named test 'area-edge leak': area:pm-operations + topics:[glance-2-mvp] excluded from glance-2-mvp, included for pm-operations",
+        "Named test 'area-edge miss': area:pm-operations with no twin topic page included for pm-operations",
+        "Accepted-trade-off fixture: area:X + topics:[Y] EXCLUDED from Y (named, R4-bounded)",
+        "No-area meeting topics fallback unchanged; W6.2 meetingsForArea tests pass UNMODIFIED",
+        "typecheck + targeted tsx --test green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "AC8: formatter polish (punch 7-9)",
+      "description": "Status excerpt date-heading handling; renderSection indented-bullet passthrough; loadMeetingIndex excerpt skips HTML comments.",
+      "acceptanceCriteria": [
+        "Status fixture renders **[YYYY-MM-DD]** prefix, no raw ### in output",
+        "Nested open-work bullets render '  - x' (no '-   - ' double-nest)",
+        "Body starting <!-- merged from --> yields next real line as excerpt",
+        "Cross-mode formatter regression: non-indented bullet output unchanged"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "AC7: jira frontmatter read-side",
+      "description": "Parse fm.jira into ActiveProject + ProjectBrief.metadata.jira; formatter renders one **Jira:** line.",
+      "acceptanceCriteria": [
+        "Object parsed; array values comma-joined; missing/malformed absent (no line, never throws)",
+        "Formatter renders line for jira:{idea: GL-12} fixture",
+        "No write path"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "AC4: siblings from area-union + archive prefix",
+      "description": "Section-6 union: same-area actives first, link-derived extras deduped; archive lookup tolerates YYYY-MM_<slug>.",
+      "acceptanceCriteria": [
+        "Area-siblings appear with zero README links",
+        "Link-only cross-area sibling still appears; self excluded; dedup works",
+        "Archived YYYY-MM_ dir resolves + labeled",
+        "Integration: 3 same-area projects each list the other 2"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "AC6: project skill prose",
+      "description": "Always-show siblings/wiki + one-line absence note; broadened trigger list (load project, review project, look at project, load up).",
+      "acceptanceCriteria": [
+        "Prose tests assert always-show rule text + broadened triggers in chef-orchestrator-skills.test.ts"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "SLICE A GATE: fixture gate + live shadow (MC3a)",
+      "description": "Verify leak/miss tests; read-only section-count shadow over all live arete-reserv projects; record numbers in diary; STOP if any count changes.",
+      "acceptanceCriteria": [
+        "Live brief section counts unchanged for every live project",
+        "arete-reserv git status byte-identical before/after",
+        "Gate numbers + verdict written to build-diary.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "D1: signal provenance on AreaMatch",
+      "description": "Additive signal + corroborated fields on AreaMatch in area-parser.ts; no behavior change for existing consumers.",
+      "acceptanceCriteria": [
+        "Unit tests per signal value + corroboration",
+        "Existing area-parser + consumer suites pass unmodified"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "AC3 core: meeting-area.ts helpers",
+      "description": "listMeetingsForBackfill (skip area: carriers; inference text; alsoMatchesViaTopics; date), applyAreaToMeeting (writeWithLock mtimeGuard 0, same-values no-op suppression), resetBackfilledMeetingAreas (backfill-only), qualification policy (summary-only excluded, title-only nameOnly flag).",
+      "acceptanceCriteria": [
+        "Candidate listing skips area: carriers",
+        "Apply preserves body bytes + other frontmatter incl. nested maps (real fs + StorageAdapter)",
+        "Same-values rerun = ZERO write calls (counting adapter)",
+        "Reset scoped to backfill; absent/manual/approval provenance untouched",
+        "Apply succeeds on freshly-written file (D4 regression)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-9",
+      "title": "AC3 CLI: arete meeting backfill-area",
+      "description": "Preview default / --apply / --reset / --days / --skip-qmd / --json; name-only flagging grouped last + summary line; also-matches-via-topics column; unwritten surfaced.",
+      "acceptanceCriteria": [
+        "Subprocess tests: preview/apply/reset/days/json paths",
+        "Preview leaves fixture workspace byte-identical (snapshotTree)",
+        "name-only flag + summary line in human output; signal/corroborated/alsoMatchesViaTopics in JSON",
+        "written:false surfaced as warning + unwritten count in JSON"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-10",
+      "title": "AC2a: arete meeting set-area",
+      "description": "set-area <file> <area-slug> --set-by approval|manual --json; area validated against areas/*.md; writeWithLock guard 0; abstain surfaced as error.",
+      "acceptanceCriteria": [
+        "Round-trip preserves body + other frontmatter keys incl. nested maps",
+        "Unknown area slug = error, no write; --json all exit paths",
+        "set-area immediately after another write succeeds (D4 regression)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-11",
+      "title": "AC2b: proposal at meeting process + inheritance",
+      "description": "proposedArea {slug,confidence,signal,corroborated} in process JSON + one human line at >=0.7; null below floor; zero area writes; integration process->set-area->approve inheritance.",
+      "acceptanceCriteria": [
+        "Proposal present >=0.7 / absent <0.7",
+        "Process writes no area: key (asserted)",
+        "Integration: created commitments carry the area after set-area before approve"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-12",
+      "title": "AC2c: process-meetings skill prose",
+      "description": "Present proposal from process output; confirm-or-skip optional never-blocking; set-area BEFORE approve.",
+      "acceptanceCriteria": [
+        "Prose tests pin propose-not-auto-write + optional-never-blocking + set-area-before-approve"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-13",
+      "title": "AC5a: CommitmentsService.setProjectSlug",
+      "description": "setProjectSlug(idPrefix, slug|null) with resolve() prefix semantics under existing lock; null clears.",
+      "acceptanceCriteria": [
+        "Set, clear, ambiguous-prefix rejection, unknown-id error",
+        "Hash-invariance pinned: projectSlug stamp/clear leaves dedup hash/ID unchanged"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-14",
+      "title": "AC5b: arete commitments claim CLI",
+      "description": "claim <id-prefix> --project <slug> / --clear / --json; project validated against active/ + archive/ both naming shapes.",
+      "acceptanceCriteria": [
+        "Subprocess: claim/clear/--json; unknown project rejected, no write",
+        "Integration: claim flips commitment from sibling unclaimed-area to project-claimed"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-15",
+      "title": "Wrap: AC9/AC10/AC11",
+      "description": "Full suite + typecheck; dark-code audit; dist rebuild + commit; cli-commands.md + AGENTS.md + capabilities.json + routability; rollback.md; memory entry + LEARNINGS; LOC ledger; ship report (stop 5.5).",
+      "acceptanceCriteria": [
+        "Full npm test green; typecheck clean",
+        "Dark-code audit: 0 unexplained dark exports",
+        "rollback.md present; ledger vs ~+685 with variance notes",
+        "dist/ rebuilt and committed"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-06-10T23:05:00Z",
+    "totalTasks": 15,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

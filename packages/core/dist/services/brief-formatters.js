@@ -20,7 +20,11 @@ function renderSection(section) {
             lines.push('');
     }
     for (const bullet of section.bullets) {
-        lines.push(`- ${bullet}`);
+        // Phase 13 AC8(8): bullets that arrive already indented (nested
+        // sub-bullets like `  - item` under a `**I owe (1):**` group header)
+        // pass through un-prefixed — prefixing them produced the `-   - …`
+        // double-nest observed in live project briefs.
+        lines.push(/^\s/.test(bullet) ? bullet : `- ${bullet}`);
     }
     if (section.truncated) {
         const count = typeof section.truncatedCount === 'number' && section.truncatedCount > 0
@@ -84,6 +88,12 @@ export function formatProjectBriefMarkdown(brief) {
     ].filter((s) => s !== null);
     if (metaBits.length > 0)
         headerLines.push(metaBits.join(' · '), '');
+    // Phase 13 AC7 — one read-only Jira line when the README carries a
+    // `jira:` frontmatter block.
+    if (meta.jira && Object.keys(meta.jira).length > 0) {
+        const jiraBits = Object.entries(meta.jira).map(([k, v]) => `${k}: ${v}`);
+        headerLines.push(`**Jira:** ${jiraBits.join(' · ')}`, '');
+    }
     // Phase 12 AC6 / R9 — visible one-liners for unresolved or divergent area.
     if (meta.areaNote)
         headerLines.push(`_${meta.areaNote}_`, '');

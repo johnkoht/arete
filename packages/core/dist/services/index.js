@@ -13,6 +13,10 @@ export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.j
 // Phase 12 AC1/AC2 — project area resolution + backfill helpers
 export { resolveProjectArea } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, } from './project-area.js';
+// Phase 13 AC2/AC3 — meeting area write surface (set-area + backfill)
+export { listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, } from './meeting-area.js';
+// Phase 13 AC4 — archive-prefix-tolerant project lookup (claim validation reuse)
+export { resolveArchivedProjectReadme } from './brief-assemblers.js';
 export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, } from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';

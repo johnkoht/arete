@@ -92,6 +92,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **`resolveTargetSlugs` helper is the single-source-of-truth for positional [slug] vs --slugs vs --all** (2026-04-29, slack-digest-topic-wiki). Three ways to specify scope on the same Commander.js command (`topic refresh [slug]` positional, `--slugs <comma-list>`, `--all`) creates an ambiguity surface that Commander silently accepts. Resolution: `--all` overrides; positional + `--slugs` together is an error with a clear message; positional alone = `[slug]`; `--slugs` alone = comma-split-trim-drop-empty; neither = `[]` (caller treats as "none specified"). Helper exported from `topic.ts` for direct unit testing. Replicate this pattern for any future command that grows multiple ways to specify the same kind of scope — don't let Commander's silent accept-everything semantics resolve the ambiguity for you.
 
+- **Owner-only staged action items (`[@owner →]` with no counterparty) create NO commitment at approve** (2026-06-10, phase-13). The approve path's commitment creation derives `personSlug` from the counterparty (i_owe_them) or owner (they_owe_me) and silently `continue`s when it's absent — so a staged item without a counterparty produces tasks/memory entries but never lands in `.arete/commitments.json`. Integration tests that assert commitment creation MUST use full arrow notation (`[@owner → @counterparty]`); a missing commitments.json after approve is the diagnostic tell.
+
 ## Pre-Edit Checklist
 
 - [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command

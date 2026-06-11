@@ -71,6 +71,40 @@ export function extractDateFromMeetingPath(filePath) {
     const match = base.match(/^(\d{4}-\d{2}-\d{2})-/);
     return match ? match[1] : undefined;
 }
+/**
+ * First non-empty, non-HTML-comment line of the first `## …` section of a
+ * meeting body, capped at 200 chars (Phase 13 AC8(9)). Returns undefined
+ * when the body has no `## ` section or the section holds only comments.
+ */
+function firstSectionExcerpt(body) {
+    let inSection = false;
+    let inComment = false;
+    for (const raw of body.split('\n')) {
+        if (/^##\s/.test(raw)) {
+            if (inSection)
+                return undefined; // first section ended without content
+            inSection = true;
+            continue;
+        }
+        if (!inSection)
+            continue;
+        const line = raw.trim();
+        if (line.length === 0)
+            continue;
+        if (inComment) {
+            if (line.includes('-->'))
+                inComment = false;
+            continue;
+        }
+        if (line.startsWith('<!--')) {
+            if (!line.includes('-->'))
+                inComment = true;
+            continue;
+        }
+        return line.slice(0, 200);
+    }
+    return undefined;
+}
 export async function loadMeetingIndex(storage, paths) {
     const meetingsDir = join(paths.resources, 'meetings');
     const exists = await storage.exists(meetingsDir);
@@ -115,19 +149,17 @@ export async function loadMeetingIndex(storage, paths) {
                     .filter((t) => t.length > 0)
                 : [];
         const projectSlug = typeof fm.project === 'string' ? fm.project : undefined;
-        // Pull a short excerpt from the body — first non-empty line after
-        // frontmatter, or first H2 (### Summary etc.)
+        // Pull a short excerpt from the body — first non-empty line of the
+        // first `## …` section. HTML-comment lines (`<!-- merged from … -->`
+        // markers and friends) are skipped so they never surface as
+        // recent-activity excerpts (Phase 13 AC8(9)).
+        //
+        // Line-walk on purpose: the previous `([\s\S]+?)(?=\n##\s|$)` regex
+        // truncated the section at its first line end under the `m` flag
+        // (same pitfall documented at `extractDiscussionTopics`), which made
+        // a leading comment line swallow the whole excerpt.
         const body = parsed?.body ?? '';
-        let excerpt;
-        const firstHeading = body.match(/^##\s+([^\n]+)\n([\s\S]+?)(?=\n##\s|$)/m);
-        if (firstHeading) {
-            const firstLine = firstHeading[2]
-                .split('\n')
-                .map((l) => l.trim())
-                .filter((l) => l.length > 0)[0];
-            if (firstLine)
-                excerpt = firstLine.slice(0, 200);
-        }
+        const excerpt = firstSectionExcerpt(body);
         entries.push({
             path: filePath,
             date,
@@ -157,13 +189,25 @@ export function meetingsForPerson(index, personSlug, personName) {
     });
 }
 /**
- * Filter the meeting index by area — union of `area:` frontmatter match
- * and `topics:` membership (W6, review concern 7: June-style meetings
- * carry `topics:` lists and no `area:` key, so area-only matching missed
- * them at both the project (S2) and area call sites).
+ * Filter the meeting index by area — explicit `area:` frontmatter wins
+ * PER MEETING; the W6 topics-union arm survives only as a fallback for
+ * meetings without one (Phase 13 AC1).
+ *
+ * A meeting WITH explicit `area:` matches only on `area:` — a topic
+ * mention of another area no longer leaks it into that area's brief
+ * (observed live failure mode (b)). A meeting WITHOUT `area:` falls back
+ * to `topics:` membership (June-style meetings carry `topics:` lists and
+ * no `area:` key — W6, review concern 7 — so area-only matching missed
+ * them at both the project and area call sites).
+ *
+ * Documented trade-off (phase-13 review finding 1, R4-bounded): once a
+ * meeting carries `area: X`, a topic mention of area Y no longer
+ * surfaces it under Y — single primary area now, `areas:` plural is the
+ * parked structural fix. Tested by the named exclusion fixture in
+ * brief-project.test.ts.
  */
 export function meetingsForArea(index, areaSlug) {
-    return index.filter((m) => m.area === areaSlug || m.topics.includes(areaSlug));
+    return index.filter((m) => m.area ? m.area === areaSlug : m.topics.includes(areaSlug));
 }
 /** Filter the meeting index by overlap with a group of attendee slugs. */
 export function meetingsForGroup(index, groupSlugs, excludePath) {
@@ -664,6 +708,37 @@ function makeEmptyPersonBrief(slug) {
     };
 }
 /**
+ * Parse a `jira:` frontmatter block into a flat string map (Phase 13 AC7).
+ * Tolerates absence and non-object shapes (returns undefined, never
+ * throws). Array values are comma-joined; scalars stringified; nested
+ * objects skipped. Pure; exported for tests.
+ */
+export function parseJiraFrontmatter(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        return undefined;
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+        if (raw === null || raw === undefined)
+            continue;
+        if (Array.isArray(raw)) {
+            const joined = raw
+                .filter((v) => v !== null && v !== undefined && typeof v !== 'object')
+                .map((v) => String(v).trim())
+                .filter((s) => s.length > 0)
+                .join(', ');
+            if (joined.length > 0)
+                out[key] = joined;
+            continue;
+        }
+        if (typeof raw === 'object')
+            continue; // nested maps are not ticket refs
+        const s = String(raw).trim();
+        if (s.length > 0)
+            out[key] = s;
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+/**
  * Permissive prose `**Area**:` line matcher (Phase 12 AC1, review concern #3).
  *
  * Tolerates: `**Area**:`, `**Area:**`, unbolded `Area:` — case-insensitive,
@@ -768,6 +843,7 @@ async function listActiveProjects(storage, paths) {
             areaDivergence: areaRes.divergence,
             status: typeof fm.status === 'string' ? fm.status : undefined,
             started: typeof fm.started === 'string' ? fm.started : undefined,
+            jira: parseJiraFrontmatter(fm.jira),
             readmePath,
             readmeContent: content,
         });
@@ -790,9 +866,53 @@ async function readProjectBySlug(storage, paths, slug) {
         areaDivergence: areaRes.divergence,
         status: typeof fm.status === 'string' ? fm.status : undefined,
         started: typeof fm.started === 'string' ? fm.started : undefined,
+        jira: parseJiraFrontmatter(fm.jira),
         readmePath,
         readmeContent: content,
     };
+}
+/**
+ * Extract renderable status-update paragraphs from a `## Status Updates`
+ * section body (Phase 13 AC8(7)).
+ *
+ * Live READMEs structure the section as dated `### YYYY-MM-DD` headings
+ * followed by paragraphs. The old paragraph-split echoed the raw `###`
+ * lines into the brief. Rules:
+ *  - heading-only chunks are never emitted as content;
+ *  - a `### YYYY-MM-DD` (date-prefixed) heading becomes a
+ *    `**[YYYY-MM-DD]**` prefix on its following paragraph;
+ *  - non-date `###` headings are dropped (and clear any pending date);
+ *  - at most `limit` paragraphs are returned (matches the previous
+ *    first-2-paragraphs behavior).
+ *
+ * Pure; exported for unit tests.
+ */
+export function extractStatusUpdates(sectionText, limit = 2) {
+    const out = [];
+    let pendingDate;
+    for (const rawChunk of sectionText.split(/\n\n+/)) {
+        const chunk = rawChunk.trim();
+        if (!chunk)
+            continue;
+        const contentLines = [];
+        for (const line of chunk.split('\n')) {
+            const heading = line.match(/^###\s+(.+?)\s*$/);
+            if (heading) {
+                const date = heading[1].match(/^(\d{4}-\d{2}-\d{2})/);
+                pendingDate = date ? date[1] : undefined;
+                continue;
+            }
+            contentLines.push(line);
+        }
+        const text = contentLines.join('\n').trim();
+        if (!text)
+            continue;
+        out.push(pendingDate ? `**[${pendingDate}]** ${text}` : text);
+        pendingDate = undefined;
+        if (out.length >= limit)
+            break;
+    }
+    return out;
 }
 /**
  * First content line of a `## <heading>` section (Phase 12 AC4 — wiki
@@ -867,6 +987,32 @@ export function parseSiblingSlugs(body, selfSlug) {
     }
     return out;
 }
+/**
+ * Resolve an archived project README path, tolerating BOTH archive
+ * naming shapes (Phase 13 AC4):
+ *   - `projects/archive/<slug>/README.md` (the shape phase-12 checked)
+ *   - `projects/archive/YYYY-MM_<slug>/README.md` (what finalize-project
+ *     actually writes, e.g. `archive/2026-06_visioning-deck/`)
+ * Returns null when neither exists. Exported for reuse by the
+ * commitments-claim project validation (Phase 13 AC5).
+ */
+export async function resolveArchivedProjectReadme(storage, paths, slug) {
+    const direct = join(paths.projects, 'archive', slug, 'README.md');
+    if (await storage.exists(direct))
+        return direct;
+    const archiveDir = join(paths.projects, 'archive');
+    if (!(await storage.exists(archiveDir)))
+        return null;
+    for (const dir of await storage.listSubdirectories(archiveDir)) {
+        const base = basename(dir);
+        if (/^\d{4}-\d{2}_/.test(base) && base.slice(8) === slug) {
+            const candidate = join(dir, 'README.md');
+            if (await storage.exists(candidate))
+                return candidate;
+        }
+    }
+    return null;
+}
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export async function assembleBriefForProject(slug, paths, deps) {
     const project = await readProjectBySlug(deps.storage, paths, slug);
@@ -887,6 +1033,7 @@ export async function assembleBriefForProject(slug, paths, deps) {
         areaSetBy: project.areaSetBy,
         status: project.status,
         started: project.started,
+        jira: project.jira,
     };
     // AC6 (Phase 12): area-resolution failure must be visible, not silent.
     if (!project.area) {
@@ -908,12 +1055,9 @@ export async function assembleBriefForProject(slug, paths, deps) {
         contextChunks.push(`**Background:** ${backgroundMatch[1].trim()}`);
     const statusMatch = body.match(/##\s+Status\s+Updates\s*\n([\s\S]+?)(?=\n##\s|$)/i);
     if (statusMatch) {
-        // Take first 2 paragraphs
-        const updates = statusMatch[1]
-            .split(/\n\n+/)
-            .map((s) => s.trim())
-            .filter((s) => s.length > 0)
-            .slice(0, 2);
+        // Phase 13 AC8(7): date headings become **[YYYY-MM-DD]** prefixes;
+        // raw `###` lines never reach the rendered excerpt.
+        const updates = extractStatusUpdates(statusMatch[1]);
         if (updates.length > 0)
             contextChunks.push(`**Status:** ${updates.join('\n\n')}`);
     }
@@ -1020,19 +1164,37 @@ export async function assembleBriefForProject(slug, paths, deps) {
     catch {
         // best-effort
     }
-    // 6. Sibling projects — relative README links resolved against
-    // active/ + archive/ (archived labeled); unresolvable links dropped.
-    // Phase 12 AC4.
-    const siblingSlugs = parseSiblingSlugs(body, slug);
-    if (siblingSlugs.length > 0) {
+    // 6. Sibling projects — shared-`area:` actives FIRST (robust primary
+    // source post-phase-12), then link-derived extras not already present
+    // (cross-area + archived references); dedup by slug; archived labeled.
+    // Archive lookup tolerates the `YYYY-MM_<slug>` prefix finalize-project
+    // actually writes. Phase 13 AC4 (supersedes the link-only Phase 12 AC4).
+    {
         const bullets = [];
-        for (const sibling of siblingSlugs) {
-            const activePath = join(paths.projects, 'active', sibling, 'README.md');
-            const archivePath = join(paths.projects, 'archive', sibling, 'README.md');
-            if (await deps.storage.exists(activePath)) {
-                bullets.push(`**${sibling}** — \`${relativeToRoot(activePath, paths.root)}\``);
+        const seen = new Set();
+        if (project.area) {
+            const actives = await listActiveProjects(deps.storage, paths);
+            for (const p of actives) {
+                if (p.slug === slug || !p.area || p.area !== project.area)
+                    continue;
+                if (seen.has(p.slug))
+                    continue;
+                seen.add(p.slug);
+                bullets.push(`**${p.slug}** — \`${relativeToRoot(p.readmePath, paths.root)}\``);
             }
-            else if (await deps.storage.exists(archivePath)) {
+        }
+        for (const sibling of parseSiblingSlugs(body, slug)) {
+            if (seen.has(sibling))
+                continue;
+            const activePath = join(paths.projects, 'active', sibling, 'README.md');
+            if (await deps.storage.exists(activePath)) {
+                seen.add(sibling);
+                bullets.push(`**${sibling}** — \`${relativeToRoot(activePath, paths.root)}\``);
+                continue;
+            }
+            const archivePath = await resolveArchivedProjectReadme(deps.storage, paths, sibling);
+            if (archivePath) {
+                seen.add(sibling);
                 bullets.push(`**${sibling}** _(archived)_ — \`${relativeToRoot(archivePath, paths.root)}\``);
             }
             // Unresolvable link → dropped (not a project).

@@ -367,6 +367,101 @@ describe('CommitmentsService.listForPerson()', () => {
 // resolve()
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Phase 13 AC5 — setProjectSlug (commitment claim verb)
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService.setProjectSlug() (Phase 13 AC5)', () => {
+  it('stamps projectSlug by 8-char prefix and persists', async () => {
+    const c = makeCommitment({ id: 'deadbeef' + 'f'.repeat(56) });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([c])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const updated = await svc.setProjectSlug('deadbeef', 'glance-2-runyon');
+    assert.equal(updated.projectSlug, 'glance-2-runyon');
+
+    const persisted = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(persisted.commitments[0].projectSlug, 'glance-2-runyon');
+  });
+
+  it('null clears the claim (--clear)', async () => {
+    const c = makeCommitment({ id: 'deadbeef' + 'f'.repeat(56), projectSlug: 'glance-2-runyon' });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([c])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const updated = await svc.setProjectSlug('deadbeef', null);
+    assert.equal(updated.projectSlug, undefined);
+
+    const persisted = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.ok(!('projectSlug' in persisted.commitments[0]), 'key removed, not set undefined');
+  });
+
+  it('ambiguous prefix → error listing matches, NO write', async () => {
+    const c1 = makeCommitment({ id: 'deadbeef' + '1'.repeat(56) });
+    const c2 = makeCommitment({ id: 'deadbeef' + '2'.repeat(56) });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([c1, c2])]]);
+    const before = store.get(COMMITMENTS_PATH);
+    const svc = new CommitmentsService(createMockStorage(store), WORKSPACE_ROOT);
+
+    await assert.rejects(
+      () => svc.setProjectSlug('deadbeef', 'some-project'),
+      /Ambiguous prefix "deadbeef" matches 2 commitments/,
+    );
+    assert.equal(store.get(COMMITMENTS_PATH), before, 'no write on ambiguity');
+  });
+
+  it('unknown id → error, no write', async () => {
+    const svc = new CommitmentsService(makeStorage([makeCommitment()]), WORKSPACE_ROOT);
+    await assert.rejects(
+      () => svc.setProjectSlug('ffffffff', 'p'),
+      /No commitment found matching id prefix/,
+    );
+  });
+
+  it('HASH INVARIANCE PINNED (review finding 5): stamping/clearing projectSlug leaves dedup hash/ID unchanged', async () => {
+    const text = 'Send the slides';
+    const personSlug = 'alice';
+    const direction = 'i_owe_them' as const;
+    const canonical = computeCommitmentHash(text, personSlug, direction);
+    const c = makeCommitment({ id: canonical, text, personSlug, direction });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([c])]]);
+    const svc = new CommitmentsService(createMockStorage(store), WORKSPACE_ROOT);
+
+    const claimed = await svc.setProjectSlug(canonical.slice(0, 8), 'glance-2-runyon');
+    // The ID is untouched AND re-deriving the hash from the claimed
+    // commitment's hash inputs yields the same canonical value —
+    // projectSlug is not a hash input (same contract as `area`).
+    assert.equal(claimed.id, canonical);
+    assert.equal(
+      computeCommitmentHash(claimed.text, claimed.personSlug, claimed.direction),
+      canonical,
+      'projectSlug must not perturb the dedup hash',
+    );
+
+    const cleared = await svc.setProjectSlug(canonical.slice(0, 8), null);
+    assert.equal(cleared.id, canonical);
+    assert.equal(
+      computeCommitmentHash(cleared.text, cleared.personSlug, cleared.direction),
+      canonical,
+    );
+  });
+
+  it('runs through save() under the service lock without disturbing other commitments', async () => {
+    const c1 = makeCommitment({ id: '1'.repeat(64), text: 'One', personSlug: 'a' });
+    const c2 = makeCommitment({ id: '2'.repeat(64), text: 'Two', personSlug: 'b' });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([c1, c2])]]);
+    const svc = new CommitmentsService(createMockStorage(store), WORKSPACE_ROOT);
+
+    await svc.setProjectSlug('1'.repeat(8), 'proj-x');
+    const persisted = JSON.parse(store.get(COMMITMENTS_PATH)!) as CommitmentsFile;
+    assert.equal(persisted.commitments.length, 2);
+    assert.equal(persisted.commitments[0].projectSlug, 'proj-x');
+    assert.ok(!('projectSlug' in persisted.commitments[1]));
+  });
+});
+
 describe('CommitmentsService.resolve()', () => {
   it('marks a commitment resolved with resolvedAt timestamp', async () => {
     const c = makeCommitment({ id: 'abc123' + 'x'.repeat(58) });

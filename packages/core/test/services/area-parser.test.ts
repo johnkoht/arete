@@ -797,6 +797,58 @@ Data pipeline processing and reporting systems active.
     });
   });
 
+  describe('signal provenance (Phase 13 D1 — additive fields)', () => {
+    it('recurring-title match carries signal recurring-title', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'CoverWhale Sync' });
+      assert.ok(match);
+      assert.equal(match.signal, 'recurring-title');
+    });
+
+    it('name match in the TITLE carries signal area-name-title', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'Glance Communications Review' });
+      assert.ok(match);
+      assert.equal(match.signal, 'area-name-title');
+    });
+
+    it('name match in the SUMMARY ONLY carries signal area-name-summary', async () => {
+      const match = await parser.suggestAreaForMeeting({
+        title: 'External Meeting',
+        summary: 'Discussed Platform Infrastructure roadmap with the team',
+      });
+      assert.ok(match);
+      assert.equal(match.signal, 'area-name-summary');
+    });
+
+    it('keyword-only match carries signal keyword', async () => {
+      const match = await parser.suggestAreaForMeeting({
+        title: 'api integration complete partnership progressing well quarterly reviews working feature',
+      });
+      assert.ok(match);
+      assert.equal(match.signal, 'keyword');
+    });
+
+    it('corroborated=true when a second distinct signal matched the same area', async () => {
+      // Title contains the area name AND enough focus keywords for a
+      // keyword match on the same area. Jaccard math (services LEARNINGS:
+      // verify, don't intuit): meeting tokens = glance, communications +
+      // all 13 focus tokens = 15; intersection 13; union 15 → 0.867 × 0.7
+      // = 0.607 ≥ 0.5 threshold → keyword arm fires too.
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Glance Communications: api integration complete partnership progressing well quarterly reviews working feature enhancements performance improvements',
+      });
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+      assert.equal(match.signal, 'area-name-title');
+      assert.equal(match.corroborated, true);
+    });
+
+    it('corroborated=false for a bare name-only title match', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'Glance Communications Review' });
+      assert.ok(match);
+      assert.equal(match.corroborated, false);
+    });
+  });
+
   describe('confidence threshold', () => {
     it('returns null when confidence below SUGGESTION_THRESHOLD (0.5)', async () => {
       // Very low overlap - shouldn't match

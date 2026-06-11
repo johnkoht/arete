@@ -2,6 +2,8 @@
  * arete meeting commands — add and process meetings
  */
 import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
+// Phase 13 AC2/AC3 — meeting area write surface
+listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, 
 // Phase 10b-min wiring — reactive cross-meeting dedup
 wireExtractDedup, adaptFilteredItemsForDedup, decorateStagedSectionsWithDupeBadges, } from '@arete/core';
 import { execSync } from 'child_process';
@@ -79,6 +81,13 @@ const DEFAULT_TEMPLATE = `# {title}
 ## Transcript
 {transcript}
 `;
+/**
+ * Confidence floor for meeting area inference (Phase 13 AC2/AC3 — inherited
+ * from the phase-12 backfill contract; pre-mortem R3, non-negotiable).
+ * Per-signal qualification (`qualifyMeetingAreaMatch`) is applied ON TOP of
+ * this floor for backfill — stricter, never looser.
+ */
+const MEETING_BACKFILL_CONFIDENCE_FLOOR = 0.7;
 export function registerMeetingCommands(program) {
     const meetingCmd = program.command('meeting').description('Add meetings');
     meetingCmd
@@ -221,6 +230,39 @@ export function registerMeetingCommands(program) {
             }
             process.exit(1);
         }
+        // -----------------------------------------------------------------
+        // Phase 13 AC2 — propose an area when the meeting lacks one.
+        // PROPOSAL ONLY: process performs ZERO area writes. The
+        // process-meetings skill presents this; on confirm,
+        // `arete meeting set-area` writes BEFORE approve so commitments
+        // inherit. ≥0.7 floor; below floor → proposedArea: null in JSON,
+        // silent in human output.
+        // -----------------------------------------------------------------
+        const { frontmatter: meetingFm, body: meetingBody } = extractFrontmatter(content);
+        let proposedArea = null;
+        const hasExplicitArea = typeof meetingFm['area'] === 'string' && meetingFm['area'].trim().length > 0;
+        if (!hasExplicitArea) {
+            try {
+                const areaMatch = await services.areaParser.suggestAreaForMeeting({
+                    title: typeof meetingFm['title'] === 'string' && meetingFm['title'].trim()
+                        ? meetingFm['title']
+                        : meetingPath.replace(/^.*\//, '').replace(/\.md$/, ''),
+                    summary: typeof meetingFm['summary'] === 'string' ? meetingFm['summary'] : undefined,
+                    transcript: meetingBody,
+                });
+                if (areaMatch && areaMatch.confidence >= MEETING_BACKFILL_CONFIDENCE_FLOOR) {
+                    proposedArea = {
+                        slug: areaMatch.areaSlug,
+                        confidence: Number(areaMatch.confidence.toFixed(2)),
+                        signal: areaMatch.signal,
+                        corroborated: Boolean(areaMatch.corroborated),
+                    };
+                }
+            }
+            catch {
+                // Inference failure is non-fatal — process continues without a proposal.
+            }
+        }
         const attendees = extractAttendeesFromMeeting(content, meetingPath, root);
         if (attendees.length === 0) {
             if (opts.json) {
@@ -302,6 +344,9 @@ export function registerMeetingCommands(program) {
             digest,
             dryRun,
             applied,
+            // Phase 13 AC2: null when the meeting already has an area, no
+            // confident match exists, or inference failed.
+            proposedArea,
             unknownQueue: unknownQueue.map((u) => ({
                 name: u.candidate.name ?? null,
                 confidence: u.confidence,
@@ -317,10 +362,303 @@ export function registerMeetingCommands(program) {
         info(`Candidates: ${attendees.length}`);
         info(`Applied: ${applied.length}`);
         info(`Unknown queue: ${unknownQueue.length}`);
+        if (proposedArea) {
+            info(`Proposed area: ${proposedArea.slug} (confidence ${proposedArea.confidence}) — confirm with \`arete meeting set-area <file> ${proposedArea.slug}\``);
+        }
         if (unknownQueue.length > 0) {
             warn('Some attendees remain in unknown_queue and require review.');
         }
         displayQmdResult(qmdResult);
+    });
+    // ---------------------------------------------------------------------------
+    // arete meeting backfill-area  (Phase 13 AC3)
+    //
+    // Third instantiation of the backfill contract (commitments, projects,
+    // now meetings): preview by default, --apply gated, --reset scoped to
+    // `area_set_by: backfill` provenance, 0.7 floor, --json complete in all
+    // exit paths, qmd refresh after apply. Meeting-specific additions:
+    // per-signal qualification (pre-mortem D1 — summary-only name matches
+    // refused, title-only flagged `name-only`), the D2
+    // `also-via-topics` recall-loss column, and surfaced lock abstains (D4).
+    // ---------------------------------------------------------------------------
+    meetingCmd
+        .command('backfill-area')
+        .description('Backfill `area:` on meetings missing it by inferring from title + summary + transcript. Default is preview (dry-run); pass --apply to write.')
+        .option('--apply', 'Write changes (default: preview-only dry-run)')
+        .option('--reset', 'Clear `area`/`area_set_by` ONLY on meetings where area_set_by="backfill"; approval/manual/legacy areas stay intact')
+        .option('--days <n>', 'Limit candidates to meetings from the last N days (default: all history)')
+        .option('--skip-qmd', 'Skip automatic qmd index update after --apply')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+                info('Run "arete install" to create a workspace');
+            }
+            process.exit(1);
+        }
+        const paths = services.workspace.getPaths(root);
+        // --reset path: clear backfill-stamped areas only.
+        if (opts.reset) {
+            const result = await resetBackfilledMeetingAreas(services.storage, paths);
+            if (opts.json) {
+                console.log(JSON.stringify({ success: true, reset: result.reset }));
+            }
+            else {
+                success(`Cleared area on ${result.reset.length} backfilled meeting(s).`);
+                for (const file of result.reset)
+                    listItem('Reset', file);
+                if (result.reset.length === 0) {
+                    info('No meeting carried the backfill provenance marker. Nothing to reset.');
+                }
+            }
+            return;
+        }
+        // Optional --days candidate limiter (OQ1: default all history).
+        let sinceDay;
+        if (opts.days !== undefined) {
+            const days = Number(opts.days);
+            if (!Number.isFinite(days) || days <= 0) {
+                if (opts.json) {
+                    console.log(JSON.stringify({ success: false, error: '--days must be a positive number' }));
+                }
+                else {
+                    error('--days must be a positive number');
+                }
+                process.exit(1);
+            }
+            sinceDay = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+        }
+        const areas = await services.areaParser.listAreas();
+        const candidates = await listMeetingsForBackfill(services.storage, paths, {
+            sinceDay,
+            areaSlugs: areas.map((a) => a.slug),
+        });
+        const proposals = [];
+        const unmatched = [];
+        for (const candidate of candidates) {
+            try {
+                const match = await services.areaParser.suggestAreaForMeeting({
+                    title: candidate.title,
+                    summary: candidate.summary,
+                    transcript: candidate.body,
+                });
+                if (match) {
+                    const q = qualifyMeetingAreaMatch(match, MEETING_BACKFILL_CONFIDENCE_FLOOR);
+                    if (q.qualified) {
+                        proposals.push({
+                            file: candidate.file,
+                            path: candidate.path,
+                            area: match.areaSlug,
+                            confidence: Number(match.confidence.toFixed(2)),
+                            signal: match.signal,
+                            corroborated: Boolean(match.corroborated),
+                            nameOnly: q.nameOnly,
+                            alsoMatchesViaTopics: candidate.alsoMatchesViaTopics,
+                        });
+                        continue;
+                    }
+                    unmatched.push({ file: candidate.file, reason: q.reason ?? 'unqualified' });
+                    continue;
+                }
+            }
+            catch {
+                // Inference failure is non-fatal — the meeting stays unmatched.
+            }
+            unmatched.push({ file: candidate.file, reason: 'no-match' });
+        }
+        // D1: name-only rows grouped LAST so the spot-check tail is visible.
+        proposals.sort((a, b) => Number(a.nameOnly) - Number(b.nameOnly));
+        const nameOnlyCount = proposals.filter((p) => p.nameOnly).length;
+        // --apply path. Lock abstains are surfaced, never silent (D4).
+        let applied = false;
+        const unwritten = [];
+        if (opts.apply && proposals.length > 0) {
+            for (const proposal of proposals) {
+                const res = await applyAreaToMeeting(services.storage, proposal.path, proposal.area, 'backfill');
+                if (!res.written && !res.noop) {
+                    unwritten.push({ file: proposal.file, reason: res.abstainReason ?? 'unknown' });
+                }
+            }
+            applied = true;
+        }
+        // qmd refresh after workspace writes — before the JSON return so
+        // JSON mode still indexes (cli LEARNINGS).
+        let qmdResult;
+        if (applied && !opts.skipQmd) {
+            const config = await loadConfig(services.storage, root);
+            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                applied,
+                candidates: candidates.length,
+                matched: proposals.length,
+                nameOnly: nameOnlyCount,
+                proposals: proposals.map(({ path: _p, ...rest }) => rest),
+                unmatched,
+                unwritten,
+                qmd: qmdResult ?? { indexed: false, skipped: true },
+            }, null, 2));
+            return;
+        }
+        const mode = applied ? 'APPLIED' : 'PREVIEW (dry-run)';
+        info(`Backfill: ${mode}`);
+        listItem('Candidates (no `area:` frontmatter)', String(candidates.length));
+        listItem(`Qualified at ≥${MEETING_BACKFILL_CONFIDENCE_FLOOR} + signal policy`, String(proposals.length));
+        if (proposals.length > 0) {
+            console.log('');
+            console.log(chalk.bold('Proposed areas:'));
+            for (const p of proposals) {
+                const flags = [`confidence ${p.confidence}`];
+                if (p.signal)
+                    flags.push(p.signal);
+                if (p.nameOnly)
+                    flags.push(chalk.yellow('name-only'));
+                const alsoVia = p.alsoMatchesViaTopics.length > 0
+                    ? chalk.magenta(`  [also-via-topics: ${p.alsoMatchesViaTopics.join(', ')}]`)
+                    : '';
+                console.log(`  ${chalk.dim(p.file.padEnd(52))} ${chalk.cyan(p.area)} ${chalk.dim(`(${flags.join(', ')})`)}${alsoVia}`);
+            }
+            if (nameOnlyCount > 0) {
+                console.log('');
+                warn(`${nameOnlyCount} of ${proposals.length} proposals are name-only title matches — eyeball these before --apply (MC3 long-tail spot-check).`);
+            }
+        }
+        if (unmatched.length > 0) {
+            console.log('');
+            console.log(chalk.bold('No qualified match (left area-less — honest):'));
+            for (const u of unmatched)
+                console.log(`  ${chalk.dim(u.file)} (${u.reason})`);
+        }
+        if (unwritten.length > 0) {
+            console.log('');
+            for (const u of unwritten) {
+                warn(`NOT written (lock abstain): ${u.file} — ${u.reason}`);
+            }
+        }
+        console.log('');
+        if (proposals.length > 0 && !applied) {
+            info('Re-run with --apply to write changes.');
+            info('Use `arete meeting backfill-area --reset` to undo backfill-set areas later.');
+        }
+        else if (applied) {
+            success(`Applied area to ${proposals.length - unwritten.length} meeting(s); stamped area_set_by: backfill provenance.`);
+            displayQmdResult(qmdResult);
+        }
+        else if (candidates.length === 0) {
+            info('Every meeting already carries an `area:`. Nothing to backfill.');
+        }
+    });
+    // ---------------------------------------------------------------------------
+    // arete meeting set-area <file> <area-slug>  (Phase 13 AC2)
+    //
+    // The confirm-time writer in the propose→confirm→approve flow:
+    // `meeting process` PROPOSES (zero area writes), the process-meetings
+    // skill presents the proposal, and on John's confirm this verb writes
+    // `area:` + `area_set_by:` BEFORE `meeting approve` so created
+    // commitments inherit the area (meeting.ts approve path reads
+    // frontmatter.area). Default provenance `approval` (OQ2); `--set-by
+    // manual` for hand-corrections (e.g. re-stamping a legacy carrier).
+    // ---------------------------------------------------------------------------
+    meetingCmd
+        .command('set-area <file> <area-slug>')
+        .description('Write `area:` + `area_set_by:` into a meeting\'s frontmatter (body preserved). Area slug must match a file in areas/.')
+        .option('--set-by <provenance>', 'Provenance marker: approval | manual', 'approval')
+        .option('--json', 'Output as JSON')
+        .action(async (file, areaSlug, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const setBy = opts.setBy ?? 'approval';
+        if (setBy !== 'approval' && setBy !== 'manual') {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: '--set-by must be approval or manual' }));
+            }
+            else {
+                error('--set-by must be approval or manual');
+            }
+            process.exit(1);
+        }
+        // Validate the area slug against areas/*.md BEFORE any write —
+        // an unknown slug is an error, never a write (AC2).
+        const areaContext = await services.areaParser.getAreaContext(areaSlug);
+        if (!areaContext) {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `Unknown area slug '${areaSlug}' — no areas/${areaSlug}.md`,
+                }));
+            }
+            else {
+                error(`Unknown area slug '${areaSlug}' — no areas/${areaSlug}.md`);
+                info('Run `ls areas/` to see valid slugs.');
+            }
+            process.exit(1);
+        }
+        // Resolve the meeting file: absolute → as-is; has a slash →
+        // workspace-relative; bare name → resources/meetings/.
+        const meetingPath = file.startsWith('/')
+            ? file
+            : file.includes('/')
+                ? join(root, file)
+                : join(root, 'resources', 'meetings', file);
+        if (!(await services.storage.exists(meetingPath))) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Meeting not found: ${meetingPath}` }));
+            }
+            else {
+                error(`Meeting not found: ${meetingPath}`);
+            }
+            process.exit(1);
+        }
+        const result = await applyAreaToMeeting(services.storage, meetingPath, areaSlug, setBy);
+        // D4: a lock abstain is an ERROR, never silent — the approve step
+        // would not inherit the area.
+        if (!result.written && !result.noop) {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `Area not written (lock abstain: ${result.abstainReason ?? 'unknown'})`,
+                    abstainReason: result.abstainReason ?? 'unknown',
+                }));
+            }
+            else {
+                error(`Area not written (lock abstain: ${result.abstainReason ?? 'unknown'})`);
+            }
+            process.exit(1);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                meeting: meetingPath,
+                area: areaSlug,
+                areaSetBy: setBy,
+                written: result.written,
+                noop: result.noop,
+            }));
+            return;
+        }
+        if (result.noop) {
+            info(`Meeting already carries area: ${areaSlug} (${setBy}) — nothing to write.`);
+        }
+        else {
+            success(`Set area: ${areaSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
+        }
     });
     // Extract subcommand - uses AIService for LLM-based extraction
     meetingCmd

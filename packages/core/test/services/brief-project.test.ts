@@ -30,6 +30,9 @@ import {
   buildProjectWikiQuery,
   unionProjectCommitments,
   parseSiblingSlugs,
+  extractStatusUpdates,
+  loadMeetingIndex,
+  parseJiraFrontmatter,
   type MeetingIndexEntry,
 } from '../../src/services/brief-assemblers.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
@@ -478,6 +481,220 @@ describe('meetingsForArea (W6.2 topics-union)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 13 AC1 — explicit `area:` wins per meeting; topics-union is the
+// fallback for area-less meetings only. AC10 fixture gate lives here.
+// ---------------------------------------------------------------------------
+
+describe('meetingsForArea (Phase 13 AC1 — explicit area: wins per meeting)', () => {
+  function entry(overrides: Partial<MeetingIndexEntry>): MeetingIndexEntry {
+    return {
+      path: '/w/resources/meetings/x.md',
+      date: '2026-06-01',
+      title: 'x',
+      attendeeIds: [],
+      attendeeNames: [],
+      topics: [],
+      ...overrides,
+    };
+  }
+
+  it('area-edge leak: meeting with explicit area elsewhere + topic tag is EXCLUDED from the topic area, INCLUDED for its own', () => {
+    // The observed live leak: a pm-operations meeting mentioning a glance
+    // topic bled into glance-2-mvp recent activity.
+    const index = [
+      entry({
+        title: 'claims-ops sync',
+        area: 'pm-operations',
+        topics: ['glance-2-mvp'],
+      }),
+    ];
+    assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 0);
+    assert.deepEqual(
+      meetingsForArea(index, 'pm-operations').map((m) => m.title),
+      ['claims-ops sync'],
+    );
+  });
+
+  it('area-edge miss: meeting with explicit area and NO twin topic page is INCLUDED for its area', () => {
+    // pm-operations has no same-named topic page — under the old union the
+    // area arm was the only hope and nothing wrote area:, so these areas
+    // silently saw zero meetings.
+    const index = [
+      entry({ title: 'pm ops weekly', area: 'pm-operations', topics: [] }),
+    ];
+    assert.deepEqual(
+      meetingsForArea(index, 'pm-operations').map((m) => m.title),
+      ['pm ops weekly'],
+    );
+  });
+
+  it('ACCEPTED TRADE-OFF (review finding 1, R4-bounded): multi-area-flavored meeting with area:X + topics:[Y] is deliberately EXCLUDED from Y', () => {
+    // This is the documented recall cost of per-meeting preference — a
+    // tested decision, not a regression. Recovery: remove the key or the
+    // parked `areas:` plural. Soak must not misread this as a bug.
+    const index = [
+      entry({
+        title: 'spans-two-areas',
+        area: 'glance-communications',
+        topics: ['glance-2-mvp'],
+      }),
+    ];
+    assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 0);
+    assert.deepEqual(
+      meetingsForArea(index, 'glance-communications').map((m) => m.title),
+      ['spans-two-areas'],
+    );
+  });
+
+  it('area-less meeting keeps the topics-union fallback unchanged', () => {
+    const index = [
+      entry({ title: 'june-style', topics: ['glance-2-mvp', 'rollout-strategy'] }),
+    ];
+    assert.deepEqual(
+      meetingsForArea(index, 'glance-2-mvp').map((m) => m.title),
+      ['june-style'],
+    );
+    assert.equal(meetingsForArea(index, 'rollout-strategy').length, 1);
+  });
+
+  it('empty-string area is treated as absent (falls back to topics)', () => {
+    const index = [entry({ title: 'empty-area', area: undefined, topics: ['glance-2-mvp'] })];
+    assert.equal(meetingsForArea(index, 'glance-2-mvp').length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 13 AC7 — `jira:` frontmatter read-side parsing
+// ---------------------------------------------------------------------------
+
+describe('parseJiraFrontmatter (Phase 13 AC7)', () => {
+  it('parses a flat object into a string map (task-management-v1 shape)', () => {
+    assert.deepEqual(parseJiraFrontmatter({ idea: 'GL-12' }), { idea: 'GL-12' });
+    assert.deepEqual(parseJiraFrontmatter({ idea: 'GL-12', epic: 'PLAT-9858' }), {
+      idea: 'GL-12',
+      epic: 'PLAT-9858',
+    });
+  });
+
+  it('comma-joins array values and stringifies scalars', () => {
+    assert.deepEqual(parseJiraFrontmatter({ epics: ['PLAT-1', 'PLAT-2'], ticket: 42 }), {
+      epics: 'PLAT-1, PLAT-2',
+      ticket: '42',
+    });
+  });
+
+  it('returns undefined for missing/malformed shapes without throwing', () => {
+    assert.equal(parseJiraFrontmatter(undefined), undefined);
+    assert.equal(parseJiraFrontmatter(null), undefined);
+    assert.equal(parseJiraFrontmatter('GL-12'), undefined);
+    assert.equal(parseJiraFrontmatter(['GL-12']), undefined);
+    assert.equal(parseJiraFrontmatter({}), undefined);
+    assert.equal(parseJiraFrontmatter({ nested: { deep: 'x' } }), undefined);
+  });
+
+  it('surfaces jira in ProjectBrief.metadata via readProjectBySlug', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), `brief-jira-${process.pid}-`));
+    try {
+      const p = makePaths(tmp);
+      writeFile(
+        tmp,
+        'projects/active/task-management-v1/README.md',
+        `---\nname: Task Management v1\nstatus: active\njira:\n  idea: GL-12\n---\n\n# Task Management\n\n## Background\nTask mgmt.\n`,
+      );
+      writeFile(tmp, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+      const intel = buildIntel(tmp);
+      const brief = await intel.assembleBriefForProject('task-management-v1', p);
+      assert.deepEqual(brief.metadata.jira, { idea: 'GL-12' });
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 13 AC8(7) — status-update extraction (dated headings → prefixes)
+// ---------------------------------------------------------------------------
+
+describe('extractStatusUpdates (Phase 13 AC8)', () => {
+  it('turns ### YYYY-MM-DD headings into **[date]** prefixes, never emits raw ###', () => {
+    const section = `### 2026-06-08\n\nShipped the leak fix to staging.\n\n### 2026-06-01\n\nKickoff complete.\n`;
+    const got = extractStatusUpdates(section);
+    assert.deepEqual(got, [
+      '**[2026-06-08]** Shipped the leak fix to staging.',
+      '**[2026-06-01]** Kickoff complete.',
+    ]);
+    assert.ok(!got.join('\n').includes('###'));
+  });
+
+  it('handles heading and paragraph in the same chunk (no blank line)', () => {
+    const section = `### 2026-06-08\nShipped the fix.\n\n### 2026-06-01\nKickoff.`;
+    assert.deepEqual(extractStatusUpdates(section), [
+      '**[2026-06-08]** Shipped the fix.',
+      '**[2026-06-01]** Kickoff.',
+    ]);
+  });
+
+  it('drops heading-only chunks and non-date headings without emitting them', () => {
+    const section = `### 2026-06-08\n\n### Notes\n\nPlain paragraph.`;
+    assert.deepEqual(extractStatusUpdates(section), ['Plain paragraph.']);
+  });
+
+  it('keeps undated paragraphs as-is and caps at the limit', () => {
+    const section = `First update.\n\nSecond update.\n\nThird update.`;
+    assert.deepEqual(extractStatusUpdates(section), ['First update.', 'Second update.']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 13 AC8(9) — meeting-index excerpt skips HTML-comment lines
+// ---------------------------------------------------------------------------
+
+describe('loadMeetingIndex excerpt (Phase 13 AC8)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), `brief-excerpt-${process.pid}-`));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('skips a leading <!-- merged from … --> comment and uses the next real line', async () => {
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-09-merged.md',
+      `---\ntitle: Merged meeting\ndate: 2026-06-09\n---\n\n## Summary\n\n<!-- merged from 2026-06-09-other.md -->\nThe real first line of the summary.\n`,
+    );
+    const index = await loadMeetingIndex(new FileStorageAdapter(), paths);
+    assert.equal(index.length, 1);
+    assert.equal(index[0].excerpt, 'The real first line of the summary.');
+  });
+
+  it('skips multi-line HTML comments', async () => {
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-09-multiline.md',
+      `---\ntitle: Multi\ndate: 2026-06-09\n---\n\n## Summary\n\n<!-- merged from\nanother-file.md -->\nActual content line.\n`,
+    );
+    const index = await loadMeetingIndex(new FileStorageAdapter(), paths);
+    assert.equal(index[0].excerpt, 'Actual content line.');
+  });
+
+  it('comment-only section yields no excerpt rather than the comment', async () => {
+    writeFile(
+      tmpDir,
+      'resources/meetings/2026-06-09-only-comment.md',
+      `---\ntitle: OnlyComment\ndate: 2026-06-09\n---\n\n## Summary\n\n<!-- merged from x.md -->\n`,
+    );
+    const index = await loadMeetingIndex(new FileStorageAdapter(), paths);
+    assert.equal(index[0].excerpt, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Phase 12 AC1 — project area resolution (priority order + prose variants)
 // ---------------------------------------------------------------------------
 
@@ -895,6 +1112,88 @@ Linked: [active sib](../active-sib/README.md), [old sib](../archived-sib/), [gho
     assert.ok(sib!.bullets.some((b) => /active-sib/.test(b) && !/archived/.test(b)));
     assert.ok(sib!.bullets.some((b) => /archived-sib/.test(b) && /_\(archived\)_/.test(b)));
     assert.ok(!sib!.bullets.some((b) => /no-such-project/.test(b)));
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 13 AC4 — siblings derive from shared `area:` ∪ README links
+  // -------------------------------------------------------------------------
+
+  it('AC4: area-siblings appear with ZERO README links (3 same-area projects each list the other 2)', async () => {
+    const readme = (title: string) =>
+      `---\ntitle: ${title}\narea: glance-2-mvp\nstatus: active\n---\n\n# ${title}\n\n## Background\nNo links here.\n`;
+    writeFile(tmpDir, 'projects/active/proj-a/README.md', readme('Proj A'));
+    writeFile(tmpDir, 'projects/active/proj-b/README.md', readme('Proj B'));
+    writeFile(tmpDir, 'projects/active/proj-c/README.md', readme('Proj C'));
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+
+    const intel = buildIntel(tmpDir);
+    for (const [self, others] of [
+      ['proj-a', ['proj-b', 'proj-c']],
+      ['proj-b', ['proj-a', 'proj-c']],
+      ['proj-c', ['proj-a', 'proj-b']],
+    ] as const) {
+      const brief = await intel.assembleBriefForProject(self, paths);
+      const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+      assert.ok(sib, `${self}: missing sibling section`);
+      assert.equal(sib!.heading, 'Sibling projects (2)', self);
+      for (const other of others) {
+        assert.ok(sib!.bullets.some((b) => b.includes(`**${other}**`)), `${self} lists ${other}`);
+      }
+      assert.ok(!sib!.bullets.some((b) => b.includes(`**${self}**`)), `${self} excludes itself`);
+    }
+  });
+
+  it('AC4: dedup when area AND link both yield the same sibling; cross-area link-only sibling still appears', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/main/README.md',
+      `---\ntitle: Main\narea: glance-2-mvp\nstatus: active\n---\n\n# Main\n\nLinked: [same area](../same-area-sib/README.md), [other area](../cross-area-sib/).\n`,
+    );
+    writeFile(
+      tmpDir,
+      'projects/active/same-area-sib/README.md',
+      '---\ntitle: Same\narea: glance-2-mvp\n---\n# S\n',
+    );
+    writeFile(
+      tmpDir,
+      'projects/active/cross-area-sib/README.md',
+      '---\ntitle: Cross\narea: pm-operations\n---\n# C\n',
+    );
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('main', paths);
+    const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+    assert.ok(sib);
+    assert.equal(
+      sib!.bullets.filter((b) => b.includes('**same-area-sib**')).length,
+      1,
+      'same-area sibling appears exactly once (deduped across sources)',
+    );
+    assert.ok(
+      sib!.bullets.some((b) => b.includes('**cross-area-sib**')),
+      'link-only cross-area sibling still appears',
+    );
+    assert.equal(sib!.heading, 'Sibling projects (2)');
+  });
+
+  it('AC4: archived YYYY-MM_<slug> directory resolves and is labeled archived', async () => {
+    writeFile(
+      tmpDir,
+      'projects/active/main/README.md',
+      `---\ntitle: Main\narea: glance-2-mvp\nstatus: active\n---\n\n# Main\n\nSee [the deck](../visioning-deck/).\n`,
+    );
+    writeFile(
+      tmpDir,
+      'projects/archive/2026-06_visioning-deck/README.md',
+      '---\ntitle: Visioning Deck\n---\n# V\n',
+    );
+    const intel = buildIntel(tmpDir);
+    const brief = await intel.assembleBriefForProject('main', paths);
+    const sib = brief.sections.find((s) => s.heading.startsWith('Sibling projects'));
+    assert.ok(sib, 'sibling section present');
+    const bullet = sib!.bullets.find((b) => b.includes('**visioning-deck**'));
+    assert.ok(bullet, 'YYYY-MM_ archived sibling resolved');
+    assert.ok(bullet!.includes('_(archived)_'), 'archived label present');
+    assert.ok(bullet!.includes('2026-06_visioning-deck/README.md'), 'path points at the real dir');
   });
 
   it('project-grained commitments: own projectSlug included even without sibling claims', async () => {

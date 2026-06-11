@@ -505,6 +505,24 @@ export type AreaMatch = {
   matchType: 'recurring' | 'inferred';
   /** Confidence of the match (0.0 - 1.0) */
   confidence: number;
+  /**
+   * Which signal produced this match (Phase 13, pre-mortem D1). Additive —
+   * existing consumers key off areaSlug/confidence only. The 0.8
+   * name-substring match is the mislabel-prone signal; callers that write
+   * areas at scale (meeting backfill) apply per-signal policy instead of
+   * comparing confidence against magic numbers.
+   *  - 'recurring-title'   exact recurring_meetings[].title match (1.0)
+   *  - 'area-name-title'   area name substring in the meeting TITLE (0.8)
+   *  - 'area-name-summary' area name substring in the SUMMARY only (0.8)
+   *  - 'keyword'           focus-keyword Jaccard overlap (≤0.7)
+   */
+  signal?: 'recurring-title' | 'area-name-title' | 'area-name-summary' | 'keyword';
+  /**
+   * True when a second distinct signal also matched the SAME area
+   * (e.g. name match + keyword overlap). Backfill preview uses this to
+   * separate corroborated proposals from name-only ones (D1).
+   */
+  corroborated?: boolean;
 };
 
 /**

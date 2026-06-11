@@ -80,9 +80,11 @@ ls resources/meetings/*.md | grep -v -e 'status: approved' -e 'status: processed
 # 1a. Per-meeting context bundle
 arete meeting context <file> --json > /tmp/<slug>-context.json
 
-# 1b. Per-meeting area suggestion (batch, not individual prompts)
-# Use AreaParserService.suggestAreaForMeeting for each meeting in
-# one pass; collect suggestions into a single batch table.
+# 1b. Per-meeting area proposal (batch, not individual prompts)
+# `arete meeting process` returns `proposedArea: {slug, confidence}`
+# for meetings lacking `area:` frontmatter (null below the 0.7 floor).
+# Collect the proposals into the batch status table — process itself
+# NEVER writes the area; it only proposes (Phase 13 AC2).
 ```
 
 **Sequenced (after gather)**:
@@ -154,8 +156,15 @@ references.
 
 | Meeting | Status | Items staged | Area | Issues |
 |---|---|---|---|---|
-| 2026-05-15-anthony-1-1 | processed | 5/2/3 | glance-comms | — |
+| 2026-05-15-anthony-1-1 | processed | 5/2/3 | glance-comms (proposed 0.8) | — |
 | 2026-05-15-cw-sync | processed | 2/1/0 | cover-whale | unknown attendee: alice@cw.com |
+
+The Area column carries the `proposedArea` from `arete meeting process`
+(marked "proposed" until confirmed). **Confirm-or-skip is OPTIONAL and
+NEVER blocking** — if the user ignores the proposal or skips it, the
+meeting stays area-less and everything else proceeds normally (the
+backfill CLI can fill it later). Do NOT write the area yourself; the
+proposal is presented for confirmation, not auto-applied.
 
 {N} items deferred — see now/archive/process-meetings/deferred-batch-{date}.md (or inline if small)
 
@@ -201,6 +210,14 @@ response format (see PATTERNS.md Pattern 3).
 After approval:
 
 ```bash
+# Write confirmed areas FIRST — set-area must run BEFORE approve so the
+# commitments created at approve inherit the meeting's area
+# (frontmatter.area → commitment.area). Only for proposals the user
+# confirmed; skipped proposals write nothing.
+for slug in <confirmed-area-meetings>; do
+  arete meeting set-area $slug.md <confirmed-area-slug>
+done
+
 # Commit approved staged items per meeting
 for slug in <approved-meetings>; do
   arete meeting approve $slug
