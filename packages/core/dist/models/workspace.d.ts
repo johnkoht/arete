@@ -64,6 +64,15 @@ export type AreteConfig = {
     extraction_mode?: ExtractionPipelineMode;
     /** Cross-meeting reconcile placement — see ReconcileMode. Default 'inline'. */
     reconcile_mode?: ReconcileMode;
+    /**
+     * CHR W7 shadow-soak instrumentation (chef-holistic-reconcile plan).
+     * When true, `meeting extract` persists a RAW pre-reconcile extraction
+     * snapshot to `dev/diary/raw-extractions/` (gitignored) before any
+     * reconcile/dedup mutation, and shadow-engine runs append to
+     * `dev/diary/reconcile-shadow.log`. Default false — zero writes, legacy
+     * behavior bit-identical.
+     */
+    reconcile_shadow?: boolean;
     /** Agent mode: builder (building Areté) or guide (end-user workspace) */
     agent_mode?: AgentMode;
     /** Target IDE: cursor or claude */

@@ -5,7 +5,9 @@ import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPe
 // Phase 10b-min wiring — reactive cross-meeting dedup
 wireExtractDedup, adaptFilteredItemsForDedup, decorateStagedSectionsWithDupeBadges, 
 // single-pass-extraction (W1.5/W2)
-resolveMeetingSeries, renderSeriesContext, AreaParserService, } from '@arete/core';
+resolveMeetingSeries, renderSeriesContext, AreaParserService, 
+// chef-holistic-reconcile W7 shadow-soak infra
+writeRawExtractionSnapshot, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -811,6 +813,27 @@ export function registerMeetingCommands(program) {
                 error(`Extraction failed: ${msg}`);
             }
             process.exit(1);
+        }
+        // CHR-W7 (shadow-soak infra): persist the RAW pre-reconcile extraction
+        // snapshot BEFORE any mutation — this point is upstream of the inline
+        // cross-meeting reconcile, processMeetingExtraction (confidence filter,
+        // completed/open-task matching, silent merges), batchLLMReview, and
+        // wireExtractDedup. Pre-mortem R2: the shadow engine consumes these,
+        // never post-inline state. Gated on `reconcile_shadow: true` (default
+        // off — zero writes, legacy bit-identical); best-effort, never fails
+        // the extraction.
+        if (config.reconcile_shadow === true && !opts.dryRun) {
+            try {
+                await writeRawExtractionSnapshot(services.storage, root, {
+                    meetingPath,
+                    extractionMode: mode,
+                    intelligence: extractionResult.intelligence,
+                    validationWarnings: extractionResult.validationWarnings,
+                });
+            }
+            catch {
+                // instrumentation only — extraction proceeds
+            }
         }
         // CHR-W0 (Stage-0 day-level reconcile): when `reconcile_mode:
         // day-level`, the inline per-file cross-meeting reconcile (this block)

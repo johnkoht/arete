@@ -40,6 +40,11 @@ notion-export/
 # Local eval/test harnesses (iterate-only, not reusable test infra)
 scripts/eval-*.ts
 
+# CHR W7 shadow-soak telemetry (raw pre-reconcile extraction snapshots +
+# shadow-engine run log) — soak instrumentation, not history
+dev/diary/raw-extractions/
+dev/diary/reconcile-shadow.log
+
 # User-specific build context (copy from USER.md.example)
 USER.md
 

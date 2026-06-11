@@ -187,3 +187,33 @@ Design notes for reviewers:
 
 **Verification**: 16+2 new tests green; meeting-reconciliation (122) green;
 core + cli typecheck/build clean.
+
+---
+
+## 2026-06-11 ~11:15 — CHR-W7 infra: raw snapshots + shadow-log scaffolding
+
+`packages/core/src/services/reconcile-shadow.ts` + extract-command wiring +
+8 unit tests + .gitignore entries (`dev/diary/raw-extractions/`,
+`dev/diary/reconcile-shadow.log`).
+
+- **Insertion point verified genuinely pre-mutation** (the pre-mortem R2
+  requirement): snapshot writes immediately after
+  `extractMeetingIntelligence` returns (meeting.ts, right before the W0
+  day-level gate) — upstream of the inline cross-meeting reconcile,
+  `processMeetingExtraction` (confidence filter / completed-open-task
+  matching / silent merges), `batchLLMReview`, AND `wireExtractDedup`.
+  Known limit documented in the service header per review F1: prompt-level
+  exclusion-list suppression happens INSIDE extraction and no snapshot can
+  see it — snapshots record `extractionMode` so soak analysis segments
+  legacy vs single_pass days.
+- **Gated on new config `reconcile_shadow: true` (default false)** — NOT
+  on reconcile_mode (the soak runs while inline is still live, so coupling
+  them would be wrong), and zero writes with flags off preserves the
+  bit-identity invariant. Best-effort try/catch; instrumentation never
+  fails extraction. Skipped on --dry-run.
+- Snapshot shape versioned (`v: 1`): {capturedAt, meetingPath, date, slug,
+  extractionMode, intelligence, validationWarnings?}. Re-extract overwrites
+  (the soak wants the snapshot that fed the day's run).
+- Shadow log: JSONL via the storage adapter's atomic `append` (O_APPEND —
+  safe under the winddown's wave-of-4 parallel extracts), read-modify-write
+  fallback for adapters without it.

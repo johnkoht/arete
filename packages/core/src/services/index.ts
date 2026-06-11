@@ -582,6 +582,16 @@ export type {
   NominationResult,
 } from './reconcile-nominate.js';
 
+// Reconcile-engine W7 shadow-soak infra (raw snapshots + shadow log)
+export {
+  writeRawExtractionSnapshot,
+  appendReconcileShadowLog,
+  parseMeetingFilename,
+  RAW_EXTRACTIONS_DIR,
+  RECONCILE_SHADOW_LOG,
+} from './reconcile-shadow.js';
+export type { RawExtractionSnapshot, ShadowLogEntry } from './reconcile-shadow.js';
+
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
