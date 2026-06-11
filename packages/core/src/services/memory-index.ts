@@ -15,6 +15,7 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { WorkspacePaths } from '../models/workspace.js';
 import type { Person } from '../models/entities.js';
 import type { AreaParserService } from './area-parser.js';
+import { canonicalizeAreaSlug } from './area-parser.js';
 import type { TopicMemoryService } from './topic-memory.js';
 import type { EntityService } from './entity.js';
 import { getTopicHeadline, type TopicPage } from '../models/topic-page.js';
@@ -207,9 +208,12 @@ export class MemoryIndexService {
     let areas: AreaIndexEntry[] = [];
     try {
       const parsedAreas = await this.areaParser.listAreas();
+      const aliasMap = await this.areaParser.getAliasMap();
       const topicsByArea = new Map<string, number>();
       for (const page of topics) {
-        const area = page.frontmatter.area;
+        // Topic pages may still carry a former slug — key by canonical so
+        // the lookup below (canonical a.slug) counts them.
+        const area = canonicalizeAreaSlug(page.frontmatter.area, aliasMap);
         if (area === undefined) continue;
         topicsByArea.set(area, (topicsByArea.get(area) ?? 0) + 1);
       }

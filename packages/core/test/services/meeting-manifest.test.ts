@@ -226,3 +226,50 @@ describe('generateMeetingManifest', () => {
     assert.ok(content.includes('open_items: 1'), 'Should still include open_items line');
   });
 });
+
+describe('generateMeetingManifest — area alias canonicalization', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+  let paths: WorkspacePaths;
+  let meetingsDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'manifest-alias-'));
+    storage = new FileStorageAdapter();
+    paths = makePaths(tmpDir);
+    meetingsDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingsDir, { recursive: true });
+    mkdirSync(join(tmpDir, 'areas'), { recursive: true });
+    writeFileSync(
+      join(tmpDir, 'areas', 'glance-operations.md'),
+      '---\narea: Glance Operations\naliases:\n  - glance-2-mvp\n---\n\n# Glance Operations\n',
+      'utf8',
+    );
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('manifest entries carry the canonical slug for old-slug meetings', async () => {
+    writeMeeting(meetingsDir, '2026-05-01-old-tagged.md', {
+      title: 'Old Tagged',
+      date: '2026-05-01',
+      area: 'glance-2-mvp',
+    });
+
+    await generateMeetingManifest(paths, storage);
+    const manifest = readFileSync(
+      join(meetingsDir, 'MANIFEST.md'),
+      'utf8',
+    );
+    assert.ok(
+      manifest.includes('area: glance-operations'),
+      'manifest should carry the canonical slug',
+    );
+    assert.ok(
+      !manifest.includes('glance-2-mvp'),
+      'former slug should not leak into the manifest',
+    );
+  });
+});

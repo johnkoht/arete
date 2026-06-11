@@ -187,6 +187,8 @@ export async function generateMeetingManifest(
         ? canonicalizeAreaSlug(fm.area.trim(), aliasMap)
         : undefined;
     const attendee_ids = Array.isArray(fm.attendee_ids) ? fm.attendee_ids.map(String) : undefined;
+    // Manifest topics are display-only (no topics-as-area matching here,
+    // unlike loadMeetingIndex) — kept verbatim, deliberately.
     const topics = Array.isArray(fm.topics) && fm.topics.length > 0 ? fm.topics.map(String) : undefined;
     const open_action_items = typeof fm.open_action_items === 'number' ? fm.open_action_items : undefined;
     const my_commitments = typeof fm.my_commitments === 'number' ? fm.my_commitments : undefined;

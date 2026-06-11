@@ -10,6 +10,7 @@
  * See plan: dev/work/plans/topic-wiki-memory/plan.md Step 5.
  */
 import { join } from 'node:path';
+import { canonicalizeAreaSlug } from './area-parser.js';
 import { getTopicHeadline } from '../models/topic-page.js';
 // ---------------------------------------------------------------------------
 // Pure renderer
@@ -178,9 +179,12 @@ export class MemoryIndexService {
         let areas = [];
         try {
             const parsedAreas = await this.areaParser.listAreas();
+            const aliasMap = await this.areaParser.getAliasMap();
             const topicsByArea = new Map();
             for (const page of topics) {
-                const area = page.frontmatter.area;
+                // Topic pages may still carry a former slug — key by canonical so
+                // the lookup below (canonical a.slug) counts them.
+                const area = canonicalizeAreaSlug(page.frontmatter.area, aliasMap);
                 if (area === undefined)
                     continue;
                 topicsByArea.set(area, (topicsByArea.get(area) ?? 0) + 1);

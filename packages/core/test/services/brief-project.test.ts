@@ -1265,3 +1265,48 @@ status: active
     assert.ok(!/Sibling claimed/.test(text), 'sibling-claimed must be excluded');
   });
 });
+
+describe('unionProjectCommitments — area alias canonicalization', () => {
+  function c(id: string, over: Record<string, unknown>): never {
+    return {
+      id,
+      text: id,
+      direction: 'i_owe_them',
+      personSlug: 'p',
+      personName: 'P',
+      source: 's.md',
+      date: '2026-06-01',
+      createdAt: '2026-06-01T00:00:00Z',
+      status: 'open',
+      resolvedAt: null,
+      ...over,
+    } as never;
+  }
+
+  it('matches commitments stamped with a former slug via the alias map', () => {
+    const aliasMap = new Map([['glance-2-mvp', 'glance-operations']]);
+    const open = [
+      c('old-stamped', { area: 'glance-2-mvp' }),
+      c('new-stamped', { area: 'glance-operations' }),
+      c('other', { area: 'unrelated' }),
+    ];
+    const got = unionProjectCommitments(
+      open as never[],
+      'me',
+      'glance-operations',
+      aliasMap,
+    ).map((x) => x.id);
+    assert.deepEqual(got, ['old-stamped', 'new-stamped']);
+  });
+
+  it('without an alias map, behaves exactly as before (exact match only)', () => {
+    const open = [
+      c('old-stamped', { area: 'glance-2-mvp' }),
+      c('new-stamped', { area: 'glance-operations' }),
+    ];
+    const got = unionProjectCommitments(open as never[], 'me', 'glance-operations').map(
+      (x) => x.id,
+    );
+    assert.deepEqual(got, ['new-stamped']);
+  });
+});

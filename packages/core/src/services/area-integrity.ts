@@ -28,11 +28,15 @@
  *    `.arete/memory/areas/{slug}.md` summaries keyed by a `{slug}` that is
  *    neither a canonical slug nor an alias
  *
- * Deliberate exclusions (covered by canonicalize-on-read, not this check):
+ * Deliberate exclusions:
  *  - task `@area(...)` metadata — tasks are free-text lines and attributing
- *    a specific file/owner to each value is ambiguous
+ *    a specific file/owner to each value is ambiguous. NOTE: the task area
+ *    filter (tasks.ts listTasks) compares raw, NOT canonicalized — no
+ *    in-repo caller passes an area today, but a future caller must
+ *    canonicalize or extend this check.
  *  - memory-item `**Topics**:` bullets — topic tokens mix areas, topics,
- *    and people; flagging non-area tokens would be noise
+ *    and people; flagging non-area tokens would be noise. These ARE
+ *    canonicalized on read (readAreaTaggedMemoryItems).
  *
  * Pure read-only; all I/O via StorageAdapter; missing directories produce
  * empty report sections, never throws.
