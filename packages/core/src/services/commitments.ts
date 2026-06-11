@@ -22,6 +22,7 @@ import type {
 import type { PersonActionItem } from './person-signals.js';
 import type { HealthIndicator } from './person-health.js';
 import { jaccardSimilarity } from '../utils/similarity.js';
+import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -526,6 +527,7 @@ async function ensureLockTarget(filePath: string): Promise<void> {
 
 export class CommitmentsService {
   private readonly filePath: string;
+  private readonly workspaceRoot: string;
   private createTaskFn?: CreateTaskFn;
   private completeTaskFromCommitmentFn?: CompleteTaskFromCommitmentFn;
   private hasOpenTaskReferencesFn?: HasOpenTaskReferencesFn;
@@ -535,6 +537,7 @@ export class CommitmentsService {
     workspaceRoot: string,
   ) {
     this.filePath = join(workspaceRoot, COMMITMENTS_FILE);
+    this.workspaceRoot = workspaceRoot;
   }
 
   /**
@@ -744,13 +747,25 @@ export class CommitmentsService {
     area?: string;
   }): Promise<Commitment[]> {
     const all = await this.load();
+    // Stored `area` values are historical data and may predate an area
+    // rename — canonicalize both sides at compare time, never rewrite.
+    const aliasMap = opts?.area
+      ? await loadAreaAliasMap(this.storage, this.workspaceRoot)
+      : undefined;
     return all.filter((c) => {
       if (c.status !== 'open') return false;
       if (opts?.direction && c.direction !== opts.direction) return false;
       if (opts?.personSlugs && opts.personSlugs.length > 0) {
         if (!opts.personSlugs.includes(c.personSlug)) return false;
       }
-      if (opts?.area && c.area !== opts.area) return false;
+      if (
+        opts?.area &&
+        aliasMap &&
+        canonicalizeAreaSlug(c.area, aliasMap) !==
+          canonicalizeAreaSlug(opts.area, aliasMap)
+      ) {
+        return false;
+      }
       return true;
     });
   }

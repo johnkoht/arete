@@ -7,6 +7,7 @@
  */
 import { join, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -110,6 +111,9 @@ export async function generateMeetingManifest(workspacePaths, storage, options) 
         return { meetingCount: 0 };
     }
     const allFiles = await storage.list(meetingsDir, { extensions: ['.md'] });
+    // Meeting frontmatter may carry pre-rename area slugs — canonicalize at
+    // generation so manifest consumers join on canonical values.
+    const aliasMap = await loadAreaAliasMap(storage, workspacePaths.root);
     // Collect valid entries
     const entries = [];
     for (const filePath of allFiles) {
@@ -135,7 +139,9 @@ export async function generateMeetingManifest(workspacePaths, storage, options) 
         const title = typeof fm.title === 'string' ? fm.title : '';
         const importance = typeof fm.importance === 'string' ? fm.importance : undefined;
         const status = typeof fm.status === 'string' ? fm.status : undefined;
-        const area = typeof fm.area === 'string' && fm.area.trim() ? fm.area.trim() : undefined;
+        const area = typeof fm.area === 'string' && fm.area.trim()
+            ? canonicalizeAreaSlug(fm.area.trim(), aliasMap)
+            : undefined;
         const attendee_ids = Array.isArray(fm.attendee_ids) ? fm.attendee_ids.map(String) : undefined;
         const topics = Array.isArray(fm.topics) && fm.topics.length > 0 ? fm.topics.map(String) : undefined;
         const open_action_items = typeof fm.open_action_items === 'number' ? fm.open_action_items : undefined;

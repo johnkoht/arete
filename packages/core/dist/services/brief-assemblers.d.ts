@@ -60,7 +60,7 @@ export interface MeetingIndexEntry {
     /** First non-empty body excerpt (post-frontmatter heading or summary). */
     excerpt?: string;
 }
-export declare function loadMeetingIndex(storage: StorageAdapter, paths: WorkspacePaths): Promise<MeetingIndexEntry[]>;
+export declare function loadMeetingIndex(storage: StorageAdapter, paths: WorkspacePaths, aliasMap?: Map<string, string>): Promise<MeetingIndexEntry[]>;
 /** Filter the meeting index to entries where `personSlug` or `personName` appear in attendees. */
 export declare function meetingsForPerson(index: MeetingIndexEntry[], personSlug: string, personName: string): MeetingIndexEntry[];
 /**
@@ -280,7 +280,7 @@ export declare function buildProjectWikiQuery(name: string, area: string | undef
  * commitments not yet claimed by ANY project (a sibling's claim excludes
  * them). Deduped by id, projectSlug-claimed first. Pure; exported for tests.
  */
-export declare function unionProjectCommitments(open: Commitment[], slug: string, area: string | undefined): Commitment[];
+export declare function unionProjectCommitments(open: Commitment[], slug: string, area: string | undefined, aliasMap?: Map<string, string>): Commitment[];
 /**
  * Sibling-project slugs referenced from a README body via relative links
  * (`](../<slug>/...`), excluding self. Pure; exported for tests.
@@ -370,8 +370,8 @@ export declare function parseMemoryItemEntries(content: string): MemoryItemEntry
  * (the same surface `ActiveTopicEntry.area` is derived from). Best-effort:
  * returns an empty map on any failure.
  */
-export declare function loadTopicAreaMap(topicMemory: TopicMemoryService, paths: WorkspacePaths): Promise<Map<string, string>>;
-export declare function readAreaTaggedMemoryItems(storage: StorageAdapter, paths: WorkspacePaths, area: string, topicAreaBySlug: Map<string, string>): Promise<AreaTaggedItem[]>;
+export declare function loadTopicAreaMap(topicMemory: TopicMemoryService, paths: WorkspacePaths, aliasMap?: Map<string, string>): Promise<Map<string, string>>;
+export declare function readAreaTaggedMemoryItems(storage: StorageAdapter, paths: WorkspacePaths, area: string, topicAreaBySlug: Map<string, string>, aliasMap?: Map<string, string>): Promise<AreaTaggedItem[]>;
 export interface AreaBriefDeps {
     storage: StorageAdapter;
     commitments: CommitmentsService;

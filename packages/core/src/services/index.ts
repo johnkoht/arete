@@ -555,6 +555,16 @@ export { generateMeetingManifest } from './meeting-manifest.js';
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 
+// Area integrity (report-only scan backing `arete areas check`)
+export { checkAreaIntegrity } from './area-integrity.js';
+export type {
+  AreaIntegrityReport,
+  DanglingAreaRef,
+  DuplicateAlias,
+  ShadowingAlias,
+  OrphanAreaArtifact,
+} from './area-integrity.js';
+
 // Area memory (L3 computed summaries)
 export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
 export type {

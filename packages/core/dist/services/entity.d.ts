@@ -106,7 +106,7 @@ export declare function computeChannelsAudit(perPerson: Array<{
 }>): ChannelsAuditResult;
 export { CHANNEL_FIELD_NAMES };
 import { CommitmentsService } from './commitments.js';
-import type { AreaParserService } from './area-parser.js';
+import { type AreaParserService } from './area-parser.js';
 import type { LLMCallFn, PersonStance } from './person-signals.js';
 export interface ListPeopleOptions {
     category?: PersonCategory;

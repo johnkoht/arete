@@ -103,6 +103,8 @@ export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.j
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
 export { generateMeetingManifest } from './meeting-manifest.js';
 export { AreaParserService } from './area-parser.js';
+export { checkAreaIntegrity } from './area-integrity.js';
+export type { AreaIntegrityReport, DanglingAreaRef, DuplicateAlias, ShadowingAlias, OrphanAreaArtifact, } from './area-integrity.js';
 export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
 export type { RefreshAreaMemoryOptions, RefreshAreaMemoryResult, CompactDecisionsOptions, CompactDecisionsResult, } from './area-memory.js';
 export type { AreaContext } from '../models/index.js';

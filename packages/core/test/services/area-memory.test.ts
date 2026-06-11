@@ -149,6 +149,13 @@ function createStubAreaParser(areas: AreaContext[] = []): AreaParserService {
     getAreaForMeeting() {
       return Promise.resolve(null);
     },
+    getAliasMap() {
+      const map = new Map<string, string>();
+      for (const a of areas) {
+        for (const alias of a.aliases ?? []) map.set(alias, a.slug);
+      }
+      return Promise.resolve(map);
+    },
   } as unknown as AreaParserService;
 }
 
@@ -1047,5 +1054,48 @@ describe('isAreaMemoryStale', () => {
     const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
     assert.equal(isAreaMemoryStale(fiveDaysAgo, 3), true);
     assert.equal(isAreaMemoryStale(fiveDaysAgo, 7), false);
+  });
+});
+
+describe('area alias join (rename safety)', () => {
+  it('meetings tagged with a former slug still aggregate into the renamed area', async () => {
+    const storage = createMockStorage();
+    const paths = makeWorkspacePaths();
+
+    // The renamed area file declares its former slug as an alias.
+    storage.store.set(
+      join(WORKSPACE_ROOT, 'areas/glance-operations.md'),
+      '---\narea: Glance Operations\nstatus: active\naliases:\n  - glance-2-mvp\nrecurring_meetings: []\n---\n\n# Glance Operations\n',
+    );
+
+    const area = makeAreaContext({
+      slug: 'glance-operations',
+      name: 'Glance Operations',
+      recurringMeetings: [],
+      aliases: ['glance-2-mvp'],
+      filePath: join(WORKSPACE_ROOT, 'areas/glance-operations.md'),
+    });
+    const areaParser = createStubAreaParser([area]);
+    const commitments = createStubCommitments();
+    const memoryService = createStubMemory();
+
+    // Historical meeting still tagged with the OLD slug — must not orphan.
+    const today = new Date().toISOString().slice(0, 10);
+    storage.store.set(
+      join(WORKSPACE_ROOT, 'resources/meetings', `${today}-old-tagged.md`),
+      `---\ntitle: "Old Tagged Meeting"\ndate: "${today}"\narea: glance-2-mvp\ntopics:\n  - rollout\nopen_action_items: 1\nattendees: []\n---\n\nBody.`,
+    );
+
+    const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+    await service.refreshAreaMemory('glance-operations', paths);
+
+    const content = storage.store.get(
+      join(WORKSPACE_ROOT, '.arete/memory/areas/glance-operations.md'),
+    )!;
+    assert.ok(content, 'memory file should be written under the canonical slug');
+    assert.ok(
+      content.includes('slug: rollout'),
+      'topic from the old-slug meeting should aggregate into the renamed area',
+    );
   });
 });

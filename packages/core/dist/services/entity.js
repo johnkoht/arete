@@ -581,6 +581,7 @@ function escapeTableCell(s) {
 import { collectSignalsForPerson, aggregateSignals, renderPersonMemorySection, getPersonMemoryLastRefreshed, isMemoryStale, upsertPersonMemorySection, extractHashesFromContent, extractCheckedHashes, } from './person-memory.js';
 import { extractStancesForPerson, isActionItemStale, deduplicateActionItems, capActionItems, } from './person-signals.js';
 import { parseActionItemsFromMeeting } from './meeting-parser.js';
+import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 import { computeRelationshipHealth } from './person-health.js';
 const DEFAULT_FEATURE_TOGGLES = {
     enableExtractionTuning: false,
@@ -1083,6 +1084,10 @@ export class EntityService {
         // ≥0.7 confidence match. Prevents repeated AreaParserService.listAreas()
         // calls when the same meeting is scanned for multiple people.
         const meetingAreaCache = new Map();
+        // Alias → canonical map, loaded once per refresh. Meeting frontmatter may
+        // carry a pre-rename `area:` slug — new commitments must be stamped with
+        // the CANONICAL slug, never the historical alias.
+        const areaAliasMap = await loadAreaAliasMap(this.storage, workspacePaths.root);
         // Pre-compute per-person meeting file candidates (SearchProvider pre-filter).
         // CRITICAL invariant: if SearchProvider returns 0 results for a person,
         // fall back to the full meetingFiles list — never skip scanning entirely.
@@ -1200,7 +1205,7 @@ export class EntityService {
                         ? parsed.frontmatter.area
                         : undefined;
                     if (fmArea) {
-                        meetingArea = fmArea;
+                        meetingArea = canonicalizeAreaSlug(fmArea, areaAliasMap);
                     }
                     else if (this.areaParser && parsed?.frontmatter.title) {
                         // C1 fix: use suggestAreaForMeeting (rich inference) instead of

@@ -1280,8 +1280,8 @@ export function unionProjectCommitments(
   aliasMap: Map<string, string> = new Map(),
 ): Commitment[] {
   const own = open.filter((c) => c.projectSlug === slug);
-  // Commitment areas are compared canonicalized, never rewritten — a
-  // commitment's stored `area` participates in its identity hash.
+  // Commitment areas are compared canonicalized, never rewritten —
+  // stored data stays as written; only joins see canonical slugs.
   const areaUnclaimed = area
     ? open.filter(
         (c) => canonicalizeAreaSlug(c.area, aliasMap) === area && !c.projectSlug,
