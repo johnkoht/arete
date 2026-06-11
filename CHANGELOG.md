@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.14.0] — 2026-06-11 — Projects first-class: write-back loop + area edge on meetings
+
+Completes the projects-first-class program (phases 13+14; plans under `dev/work/plans/arete-v2-chef-orchestrator/`). Projects now have a full read-in/write-back loop, and `area:` is a first-class edge on all three entities (projects, commitments, meetings).
+
+### Added
+- **Meeting area edge** — `arete meeting process` proposes an area (≥0.7 confidence, signal-typed: summary-only name matches refused, title-only flagged `name-only`); `arete meeting set-area` writes it on confirm with provenance; commitments created at approve inherit the meeting's area automatically. `arete meeting backfill-area` (preview-by-default / `--apply` / `--reset`, zero-write-call reruns) covers history. `meetingsForArea` prefers explicit `area:` — topic-mention leakage into area briefs ends once areas are applied (topics-union remains the fallback for untagged meetings; the multi-area recall trade-off is documented + tested).
+- **`/update-project` write-back skill** — scans what changed since the README was last touched (area meetings, refreshed topics, new commitments), proposes itemized typed edits (status update, decision/learning, open question, meeting link, commitment claim, topics refresh) with per-item approval on the winddown "proposed" surface. Never auto-writes; rejecting leaves the README untouched. Acceptance case: the live "June-fixation" stale-goal-date contradiction, shipped as a named integration test.
+- **`arete project refresh-topics`** — system-owned `topics:` frontmatter cache (cap 5, retrieval-score floor calibrated on live wiki pages); change-gated: same slug set → zero write calls even under `--apply`. Display-only by contract (tested — no consumer behavior depends on it).
+- **Close→retro** — `finalize-project` now emits an idempotent `## Closed project:` retro entry to memory items, integrated to the wiki via the standard refresh path (no new wiki-write surface).
+- **`arete commitments claim <id> --project <slug>`** — stamps/clears `projectSlug` so a sibling project's brief stops surfacing commitments another sibling has claimed.
+- **Sibling projects derive from shared `area:`** (union with README links; archived `YYYY-MM_` dirs resolve); `jira:` frontmatter surfaced read-only in project briefs; `/project` triggers broadened ("load/review/look at project"); formatter polish (dated status prefixes, nested-bullet rendering, comment-free meeting excerpts).
+- **PATTERNS.md**: "propose-edits-back-to-source-doc" interaction contract (winddown staged items, /update-project, future published-doc-sync).
+
+### Fixed
+- **Dropped ≠ done** — resolving a commitment as `dropped` (e.g. winddown dedup of mirror duplicates) no longer falsely checks its linked week.md/tasks.md tasks. Back-propagation now fires only for `resolved`. (Fired live 2026-06-10: 6 duplicate drops marked 7 tasks complete.)
+
 ## [0.13.0] — 2026-06-10 — Projects as first-class citizens (read side)
 
 A project's area is now a reliably-present, system-derived field, so the already-built project brief lights up (plan: `dev/work/plans/arete-v2-chef-orchestrator/phase-12-projects-first-class/plan.md`, slices A+B+C; the write-back flow `/update-project` and close→retro are deferred to a follow-up phase).
