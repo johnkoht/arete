@@ -49,10 +49,38 @@ packages/core/src/services/project-area.ts:123:  await storage.write(readmePath,
 1. *Behavioral*: `assembleBriefForProject` output (sections + metadata) is deep-equal for the same project with and without the `topics:` cache.
 2. *Source tripwire*: brief-assemblers/brief-formatters contain no `project.topics` / `topicsRefreshed` reads — fails loudly when a future consumer appears without first making the cache authoritative.
 
-## AC8 — gate result (wrap)
+## AC8 — gate result: **PASS**
 
-*(filled at wrap)*
+Hard gate (plan AC8): on the fixture workspace, run the approved-update path twice with unchanged wiki state → README byte-identical after the first run; june-fixation green.
 
-## Net-LOC ledger (wrap)
+- **CLI level** (`project-refresh-topics.test.ts`, named `AC8 GATE`): first `--apply` writes `topics:` + `topics_refreshed:` + ownership comment (exactly once); second `--apply` with unchanged wiki → `changed:false`, `applied:false`, **entire workspace tree byte-identical** (snapshotTree over every file). PASS.
+- **Core level** (`project-topics.test.ts`): the same rerun shape asserts **zero write CALLS** via counting adapter (stronger than identical content — R2's exact wording). PASS.
+- **june-fixation** (`june-fixation.integration.test.ts`): all four substrate assertions green + the same-day-exclusion control test. PASS.
 
-*(filled at wrap)*
+**Honest verification split (binding, from plan AC1/AC3)**: these gates certify the SUBSTRATE and the VERB write-safety. The acceptance *behavior* — the skill proposing the right edit and touching nothing else, and reject-leaves-untouched on the skill path — is LLM-mediated: prose-pinned (15 prose tests) + soak-verified (MC3, 3 John-observed runs), **not merge-verified**.
+
+## Net-LOC ledger
+
+Convention: logic lines (added, non-comment/non-blank), tests excluded; vs plan estimate ~+220 code / ~+310 md.
+
+| Surface | Logic LOC | Raw |
+|---|---|---|
+| project-topics.ts (AC2 core) | 128 | 245 |
+| CLI refresh-topics (AC2) | 103 | 117 |
+| brief-assemblers (score + parseTopicsCache + population) | 27 | 50 |
+| barrel + entities + project-area export | 23 | 40 |
+| **Code total** | **281** | **452** |
+| update-project SKILL.md (AC1) | — | 119 md |
+| PATTERNS entry (AC6) | — | 31 md |
+| finalize-project retro (AC5) | — | 20 md |
+| docs (cli-commands, /project pointer) | — | 5 md |
+| **Md total** | | **175 md** |
+| Tests (excluded by convention) | | 1,271 |
+
+**Code 281 vs ~220 est = 1.28×** (under the 1.5× tripwire; overrun concentrated in the CLI verb's display/error paths and the retrievalFailed safety branch the plan didn't budget). **Md 175 vs ~310 est = 0.56×** — prose ran UNDER again (same direction as phase-12), mostly because the skill leans on the PATTERNS entry instead of restating it.
+
+## Deviations from plan (all flagged in diary/pre-mortem)
+
+1. **AC5 mechanism correction (pre-mortem D5)**: `arete topic refresh` does not consume `items/decisions.md` (verified in code; the `relevantL2` channel has no production caller). Retro stays items/-mediated per OQ1, but the regen verb is `arete memory refresh` and the verified integration surfaces are briefs + area memory pointers, not topic pages. Needs John's eyes at review.
+2. **`retrievalFailed` safety field** (unplanned, +~10 LOC): a wiki-retrieval ERROR forces `changed:false` so a transient failure can never empty a legitimate cache under `--apply`.
+3. **`resetBackfilledProjectAreas` is a third README writer** — the plan's grep expectation named two ("applyAreaToProjectReadme + the topics writer"); the phase-12 `--reset` writer also targets READMEs. Recorded verbatim above; all three are flag-gated.
