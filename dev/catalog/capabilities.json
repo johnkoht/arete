@@ -931,15 +931,17 @@
       "usageStatus": "active",
       "owner": "build",
       "platform": "cross",
-      "summary": "Phase 12: project flows. `open` = READ-ONLY resolve + brief + what's-new-since-README-mtime (tie -> top-N disambiguation, never auto-loads). `backfill-area` = propose area: for area-less projects (0.7 confidence floor, preview default, --apply writes area_set_by: backfill provenance, --reset clears only backfill-stamped).",
+      "summary": "Phase 12+14: project flows. `open` = READ-ONLY resolve + brief + what's-new-since-README-mtime (tie -> top-N disambiguation, never auto-loads). `backfill-area` = propose area: for area-less projects (0.7 confidence floor, preview default, --apply writes area_set_by: backfill provenance, --reset clears only backfill-stamped). `refresh-topics` = system-owned topics: cache (top-5 wiki topics above absolute 0.35 score floor, preview default, --apply change-gated: same slug set = zero write calls).",
       "implementationPaths": [
         "packages/cli/src/commands/project.ts",
+        "packages/core/src/services/brief-assemblers.ts",
         "packages/core/src/services/project-area.ts",
-        "packages/core/src/services/brief-assemblers.ts"
+        "packages/core/src/services/project-topics.ts"
       ],
       "entrypoints": [
         "arete project open <name>",
-        "arete project backfill-area [--apply|--reset]"
+        "arete project backfill-area [--apply|--reset]",
+        "arete project refresh-topics <slug> [--apply]"
       ],
       "readBeforeChange": [
         "packages/cli/src/commands/LEARNINGS.md",
@@ -947,12 +949,16 @@
       ],
       "testCommands": [
         "npm run typecheck",
-        "npx tsx --test packages/cli/test/commands/project.test.ts packages/core/test/services/project-area.test.ts"
+        "npx tsx --test packages/cli/test/commands/project.test.ts packages/core/test/services/project-area.test.ts",
+        "npx tsx --test packages/cli/test/commands/project-refresh-topics.test.ts packages/core/test/services/project-topics.test.ts"
       ],
       "notes": [
         "open is contractually zero-write (counting-adapter + tree-snapshot tests)",
-        "area resolution priority: fm.area -> areas[0] -> prose **Area**: line -> unresolved (resolveProjectArea)"
-      ]
+        "area resolution priority: fm.area -> areas[0] -> prose **Area**: line -> unresolved (resolveProjectArea)",
+        "topics: cache is display-only (R10) — ownership comment stamped in README; R10 guard test fails loudly on a future consumer",
+        "refresh-topics floor calibrated on the 23 wiki-rescue-W4 landing pads (phase-14 build-report)"
+      ],
+      "lastVerified": "2026-06-11"
     },
     {
       "id": "meeting-area-cli",

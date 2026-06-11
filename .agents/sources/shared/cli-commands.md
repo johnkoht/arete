@@ -86,6 +86,10 @@
   - `--reset` - Clear ONLY backfill-stamped areas (creation/manual untouched)
   - `--skip-qmd` - Skip automatic qmd index update after --apply
   - `--json` - Output as JSON
+- `arete project refresh-topics <slug>` - Recompute the system-owned `topics:` frontmatter cache (top-5 wiki topics above an absolute score floor). Default is preview (pure read); the cache is display-only — do not depend on it
+  - `--apply` - Write `topics:` + `topics_refreshed:` ONLY when the slug set changed (same set = zero write calls)
+  - `--skip-qmd` - Skip automatic qmd index update after an actual write
+  - `--json` - Output as JSON
 - `arete brief --project <slug>` - Project brief (also reachable via `arete project open`)
 
 ## Meetings

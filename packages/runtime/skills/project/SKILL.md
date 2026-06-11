@@ -26,7 +26,7 @@ requires_briefing: false
 
 Open a project with its full surrounding context in one move: `/project <name>` resolves the project, assembles the brief (README context + recent area meetings + open commitments + decisions/learnings + related wiki topics + sibling projects), and shows what changed since the README was last touched.
 
-**This flow is READ-ONLY. Opening a project NEVER writes to the project README or any other workspace file.** It computes relevant context for display only. Write-back belongs to a separate, approval-gated flow (`/update-project`, future phase) — never to open.
+**This flow is READ-ONLY. Opening a project NEVER writes to the project README or any other workspace file.** It computes relevant context for display only. Write-back belongs to a separate, approval-gated flow (`/update-project` — see `update-project/SKILL.md`) — never to open.
 
 ## When to Use
 

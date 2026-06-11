@@ -1,0 +1,134 @@
+{
+  "name": "phase-14-project-write-back",
+  "branchName": "worktree-agent-a0e5ef1fddde3721c",
+  "goal": "Close the read-in/write-back loop: /update-project proposal flow on the winddown surface, change-gated refresh-topics verb (R1/R2 in tested code), june-fixation substrate gate, items/-mediated close retro (stretch, D5-adapted).",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "AC6: PATTERNS.md propose-edits-back-to-source-doc (ships FIRST)",
+      "description": "Append the pattern entry to packages/runtime/skills/PATTERNS.md: proposed-surface shape, per-item approval, source attribution, reject-leaves-untouched, R2 change-gated-persistence corollary, named instances (daily-winddown staged items; /update-project README; future published-doc-sync). OWN commit before any skill prose (MC4).",
+      "acceptanceCriteria": [
+        "Entry exists in PATTERNS.md with all five documented elements",
+        "Committed BEFORE any update-project/finalize-project prose (commit order provable)",
+        "typecheck unaffected (md only)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "AC2 core: project-topics module + WikiMatch.score + read-model fields",
+      "description": "New packages/core/src/services/project-topics.ts: computeProjectTopics (buildProjectWikiQuery + retrieveWiki with scores, absolute floor, cap 5), readProjectTopicsState, applyTopicsToProjectReadme (slug-SET change-gate, wholesale rewrite of topics:+topics_refreshed:+ownership comment). Additive WikiMatch.score. entities.Project gains topics?/topicsRefreshed?.",
+      "acceptanceCriteria": [
+        "Counting adapter: same slug set -> ZERO write calls even under apply",
+        "Slug-set change -> single wholesale rewrite; topics_refreshed bumped only then",
+        "Ownership comment inserted once; dedup by stable substring; preserved on rewrite; body starting with HTML comment handled (D7)",
+        "Lossless frontmatter round-trip: nested jira:/notion: blocks survive",
+        "Cap 5 honored; below-floor slug excluded (strong+weak fixture, wide margins both backends per D6)",
+        "typecheck + tsx --test packages/core/test/services/project-topics.test.ts green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "AC2 CLI: arete project refresh-topics <slug>",
+      "description": "Subcommand on project.ts: preview default (computed slugs, current cached set, changed flag), --apply change-gated, --json all exit paths, --skip-qmd, qmd refresh only on actual write. Subprocess tests in NEW file packages/cli/test/commands/project-refresh-topics.test.ts.",
+      "acceptanceCriteria": [
+        "Preview is pure read: snapshotTree byte-identical",
+        "--apply writes once on change; rerun with unchanged wiki -> byte-identical workspace AND zero write calls (AC8 gate test)",
+        "--json complete in every exit path incl. not-a-workspace and no-such-project",
+        "qmd refresh skipped on no-op apply; --skip-qmd honored",
+        "typecheck + targeted tests green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "AC2 floor calibration on 23 W4 landing-pad topics (read-only)",
+      "description": "Script (uncommitted, /tmp or scripts/ per eval-harness-local memory) scoring live arete-reserv projects' wiki queries against the 23 landing-pad slugs via retrieveWiki scores. Pick the absolute threshold; document in project-topics.ts constant + build-report table.",
+      "acceptanceCriteria": [
+        "Calibration table recorded in build-report (per-project top matches + scores, landing-pad hits)",
+        "Threshold constant documented with derivation comment",
+        "Zero writes to arete-reserv (read-only verified)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "AC1: /update-project skill prose + /project pointer + prose tests",
+      "description": "New packages/runtime/skills/update-project/SKILL.md (winddown proposed surface, typed menu incl. commitment claim, source attribution, June-fixation worked example, D2 backfill hint, D3 empty-scan note, conversational entry, PATTERNS ref, honest verification split, rollback). Update /project SKILL.md 'future phase' pointer. Append new describes to chef-orchestrator-skills.test.ts (no existing test edited).",
+      "acceptanceCriteria": [
+        "Prose tests: propose-not-auto-write; reject-leaves-untouched; typed menu; winddown-surface reference; June-fixation example verbatim; PATTERNS reference; backfill-provenance hint; topics persistence only via refresh-topics --apply after approval",
+        "/project SKILL.md read-only language UNCHANGED (existing prose tests still green)",
+        "git diff shows chef-orchestrator-skills.test.ts changes are append-only"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "AC3: june-fixation named integration test",
+      "description": "NEW file (cli integration): fixture workspace with project README (Background/Status: 'end of June 2026', mtime set), area-tagged meeting >=1 day after README mtime whose decision text moves the goal to EOY-2026. Run arete project open --json.",
+      "acceptanceCriteria": [
+        "(a) meeting present in whatsNew.meetings",
+        "(b) decision text readable at the surfaced path",
+        "(c) stale goal line present in brief project-context section",
+        "(d) zero writes during the scan: snapshotTree byte-identical (+ counting adapter at core level)",
+        "Test is named 'june-fixation'"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "AC4: regression wall + R10 guard artifacts",
+      "description": "Prove phase-12 zero-write test files untouched (git diff empty for both); run those suites green; R10 guard test asserting no brief section/behavior branches on Project.topics; record README-writers grep verbatim for build-report.",
+      "acceptanceCriteria": [
+        "git diff 24b0f816..HEAD -- packages/core/test/services/project-area.test.ts packages/cli/test/commands/project.test.ts is EMPTY",
+        "Both suites pass unmodified",
+        "R10 guard test ships and fails loudly on a future topics consumer",
+        "Grep artifact captured: only README writers in core are applyAreaToProjectReadme + the topics writer"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "AC5 (STRETCH, defer-not-cut): finalize-project retro step (D5-adapted)",
+      "description": "Prose step in finalize-project SKILL.md: compose '## Closed project: <name>' entry (exact plan data-model shape) from completion summary; idempotency scan items/decisions.md for 'Closed project: <slug>' first; append in standard memory-item format; run arete memory refresh; report where it surfaces. Prose test + substrate test (fixture retro entry surfaces in area/project brief Decisions & learnings).",
+      "acceptanceCriteria": [
+        "Prose test: retro step + idempotency-scan rule + exact entry format present",
+        "Substrate test: appended fixture retro entry appears in brief Decisions & learnings via existing parseMemoryItemEntries machinery",
+        "Zero new code paths; D5 adaptation documented in skill prose and diary"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-9",
+      "title": "Wrap: AC7 full suite (detached) + AC8 gate capture + AC9 rollback + docs + memory + dist",
+      "description": "Detached npm test -> /tmp/p14-suite.log; build-report (calibration table, grep artifact, AC8 gate result, honest verification splits); rollback.md; cli-commands.md + capabilities.json + routability; memory entry + LEARNINGS; rebuild + commit dist. Stop after ship report.",
+      "acceptanceCriteria": [
+        "Full suite green or explicitly left-to-prime with detached log evidence",
+        "AC8 gate result captured in build-report",
+        "rollback.md spot-verified",
+        "Net-LOC ledger vs ~+220 code / ~+310 md recorded",
+        "dist/ rebuilt and committed"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ]
+}

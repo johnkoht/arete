@@ -140,6 +140,15 @@ export interface WikiMatch {
      * serving a frozen page as if it were current.
      */
     lastRefreshed: string;
+    /**
+     * Ranking score this match was retrieved with (Phase 14 AC2 — the
+     * topics-cache confidence floor rides this). Primary path: the
+     * `retrieveRelevant` re-rank score (qmd score × 0.6 + recency +
+     * area-match bonuses). Fallback path: alias-jaccard + area bonus.
+     * Additive — display/threshold use only; no existing consumer
+     * branches on it.
+     */
+    score: number;
 }
 /** Days since `last_refreshed` after which a wiki page is labeled stale.
  * Mirrors `listTopicMemoryStatus`'s staleDays=60 (strict `>`). */
@@ -196,6 +205,16 @@ export interface ProjectBriefDeps {
     areaMemory: AreaMemoryService;
     entities: EntityService;
 }
+/**
+ * Parse the system-owned `topics:` cache pair out of project frontmatter
+ * (Phase 14 AC2). Tolerant: non-array/non-string shapes → undefined (never
+ * throws). Read-side only — the write path lives in project-topics.ts.
+ * Pure; exported for tests.
+ */
+export declare function parseTopicsCache(fm: Record<string, unknown>): {
+    topics?: string[];
+    topicsRefreshed?: string;
+};
 /**
  * Parse a `jira:` frontmatter block into a flat string map (Phase 13 AC7).
  * Tolerates absence and non-object shapes (returns undefined, never

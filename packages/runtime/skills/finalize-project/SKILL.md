@@ -127,6 +127,26 @@ Apply updates to context files:
 
 For key decisions and learnings from the project, append to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md` using the standard format — see [PATTERNS.md](../PATTERNS.md) (extract_decisions_learnings). You may add **Review Date** for decisions and **Project** where applicable.
 
+#### Closed-Project Retro (frozen trace — Phase 14 AC5)
+
+Emit ONE structured retro entry to `.arete/memory/items/decisions.md` so the closed project leaves a dated, findable trace in the memory surfaces (the area/project briefs' "Decisions & learnings" section; the area memory page's Recent Decisions pointers) without hand-copying. No new machinery — this is an ordinary memory item riding the existing pipeline (the items/-mediated mechanism approved in the phase-14 plan, OQ1).
+
+**Idempotency — scan before write**: search `decisions.md` for a heading containing `Closed project: <project name>` (the slug works too). Present → SKIP this step entirely; rerunning finalize must never duplicate the retro.
+
+**Exact entry format** (standard memory-item live format — `## Title` heading + metadata bullets, parsed by the same machinery as every other decision; the `Topics:` bullet MUST include the project's area slug so the retro surfaces in that area's brief):
+
+```markdown
+## Closed project: Visioning Deck
+- **Date**: 2026-06-10
+- **Source**: projects/archive/2026-06_visioning-deck/README.md
+- **Topics**: glance-2-mvp, vision-deck
+- **Project**: visioning-deck
+
+[2–4 line outcome summary: what shipped, what was decided, what was learned.]
+```
+
+Compose the summary from the Completion Summary written in step 6. After appending, run `arete memory refresh` (mechanical area-memory + index regeneration — the retro appears as a Recent Decisions pointer on the area memory page), then report where the retro now surfaces. Note: `arete topic refresh` does NOT integrate memory items into topic pages (its sources are meetings and slack digests) — the items/-mediated retro surfaces through briefs and area memory by design; a direct wiki-page writer remains deliberately deferred (phase-12 pre-mortem R7).
+
 #### Activity Log
 
 Add entry to `.arete/activity/activity-log.md`:

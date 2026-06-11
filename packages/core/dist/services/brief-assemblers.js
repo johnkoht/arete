@@ -399,6 +399,7 @@ export async function retrieveWiki(topicMemory, paths, query, opts = {}) {
             summary: summarizeWikiBody(r.bodyForContext),
             path: join(paths.memory, 'topics', `${r.slug}.md`),
             lastRefreshed: r.frontmatter.last_refreshed,
+            score: r.score,
         }));
     }
     if (result.searchBackend !== 'none') {
@@ -447,6 +448,7 @@ export async function retrieveWiki(topicMemory, paths, query, opts = {}) {
         summary: summarizeWikiBody(s.bodyForContext),
         path: join(paths.memory, 'topics', `${s.slug}.md`),
         lastRefreshed: s.frontmatter.last_refreshed,
+        score: s.score,
     }));
 }
 /**
@@ -708,6 +710,31 @@ function makeEmptyPersonBrief(slug) {
     };
 }
 /**
+ * Parse the system-owned `topics:` cache pair out of project frontmatter
+ * (Phase 14 AC2). Tolerant: non-array/non-string shapes → undefined (never
+ * throws). Read-side only — the write path lives in project-topics.ts.
+ * Pure; exported for tests.
+ */
+export function parseTopicsCache(fm) {
+    const out = {};
+    if (Array.isArray(fm['topics'])) {
+        const slugs = fm['topics']
+            .filter((t) => typeof t === 'string')
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0);
+        if (slugs.length > 0)
+            out.topics = slugs;
+    }
+    const refreshed = fm['topics_refreshed'];
+    if (typeof refreshed === 'string' && refreshed.trim().length > 0) {
+        out.topicsRefreshed = refreshed.trim();
+    }
+    else if (refreshed instanceof Date) {
+        out.topicsRefreshed = refreshed.toISOString().slice(0, 10);
+    }
+    return out;
+}
+/**
  * Parse a `jira:` frontmatter block into a flat string map (Phase 13 AC7).
  * Tolerates absence and non-object shapes (returns undefined, never
  * throws). Array values are comma-joined; scalars stringified; nested
@@ -844,6 +871,7 @@ async function listActiveProjects(storage, paths) {
             status: typeof fm.status === 'string' ? fm.status : undefined,
             started: typeof fm.started === 'string' ? fm.started : undefined,
             jira: parseJiraFrontmatter(fm.jira),
+            ...parseTopicsCache(fm),
             readmePath,
             readmeContent: content,
         });
@@ -867,6 +895,7 @@ async function readProjectBySlug(storage, paths, slug) {
         status: typeof fm.status === 'string' ? fm.status : undefined,
         started: typeof fm.started === 'string' ? fm.started : undefined,
         jira: parseJiraFrontmatter(fm.jira),
+        ...parseTopicsCache(fm),
         readmePath,
         readmeContent: content,
     };

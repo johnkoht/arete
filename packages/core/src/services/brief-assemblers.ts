@@ -510,6 +510,15 @@ export interface WikiMatch {
    * serving a frozen page as if it were current.
    */
   lastRefreshed: string;
+  /**
+   * Ranking score this match was retrieved with (Phase 14 AC2 — the
+   * topics-cache confidence floor rides this). Primary path: the
+   * `retrieveRelevant` re-rank score (qmd score × 0.6 + recency +
+   * area-match bonuses). Fallback path: alias-jaccard + area bonus.
+   * Additive — display/threshold use only; no existing consumer
+   * branches on it.
+   */
+  score: number;
 }
 
 /** Days since `last_refreshed` after which a wiki page is labeled stale.
@@ -553,6 +562,7 @@ export async function retrieveWiki(
       summary: summarizeWikiBody(r.bodyForContext),
       path: join(paths.memory, 'topics', `${r.slug}.md`),
       lastRefreshed: r.frontmatter.last_refreshed,
+      score: r.score,
     }));
   }
 
@@ -611,6 +621,7 @@ export async function retrieveWiki(
     summary: summarizeWikiBody(s.bodyForContext),
     path: join(paths.memory, 'topics', `${s.slug}.md`),
     lastRefreshed: s.frontmatter.last_refreshed,
+    score: s.score,
   }));
 }
 
@@ -935,8 +946,45 @@ interface ActiveProject {
    * arrays comma-joined. Absent when missing or malformed. No write path.
    */
   jira?: Record<string, string>;
+  /**
+   * Phase 14 AC2 — system-owned topics cache read from frontmatter.
+   * Display/convenience ONLY (pre-mortem R10): populated on read, written
+   * exclusively by `arete project refresh-topics --apply`, and NOTHING in
+   * brief assembly or formatting may branch on it (guarded by the R10
+   * no-consumer test in project-topics.test.ts).
+   */
+  topics?: string[];
+  /** Date the topics cache last changed (R2: bumped only on slug-set change). */
+  topicsRefreshed?: string;
   readmePath: string;
   readmeContent: string;
+}
+
+/**
+ * Parse the system-owned `topics:` cache pair out of project frontmatter
+ * (Phase 14 AC2). Tolerant: non-array/non-string shapes → undefined (never
+ * throws). Read-side only — the write path lives in project-topics.ts.
+ * Pure; exported for tests.
+ */
+export function parseTopicsCache(fm: Record<string, unknown>): {
+  topics?: string[];
+  topicsRefreshed?: string;
+} {
+  const out: { topics?: string[]; topicsRefreshed?: string } = {};
+  if (Array.isArray(fm['topics'])) {
+    const slugs = fm['topics']
+      .filter((t): t is string => typeof t === 'string')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    if (slugs.length > 0) out.topics = slugs;
+  }
+  const refreshed = fm['topics_refreshed'];
+  if (typeof refreshed === 'string' && refreshed.trim().length > 0) {
+    out.topicsRefreshed = refreshed.trim();
+  } else if (refreshed instanceof Date) {
+    out.topicsRefreshed = refreshed.toISOString().slice(0, 10);
+  }
+  return out;
 }
 
 /**
@@ -1093,6 +1141,7 @@ async function listActiveProjects(
       status: typeof fm.status === 'string' ? fm.status : undefined,
       started: typeof fm.started === 'string' ? fm.started : undefined,
       jira: parseJiraFrontmatter(fm.jira),
+      ...parseTopicsCache(fm),
       readmePath,
       readmeContent: content,
     });
@@ -1120,6 +1169,7 @@ async function readProjectBySlug(
     status: typeof fm.status === 'string' ? fm.status : undefined,
     started: typeof fm.started === 'string' ? fm.started : undefined,
     jira: parseJiraFrontmatter(fm.jira),
+    ...parseTopicsCache(fm),
     readmePath,
     readmeContent: content,
   };

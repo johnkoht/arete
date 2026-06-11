@@ -1459,3 +1459,34 @@ section to its SKILL.md specifying:
 invocation path. Gather-only mode is an alternate entry point that
 returns structured output instead of engaging.
 
+
+---
+
+## propose-edits-back-to-source-doc
+
+**Purpose**: Flow outcomes BACK into a source-of-truth document (a project README, staged memory items, a wiki page) through an itemized, approval-gated proposal — never through silent writes. This is the write-back counterpart of `do-all-work-then-engage`: the agent does all scan/judgment work upfront, then proposes concrete edits to the document and applies EXACTLY what the user approves.
+
+**Used by / named instances**:
+
+- **daily-winddown** — proposes collapses/stages to the staged-items surface (`## Closed today (proposed)`, `## Stage for approval`).
+- **/update-project** — proposes README edits from the "what's new since last touched" scan (Phase 14; the June-fixation case is the canonical worked example).
+- **published-doc-sync** (future) — will propose wiki-page supersessions when published docs contradict recorded decisions.
+
+### Envelope (prescriptive)
+
+1. **Scan deterministically, propose judgmentally.** The data path is CLI/primitive output (e.g., `arete project open --json`); the LLM's judgment composes proposals ON TOP of it and never replaces the scan.
+2. **Itemized typed proposals.** Each proposed edit is ONE item from a small typed menu the skill defines (e.g., status update, decision/learning to log, open question, meeting link, cache refresh, commitment claim). One item = one approvable unit. No omnibus "apply all my changes" items.
+3. **Source attribution on every item.** Each item quotes the source that justifies it (which meeting, topic page, or commitment) so the user can audit the claim before approving. When the source's own provenance is machine-inferred (e.g., a meeting whose `area_set_by: backfill`), the item carries a visible verify hint — attribution must not lend false authority.
+4. **Per-item approval; apply exactly the approved set.** The user approves/edits/skips per item (the daily-winddown `## Proposed updates` interaction). The agent applies precisely the approved items — nothing more, even when it is confident about the rest.
+5. **Reject-leaves-untouched.** Rejecting every item leaves the target document byte-identical. There is no "while I was in there" tidying.
+6. **Change-gated persistence (R2 corollary).** Any machine-owned cache the flow maintains (e.g., `topics:` frontmatter) is written ONLY when its content actually changes — same value set → zero write calls, no freshness-stamp churn in git. Enforce this in tested code (a CLI verb with a counting-adapter test), not in prose.
+
+### Verification honesty
+
+The apply/reject discipline on the SKILL path is LLM-mediated and not CI-provable; pin it in prose tests, enforce write-safety in the tested verbs the skill calls, and verify the live behavior in a named soak. Say which is which in the skill's own prose.
+
+### Content (per-skill)
+
+Each adopting skill's SKILL.md specifies: the typed proposal menu, the scan command(s), the approval surface format, the persistence verb(s) it is allowed to call after approval, and a named worked example of "propose the correction; touch nothing else."
+
+**See also**: `do-all-work-then-engage` (the engagement envelope), `propose-with-mcp-action` (action proposals — sibling pattern for verbs rather than document edits), `extract_decisions_learnings` (the never-write-without-approval rule this pattern generalizes).

@@ -30,9 +30,25 @@ export {
   listProjectsForBackfill,
   applyAreaToProjectReadme,
   resetBackfilledProjectAreas,
+  parseProjectReadme,
 } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
+// Phase 14 AC2 — project topics-cache compute/diff/write (R1/R2 in tested code)
+export {
+  computeProjectTopicsRefresh,
+  applyProjectTopics,
+  sameSlugSet,
+  PROJECT_TOPICS_CAP,
+  PROJECT_TOPICS_SCORE_FLOOR,
+  PROJECT_TOPICS_OWNERSHIP_COMMENT,
+} from './project-topics.js';
+export type {
+  ProjectTopicsRefresh,
+  ComputedProjectTopic,
+  ApplyProjectTopicsResult,
+} from './project-topics.js';
+export { parseTopicsCache } from './brief-assemblers.js';
 // Phase 13 AC2/AC3 — meeting area write surface (set-area + backfill)
 export {
   listMeetingsForBackfill,

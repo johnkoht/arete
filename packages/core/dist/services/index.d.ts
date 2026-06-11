@@ -10,9 +10,12 @@ export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.j
 export type { DiscussionTopicGroup, NextFocusExtract, } from './brief-assemblers.js';
 export { resolveProjectArea } from './brief-assemblers.js';
 export type { ProjectAreaResolution } from './brief-assemblers.js';
-export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, } from './project-area.js';
+export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
+export { computeProjectTopicsRefresh, applyProjectTopics, sameSlugSet, PROJECT_TOPICS_CAP, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_TOPICS_OWNERSHIP_COMMENT, } from './project-topics.js';
+export type { ProjectTopicsRefresh, ComputedProjectTopic, ApplyProjectTopicsResult, } from './project-topics.js';
+export { parseTopicsCache } from './brief-assemblers.js';
 export { listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, } from './meeting-area.js';
 export type { MeetingBackfillCandidate, MeetingAreaQualification, ApplyAreaResult, } from './meeting-area.js';
 export { resolveArchivedProjectReadme } from './brief-assemblers.js';

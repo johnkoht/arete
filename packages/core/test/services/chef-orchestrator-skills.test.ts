@@ -1323,3 +1323,143 @@ describe('/project skill prose (Phase 12 AC3)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 14 — /update-project skill prose (AC1; NOT a chef skill — it
+// instantiates the propose-edits-back-to-source-doc pattern). These are
+// string-presence assertions: prose pins the rules, the AC2 verb tests +
+// AC4 regression wall enforce write-safety in CI, the MC3 soak verifies
+// live behavior (honest verification split, stated in-skill).
+// ---------------------------------------------------------------------------
+
+describe('/update-project skill prose (Phase 14 AC1)', () => {
+  const skillPath = join(SKILLS_DIR, 'update-project', 'SKILL.md');
+
+  it('exists', () => {
+    assert.ok(existsSync(skillPath), `missing ${skillPath}`);
+  });
+
+  it('propose-not-auto-write rule: everything proposed, nothing applied without approval', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /Never auto-writes/i);
+    assert.match(prose, /Everything is proposed; nothing is auto-applied/i);
+    assert.match(prose, /Never write without an approved item/i);
+  });
+
+  it('reject-leaves-untouched rule (byte-identical README)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /Rejecting everything leaves the README byte-identical/);
+    assert.match(prose, /No "while I was in there"/);
+  });
+
+  it('carries the typed proposal menu (all six v1 types incl. commitment claim per OQ3)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /\*\*Status update\*\*/);
+    assert.match(prose, /\*\*Decision \/ learning to log\*\*/);
+    assert.match(prose, /\*\*New open question\*\*/);
+    assert.match(prose, /\*\*Meeting link\*\*/);
+    assert.match(prose, /\*\*Topics-cache refresh\*\*/);
+    assert.match(prose, /\*\*Commitment claim\*\*/);
+    assert.match(prose, /arete commitments claim <id> --project <slug>/);
+  });
+
+  it('references the daily-winddown proposed surface shape', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /## Proposed updates/);
+    assert.match(prose, /winddown/i);
+  });
+
+  it('carries the June-fixation worked example verbatim', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /June-fixation/);
+    assert.match(prose, /propose the goal-date correction; touch nothing else/);
+    assert.match(prose, /EOY-2026/);
+  });
+
+  it('R1: topics persistence ONLY via the change-gated verb after approval', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /ONLY through `arete project refresh-topics <slug> --apply`/);
+    assert.match(prose, /Never hand-edit `topics:`\/`topics_refreshed:`/);
+  });
+
+  it('references the propose-edits-back-to-source-doc pattern (AC6/MC4)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /propose-edits-back-to-source-doc/);
+    assert.match(prose, /PATTERNS\.md/);
+  });
+
+  it('pre-mortem D2: backfill-provenance hint on machine-inferred source areas', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /area_set_by: backfill/);
+    assert.match(prose, /verify this meeting actually belongs/i);
+  });
+
+  it('pre-mortem D3: empty-scan message cites the mtime date + day-granularity caveat', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /Nothing new since the README was last touched/);
+    assert.match(prose, /day granularity/i);
+  });
+
+  it('conversational entry resolves the meeting FIRST, then the same pipeline (decision 5)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /resolve the meeting first/i);
+    assert.match(prose, /One flow, two entry points; no parallel logic/);
+  });
+
+  it('disambiguation: never auto-load a tie (reuses /project rules)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /never auto-load a tie/i);
+  });
+
+  it('states the honest verification split (CI enforces verbs; prose+soak cover the skill path)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /## Verification honesty/);
+    assert.match(prose, /LLM-mediated/);
+    assert.match(prose, /not CI-proven/);
+  });
+
+  it('has a Rollback section', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /## Rollback/);
+    assert.match(prose, /git revert/);
+  });
+
+  it('/project SKILL.md now points at the live flow (no "future phase" left)', () => {
+    const projectProse = readFileSync(join(SKILLS_DIR, 'project', 'SKILL.md'), 'utf8');
+    assert.match(projectProse, /update-project\/SKILL\.md/);
+    assert.doesNotMatch(projectProse, /future phase/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14 AC5 (stretch) — finalize-project closed-project retro prose.
+// Mechanism per phase-14 pre-mortem D5: items/-mediated (OQ1), surfacing
+// through briefs + area memory; `arete memory refresh` is the regen verb
+// (topic refresh does not consume memory items).
+// ---------------------------------------------------------------------------
+
+describe('finalize-project retro prose (Phase 14 AC5)', () => {
+  const skillPath = join(SKILLS_DIR, 'finalize-project', 'SKILL.md');
+
+  it('carries the retro step with the exact entry format', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /Closed-Project Retro/);
+    assert.match(prose, /## Closed project: Visioning Deck/);
+    assert.match(prose, /- \*\*Date\*\*: 2026-06-10/);
+    assert.match(prose, /- \*\*Topics\*\*: glance-2-mvp, vision-deck/);
+    assert.match(prose, /- \*\*Project\*\*: visioning-deck/);
+    assert.match(prose, /MUST include the project's area slug/);
+  });
+
+  it('carries the idempotency-scan rule (rerunning finalize never duplicates)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /scan before write/i);
+    assert.match(prose, /never duplicate the retro/i);
+  });
+
+  it('runs arete memory refresh (NOT topic refresh) and states why (pre-mortem D5)', () => {
+    const prose = readFileSync(skillPath, 'utf8');
+    assert.match(prose, /arete memory refresh/);
+    assert.match(prose, /`arete topic refresh` does NOT integrate memory items/);
+  });
+});

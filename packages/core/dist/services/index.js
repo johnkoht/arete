@@ -12,7 +12,10 @@ export { formatPersonBriefMarkdown, formatProjectBriefMarkdown, formatAreaBriefM
 export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.js';
 // Phase 12 AC1/AC2 — project area resolution + backfill helpers
 export { resolveProjectArea } from './brief-assemblers.js';
-export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, } from './project-area.js';
+export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
+// Phase 14 AC2 — project topics-cache compute/diff/write (R1/R2 in tested code)
+export { computeProjectTopicsRefresh, applyProjectTopics, sameSlugSet, PROJECT_TOPICS_CAP, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_TOPICS_OWNERSHIP_COMMENT, } from './project-topics.js';
+export { parseTopicsCache } from './brief-assemblers.js';
 // Phase 13 AC2/AC3 — meeting area write surface (set-area + backfill)
 export { listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, } from './meeting-area.js';
 // Phase 13 AC4 — archive-prefix-tolerant project lookup (claim validation reuse)
