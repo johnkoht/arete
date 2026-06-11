@@ -1490,3 +1490,83 @@ The apply/reject discipline on the SKILL path is LLM-mediated and not CI-provabl
 Each adopting skill's SKILL.md specifies: the typed proposal menu, the scan command(s), the approval surface format, the persistence verb(s) it is allowed to call after approval, and a named worked example of "propose the correction; touch nothing else."
 
 **See also**: `do-all-work-then-engage` (the engagement envelope), `propose-with-mcp-action` (action proposals — sibling pattern for verbs rather than document edits), `extract_decisions_learnings` (the never-write-without-approval rule this pattern generalizes).
+
+
+---
+
+## reconcile-engine
+
+**Purpose**: One reconciliation brain for the winddown. All cross-item
+judgment — cross-meeting dedup, intent-vs-commitment, fulfillment scan,
+moot detection, supersession arcs — runs in ONE holistic pass at winddown
+time over a merged, timestamp-ordered ledger. Replaces the three
+overlapping dedup mechanisms (inline `--reconcile`, per-file
+`wireExtractDedup`, Step 2 rules applied ad hoc) with a single specified
+engine invoked by both winddowns.
+
+**Used by**: `daily-winddown` (horizon=day, 7-day lookback context),
+`weekly-winddown` (horizon=week; ships after daily stabilizes per CHR W5
+sequencing). Stage-0 precursor: `arete meeting reconcile-day` behind
+`reconcile_mode: day-level` (CHR W0).
+
+**Authoritative spec**: `dev/work/plans/chef-holistic-reconcile/engine-spec.md`
+— ledger shape, phases R0–R4, judgment-band parameter table, arc-assembly
+rules with worked examples, provenance vocabulary, degraded-mode contract,
+idempotency rails. This pattern entry is the envelope summary; the spec is
+load-bearing.
+
+### Envelope (prescriptive)
+
+```
+R0  idempotency sweep — R7 resolvedAt check; prior-day directive scan
+    ([[unmerge]] / [[confirm]] / [[unskip]] …); approved/skipped items
+    become READ-ONLY (evidence, never re-decided)
+R1  build the merged ledger — extractions (RAW, pre-reconcile) × slack ×
+    email × calendar × commitments × week.md completions × workspace-
+    APPEND evidence entries; timestamp ASC; arcs survive composition
+    (never dedup the ledger itself)
+R2  candidate nomination (mechanical, cheap) — `arete reconcile nominate
+    --ledger <file.json>`; Jaccard 0.7 nomination + 0.5–0.7 uncertain-band
+    tagging, memory match, completed-task match, continuation_of /
+    supersedes claim verification, relevance scoring. Nomination is NEVER
+    a decision.
+R3  judgment pass (agent) — rules 3→4→1→2 with ALL guards (mirror-pair,
+    recurring-item, direction, Rule-1 precedence); quality gate (absorbs
+    batchLLMReview; blockers never quality-dropped); arc assembly for
+    repeat workstreams (present oldest→newest, recommend, never collapse
+    to oldest); sidecar tiering
+R4  write decisions (mechanical) — writeWithLock partial-merge ONLY:
+    staged_item_status / staged_item_source: 'chef-dedup' /
+    staged_item_skip_reason {reason, evidence, matched_ref, setBy, setAt}
+    + dedup-decisions log + item-fates events. setAt is REQUIRED.
+```
+
+Hard rules:
+
+- **Proposed-only (D7)**: the engine computes, the chef proposes, the user
+  approves. No auto-mutations, no body-line deletion, ever.
+- **Threshold-unity is nomination-scoped**: 0.7 unifies candidate filters
+  only. Judgment bands keep their deliberate values (Rule 4 concrete ≥0.7
+  with 0.5–0.7 → Uncertain; `CommitmentsService.reconcile()` 0.6 as a
+  post-approval primitive). Do not "unify" them — see the spec's parameter
+  table and review F2.
+- **Mechanical/judgment seam**: the agent never computes similarity; the
+  primitive never makes judgment calls. The seam is the nomination file.
+- **Degraded mode**: legacy-shaped input (no tiers/⚠/claims) degrades to
+  nomination-only dedup with tier=normal defaults — an SP rollback never
+  strands the winddown.
+- **Idempotent re-runs**: a deliberate same-day re-run proposes zero
+  already-resolved items (R0 mask + R7 check + upsert writes + dedup-log).
+
+### Content (per-skill)
+
+The calling SKILL.md specifies: the horizon and gather scope (which Step 1
+outputs feed R1), where the curated proposals render (Closed today /
+Uncertain / sidecar sections), and any workspace APPEND evidence sources
+(e.g., jira ticket state in arete-reserv — a workspace concern, never core;
+the engine consumes whatever `workspace-evidence` entries the APPEND
+contributes and degrades structurally when absent).
+
+**See also**: `gather-only composition` (feeds R1), `curate-with-reason-
+labels` + `surface-deferred-as-sidecar` (render R3 output),
+`do-all-work-then-engage` (the engine runs inside step 4, judgment).

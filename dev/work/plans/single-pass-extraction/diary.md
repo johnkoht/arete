@@ -120,3 +120,31 @@ degrade.
 
 **Verification**: full suite 4575 tests / 4573 pass / 0 fail / 2 skipped
 (+4 new). cli rebuild clean.
+
+---
+
+## 2026-06-11 ~10:10 — CHR-W1: engine spec + PATTERNS entry
+
+`dev/work/plans/chef-holistic-reconcile/engine-spec.md` (spec v1) +
+`packages/runtime/skills/PATTERNS.md` § reconcile-engine (envelope summary
+pointing at the spec).
+
+Coverage per brief: ledger shape (gather-loop composition + extraction
+entries w/ single-pass fields; raw-not-post-inline rule; arcs-survive-
+composition rule), R0–R4, rule definitions with ALL Rule-4 guards and the
+judgment-band parameter table — threshold-unity deliberately scoped to R2
+nomination only; Rule 4 concrete ≥0.7 / 0.5–0.7 Uncertain band
+(SKILL.md:583,632–642) and CommitmentsService.reconcile()'s 0.6 preserved
+as named engine parameters (review F2's "regression-by-test" inversion
+guarded in prose). Arc assembly with THREE worked examples per review F7:
+(1) Anthony de_002 → workshop de_004 same-day supersession (the AC3
+fixture), (2) A→B→A′ flip-flop reversal (high Jaccard between non-adjacent
+arc members = arc evidence, not dedup evidence), (3) three-meeting
+continuation chain (continuation vs supersession vs duplicate collapse
+directions distinguished). Provenance: writers emit 'chef-dedup', readers
+accept 'reconciled' forever; skip_reason carries {reason, evidence,
+matched_ref, setBy, setAt} with greppable reason prefixes. Degraded-mode
+contract table (tier→normal, confidence-as-staging-signal semantics noted
+per review F8, claims→nomination-only). R7 idempotency as a four-mechanism
+stack. Jira: generic `workspace-evidence` APPEND extension point, NOT core
+(per 2026-06-11 adjudication; no core CLI/MCP ever). Scope fence § 9.
