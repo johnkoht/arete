@@ -58,3 +58,7 @@ Task 6 (66f29803): `june-fixation` named integration test — all four substrate
 Task 7: regression wall verified — frozen phase-12 test files show a 0-line diff vs the merge base; both suites pass unmodified (6/6, 9/9). README-writers grep captured verbatim in build-report.md: exactly three writer functions across two modules, all flag-gated (phase-12's two backfill-area writers + this phase's topics writer). R10 guards shipped earlier in task 2.
 
 Slice 3 (AC5 stretch) next, with the D5 mechanism adaptation.
+
+## 2026-06-11T04:00Z — Slice 3 complete (AC5 stretch shipped, D5-adapted)
+
+finalize-project gains the Closed-Project Retro step: exact entry format from the plan's data model, idempotency scan-before-write, Topics bullet must carry the area slug (that's what makes the trace findable). Per pre-mortem D5 the regen verb is `arete memory refresh` and the prose says plainly that `topic refresh` does not consume memory items — the retro surfaces through briefs + area memory pointers, which the format-contract test proves end-to-end on existing machinery. Zero new code paths; R7 stays dissolved. Wrap next.
