@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.1] — 2026-06-12 — Wiki section no longer silently dropped on qmd timeout
+
+Briefs (`/project` and every mode's "Related wiki pages" section) intermittently lost their wiki section run-to-run. Root cause: semantic wiki retrieval shells out to `qmd query` — an LLM expansion + embedding + rerank that takes ~6s on a realistic brief query — but shared the 5s timeout meant for BM25 `qmd search`. On timeout the rejection was swallowed to an empty result, indistinguishable from a genuine no-match, so the section was suppressed *and* the jaccard fallback was skipped.
+
+### Fixed
+- **qmd semantic timeout split out from BM25** — `qmd query` (semantic) now gets `SEMANTIC_TIMEOUT_MS=15000`; `qmd search` (keyword) keeps the 5s budget. A timeout is distinguished from a genuine qmd error (`isTimeoutError`) and surfaced as a degradation signal (opt-in `SearchOptions.onDegraded`) rather than masquerading as an empty result.
+- **Degraded ≠ empty** — `retrieveRelevant` threads a `degraded` flag; `retrieveWiki` now falls through to the `listAll` + alias-jaccard fallback when the search was cut short, while still respecting a genuine empty (no spurious matches). `arete topic` reports a timeout instead of "No matching topics".
+
 ## [0.15.0] — 2026-06-11 — Area aliases: rename safety + integrity check
 
 Areas can now be renamed without orphaning history. An area file declares its former slugs in `aliases:` frontmatter; historical `area:` references in meetings, projects, goals, topic pages, memory items, and commitments keep resolving and joining — stored data is never rewritten (point-in-time records stay as written).
