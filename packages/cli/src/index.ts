@@ -51,6 +51,7 @@ import { registerEventsCommand } from './commands/events.js';
 import { registerDedupCommand } from './commands/dedup.js';
 import { registerAgendaCommands } from './commands/agenda.js';
 import { registerPlanContextCommand } from './commands/plan-context.js';
+import { registerWinddownCommand } from './commands/winddown.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -187,5 +188,6 @@ registerEventsCommand(program);
 registerDedupCommand(program);
 registerAgendaCommands(program);
 registerPlanContextCommand(program);
+registerWinddownCommand(program);
 
 program.parse();

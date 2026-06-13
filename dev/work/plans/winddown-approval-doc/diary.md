@@ -115,3 +115,81 @@ body, full-doc ordering, empty-block omission.
 - `prefillChecked(undefined)` returns true (no overlay → keep). Acceptable for
   legacy-shaped items but the chef always supplies meta in checklist mode.
 No correctness issues found; proceeding to commit.
+
+---
+
+## 2026-06-12 — W3 + W4: apply mapper + round-trip safety
+
+**Shipped.** `packages/core/src/integrations/winddown-apply.ts` (pure
+parse/diff/classify/summary + an `executeWinddownApply` driven by injected
+deps) and `packages/cli/src/commands/winddown.ts` (`arete winddown apply
+<date>`). Wired `registerWinddownCommand` into the CLI.
+
+**Flow (as built).**
+1. `arete winddown apply <date>` reads `now/archive/daily-winddown/
+   winddown-<date>.md` (user-edited) + `winddown-<date>.baseline.md`
+   (agent render, persisted at Step 5).
+2. `buildApplyPlan` parses BOTH docs into anchor→line maps, diffs, classifies
+   each line: approve / skip / user-override / rescue / edited / choice-resolved.
+3. `renderApplySummary` prints counts + edited-item diffs + the FINAL outbound
+   text for every message action (AC5b), + warnings.
+4. Confirm `[y/N]` (D6; `--yes` to skip, `--dry-run` to preview, `--json`).
+5. `executeWinddownApply` → per-item `writeItemStatusToFile` (+ user-rejected
+   skip_reason marker), then `commitApprovedItems` once per touched meeting,
+   then commitment resolves (R7 guard via `listOpen`), then DRAFT output for
+   DM/Slack/email/jira/inbox (NOT sent — chef sends via MCP; edited body flows
+   verbatim).
+
+**W4 safety.** Anchors are the diff key (text edits round-trip as `edited`,
+not broken maps). unchecked-[x] → user-override → skipped+"user-rejected".
+checked-[ ] → rescue → approved. Malformed (anchorless) checkbox lines and
+unknown anchors (not in baseline) → `plan.warnings`, surfaced in the summary,
+NEVER applied (AC2). Idempotent: meeting already `status: approved` → commit
+no-ops; commitment absent from `listOpen` → `already-resolved` (R7).
+
+**Design fix found during testing (recorded — AC5 contract).** First cut had
+`executeWinddownApply` push to `result.meetingsCommitted` unconditionally after
+`deps.commitMeeting`, so a no-op re-commit still inflated the count → AC4/AC5
+mismatch. Fixed by making `commitMeeting` return `'committed' | 'already-applied'`
+and counting only real commits. The dep now SIGNALS idempotency so the summary
+counts equal executed mutations exactly.
+
+**Scope decision (documented gap).** `act:create:*` (create commitment) is NOT
+wired to `commitments.create` in the CLI — create needs person/direction
+resolution that isn't deterministically derivable from the doc. With
+`createCommitment` absent from deps, the engine routes `create` actions through
+`draftAction`, so the chef executes the `commitments_create` verb via MCP (same
+as the prose flow). Resolve/DM/jira/inbox are the live verbs; this matches the
+mockup (no create action shown).
+
+**Baseline persistence.** SKILL.md Step 5 now instructs (checklist mode only):
+`cp winddown-<date>.md → winddown-<date>.baseline.md` immediately after writing
+the rendered doc and BEFORE the user edits — so the baseline is the verbatim
+agent recommendation (AC1 zero-drift). Step 6 documents the `arete winddown
+apply` invocation + the draft-don't-send contract.
+
+**Tests.**
+- `winddown-apply.test.ts` (14, core): parse incl. D8 body, full semantics
+  table (AC3), AC1 round-trip, AC2 unknown/malformed, AC4 idempotent re-apply,
+  AC5 summary==mutations, AC5b edited body verbatim+echo, choice resolution.
+- `winddown.test.ts` (5, CLI integration, real workspace): AC1 agree-path
+  (meeting → status:approved, commitment resolved), AC4 re-apply (0 commits,
+  "already resolved"), dry-run no-op, user-override skips item, AC2 warning.
+  This also verifies AC7 — the apply writes the SAME `status: approved` +
+  `## Approved *` body contract the web `/review` reads (no new writer path).
+- `config.test.ts` (+3): winddown_render default prose, resolves checklist,
+  clamps invalid → prose (AC6 safety).
+
+**Self-review pass (separate read of the W3/W4 diff).** Findings:
+- `cleanText` strips tier markers + trailing `— skip:` reason + link
+  annotations so the diff compares USER text only (agent decoration on a skip
+  line doesn't read as an edit). Verified by the AC1 round-trip test (no
+  spurious `edited`).
+- D8 body parser keys off the blockquote-fence; a body with NO fence is left
+  as undefined (action line still maps). Safe.
+- choice keys of form `<id>@<slug>:keep|skip` drive the underlying item;
+  other choice keys (mirror/cal) are counted resolved but executed by the chef
+  (no generic primitive) — matches mockup intent.
+- AC6: the renderer/apply are inert unless `winddown_render: checklist`; prose
+  path is the existing skill text, untouched when flag off.
+No correctness issues; proceeding to commit + full-suite gate.

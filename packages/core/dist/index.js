@@ -30,6 +30,7 @@ export { getCalendarProvider, } from './integrations/calendar/index.js';
 export { saveMeetingFile, meetingFilename, findMatchingAgenda, findMatchingAgendaPath, findMatchingCalendarEvent, inferMeetingImportance, } from './integrations/meetings.js';
 export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, parseStagedItemSkipReason, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
 export { renderStagedItemsAsChecklist, renderWinddownDoc, renderMeeting, renderChoices, renderActions, uncertainItemToChoice, itemAnchor, choiceAnchor, actionAnchor, isUncertain, prefillChecked, tierMarker, linkSuffix, sortByTier, ITEM_ANCHOR_RE, CHOICE_ANCHOR_RE, ACTION_ANCHOR_RE, } from './integrations/winddown-checklist.js';
+export { parseWinddownDoc, buildApplyPlan, renderApplySummary, executeWinddownApply, } from './integrations/winddown-apply.js';
 export { saveConversationFile, conversationFilename, updateConversationFrontmatter, parseConversation, extractInsights, } from './integrations/conversations/index.js';
 // Service container factory
 export { createServices } from './factory.js';

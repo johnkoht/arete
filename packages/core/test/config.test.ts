@@ -179,4 +179,32 @@ describe('loadConfig', () => {
     assert.equal(config.qmd_collections, undefined);
     rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  // winddown-approval-doc plan — AC6 invariant: default render mode is prose
+  // (the checklist renderer is never invoked unless explicitly flipped).
+  it('defaults winddown_render to prose', async () => {
+    tmpDir = createTmpDir();
+    storage = new FileStorageAdapter();
+    const config = await loadConfig(storage, tmpDir);
+    assert.equal(config.winddown_render, 'prose');
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('resolves winddown_render: checklist from workspace arete.yaml', async () => {
+    tmpDir = createTmpDir();
+    storage = new FileStorageAdapter();
+    writeFileSync(join(tmpDir, 'arete.yaml'), 'winddown_render: checklist\n', 'utf8');
+    const config = await loadConfig(storage, tmpDir);
+    assert.equal(config.winddown_render, 'checklist');
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('clamps invalid winddown_render to prose (AC6 safety)', async () => {
+    tmpDir = createTmpDir();
+    storage = new FileStorageAdapter();
+    writeFileSync(join(tmpDir, 'arete.yaml'), 'winddown_render: fancy\n', 'utf8');
+    const config = await loadConfig(storage, tmpDir);
+    assert.equal(config.winddown_render, 'prose');
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
 });

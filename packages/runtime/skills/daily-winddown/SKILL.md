@@ -1344,6 +1344,23 @@ If the file already exists for today (re-run), append a `## Re-run at
 HH:MM` divider and re-write the latest curated view below it; do not
 silently overwrite earlier history.
 
+{CHECKLIST MODE baseline (winddown-approval-doc plan, W3) — ONLY when
+`winddown_render: checklist`. After writing the doc, ALSO persist the
+EXACT rendered doc as the apply BASELINE alongside the archive:
+`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`. This is the
+agent's recommendation snapshot; `arete winddown apply` diffs the user's
+edited `winddown-YYYY-MM-DD.md` against it to classify each toggle/edit.
+The baseline must be the renderer output verbatim (NOT re-derived) so the
+agree-path round-trip is zero-drift (AC1). On a re-run, overwrite the
+baseline with the latest rendered doc (the apply always diffs against the
+most recent recommendation).
+
+```bash
+# checklist mode only — write the apply baseline (verbatim renderer output)
+cp "now/archive/daily-winddown/winddown-$(date +%Y-%m-%d).md" \
+   "now/archive/daily-winddown/winddown-$(date +%Y-%m-%d).baseline.md"
+```}
+
 After persisting, send the curated view as a single message. Wait for
 user response. Do not run any further primitives or writes until
 response received.
@@ -1369,6 +1386,30 @@ Acceptable user responses:
 - Free-form pushback / questions → engage normally
 
 ### Step 6 — Execute approved actions + commit approved items
+
+{CHECKLIST MODE apply (winddown-approval-doc plan, W3) — ONLY when
+`winddown_render: checklist`. When the user says they've toggled the doc
+and run `/winddown apply` (or asks you to apply it), invoke:
+
+```bash
+arete winddown apply <YYYY-MM-DD>          # interactive confirm
+arete winddown apply <YYYY-MM-DD> --dry-run  # preview the plan + summary only
+arete winddown apply <YYYY-MM-DD> --json     # machine-readable plan + result
+```
+
+This reads `winddown-<date>.md` (the user's edited doc) + the
+`.baseline.md` you persisted in Step 5, diffs them, prints the CONFIRM
+SUMMARY (counts + edited-item diffs + final outbound text for any message
+action), and on `y` executes via the existing primitives: meeting
+approve/skip status writes + `commitApprovedItems`, `commitments resolve`
+(R7-idempotent), and DRAFT output for DM/Slack/email/jira/inbox actions.
+**Apply does NOT send messages** — it prints `DRAFT <verb>:<id>` with the
+final (possibly edited) body; YOU execute the actual send/draft through MCP
+exactly as in the prose flow, using the echoed verbatim text. Idempotent:
+re-running applies nothing new. Malformed/unknown anchors are surfaced in
+the summary, never silently applied — fix the doc and re-run if you see
+them. Then continue with the people-memory refresh / week.md / index steps
+below.}
 
 After user approval (and only after):
 

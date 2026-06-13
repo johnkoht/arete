@@ -138,6 +138,23 @@ export type {
   ChecklistView,
 } from './integrations/winddown-checklist.js';
 export {
+  parseWinddownDoc,
+  buildApplyPlan,
+  renderApplySummary,
+  executeWinddownApply,
+} from './integrations/winddown-apply.js';
+export type {
+  ParsedLine,
+  ParsedWinddownDoc,
+  ItemDecision,
+  ItemClassification,
+  ChoiceClassification,
+  ActionClassification,
+  WinddownApplyPlan,
+  WinddownApplyDeps,
+  WinddownApplyResult,
+} from './integrations/winddown-apply.js';
+export {
   saveConversationFile,
   conversationFilename,
   updateConversationFrontmatter,
