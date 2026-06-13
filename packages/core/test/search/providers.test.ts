@@ -228,5 +228,72 @@ describe('search providers', () => {
       // Configured (non-deterministic) name also rebases
       assert.strictEqual(results[1].path, '.arete/memory/topics/other.md');
     });
+
+    it('semanticSearch uses a larger timeout than search (qmd query runs an LLM)', async () => {
+      const timeouts: Record<string, number> = {};
+      const deps = {
+        whichSync: () => ({ status: 0, stdout: '/usr/bin/qmd' }),
+        execFileAsync: async (
+          _file: string,
+          args: string[],
+          opts: { timeout: number; cwd: string; maxBuffer: number },
+        ) => {
+          timeouts[args[0]] = opts.timeout; // args[0] is 'search' | 'query'
+          return { stdout: '[]', stderr: '' };
+        },
+      };
+      const provider = getQmdSearchProvider('/workspace', deps);
+      await provider.search('q');
+      await provider.semanticSearch('q');
+      assert.strictEqual(timeouts['search'], 5000, 'BM25 search keeps the tight budget');
+      assert.ok(
+        timeouts['query'] > timeouts['search'],
+        `semantic query budget (${timeouts['query']}) must exceed search (${timeouts['search']})`,
+      );
+    });
+
+    it('semanticSearch signals onDegraded when the qmd subprocess times out', async () => {
+      let reason: string | undefined;
+      const provider = getQmdSearchProvider('/workspace', {
+        whichSync: () => ({ status: 0, stdout: '/usr/bin/qmd' }),
+        execFileAsync: async () => {
+          // execFile rejects with killed:true when its `timeout` fires.
+          const err = Object.assign(new Error('timed out'), {
+            killed: true,
+            signal: 'SIGTERM',
+          });
+          throw err;
+        },
+      });
+      const results = await provider.semanticSearch('q', {
+        onDegraded: (r) => {
+          reason = r;
+        },
+      });
+      assert.deepEqual(results, [], 'still returns a graceful empty');
+      assert.strictEqual(reason, 'timeout', 'a timeout must surface as degraded');
+    });
+
+    it('semanticSearch does NOT signal onDegraded on a genuine qmd error', async () => {
+      let called = false;
+      const provider = getQmdSearchProvider('/workspace', {
+        whichSync: () => ({ status: 0, stdout: '/usr/bin/qmd' }),
+        execFileAsync: async () => {
+          // A non-zero qmd exit: numeric code, not killed.
+          const err = Object.assign(new Error('qmd exited 1'), {
+            killed: false,
+            code: 1,
+          });
+          throw err;
+        },
+      });
+      const results = await provider.semanticSearch('q', {
+        onDegraded: () => {
+          called = true;
+        },
+      });
+      assert.deepEqual(results, []);
+      assert.strictEqual(called, false, 'a real error is not a degraded empty');
+    });
   });
 });

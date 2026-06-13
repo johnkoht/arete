@@ -257,6 +257,41 @@ aliases:
       `fallback bullets must show last_refreshed: ${JSON.stringify(wiki!.bullets)}`,
     );
   });
+
+  it('runs the jaccard fallback when qmd times out (degraded empty ≠ real empty)', async () => {
+    // qmd is present but the query was cut short: it returns [] AND signals
+    // degradation. The section must NOT vanish — fall through to listAll +
+    // jaccard (glance-2-roadmap carries the "Lindsay" alias, so it matches).
+    const degradedProvider: SearchProvider = {
+      name: 'qmd',
+      isAvailable: async () => true,
+      search: async (): Promise<SearchResult[]> => [],
+      semanticSearch: async (_q, opts): Promise<SearchResult[]> => {
+        opts?.onDegraded?.('timeout');
+        return [];
+      },
+    };
+    const intel = buildIntel(tmpDir, degradedProvider);
+    const brief = await intel.assembleBriefForPerson('lindsay-gray', paths);
+    const wiki = brief.sections.find((s) => s.heading.startsWith('Related wiki pages'));
+    assert.ok(wiki, 'a timed-out qmd must degrade to the fallback, not drop the section');
+    assert.ok(wiki!.bullets.some((b) => /glance-2-roadmap/.test(b)));
+  });
+
+  it('respects a genuine empty (qmd present, no match, not degraded) — no section', async () => {
+    // Provider is healthy and truly found nothing: the fallback must NOT
+    // fire (otherwise every brief gets noisy slug-coincidence matches).
+    const emptyProvider: SearchProvider = {
+      name: 'qmd',
+      isAvailable: async () => true,
+      search: async (): Promise<SearchResult[]> => [],
+      semanticSearch: async (): Promise<SearchResult[]> => [],
+    };
+    const intel = buildIntel(tmpDir, emptyProvider);
+    const brief = await intel.assembleBriefForPerson('lindsay-gray', paths);
+    const wiki = brief.sections.find((s) => s.heading.startsWith('Related wiki pages'));
+    assert.strictEqual(wiki, undefined, 'a real empty must not trigger the fallback');
+  });
 });
 
 describe('wikiStalenessLabel (W5/AC5)', () => {

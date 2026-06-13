@@ -569,6 +569,15 @@ export interface RetrieveRelevantResult {
      *  - 'none'     — no search provider configured; results is always []
      */
     searchBackend: 'qmd' | 'fallback' | 'none';
+    /**
+     * True when the backend was available but the query did NOT complete (the
+     * qmd subprocess timed out), so `results` is empty for a reason other than
+     * a genuine no-match. Consumers with a cheaper fallback (wiki jaccard)
+     * should run it rather than trust the empty; user-facing readers should
+     * say "timed out", not "no results". Absent/false on the normal path —
+     * additive, so existing consumers ignore it safely.
+     */
+    degraded?: boolean;
 }
 declare module './topic-memory.js' {
     interface TopicMemoryService {

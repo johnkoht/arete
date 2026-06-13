@@ -44,6 +44,10 @@ The search subsystem provides a `SearchProvider` interface with two strategies: 
 
 - **`SEARCH_PROVIDER_CANDIDATE_LIMIT = 100` is in `entity.ts`, not here.** This module-level constant controls how many meeting candidates `EntityService.refreshPersonMemory()` requests from the SearchProvider per person. If results hit the cap (`results.length >= 100`), it falls back to a full scan — same behavior as zero results. This is intentional: a capped result set means the index may be incomplete for that person. Relevant for debugging "missing signals" issues on accounts with many meetings.
 
+- **`search` and `semanticSearch` have DIFFERENT timeouts — `qmd query` runs an LLM and is slow.** `DEFAULT_TIMEOUT_MS = 5000` covers `qmd search` (BM25, sub-second). `semanticSearch` shells out to `qmd query`, which runs LLM query-expansion + embedding + cross-encoder reranking — measured 6.0s on a realistic project-brief query, before cold model-load overhead. It gets its own `SEMANTIC_TIMEOUT_MS = 15000`. The original shared 5s budget caused `/project` (and every other brief mode's "Related wiki pages" section) to *intermittently vanish*: the qmd subprocess hit 5s, `execFileAsync` rejected, the catch swallowed it to `[]`, and that empty was indistinguishable from a genuine no-match. If you tighten either timeout, remember the semantic path is the slow one.
+
+- **A timeout is signaled via `SearchOptions.onDegraded`, NOT by throwing.** Four of five `semanticSearch` callers (`entity.ts`, `context.ts`, `meeting-reconciliation.ts`, `memory.ts`) rely on the graceful-`[]`-on-failure contract — `entity.ts` has a CRITICAL invariant that 0 results means "full scan", so throwing would break it. Instead, the qmd provider's catch calls `options.onDegraded?.('timeout')` (only for a `killed`/`SIGTERM`/`ETIMEDOUT` rejection — see `isTimeoutError`, NOT a genuine non-zero qmd exit) and still returns `[]`. `TopicMemoryService.retrieveRelevant` opts in and surfaces `degraded: boolean` on its result; `retrieveWiki` (brief-assemblers) runs its listAll+jaccard fallback on a degraded empty instead of suppressing the section, while still respecting a genuine empty. The distinction "didn't finish" vs "found nothing" is the whole point — don't collapse them back to a bare `[]`.
+
 ## Invariants
 
 - `SearchProvider.isAvailable()` for the fallback always returns `true`. For QMD, it shells out to `which qmd` each time — no caching. Don't call it in a tight loop.
@@ -53,7 +57,7 @@ The search subsystem provides a `SearchProvider` interface with two strategies: 
 ## Testing Gaps
 
 - No test that exercises fallback provider with a real temp directory containing `.md` files and verifies token scoring behavior (only integration-level manual verification).
-- No test that validates QMD provider timeout behavior (5000ms default in `qmd.ts` L14) — a slow `qmd` process would silently return `[]`.
+- ~~No test that validates QMD provider timeout behavior~~ — RESOLVED. `providers.test.ts` now covers the timeout/`onDegraded` split (timeout fires it, genuine error does not, semantic budget > search budget); `topic-memory-retrieve.test.ts` covers `degraded` propagation; `brief-wiki-fallback.test.ts` covers degraded-empty→fallback vs genuine-empty→no-section.
 
 ## Patterns That Work
 

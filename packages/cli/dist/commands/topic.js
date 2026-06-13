@@ -643,6 +643,7 @@ export function registerTopicCommands(program) {
                 query,
                 results: retrieval.results,
                 searchBackend: retrieval.searchBackend,
+                degraded: retrieval.degraded ?? false,
             }, null, 2));
             return;
         }
@@ -653,7 +654,13 @@ export function registerTopicCommands(program) {
             return;
         }
         if (retrieval.results.length === 0) {
-            info('No matching topics.');
+            if (retrieval.degraded) {
+                warn('Search timed out before completing — results may be incomplete.');
+                info('Try again (a warm qmd is faster) or narrow the query.');
+            }
+            else {
+                info('No matching topics.');
+            }
             return;
         }
         for (const r of retrieval.results) {
