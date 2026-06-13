@@ -193,3 +193,46 @@ apply` invocation + the draft-don't-send contract.
 - AC6: the renderer/apply are inert unless `winddown_render: checklist`; prose
   path is the existing skill text, untouched when flag off.
 No correctness issues; proceeding to commit + full-suite gate.
+
+---
+
+## 2026-06-12 — WRAP
+
+**Full suite.** `tsx --test` over all of packages/core/test + packages/cli/test
+(excluding the slow integration dir): 4602 pass / 0 fail / 2 pre-existing skips.
+Core+CLI typecheck (`tsc -b packages/core packages/cli`) green.
+
+**Fresh-eyes review over the whole branch diff (feat/single-pass-extraction...HEAD).**
+Done as a disciplined separate read pass (no nested-agent tooling available).
+Checked:
+- Anchor regex collision: `<!-- choice:le_001@cust:keep -->` does NOT match
+  `ITEM_ANCHOR_RE` (the id group is anchored immediately after `<!--\s*`, and
+  the slug class excludes `:`). Verified empirically. No mis-classification.
+- `parseActionBody` skips the pre-fence label line, captures only fenced body
+  lines, returns undefined (action still maps) when no fence. Safe.
+- `cleanText` strips tier markers + trailing `— skip:` + ↩/⤴ link runs so the
+  diff compares USER text only — agent decoration on a skip line is not an
+  "edit". AC1 round-trip test confirms zero spurious edits.
+- AC5 contract: `commitMeeting` returns committed|already-applied; the engine
+  counts only real commits → summary counts == executed mutations even on
+  re-apply. (This was the one design bug found + fixed during W3 testing.)
+- Auto-promoted uncertain item round-trips with 0 warnings / 0 malformed.
+- SKILL.md diff: ZERO deletions — all additive gated blocks → AC6 byte-identical
+  prose when flag off.
+No correctness findings to fix.
+
+**Artifacts.** dist rebuilt + committed per house rule (only the files my source
+touches changed in dist — no stale churn). build-report.md written. Worktree
+clean after the wrap commit.
+
+**For John's review (top items):**
+1. The chef-side `ChecklistView` assembly lives in SKILL.md prose (Step 4), not
+   a core function — by design (renderer is the tested deterministic core). If
+   you'd rather have a `buildChecklistView(meetingFiles)` core helper so the
+   chef does less, that's a clean follow-up.
+2. `act:create:*` and non-item choice keys (mirror/cal) are surfaced/counted but
+   executed chef-side, not by `apply` (need person/direction or no generic
+   primitive). Confirm that split is what you want, or we wire `create`.
+3. Apply never SENDS outbound — it drafts `DRAFT <verb>:<id>` with verbatim body
+   for you to fire via MCP (D8/AC5b: the edited body is the deliverable). If you
+   want apply to send directly for some verbs, that's a deliberate next step.
