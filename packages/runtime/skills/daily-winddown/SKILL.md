@@ -1129,6 +1129,28 @@ single_pass`; legacy meetings render exactly as before):
    a short bullet list at the END of this section under a "Open
    questions raised today" subheading — informational, no checkbox.}
 
+{CHECKLIST RENDER MODE (winddown-approval-doc plan, W1/W2) — ADDITIVE,
+flag-gated. ONLY when `winddown_render: checklist` in arete.yaml (default
+`prose` renders EXACTLY as below — byte-identical, AC6). When `checklist`:
+the chef builds a `ChecklistView` from today's staged meetings + their
+frontmatter maps (`staged_item_status` / `_importance` / `_uncertain` /
+`_links` / `_skip_reason` / `_owner`) and calls the core renderer
+`renderWinddownDoc(view)` (`@arete/core`) instead of hand-writing the
+`## Stage for approval` prose. The renderer emits per-meeting
+`### Action items / Decisions / Learnings` checkboxes pre-filled from
+tier+status (`[x]` keep / `[ ]` skip+reason), `[BLOCKER]`/`[high]`/⚠
+markers, a `## ⛔ Blockers & ⚠ Your call first` block for uncertain items
+(option-checkboxes, NOT pre-filled), and a `## Proposed actions` block
+(action-checkboxes pre-filled from the agent reco; payload-carrying
+actions — DM/Slack/email/jira — render their body inline as an editable
+fenced block). Every line carries a HIDDEN anchor
+(`<!-- ai_001@slug -->` / `<!-- choice:... -->` / `<!-- act:verb:id -->`).
+This whole doc IS the `## Stage for approval` + `## Uncertain` +
+`## Proposed actions` surface — do NOT also emit the prose versions of
+those sections. Persist the rendered doc verbatim as the apply baseline
+(Step 5). The user toggles disagreements in their editor and runs
+`/winddown apply` (Step 5/6).}
+
 - [ ] [BLOCKER] Glance can't roll out without license-profile assignment — compliance workshop
 - [ ] Send API spec to Anthony — open commitment to Anthony, 9d old (high)
 - Decision: Adopt Sonnet for reconciliation tier — matches week focus #2 (cost gate)

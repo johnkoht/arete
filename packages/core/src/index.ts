@@ -111,6 +111,33 @@ export type {
   SkippedItemObserver,
 } from './integrations/staged-items.js';
 export {
+  renderStagedItemsAsChecklist,
+  renderWinddownDoc,
+  renderMeeting,
+  renderChoices,
+  renderActions,
+  uncertainItemToChoice,
+  itemAnchor,
+  choiceAnchor,
+  actionAnchor,
+  isUncertain,
+  prefillChecked,
+  tierMarker,
+  linkSuffix,
+  sortByTier,
+  ITEM_ANCHOR_RE,
+  CHOICE_ANCHOR_RE,
+  ACTION_ANCHOR_RE,
+} from './integrations/winddown-checklist.js';
+export type {
+  ChecklistTier,
+  ChecklistItemMeta,
+  ChecklistMeeting,
+  ChecklistChoice,
+  ChecklistAction,
+  ChecklistView,
+} from './integrations/winddown-checklist.js';
+export {
   saveConversationFile,
   conversationFilename,
   updateConversationFrontmatter,

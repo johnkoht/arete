@@ -17,6 +17,9 @@ const DEFAULT_CONFIG = {
     // Flipping is John's call after the W5 eval gate / CHR-W0 review.
     extraction_mode: 'legacy',
     reconcile_mode: 'inline',
+    // winddown-approval-doc plan: default 'prose' = byte-identical to today's
+    // winddown (AC6). Flip to 'checklist' to enable the approval surface.
+    winddown_render: 'prose',
     ai: {
         tiers: {
             fast: undefined,
@@ -104,6 +107,9 @@ function normalizeConfig(config) {
     }
     if (config.reconcile_mode !== 'inline' && config.reconcile_mode !== 'day-level') {
         config.reconcile_mode = 'inline';
+    }
+    if (config.winddown_render !== 'prose' && config.winddown_render !== 'checklist') {
+        config.winddown_render = 'prose';
     }
     /**
      * Migration: qmd_collection (singular) → qmd_collections (map)

@@ -54,6 +54,18 @@ export type ExtractionPipelineMode = 'legacy' | 'single_pass';
  *   runs ONE `arete meeting reconcile-day` call over the whole day at Step 2.
  */
 export type ReconcileMode = 'inline' | 'day-level';
+/**
+ * Winddown render mode (winddown-approval-doc plan, W1).
+ * - 'prose' (default): today's narrative `## Stage for approval` doc —
+ *   BYTE-IDENTICAL to pre-feature winddown (AC6 invariant).
+ * - 'checklist': the checkbox approval surface — per-meeting `### Action items
+ *   / Decisions / Learnings` checkboxes pre-filled from tier+status, Your-call
+ *   blocks for uncertain items, proposed-action checkboxes with editable
+ *   bodies, hidden anchors per line, and a persisted baseline for `/winddown
+ *   apply` round-trip.
+ * Absent or 'prose' ⇒ the checklist renderer is never invoked.
+ */
+export type WinddownRenderMode = 'prose' | 'checklist';
 /** Shape of the resolved config object */
 export type AreteConfig = {
     schema: number;
@@ -64,6 +76,8 @@ export type AreteConfig = {
     extraction_mode?: ExtractionPipelineMode;
     /** Cross-meeting reconcile placement — see ReconcileMode. Default 'inline'. */
     reconcile_mode?: ReconcileMode;
+    /** Winddown render mode — see WinddownRenderMode. Default 'prose' (AC6). */
+    winddown_render?: WinddownRenderMode;
     /**
      * CHR W7 shadow-soak instrumentation (chef-holistic-reconcile plan).
      * When true, `meeting extract` persists a RAW pre-reconcile extraction
