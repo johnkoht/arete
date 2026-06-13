@@ -1680,6 +1680,15 @@ export interface RetrieveRelevantResult {
    *  - 'none'     — no search provider configured; results is always []
    */
   searchBackend: 'qmd' | 'fallback' | 'none';
+  /**
+   * True when the backend was available but the query did NOT complete (the
+   * qmd subprocess timed out), so `results` is empty for a reason other than
+   * a genuine no-match. Consumers with a cheaper fallback (wiki jaccard)
+   * should run it rather than trust the empty; user-facing readers should
+   * say "timed out", not "no results". Absent/false on the normal path —
+   * additive, so existing consumers ignore it safely.
+   */
+  degraded?: boolean;
 }
 
 const TOPIC_PATH_PREFIX = '.arete/memory/topics/';
@@ -1742,13 +1751,17 @@ TopicMemoryService.prototype.retrieveRelevant = async function (
   const backend = classifyBackend(searchProvider.name);
   const overfetchMult = backend === 'qmd' ? QMD_OVERFETCH_MULTIPLIER : FALLBACK_OVERFETCH_MULTIPLIER;
 
+  let degraded = false;
   const rawCandidates = await searchProvider.semanticSearch(query, {
     paths: [TOPIC_PATH_PREFIX],
     limit: limit * overfetchMult,
+    onDegraded: () => {
+      degraded = true;
+    },
   });
 
   if (rawCandidates.length === 0) {
-    return { results: [], searchBackend: backend };
+    return { results: [], searchBackend: backend, degraded };
   }
 
   // Post-filter by path prefix — qmd ignores `paths` (see qmd.ts),
@@ -1767,7 +1780,10 @@ TopicMemoryService.prototype.retrieveRelevant = async function (
     .map((c) => ({ path: c.path, score: c.score }));
 
   if (candidatePaths.length === 0) {
-    return { results: [], searchBackend: backend };
+    // `degraded` is false on this path today (a timeout yields empty
+    // rawCandidates and returns above), but thread it for symmetry so a
+    // future change can't silently drop the signal here.
+    return { results: [], searchBackend: backend, degraded };
   }
 
   // Re-read full file content from disk — `c.content` from qmd is a

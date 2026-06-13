@@ -111,6 +111,29 @@ describe('TopicMemoryService.retrieveRelevant', () => {
     const r = await svc.retrieveRelevant('anything');
     assert.strictEqual(r.results.length, 0);
     assert.strictEqual(r.searchBackend, 'fallback');
+    assert.ok(!r.degraded, 'a genuine empty is not degraded');
+  });
+
+  it('surfaces degraded:true when the provider signals a timeout', async () => {
+    // Provider that returns [] AND fires onDegraded — i.e. qmd timed out.
+    const degradedProvider: SearchProvider = {
+      name: 'qmd',
+      async isAvailable() {
+        return true;
+      },
+      async search() {
+        return [];
+      },
+      async semanticSearch(_q, opts) {
+        opts?.onDegraded?.('timeout');
+        return [];
+      },
+    };
+    const svc = new TopicMemoryService(makeStorage(), degradedProvider);
+    const r = await svc.retrieveRelevant('anything');
+    assert.strictEqual(r.results.length, 0);
+    assert.strictEqual(r.searchBackend, 'qmd');
+    assert.strictEqual(r.degraded, true, 'a timeout must propagate as degraded');
   });
 
   it('classifies searchBackend as "qmd" when provider name is "qmd"', async () => {

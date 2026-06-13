@@ -579,9 +579,13 @@ export async function retrieveWiki(
     }));
   }
 
-  if (result.searchBackend !== 'none') {
-    return []; // Provider available but returned nothing — respect that.
+  if (result.searchBackend !== 'none' && !result.degraded) {
+    return []; // Provider available and genuinely returned nothing — respect that.
   }
+  // Either no provider, OR the provider was cut short (timeout) so its empty
+  // is not a real no-match. Fall through to the listAll + jaccard fallback so
+  // a slow qmd degrades to *something* rather than silently dropping the
+  // whole section.
 
   // Fallback path — listAll + tokenizeSlug alias-jaccard
   const { topics } = await topicMemory.listAll(paths);
