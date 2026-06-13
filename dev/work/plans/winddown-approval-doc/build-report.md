@@ -73,20 +73,21 @@ arete winddown apply 2026-06-09 --json     # machine-readable plan + result
 | AC1 round-trip agree-path zero-drift | PASS | `winddown-apply.test.ts` "AC1 round-trip"; CLI "AC1 agree-path"; manual render→parse→plan check (0 warnings, 0 edited) |
 | AC2 every line maps or is reported | PASS | `winddown-apply.test.ts` unknown-anchor + malformed; CLI "AC2 warning" |
 | AC3 full semantics table (each row a test) | PASS | `winddown-apply.test.ts` "classify — semantics table" (approve/skip/user-override/rescue/edited) + choice resolution |
-| AC4 idempotent re-apply | PASS | `winddown-apply.test.ts` "AC4"; CLI "AC4 idempotent re-apply" (0 commits, already-resolved) |
-| AC5 summary matches mutations | PASS | `winddown-apply.test.ts` "summary counts equal executed mutation counts" |
-| AC5b edited action body sent verbatim + echoed | PASS | `winddown-apply.test.ts` "edited DM body flows verbatim and is echoed" |
+| AC4 idempotent re-apply | PASS | `winddown-apply.test.ts` "AC4"; CLI "AC4 idempotent re-apply" (0 commits, already-resolved). 2026-06-12 (M1): also covers the all-skipped case — CLI "M1 all-skipped" re-apply reports 0 meetings committed (frontmatter-`approved` guard) |
+| AC5 summary matches mutations | PASS | `winddown-apply.test.ts` "summary counts equal executed mutation counts". 2026-06-12 (M1 fix): an all-skipped meeting now COMMITS so the on-disk result matches the "skipped" summary (was: summary said skipped, disk unchanged) — CLI "M1 all-skipped". 2026-06-12 (S2 fix): non-item choices now summarized as "recorded (chef will execute)", counted `choicesRecorded` not `choicesResolved` |
+| AC5b edited action body sent verbatim + echoed | PASS | `winddown-apply.test.ts` "edited DM body flows verbatim and is echoed". 2026-06-12 (S1 fix): an item edit containing the " — skip: " sentinel round-trips verbatim into `staged_item_edits` + summary — "S1: an edit containing ' — skip: ' round-trips verbatim" |
 | AC6 flag off = byte-identical to today | PASS | `config.test.ts` default prose + clamp; SKILL.md diff has ZERO deletions (all additive gated blocks) |
-| AC7 web /review reads correct status after CLI apply | PASS | apply writes the SAME `status: approved` + `## Approved *` body via `commitApprovedItems` (no new writer); CLI test asserts `status: approved` + `## Approved Action Items` |
+| AC7 web /review reads correct status after CLI apply | PASS | apply writes the SAME `status: approved` + `## Approved *` body via `commitApprovedItems` (no new writer); CLI test asserts `status: approved` + `## Approved Action Items`. 2026-06-12 (M1 fix): an all-skipped meeting now advances to `status: approved` (+ `## Skipped on Apply`) instead of being left `processed` and re-surfaced by /review — CLI "M1 all-skipped" |
 
 ## Tests added
 
 - `packages/core/test/integrations/winddown-checklist.test.ts` — 14 (renderer)
-- `packages/core/test/integrations/winddown-apply.test.ts` — 14 (apply engine)
-- `packages/cli/test/commands/winddown.test.ts` — 5 (CLI integration, real workspace)
+- `packages/core/test/integrations/winddown-apply.test.ts` — 16 (apply engine; +S1 skip-sentinel round-trip, +S2 non-item choice hand-off)
+- `packages/cli/test/commands/winddown.test.ts` — 6 (CLI integration, real workspace; +M1 all-skipped commit)
+- `packages/core/test/integrations/staged-items.test.ts` — +1 (N2: status-only write writes no empty `staged_item_edits`)
 - `packages/core/test/config.test.ts` — +3 (flag default/resolve/clamp)
 
-Full unit suite: 4602 pass / 0 fail / 2 pre-existing skips. Core+CLI typecheck green.
+Full unit suite: 4602 pass / 0 fail / 2 pre-existing skips (pre review fixes).
 
 ## Known gaps / deferred
 
@@ -95,9 +96,12 @@ Full unit suite: 4602 pass / 0 fail / 2 pre-existing skips. Core+CLI typecheck g
   deterministically. The engine routes `create` actions through the draft path
   so the chef executes `commitments_create` via MCP (matches the prose flow; the
   mockup shows no create action). Resolve/DM/jira/inbox are the live verbs.
-- Non-item choice keys (mirror-pair, calendar) are COUNTED as resolved but have
-  no generic execution primitive — the chef reads the chosen key from the doc
-  and acts. Only `<id>@<slug>:keep|skip` choice keys auto-drive an item status.
+- Non-item choice keys (mirror-pair, calendar) have no generic execution
+  primitive. 2026-06-12 (S2 fix): apply now emits a `DRAFT choice:<key>`
+  hand-off for each (so the chef sees + executes it) and counts them as
+  `choicesRecorded` / summarizes them as "recorded (chef will execute)" — NOT
+  `choicesResolved` / "resolved as marked", which falsely implied apply ran the
+  collapse. Only `<id>@<slug>:keep|skip` choice keys auto-drive an item status.
 - Outbound sends (Slack/email/jira) are intentionally NOT executed by `apply` —
   it emits `DRAFT <verb>:<id>` with the verbatim body; the chef sends via MCP
   (per plan W3 / D8). The point built here is that the EDITED body flows through.

@@ -30,6 +30,15 @@ export interface ParsedLine {
     checked: boolean;
     /** Visible text with the checkbox, markers, reason, and anchor stripped. */
     text: string;
+    /**
+     * The raw line text with ONLY the checkbox + trailing anchor removed — agent
+     * decoration (tier marker / `— skip: …` / ↩ continues / ⤴ supersedes) is
+     * PRESERVED. Used to detect user amendments without truncating an edit that
+     * legitimately contains a decoration sentinel (S1): the baseline-clean `text`
+     * is compared against the edited line's `rawText`, and an amended item's
+     * staged text is taken from `rawText` verbatim.
+     */
+    rawText: string;
     /** For items: the staged item id (ai_001) + meeting slug. */
     itemId?: string;
     meetingSlug?: string;
@@ -152,7 +161,10 @@ export interface WinddownApplyResult {
     alreadyResolved: string[];
     createdCommitments: number;
     draftedActions: number;
+    /** Item-decision choices (`<id>@<slug>:keep|skip`) executed here. */
     choicesResolved: number;
+    /** Non-item choices handed off to the chef (DRAFT choice:<key>), NOT executed. */
+    choicesRecorded: number;
     warnings: string[];
 }
 /**

@@ -236,3 +236,59 @@ clean after the wrap commit.
 3. Apply never SENDS outbound — it drafts `DRAFT <verb>:<id>` with verbatim body
    for you to fire via MCP (D8/AC5b: the edited body is the deliverable). If you
    want apply to send directly for some verbs, that's a deliberate next step.
+
+## 2026-06-12 — review fixes
+
+Independent-review findings applied. ZERO LLM calls (parse/diff/classify/render
+remain deterministic). Per-finding disposition:
+
+- **M1 (MUST-FIX) — all-skipped meeting never commits.** FIXED.
+  `winddown.ts` `commitMeeting` had `if (!hasApproved) return 'already-applied'`
+  which short-circuited the commit path when the user unchecked every approved
+  item — leaving the meeting at `status: processed` with uncommitted skip state
+  (broke AC5 disk≠summary, AC7 re-surface, idempotency). Now: the genuine
+  pre-applied guard (frontmatter already `status: approved`) returns
+  `already-applied`; a run with ANY staged statuses (incl. all-`skipped`) runs
+  `commitApprovedItems`, which advances `status` → `approved`, strips the staged
+  sections, and writes `## Skipped on Apply` even with zero approved items. Only
+  a meeting with no staged statuses at all is a true no-op. Test:
+  `winddown.test.ts` "M1 all-skipped: unchecking every approved item still
+  commits" (assert status approved, staged sections stripped, `## Skipped on
+  Apply` present, re-apply reports 0 committed).
+
+- **S1 (SHOULD-FIX) — cleanText truncated user edits containing decoration
+  sentinels.** FIXED. `cleanText` stripped `— skip:` / ↩ / ⤴ from BOTH baseline
+  and edited text, so an edit like `Tell Bob — skip: the friday call` was
+  silently truncated to `Tell Bob`. Now `cleanText` (full decoration strip)
+  cleans the BASELINE only; a new `cleanRawText` (checkbox+anchor strip only,
+  decoration preserved) feeds a `rawText` field on every parsed line. Amendment
+  detection compares baseline-clean `text` vs edited `rawText`; an amended
+  item's `editedText` is taken from `rawText` verbatim. Untouched lines
+  round-trip (raw == raw). Test: `winddown-apply.test.ts` "S1: an edit
+  containing ' — skip: ' round-trips verbatim" (asserts editedText, summary
+  echo, and staged setItemStatus all carry the full text).
+
+- **S2 (SHOULD-FIX) — non-item choices counted "resolved" but executed
+  nothing.** FIXED. A chosen `choice:ai_007>acc2a220` (mirror/cal etc.)
+  incremented `choicesResolved` and the summary said "resolved as marked", but
+  the execute loop only acts on `<id>@<slug>:keep|skip` keys — so nothing ran
+  and no hand-off was emitted. Now non-item choices emit a `DRAFT choice:<key>`
+  via `draftAction` (chef sees + executes), increment a new `choicesRecorded`
+  counter (NOT `choicesResolved`), and the summary reads "recorded (chef will
+  execute)". Item keep/skip choices keep prior behavior. Test:
+  `winddown-apply.test.ts` "S2: a non-item choice is handed off ... NOT
+  executed-resolved" (asserts DRAFT hand-off emitted, choicesResolved == 0,
+  choicesRecorded == 1, no item primitive / no commit ran, summary wording).
+
+- **N2 (NOTE) — empty `staged_item_edits: {}` on a no-edit skip.** FOLDED.
+  `writeItemStatusToFile` unconditionally initialized `staged_item_edits = {}`;
+  now it only initializes the map when `editedText` is provided. Reader
+  (`parseStagedItemEdits`) already treats an absent map as `{}` — no regression.
+  Test: `staged-items.test.ts` "(11b/N2) a status-only write does NOT create an
+  empty staged_item_edits map".
+
+- **N1 / N3 — left as-is** (documented latent footguns, per review note).
+
+Tests: core `winddown-apply.test.ts` 14→16, `staged-items.test.ts` +1; CLI
+`winddown.test.ts` 5→6. Affected-package suites green; full core+cli suite green
+(see WRAP baseline + this run). dist rebuilt + committed per house rule.

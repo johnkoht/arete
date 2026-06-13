@@ -254,15 +254,20 @@ export async function writeItemStatusToFile(storage, filePath, itemId, options) 
     if (raw === null)
         throw new Error(`Meeting file not found: ${filePath}`);
     const { data, body } = parseFrontmatter(raw);
-    // Initialize maps if absent
+    // Initialize the status map if absent.
     if (!data['staged_item_status'] || typeof data['staged_item_status'] !== 'object') {
         data['staged_item_status'] = {};
     }
-    if (!data['staged_item_edits'] || typeof data['staged_item_edits'] !== 'object') {
-        data['staged_item_edits'] = {};
-    }
     data['staged_item_status'][itemId] = options.status;
+    // N2: only touch `staged_item_edits` when there is edited text to record —
+    // a status-only write (e.g. a skip with no amendment) must not leave an
+    // empty `staged_item_edits: {}` map in the frontmatter. The reader
+    // (`parseStagedItemEdits`) already treats an absent map as `{}`, so this is
+    // safe and keeps the serialized frontmatter clean.
     if (options.editedText !== undefined) {
+        if (!data['staged_item_edits'] || typeof data['staged_item_edits'] !== 'object') {
+            data['staged_item_edits'] = {};
+        }
         data['staged_item_edits'][itemId] = options.editedText;
     }
     await storage.write(filePath, serializeFrontmatter(data, body));

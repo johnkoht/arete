@@ -41,6 +41,15 @@ export interface ParsedLine {
   checked: boolean;
   /** Visible text with the checkbox, markers, reason, and anchor stripped. */
   text: string;
+  /**
+   * The raw line text with ONLY the checkbox + trailing anchor removed — agent
+   * decoration (tier marker / `— skip: …` / ↩ continues / ⤴ supersedes) is
+   * PRESERVED. Used to detect user amendments without truncating an edit that
+   * legitimately contains a decoration sentinel (S1): the baseline-clean `text`
+   * is compared against the edited line's `rawText`, and an amended item's
+   * staged text is taken from `rawText` verbatim.
+   */
+  rawText: string;
   /** For items: the staged item id (ai_001) + meeting slug. */
   itemId?: string;
   meetingSlug?: string;
@@ -65,20 +74,44 @@ export interface ParsedWinddownDoc {
 
 const CHECKBOX_RE = /^\s*-\s*\[([ xX])\]\s*(.*)$/;
 
-/** Strip markdown emphasis + tier markers + inline reason from item/action text. */
+/**
+ * Strip the trailing anchor comment from a line (always agent-owned, never
+ * part of the user's visible text). Shared by both clean variants.
+ */
+function stripAnchor(raw: string): string {
+  return raw.replace(/<!--[^>]*-->\s*$/, '').trimEnd();
+}
+
+/**
+ * Fully cleaned text: anchor + tier markers + agent decoration (`— skip: …`,
+ * ↩ continues / ⤴ supersedes) all stripped. This is the canonical BASELINE
+ * text — the agent decoration only ever appears on agent-authored lines, so
+ * cleaning the baseline this way recovers the underlying item text.
+ *
+ * S1: this MUST NOT be used to derive the user's amended text — a user edit
+ * that legitimately contains " — skip: …" would be truncated. Use `rawText`
+ * (decoration preserved) for that. See `cleanRawText`.
+ */
 function cleanText(raw: string): string {
-  let t = raw;
-  // Drop the trailing anchor if present.
-  t = t.replace(/<!--[^>]*-->\s*$/, '').trimEnd();
+  let t = stripAnchor(raw);
   // Drop tier markers.
   t = t.replace(/\*\*\[(?:BLOCKER|high)\]\*\*\s*/gi, '');
-  // Drop the agent's inline "— skip: <reason>" / link annotations are kept in
-  // text? No — link annotations (↩/⤴) are agent-authored decoration; strip the
-  // trailing "  ↩ continues ..." / "  ⤴ supersedes ..." run.
+  // Strip the agent's link annotations (↩ continues / ⤴ supersedes).
   t = t.replace(/\s{2,}(?:↩ continues|⤴ supersedes)[^]*$/u, '');
   // Strip a trailing "— skip: ..." reason clause (agent decoration, not user text).
   t = t.replace(/\s+—\s+skip:\s.*$/u, '');
   return t.trim();
+}
+
+/**
+ * Raw user text: ONLY the checkbox (already removed by the caller) + trailing
+ * anchor are stripped — tier markers and agent decoration are PRESERVED. This
+ * is what the user actually typed/kept on the line; comparing it against the
+ * baseline-clean text detects amendments, and an amended item's staged text is
+ * taken from here verbatim so a sentinel-bearing edit round-trips intact (S1).
+ */
+function cleanRawText(raw: string): string {
+  return stripAnchor(raw).trim();
 }
 
 /**
@@ -143,6 +176,7 @@ export function parseWinddownDoc(markdown: string): ParsedWinddownDoc {
         anchor,
         checked,
         text: cleanText(rest),
+        rawText: cleanRawText(rest),
         itemId: itemM[1],
         meetingSlug: itemM[2],
       });
@@ -153,6 +187,7 @@ export function parseWinddownDoc(markdown: string): ParsedWinddownDoc {
         anchor,
         checked,
         text: cleanText(rest),
+        rawText: cleanRawText(rest),
         choiceKey: choiceM[1],
       });
     } else if (actionM) {
@@ -162,6 +197,7 @@ export function parseWinddownDoc(markdown: string): ParsedWinddownDoc {
         anchor,
         checked,
         text: cleanText(rest),
+        rawText: cleanRawText(rest),
         verb: actionM[1],
         actionId: actionM[2],
       };
@@ -267,13 +303,19 @@ export function buildApplyPlan(
       continue;
     }
     if (eLine.kind === 'item') {
+      // S1: detect amendment by comparing the RAW lines (agent decoration
+      // intact on both sides). An untouched line round-trips byte-for-byte, so
+      // equal raw text ⇒ no edit. When amended, the user's text is taken from
+      // the edited RAW line verbatim — never the skip-stripped `text`, which
+      // would truncate an edit that legitimately contains " — skip: …".
+      const amended = eLine.rawText !== bLine.rawText;
       items.push({
         itemId: eLine.itemId!,
         meetingSlug: eLine.meetingSlug!,
         decision: classifyItem(bLine.checked, eLine.checked),
-        edited: eLine.text !== bLine.text,
+        edited: amended,
         baselineText: bLine.text,
-        editedText: eLine.text,
+        editedText: amended ? eLine.rawText : bLine.text,
       });
     } else if (eLine.kind === 'choice') {
       choices.push({ choiceKey: eLine.choiceKey!, chosen: eLine.checked });
@@ -335,8 +377,17 @@ export function renderApplySummary(plan: WinddownApplyPlan): string {
         (actionsSkipped.length > 0 ? `, ${actionsSkipped.length} you deferred` : ''),
     );
   }
-  if (choicesResolved.length > 0) {
-    lines.push(`  ${choicesResolved.length} your-call → resolved as marked`);
+  // S2: item-decision choices (`<id>@<slug>:keep|skip`) execute here and are
+  // "resolved as marked"; non-item choices have no primitive — they are handed
+  // off to the chef, so they are "recorded (chef will execute)", NOT applied.
+  const ITEM_CHOICE_RE = /^(?:ai|de|le)_\d+@[a-z0-9][a-z0-9._-]*:(?:keep|skip)$/;
+  const choicesResolvedHere = choicesResolved.filter((c) => ITEM_CHOICE_RE.test(c.choiceKey));
+  const choicesRecorded = choicesResolved.filter((c) => !ITEM_CHOICE_RE.test(c.choiceKey));
+  if (choicesResolvedHere.length > 0) {
+    lines.push(`  ${choicesResolvedHere.length} your-call → resolved as marked`);
+  }
+  if (choicesRecorded.length > 0) {
+    lines.push(`  ${choicesRecorded.length} your-call → recorded (chef will execute)`);
   }
   // Edited item diffs.
   for (const it of editedItems) {
@@ -413,7 +464,10 @@ export interface WinddownApplyResult {
   alreadyResolved: string[];
   createdCommitments: number;
   draftedActions: number;
+  /** Item-decision choices (`<id>@<slug>:keep|skip`) executed here. */
   choicesResolved: number;
+  /** Non-item choices handed off to the chef (DRAFT choice:<key>), NOT executed. */
+  choicesRecorded: number;
   warnings: string[];
 }
 
@@ -440,6 +494,7 @@ export async function executeWinddownApply(
     createdCommitments: 0,
     draftedActions: 0,
     choicesResolved: 0,
+    choicesRecorded: 0,
     warnings: [...plan.warnings],
   };
 
@@ -467,13 +522,17 @@ export async function executeWinddownApply(
   }
 
   // ── Choices: a chosen option whose key encodes an item decision ──
-  // Keys of the form `<itemId>@<slug>:keep|skip` resolve the underlying item.
+  // Keys of the form `<itemId>@<slug>:keep|skip` resolve the underlying item
+  // and execute here. Non-item choice keys (mirror/cal/etc.) have no generic
+  // primitive — they are handed off to the chef via a `DRAFT choice:<key>`
+  // line and counted as RECORDED, not executed-resolved (S2): apply must not
+  // claim it performed a collapse it never ran.
   for (const c of plan.choices) {
     if (!c.chosen) continue;
-    result.choicesResolved++;
     const m = c.choiceKey.match(/^((?:ai|de|le)_\d+)@([a-z0-9][a-z0-9._-]*):(keep|skip)$/);
     if (m) {
       const [, itemId, slug, branch] = m;
+      result.choicesResolved++;
       await deps.setItemStatus(slug, itemId, branch === 'keep' ? 'approved' : 'skipped', {
         skipReason: branch === 'skip' ? 'user-rejected' : undefined,
       });
@@ -482,10 +541,12 @@ export async function executeWinddownApply(
         if (outcome === 'committed') result.meetingsCommitted.push(slug);
         touchedMeetings.add(slug);
       }
+    } else {
+      // Non-item choice — emit a chef hand-off; the chef reads the chosen key
+      // from the draft output and executes the collapse. NOT executed here.
+      result.choicesRecorded++;
+      if (deps.draftAction) await deps.draftAction('choice', c.choiceKey);
     }
-    // Non-item choice keys (mirror/cal/etc.) are recorded as resolved; their
-    // execution is chef-orchestrated (no generic primitive). Surfaced count
-    // only — the chef reads the chosen key from the doc.
   }
 
   // ── Actions: route by verb through injected primitives ──

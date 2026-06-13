@@ -111,14 +111,19 @@ export function registerWinddownCommand(program) {
                 const content = await services.storage.read(filePath);
                 if (content === null)
                     return 'already-applied';
-                // Idempotency: an already-approved meeting is a no-op.
+                // Idempotency (genuine pre-applied guard): a meeting whose frontmatter
+                // is ALREADY `status: approved` was committed on a prior run — no-op.
                 const fm = content.match(/^---\n([\s\S]*?)\n---/);
                 if (fm && /\bstatus:\s*approved\b/.test(fm[1]))
                     return 'already-applied';
-                // Nothing approved → nothing to commit (e.g. all skipped).
+                // Distinguish "nothing to do" from "all items skipped this run". A run
+                // where the user unchecked every approved item still has staged
+                // statuses (all `skipped`) and MUST be committed: `commitApprovedItems`
+                // advances `status` → `approved`, strips the staged sections, and
+                // writes `## Skipped on Apply` even with zero approved items. Only a
+                // meeting with NO staged statuses at all is a true no-op.
                 const statusMap = parseStagedItemStatus(content);
-                const hasApproved = Object.values(statusMap).some((s) => s === 'approved');
-                if (!hasApproved)
+                if (Object.keys(statusMap).length === 0)
                     return 'already-applied';
                 await commitApprovedItems(services.storage, filePath, memoryDir);
                 return 'committed';

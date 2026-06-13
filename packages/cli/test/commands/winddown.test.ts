@@ -175,6 +175,45 @@ describe('arete winddown apply', () => {
     assert.match(meeting, /## Approved Decisions/);
   });
 
+  it('M1 all-skipped: unchecking every approved item still commits (skips persisted, status advances)', () => {
+    // Uncheck BOTH agent-approved items (ai_001 + de_001) so nothing remains
+    // approved. Pre-fix this short-circuited commitMeeting → meeting stuck at
+    // `processed` with uncommitted skip state. Post-fix the commit path still
+    // runs: status → approved, staged sections stripped, `## Skipped on Apply`.
+    const edited = renderedDoc()
+      .replace(
+        '- [x] Set up tech spike with Nick + James',
+        '- [ ] Set up tech spike with Nick + James',
+      )
+      .replace(
+        '- [x] PRDs get a UX section going forward',
+        '- [ ] PRDs get a UX section going forward',
+      );
+    writeDocs(tmpDir, resolveId, edited);
+
+    const { stdout, code } = runCliRaw(['winddown', 'apply', DATE, '--yes'], { cwd: tmpDir });
+    assert.equal(code, 0, stdout);
+
+    const meeting = readFileSync(join(tmpDir, 'resources', 'meetings', 'anthony.md'), 'utf8');
+    // status advanced even though zero items approved.
+    assert.match(meeting, /status:\s*approved/);
+    // staged sections stripped.
+    assert.doesNotMatch(meeting, /## Staged Action Items/);
+    assert.doesNotMatch(meeting, /## Staged Decisions/);
+    // skip audit section written.
+    assert.match(meeting, /## Skipped on Apply/);
+    // nothing approved.
+    assert.doesNotMatch(meeting, /## Approved Action Items/);
+    assert.doesNotMatch(meeting, /## Approved Decisions/);
+    // 1 meeting committed reported.
+    assert.match(stdout, /1 meetings committed/);
+
+    // Re-apply is a no-op (frontmatter already `approved`).
+    const second = runCliRaw(['winddown', 'apply', DATE, '--yes'], { cwd: tmpDir });
+    assert.equal(second.code, 0, second.stdout);
+    assert.match(second.stdout, /0 meetings committed/);
+  });
+
   it('AC2: a malformed/unknown anchor is surfaced, not applied', () => {
     const edited = renderedDoc() + '\n- [x] sneaky new item  <!-- ai_999@anthony -->';
     writeDocs(tmpDir, resolveId, edited);

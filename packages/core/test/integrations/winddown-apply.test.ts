@@ -150,6 +150,30 @@ describe('classify — semantics table (AC3)', () => {
     assert.equal(it.editedText, 'Set up tech spike with Nick + James');
     assert.equal(it.decision, 'approve');
   });
+
+  it('S1: an edit containing " — skip: " round-trips verbatim (not truncated)', async () => {
+    // The user rewrote an approved item's text to legitimately contain the
+    // decoration sentinel. Pre-fix `cleanText` truncated it at " — skip: ".
+    const edited = BASELINE.replace(
+      '- [x] Set up tech spike  <!-- ai_004@anthony -->',
+      '- [x] Tell Bob — skip: the friday call  <!-- ai_004@anthony -->',
+    );
+    const plan = buildApplyPlan('2026-06-09', BASELINE, edited);
+    const it = plan.items.find((i) => i.itemId === 'ai_004')!;
+    assert.equal(it.edited, true);
+    assert.equal(it.editedText, 'Tell Bob — skip: the friday call');
+    assert.equal(it.decision, 'approve');
+
+    // …and the confirm summary echoes the full edited text verbatim.
+    const summary = renderApplySummary(plan);
+    assert.match(summary, /Tell Bob — skip: the friday call/);
+
+    // …and the executed staged edit carries the verbatim text.
+    const { deps, calls } = makeDeps();
+    await executeWinddownApply(plan, deps);
+    const w = calls.setItemStatus.find((c) => c.id === 'ai_004')!;
+    assert.equal(w.editedText, 'Tell Bob — skip: the friday call');
+  });
 });
 
 describe('AC1 round-trip: no edits → zero drift', () => {
@@ -284,5 +308,38 @@ describe('choice resolution', () => {
     const w = calls.setItemStatus.find((c) => c.id === 'le_001')!;
     assert.equal(w.status, 'approved');
     assert.equal(w.slug, 'cust');
+  });
+
+  it('S2: a non-item choice is handed off (DRAFT choice:<key>), NOT executed-resolved', async () => {
+    const baseline = [
+      '## ⛔ Blockers & ⚠ Your call first   (decide these — not pre-filled)',
+      '',
+      '⚠ **Mirror ai_007 into the shadowing thread?**',
+      '   - [ ] yes — collapse into acc2a220   <!-- choice:ai_007>acc2a220 -->',
+    ].join('\n');
+    const edited = baseline.replace(
+      '   - [ ] yes — collapse into acc2a220   <!-- choice:ai_007>acc2a220 -->',
+      '   - [x] yes — collapse into acc2a220   <!-- choice:ai_007>acc2a220 -->',
+    );
+    const plan = buildApplyPlan('2026-06-09', baseline, edited);
+    const chosen = plan.choices.filter((c) => c.chosen);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].choiceKey, 'ai_007>acc2a220');
+
+    // Summary wording: "recorded (chef will execute)", NOT "resolved as marked".
+    const summary = renderApplySummary(plan);
+    assert.match(summary, /recorded \(chef will execute\)/);
+    assert.doesNotMatch(summary, /resolved as marked/);
+
+    const { deps, calls } = makeDeps();
+    const res = await executeWinddownApply(plan, deps);
+    // Handed off as a DRAFT choice:<key>, never executed as an item decision.
+    assert.equal(res.choicesResolved, 0, 'non-item choice is NOT executed-resolved');
+    assert.equal(res.choicesRecorded, 1, 'counted as chef hand-off');
+    const handoff = calls.draftAction.find((d) => d.verb === 'choice')!;
+    assert.ok(handoff, 'a DRAFT choice hand-off was emitted');
+    assert.equal(handoff.id, 'ai_007>acc2a220');
+    assert.equal(calls.setItemStatus.length, 0, 'no item primitive ran');
+    assert.equal(calls.commitMeeting.length, 0, 'no meeting committed');
   });
 });

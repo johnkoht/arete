@@ -527,6 +527,21 @@ describe('writeItemStatusToFile', () => {
     assert.equal(edits['de_001'], 'Updated decision text');
   });
 
+  it('(11b/N2) a status-only write does NOT create an empty staged_item_edits map', async () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody.`;
+    storage.files.set(MEETING_FILE, content);
+
+    await writeItemStatusToFile(storage, MEETING_FILE, 'ai_001', { status: 'skipped' });
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const frontmatter = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.ok(!('staged_item_edits' in frontmatter), 'no empty staged_item_edits map written');
+    // The reader still treats the absent map as {} (no regression).
+    assert.deepEqual(parseStagedItemEdits(updated), {});
+    // Status was still recorded.
+    assert.equal(parseStagedItemStatus(updated)['ai_001'], 'skipped');
+  });
+
   it('(12) throws when file not found', async () => {
     await assert.rejects(
       () => writeItemStatusToFile(storage, '/nonexistent/file.md', 'ai_001', { status: 'approved' }),
