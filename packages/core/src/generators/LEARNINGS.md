@@ -30,6 +30,10 @@ Both are consumed by `ClaudeAdapter` in `packages/core/src/adapters/claude-adapt
 - Every skill with a valid `id` gets a command file. No filtering by trigger type.
 - The CLAUDE.md footer always includes `config.version` and current ISO timestamp.
 
+## Patterns
+
+- **Agent-guidance lines that explain CLI output semantics live in the generator string** (2026-06-13, v0.16.0): When a CLI surface gains output semantics an agent must understand (e.g. `arete search` now tags project results with a `[provenance]` label and sinks `working/` drafts), document it as a content line in `generateClaudeMd()` rather than expecting the agent to infer it. This is pure content, not a code pattern — the generator is the right home because the guidance ships in the workspace's CLAUDE.md. Source: v0.16.0 project search provenance + active-topics durable-status (commit dd06769b).
+
 ## Pre-Edit Checklist
 
 - [ ] If changing command format: verify Claude Code recognizes the new format (test with `arete install --ide claude`)

@@ -741,6 +741,21 @@ arete search "jane" --person jane-doe             # Results about Jane
 
 See [CLI Reference > Search](#search) for all flags and options.
 
+**Search vs. the topic wiki** — two different things, often conflated:
+
+- **Search** returns *raw matching documents* ranked by relevance — every file that mentions your query, unsynthesized. Use it to find primary sources or ground a specific claim.
+- **The topic wiki** (`.arete/memory/topics/`) is the *synthesized, reconciled* view of a topic, built by the meeting pipeline. The agent already holds the topic *list* at boot and pulls a full page on demand (see [Memory System](#memory-system)).
+
+In short: the wiki is the distilled answer; search is the raw stack of sources.
+
+**Result provenance (project files)** — project results are labeled by source folder so a draft isn't mistaken for a decision:
+
+- `[published]` — `outputs/` or the project `README.md` (durable)
+- `[reference]` — `inputs/` (pulled-in material, e.g. another team's docs)
+- `[draft]` — `working/` (in-progress; **ranked below all other results**)
+
+Files outside those folders (project-root docs, etc.) are unlabeled and rank normally. Nothing is excluded from search — `working/` drafts stay findable, just down-ranked and marked. Treat `[draft]` as exploratory, not settled.
+
 ### Context Injection (Deprecated)
 
 > **Deprecated**: Use `arete search "query" --scope context` instead.
@@ -1269,6 +1284,8 @@ Plus navigation surfaces:
 - `arete memory refresh` — regenerates areas + topics + index + CLAUDE.md Active Topics block
 - `arete topic seed` — one-shot backfill over all historical meetings
 - `arete topic refresh <slug>` — targeted refresh of one topic's narrative
+
+**What does NOT write the topic wiki**: only meeting ingest (and `slack-digest`) build topic-page narrative. `wrap` and `finalize-project` write **decisions/learnings to L2** (`.arete/memory/items/`), not the wiki — a closed project surfaces through area/project briefs via an area-tagged memory item, not a topic page. Project `outputs/` are **searchable** (and labeled `[published]` — see [Search](#search)) but are **not** auto-synthesized into the wiki; a publish-to-wiki bridge is planned, not yet built. (`wrap` is the lightweight close-out usable on any work; `finalize-project` is the project-specific, full-archival version — context reconciliation, dated archive, briefs-surfacing retro.)
 
 **Collaboration profile**: `.arete/memory/summaries/collaboration.md` — synthesized profile of how to work with you, derived from observations.
 

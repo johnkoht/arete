@@ -4,6 +4,18 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Project search now tells decisions from drafts
+
+`arete search` (and the `/guide` agent) now label project results by where the file lives and rank your in-progress notes last, so a half-formed draft doesn't outrank a real decision:
+
+- **`[published]`** — `outputs/` or a project's `README.md`
+- **`[reference]`** — `inputs/` (material you pulled in, e.g. another team's docs)
+- **`[draft]`** — `working/` (in-progress; ranked below everything else)
+
+Nothing is hidden — your `working/` notes stay fully searchable and visible in Obsidian, just down-ranked and marked so the agent treats them as exploratory. Files at the project root (a `discovery.md`, say) rank normally. This is a search-ranking change only — it doesn't move your files or touch the topic wiki. (Bringing published project docs *into* the wiki is still on the roadmap.)
+
+Also: long-running topics no longer drop out of the agent's boot context just because they've gone quiet. A topic that's still `active`, `stable`, or `blocked` stays in the Active Topics list past the 90-day window — so when you pick a project back up months later, the agent still knows about it.
+
 ## Areté v2 — Faster daily flow, forkable skills, sharper memory
 
 A big update. The daily and weekly winddown skills now do all their analysis up front and then come back to you with a short list of curated proposals — each with a reason label — instead of walking you through one item at a time. In practice winddown went from a 30–45 minute slog to roughly half that.
