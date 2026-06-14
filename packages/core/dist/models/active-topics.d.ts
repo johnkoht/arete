@@ -42,8 +42,10 @@ export interface GetActiveTopicsOptions {
 /**
  * Select + sort active topics for the boot-context Active Topics block.
  *
- * Filter: include only topics whose `openItems > 0` OR whose
- * `last_refreshed` is within `recencyDays` (default 90).
+ * Filter: include a topic when `openItems > 0` OR `last_refreshed` is within
+ * `recencyDays` (default 90) OR its `status` is durable (active/stable/
+ * blocked) — durable-but-quiet topics survive the recency cutoff so a
+ * long-running thread isn't dropped from boot context after 90 quiet days.
  *
  * Sort: `(openItems desc, lastRefreshed desc, slug asc)` — deterministic
  * slug tiebreak keeps output stable across refreshes when everything

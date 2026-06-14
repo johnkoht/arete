@@ -30,6 +30,7 @@
  * ```
  */
 import type { Command } from 'commander';
+import { type Provenance } from '../lib/provenance.js';
 import { createServices } from '@arete/core';
 import type { QmdScope, QmdCollectionRoots, AreteConfig, StorageAdapter, ResolvedEntity, WorkspacePaths, DateRange, MemoryTimeline } from '@arete/core';
 /** Search result item */
@@ -42,6 +43,13 @@ export interface SearchResultItem {
     snippet: string;
     /** Relevance score (0-1) */
     score: number;
+    /**
+     * Source-folder provenance for project results: `published` (outputs/ or the
+     * project README), `reference` (inputs/), `draft` (working/). Absent for the
+     * durable long-tail (root docs, etc.) and all non-project paths. Drafts are
+     * ranked below all other results; this field does not affect `score`.
+     */
+    provenance?: Provenance;
 }
 /** Default search output schema */
 export interface SearchOutput {
