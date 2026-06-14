@@ -56,6 +56,7 @@
 [Build Principles]|mindset for autonomous execution
 |plan_first:Enter plan mode for non-trivial work (3+ steps or architectural decisions). If execution goes sideways, STOP and re-plan immediately.
 |verify_before_done:Never mark complete without proving it works. Run tests, check logs. Ask: "Would a staff engineer approve this?"
+|definition_of_done:When substantive work is complete + verified, PROACTIVELY wrap before reporting done — do NOT wait to be asked: (1) update nearest LEARNINGS.md per .pi/standards/learnings-protocol.md (regression / first-use / non-obvious decision); (2) write memory/entries/YYYY-MM-DD_<slug>.md + MEMORY.md index line; (3) when user-facing, update GUIDE.md + packages/runtime/UPDATES.md, and CHANGELOG.md for build/infra changes; (4) bump the version per judgment (auto when clearly warranted, else ask the builder) and route the merge through the gatekeeper (gitboss) — never silently push/release to main. Canonical flow: /ship Phase 5 (wrap).
 |zero_context_switching:When given a bug, just fix it. Point at logs/errors/failing tests, then resolve. Don't ask for hand-holding.
 |elegance_balanced:For non-trivial changes, ask "is there a more elegant way?" For simple fixes, don't over-engineer. Challenge your own work before presenting.
 |self_improve:After ANY correction, update nearest LEARNINGS.md with the pattern. Ruthlessly iterate until mistake rate drops.
