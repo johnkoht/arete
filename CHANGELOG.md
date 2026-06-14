@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.16.0] — 2026-06-14 — Project search distinguishes drafts from decisions
+
+`arete search` now labels project results by source folder and ranks in-progress `working/` drafts below everything else, so scratch no longer outranks a real decision. The qmd index is unchanged — results are reordered and labeled, not excluded. Also fixes durable-but-quiet topics silently dropping from the agent's boot context after 90 days.
+
+### Added
+- **Project-result provenance in `arete search`** — results under a project are tagged `[published]` (`outputs/` or the project `README.md`), `[reference]` (`inputs/`), or `[draft]` (`working/`); `working/` results are stable-sunk below all others. Path-keyed classifier (`classifyProvenance`/`applyProvenance` in `packages/cli/src/lib/provenance.ts`), applied after the minScore/person filters; the displayed relevance score is never mutated. The durable long-tail (project-root docs, `skill/`, `plan/`, etc.) stays neutral and unlabeled. Inverted from a "published allowlist" after validating against the real workspace — only `working/` is a reliable scratch signal. Agent guidance for the labels added to the CLAUDE.md generator.
+
+### Fixed
+- **Durable-status topics survive the boot recency cutoff** — `getActiveTopics` had been keeping only recently-refreshed topics because its `openItems` OR-branch was dead (`openItemsBySlug` is never populated by a live boot caller, collapsing the filter to recency-only). Topics with status `active`/`stable`/`blocked` now stay in the Active Topics list regardless of age; `stale`/`archived` still age out.
+
 ## [0.15.1] — 2026-06-12 — Wiki section no longer silently dropped on qmd timeout
 
 Briefs (`/project` and every mode's "Related wiki pages" section) intermittently lost their wiki section run-to-run. Root cause: semantic wiki retrieval shells out to `qmd query` — an LLM expansion + embedding + rerank that takes ~6s on a realistic brief query — but shared the 5s timeout meant for BM25 `qmd search`. On timeout the rejection was swallowed to an empty result, indistinguishable from a genuine no-match, so the section was suppressed *and* the jaccard fallback was skipped.
