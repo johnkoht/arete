@@ -32,6 +32,7 @@
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import chalk from 'chalk';
+import { applyProvenance } from '../lib/provenance.js';
 import { createServices, loadConfig, buildQmdCollectionRoots, rebaseQmdPath } from '@arete/core';
 import { header, info, error, listItem, warn } from '../formatters.js';
 const execFileAsync = promisify(execFile);
@@ -499,6 +500,11 @@ export async function runSearch(query, opts, deps = getDefaultDeps()) {
                 snippetLower.includes(slugLower));
         });
     }
+    // Provenance ordering: label each result by its project subfolder and
+    // stable-sink `working/` drafts below everything else, preserving qmd's
+    // relevance order within each group. The qmd index is untouched — this only
+    // reorders + labels what qmd returned. (dev/work/plans/project-wiki-sync)
+    results = applyProvenance(results);
     // Standard output
     if (opts.json) {
         console.log(JSON.stringify({
@@ -522,7 +528,8 @@ export async function runSearch(query, opts, deps = getDefaultDeps()) {
     }
     for (const item of results) {
         const scoreStr = chalk.dim(`(${(item.score * 100).toFixed(0)}%)`);
-        console.log(`  ${chalk.bold(item.title)} ${scoreStr}`);
+        const tag = item.provenance ? ` ${chalk.dim(`[${item.provenance}]`)}` : '';
+        console.log(`  ${chalk.bold(item.title)}${tag} ${scoreStr}`);
         console.log(chalk.dim(`    ${item.path}`));
         // Show truncated snippet
         const snippetPreview = item.snippet.slice(0, 120).replace(/\n/g, ' ');

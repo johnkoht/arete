@@ -120,6 +120,8 @@ arete commitments list
 arete index
 \`\`\`
 
+Project search results are tagged by source: \`[published]\` (outputs/ or the project README) and \`[reference]\` (inputs/) are durable; \`[draft]\` (working/) is in-progress and is ranked last — treat it as exploratory, not a settled decision, and prefer published/reference on conflict. Untagged results are normal project or workspace content — judge on their content.
+
 Use these services to ground your responses in workspace data rather than guessing.`;
 }
 function generateMemory() {

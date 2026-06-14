@@ -55,8 +55,10 @@ function daysBetween(isoDate: string, now: Date): number {
 /**
  * Select + sort active topics for the boot-context Active Topics block.
  *
- * Filter: include only topics whose `openItems > 0` OR whose
- * `last_refreshed` is within `recencyDays` (default 90).
+ * Filter: include a topic when `openItems > 0` OR `last_refreshed` is within
+ * `recencyDays` (default 90) OR its `status` is durable (active/stable/
+ * blocked) — durable-but-quiet topics survive the recency cutoff so a
+ * long-running thread isn't dropped from boot context after 90 quiet days.
  *
  * Sort: `(openItems desc, lastRefreshed desc, slug asc)` — deterministic
  * slug tiebreak keeps output stable across refreshes when everything
@@ -79,8 +81,15 @@ export function getActiveTopics(
     const openItems = openItemsBySlug?.get(slug) ?? 0;
     const daysOld = daysBetween(page.frontmatter.last_refreshed, today);
 
-    // Filter: active if has open items OR is recent
-    if (openItems === 0 && daysOld > recencyDays) continue;
+    // Filter: keep if it has open items OR is recent OR its status is durable
+    // (active/stable/blocked). Durable-but-quiet topics must survive the
+    // recency cutoff so a long-running thread isn't dropped from boot context
+    // after 90 quiet days — e.g. a sibling project picked up months later.
+    // `stale`/`archived` still age out; `new` is covered by recency.
+    const status = page.frontmatter.status;
+    const durable =
+      status === 'active' || status === 'stable' || status === 'blocked';
+    if (openItems === 0 && daysOld > recencyDays && !durable) continue;
 
     const entry: ActiveTopicEntry & { openItems: number } = {
       slug,

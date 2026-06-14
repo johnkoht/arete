@@ -35,6 +35,7 @@ import { promisify } from 'node:util';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 
+import { applyProvenance, type Provenance } from '../lib/provenance.js';
 import { createServices, loadConfig, buildQmdCollectionRoots, rebaseQmdPath } from '@arete/core';
 import type {
   QmdScope,
@@ -74,6 +75,13 @@ export interface SearchResultItem {
   snippet: string;
   /** Relevance score (0-1) */
   score: number;
+  /**
+   * Source-folder provenance for project results: `published` (outputs/ or the
+   * project README), `reference` (inputs/), `draft` (working/). Absent for the
+   * durable long-tail (root docs, etc.) and all non-project paths. Drafts are
+   * ranked below all other results; this field does not affect `score`.
+   */
+  provenance?: Provenance;
 }
 
 /** Default search output schema */
@@ -724,6 +732,12 @@ export async function runSearch(
     });
   }
 
+  // Provenance ordering: label each result by its project subfolder and
+  // stable-sink `working/` drafts below everything else, preserving qmd's
+  // relevance order within each group. The qmd index is untouched — this only
+  // reorders + labels what qmd returned. (dev/work/plans/project-wiki-sync)
+  results = applyProvenance(results);
+
   // Standard output
   if (opts.json) {
     console.log(
@@ -756,7 +770,8 @@ export async function runSearch(
 
   for (const item of results) {
     const scoreStr = chalk.dim(`(${(item.score * 100).toFixed(0)}%)`);
-    console.log(`  ${chalk.bold(item.title)} ${scoreStr}`);
+    const tag = item.provenance ? ` ${chalk.dim(`[${item.provenance}]`)}` : '';
+    console.log(`  ${chalk.bold(item.title)}${tag} ${scoreStr}`);
     console.log(chalk.dim(`    ${item.path}`));
     // Show truncated snippet
     const snippetPreview = item.snippet.slice(0, 120).replace(/\n/g, ' ');

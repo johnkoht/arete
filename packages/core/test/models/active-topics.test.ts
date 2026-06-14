@@ -36,7 +36,7 @@ describe('getActiveTopics', () => {
   it('filters out stale topics without open items', () => {
     const pages = [
       page('recent', { last_refreshed: '2026-04-20' }),
-      page('stale', { last_refreshed: '2025-01-01' }),
+      page('stale', { status: 'stale', last_refreshed: '2025-01-01' }),
     ];
     const out = getActiveTopics(pages, { today: REF_TODAY });
     assert.deepStrictEqual(out.map((e) => e.slug), ['recent']);
@@ -44,12 +44,36 @@ describe('getActiveTopics', () => {
 
   it('keeps stale topics that have open items', () => {
     const pages = [
-      page('stale-but-urgent', { last_refreshed: '2025-01-01' }),
+      page('stale-but-urgent', { status: 'stale', last_refreshed: '2025-01-01' }),
     ];
     const openItems = new Map([['stale-but-urgent', 3]]);
     const out = getActiveTopics(pages, { today: REF_TODAY, openItemsBySlug: openItems });
     assert.strictEqual(out.length, 1);
     assert.strictEqual(out[0].slug, 'stale-but-urgent');
+  });
+
+  it('keeps durable-status topics even when old and without open items', () => {
+    for (const status of ['active', 'stable', 'blocked'] as const) {
+      const pages = [page(`old-${status}`, { status, last_refreshed: '2025-01-01' })];
+      const out = getActiveTopics(pages, { today: REF_TODAY });
+      assert.deepStrictEqual(
+        out.map((e) => e.slug),
+        [`old-${status}`],
+        `durable status '${status}' should survive the recency cutoff`,
+      );
+    }
+  });
+
+  it('drops old non-durable topics (new/stale/archived) without open items', () => {
+    for (const status of ['new', 'stale', 'archived'] as const) {
+      const pages = [page(`old-${status}`, { status, last_refreshed: '2025-01-01' })];
+      const out = getActiveTopics(pages, { today: REF_TODAY });
+      assert.deepStrictEqual(
+        out.map((e) => e.slug),
+        [],
+        `non-durable status '${status}' should age out past the recency cutoff`,
+      );
+    }
   });
 
   it('sorts by (openItems desc, lastRefreshed desc, slug asc)', () => {
