@@ -13,6 +13,8 @@ export type { ProjectAreaResolution } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
+export { selectProjectDocs } from './brief-assemblers.js';
+export type { ProjectDocSelection, SelectProjectDocsOptions, SelectedExpandedDoc, ListedDoc, } from './brief-assemblers.js';
 export { computeProjectTopicsRefresh, applyProjectTopics, sameSlugSet, PROJECT_TOPICS_CAP, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_TOPICS_OWNERSHIP_COMMENT, } from './project-topics.js';
 export type { ProjectTopicsRefresh, ComputedProjectTopic, ApplyProjectTopicsResult, } from './project-topics.js';
 export { parseTopicsCache } from './brief-assemblers.js';

@@ -41,6 +41,9 @@ import {
   assembleBriefForProject as assembleProjectImpl,
   assembleProjectWhatsNew as assembleProjectWhatsNewImpl,
   type ProjectWhatsNew,
+  selectProjectDocs as selectProjectDocsImpl,
+  type ProjectDocSelection,
+  type SelectProjectDocsOptions,
   assembleBriefForArea as assembleAreaImpl,
   assembleBriefForMeeting as assembleMeetingImpl,
   type MeetingBriefOptions,
@@ -465,6 +468,21 @@ export class IntelligenceService {
       areaMemory: deps.areaMemory,
       entities: this.entities,
     });
+  }
+
+  /**
+   * Deterministically select + budget a project's documents (WS-1 —
+   * plan-context-injection). Pure read, NO LLM (lexical jaccard + mtime).
+   * Surfaces the net-new `selectProjectDocs` engine so `/project`,
+   * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
+   */
+  async selectProjectDocs(
+    slug: string,
+    paths: WorkspacePaths,
+    opts: SelectProjectDocsOptions = {},
+  ): Promise<ProjectDocSelection> {
+    const deps = this.requireBriefDeps();
+    return selectProjectDocsImpl(slug, paths, { storage: deps.storage }, opts);
   }
 
   /** Assemble a structured brief for an area — AC3. Pure aggregator. */

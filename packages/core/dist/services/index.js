@@ -13,6 +13,8 @@ export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.j
 // Phase 12 AC1/AC2 — project area resolution + backfill helpers
 export { resolveProjectArea } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
+// WS-1 (plan-context-injection) — deterministic project-doc selection engine
+export { selectProjectDocs } from './brief-assemblers.js';
 // Phase 14 AC2 — project topics-cache compute/diff/write (R1/R2 in tested code)
 export { computeProjectTopicsRefresh, applyProjectTopics, sameSlugSet, PROJECT_TOPICS_CAP, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_TOPICS_OWNERSHIP_COMMENT, } from './project-topics.js';
 export { parseTopicsCache } from './brief-assemblers.js';

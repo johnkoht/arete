@@ -329,6 +329,70 @@ export interface ProjectWhatsNew {
  * services/LEARNINGS.md).
  */
 export declare function assembleProjectWhatsNew(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectWhatsNew | null>;
+/** A document selected for expansion (its body is included). */
+export interface SelectedExpandedDoc {
+    /** Workspace-relative path. */
+    rel: string;
+    /** First markdown heading (or filename-derived title when no heading). */
+    heading: string;
+    /** Full document body (frontmatter stripped). */
+    body: string;
+    provenance: 'published' | 'reference' | 'draft';
+    /** Composite selection score (auditable). */
+    score: number;
+}
+/** A document listed (title-only) but not expanded into the budget. */
+export interface ListedDoc {
+    rel: string;
+    title: string;
+    firstHeading?: string;
+    provenance: 'published' | 'reference' | 'draft';
+}
+/**
+ * Result of {@link selectProjectDocs}. A descriptor, not rendered markdown.
+ */
+export interface ProjectDocSelection {
+    expanded: SelectedExpandedDoc[];
+    listed: ListedDoc[];
+    budgetChars: number;
+    usedChars: number;
+    truncated: boolean;
+    /** True when the top expanded doc scored below the relevance floor (the
+     * zero-result safety fallback fired or selection is low-confidence). */
+    lowConfidence?: boolean;
+}
+export interface SelectProjectDocsOptions {
+    /** Meeting/plan title — the LEXICAL selection query. Enriched internally
+     * with the resolved area slug + project name/slug tokens (pre-mortem R5). */
+    topic?: string;
+    /** Extra query tokens (attendee names, area slug) the caller resolves and
+     * unions into the lexical query before tokenizing (pre-mortem R5). */
+    queryExtra?: string;
+    /** Hard cap on TOTAL expanded body bytes; caller sets per use. Default 12k. */
+    budgetChars?: number;
+    /** Default false: working/ is listed, not expanded (pre-mortem R11). */
+    expandWorking?: boolean;
+    /** Max docs to expand. Default 3. */
+    maxExpanded?: number;
+    /** Caller opts in to the location boost (outputs/root/working). Default
+     * false so the generic /project read does not invert provenance (R11). */
+    locationBoost?: boolean;
+    /** Injected for deterministic recency scoring in tests. Default now. */
+    referenceDate?: Date;
+}
+/**
+ * Deterministically select and budget project documents (WS-1).
+ *
+ * PURE READ — no writes, NO LLM/embedding. Traversal + lexical jaccard +
+ * mtime recency only. Zero-result safety: never returns an empty `expanded`
+ * when ≥1 doc exists (falls back to the most-recent root-or-README doc).
+ *
+ * @param slug   project slug (under projects/active/<slug>/)
+ * @param paths  workspace paths
+ * @param deps   storage adapter (only `storage` is consulted)
+ * @param opts   selection options (see {@link SelectProjectDocsOptions})
+ */
+export declare function selectProjectDocs(slug: string, paths: WorkspacePaths, deps: Pick<ProjectBriefDeps, 'storage'>, opts?: SelectProjectDocsOptions): Promise<ProjectDocSelection>;
 export interface AreaTaggedItem {
     type: 'decision' | 'learning';
     text: string;

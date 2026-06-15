@@ -16,7 +16,7 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
 import type { BriefingRequest, PrimitiveBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief } from '../models/index.js';
-import { type ProjectWhatsNew, type MeetingBriefOptions } from './brief-assemblers.js';
+import { type ProjectWhatsNew, type ProjectDocSelection, type SelectProjectDocsOptions, type MeetingBriefOptions } from './brief-assemblers.js';
 export declare class IntelligenceService {
     private context;
     private memory;
@@ -58,6 +58,13 @@ export declare class IntelligenceService {
      * Phase 12 AC3 (read-only open flow). Pure read; no LLM, no writes.
      */
     assembleProjectWhatsNew(slug: string, paths: WorkspacePaths): Promise<ProjectWhatsNew | null>;
+    /**
+     * Deterministically select + budget a project's documents (WS-1 —
+     * plan-context-injection). Pure read, NO LLM (lexical jaccard + mtime).
+     * Surfaces the net-new `selectProjectDocs` engine so `/project`,
+     * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
+     */
+    selectProjectDocs(slug: string, paths: WorkspacePaths, opts?: SelectProjectDocsOptions): Promise<ProjectDocSelection>;
     /** Assemble a structured brief for an area — AC3. Pure aggregator. */
     assembleBriefForArea(slug: string, paths: WorkspacePaths): Promise<AreaBrief>;
     /**

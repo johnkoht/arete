@@ -5,7 +5,7 @@
  * Orchestrates ContextService, MemoryService, and EntityService.
  * No direct fs imports — uses injected services only.
  */
-import { assembleBriefForPerson as assemblePersonImpl, assembleBriefForProject as assembleProjectImpl, assembleProjectWhatsNew as assembleProjectWhatsNewImpl, assembleBriefForArea as assembleAreaImpl, assembleBriefForMeeting as assembleMeetingImpl, } from './brief-assemblers.js';
+import { assembleBriefForPerson as assemblePersonImpl, assembleBriefForProject as assembleProjectImpl, assembleProjectWhatsNew as assembleProjectWhatsNewImpl, selectProjectDocs as selectProjectDocsImpl, assembleBriefForArea as assembleAreaImpl, assembleBriefForMeeting as assembleMeetingImpl, } from './brief-assemblers.js';
 // ---------------------------------------------------------------------------
 // routeToSkill — ported from skill-router.ts
 // ---------------------------------------------------------------------------
@@ -361,6 +361,16 @@ export class IntelligenceService {
             areaMemory: deps.areaMemory,
             entities: this.entities,
         });
+    }
+    /**
+     * Deterministically select + budget a project's documents (WS-1 —
+     * plan-context-injection). Pure read, NO LLM (lexical jaccard + mtime).
+     * Surfaces the net-new `selectProjectDocs` engine so `/project`,
+     * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
+     */
+    async selectProjectDocs(slug, paths, opts = {}) {
+        const deps = this.requireBriefDeps();
+        return selectProjectDocsImpl(slug, paths, { storage: deps.storage }, opts);
     }
     /** Assemble a structured brief for an area — AC3. Pure aggregator. */
     async assembleBriefForArea(slug, paths) {

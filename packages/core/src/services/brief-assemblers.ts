@@ -25,6 +25,7 @@ import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 import type { AreaMemoryService } from './area-memory.js';
 import { parseTopicPage, type TopicPageFrontmatter } from '../models/topic-page.js';
 import { jaccardSimilarity } from '../utils/similarity.js';
+import { tokenize } from '../search/tokenize.js';
 import type {
   WorkspacePaths,
   PersonBrief,
@@ -1655,6 +1656,364 @@ export async function assembleProjectWhatsNew(
   }
 
   return { since: sinceIso, meetings, topics, commitments };
+}
+
+// ---------------------------------------------------------------------------
+// Project document selection (WS-1 — plan-context-injection)
+//
+// Pure, deterministic, NO-LLM project-doc selector. Traverses a project dir
+// ({README.md, root *.md, outputs/*, working/*, inputs/*}) via the
+// StorageAdapter ONLY (never `fs`) and ranks candidates lexically
+// (tokenize + jaccardSimilarity) + by recency (getModified, injected
+// referenceDate). Returns a *descriptor* (ProjectDocSelection) — rendering
+// stays in CLI/formatters.
+//
+// Defined HERE (brief-assemblers.ts) so the `brief-no-llm.test.ts` grep guard
+// (which scans only this file path) covers it (pre-mortem R2). It uses only
+// `tokenize`/`jaccardSimilarity`/`getModified` — no searchProvider.search,
+// no embeddings, no AIService (AC1.7).
+// ---------------------------------------------------------------------------
+
+/** A document selected for expansion (its body is included). */
+export interface SelectedExpandedDoc {
+  /** Workspace-relative path. */
+  rel: string;
+  /** First markdown heading (or filename-derived title when no heading). */
+  heading: string;
+  /** Full document body (frontmatter stripped). */
+  body: string;
+  provenance: 'published' | 'reference' | 'draft';
+  /** Composite selection score (auditable). */
+  score: number;
+}
+
+/** A document listed (title-only) but not expanded into the budget. */
+export interface ListedDoc {
+  rel: string;
+  title: string;
+  firstHeading?: string;
+  provenance: 'published' | 'reference' | 'draft';
+}
+
+/**
+ * Result of {@link selectProjectDocs}. A descriptor, not rendered markdown.
+ */
+export interface ProjectDocSelection {
+  expanded: SelectedExpandedDoc[];
+  listed: ListedDoc[];
+  budgetChars: number;
+  usedChars: number;
+  truncated: boolean;
+  /** True when the top expanded doc scored below the relevance floor (the
+   * zero-result safety fallback fired or selection is low-confidence). */
+  lowConfidence?: boolean;
+}
+
+export interface SelectProjectDocsOptions {
+  /** Meeting/plan title — the LEXICAL selection query. Enriched internally
+   * with the resolved area slug + project name/slug tokens (pre-mortem R5). */
+  topic?: string;
+  /** Extra query tokens (attendee names, area slug) the caller resolves and
+   * unions into the lexical query before tokenizing (pre-mortem R5). */
+  queryExtra?: string;
+  /** Hard cap on TOTAL expanded body bytes; caller sets per use. Default 12k. */
+  budgetChars?: number;
+  /** Default false: working/ is listed, not expanded (pre-mortem R11). */
+  expandWorking?: boolean;
+  /** Max docs to expand. Default 3. */
+  maxExpanded?: number;
+  /** Caller opts in to the location boost (outputs/root/working). Default
+   * false so the generic /project read does not invert provenance (R11). */
+  locationBoost?: boolean;
+  /** Injected for deterministic recency scoring in tests. Default now. */
+  referenceDate?: Date;
+}
+
+/** Recency half-life in days (score → 0 as age → halflife). */
+const DOC_RECENCY_HALFLIFE_DAYS = 30;
+/** Chars of body sampled into the relevance query for each candidate. */
+const DOC_RELEVANCE_BODY_CHARS = 600;
+/** Below this composite score the top pick is flagged low-confidence. */
+const DOC_LOW_CONFIDENCE_FLOOR = 0.12;
+/** Cap on the number of files traversed per dir (by mtime); rest are listed. */
+const DOC_TRAVERSAL_CAP = 20;
+
+type DocLocation = 'readme' | 'root' | 'outputs' | 'working' | 'inputs';
+
+interface DocCandidate {
+  rel: string;
+  absPath: string;
+  location: DocLocation;
+  title: string;
+  firstHeading?: string;
+  body: string;
+  provenance: 'published' | 'reference' | 'draft';
+  mtimeMs: number;
+  score: number;
+  relevance: number;
+  recency: number;
+  locBoost: number;
+}
+
+/** First markdown heading text (`# ...` or `## ...`) in a body, or undefined. */
+function firstHeadingOf(body: string): string | undefined {
+  for (const line of body.split('\n')) {
+    const m = line.match(/^#{1,6}\s+(.+?)\s*$/);
+    if (m) return m[1].trim();
+  }
+  return undefined;
+}
+
+/** Human-ish title from a filename: strip ext, replace separators. */
+function titleFromFilename(rel: string): string {
+  const base = basename(rel).replace(/\.md$/i, '');
+  return base.replace(/[-_]+/g, ' ').trim() || base;
+}
+
+/**
+ * Provenance per location, mirroring the v0.16.0 search convention:
+ * outputs/ = published, README/root = reference, working/inputs = draft.
+ */
+function provenanceForLocation(
+  loc: DocLocation,
+): 'published' | 'reference' | 'draft' {
+  if (loc === 'outputs') return 'published';
+  if (loc === 'working' || loc === 'inputs') return 'draft';
+  return 'reference';
+}
+
+function locationBoostValue(loc: DocLocation): number {
+  if (loc === 'outputs') return 0.15;
+  if (loc === 'readme' || loc === 'root') return 0.1;
+  if (loc === 'working') return 0.05;
+  return 0;
+}
+
+/**
+ * Deterministically select and budget project documents (WS-1).
+ *
+ * PURE READ — no writes, NO LLM/embedding. Traversal + lexical jaccard +
+ * mtime recency only. Zero-result safety: never returns an empty `expanded`
+ * when ≥1 doc exists (falls back to the most-recent root-or-README doc).
+ *
+ * @param slug   project slug (under projects/active/<slug>/)
+ * @param paths  workspace paths
+ * @param deps   storage adapter (only `storage` is consulted)
+ * @param opts   selection options (see {@link SelectProjectDocsOptions})
+ */
+export async function selectProjectDocs(
+  slug: string,
+  paths: WorkspacePaths,
+  deps: Pick<ProjectBriefDeps, 'storage'>,
+  opts: SelectProjectDocsOptions = {},
+): Promise<ProjectDocSelection> {
+  const storage = deps.storage;
+  const budgetChars = opts.budgetChars ?? BRIEF_GLOBAL_CAP_CHARS;
+  const maxExpanded = opts.maxExpanded ?? 3;
+  const expandWorking = opts.expandWorking ?? false;
+  const useLocationBoost = opts.locationBoost ?? false;
+  const referenceMs = (opts.referenceDate ?? new Date()).getTime();
+
+  const empty: ProjectDocSelection = {
+    expanded: [],
+    listed: [],
+    budgetChars,
+    usedChars: 0,
+    truncated: false,
+  };
+
+  const projectDir = join(paths.projects, 'active', slug);
+  if (!(await storage.exists(projectDir))) return empty;
+
+  // ---- 1. Gather candidate .md files across the traversed dirs ------------
+  // README + root *.md (non-recursive); outputs/ working/ inputs/ (each, .md
+  // only — pre-mortem R12). Cap each dir at DOC_TRAVERSAL_CAP files by mtime;
+  // overflow is still listed (not expanded). The README is forced into `root`
+  // location classification overridden to `readme` below.
+  const seenAbs = new Set<string>();
+  const candidates: DocCandidate[] = [];
+
+  async function gatherDir(
+    dir: string,
+    loc: DocLocation,
+  ): Promise<void> {
+    if (!(await storage.exists(dir))) return;
+    // Non-recursive .md listing. The root dir also contains README.md, which
+    // we classify separately below.
+    let files: string[];
+    try {
+      files = await storage.list(dir, { extensions: ['.md'] });
+    } catch {
+      return;
+    }
+    // Attach mtimes, sort newest-first, cap traversal.
+    const withMtime: Array<{ abs: string; mtimeMs: number }> = [];
+    for (const abs of files) {
+      const mod = await storage.getModified(abs);
+      withMtime.push({ abs, mtimeMs: mod ? mod.getTime() : 0 });
+    }
+    withMtime.sort(
+      (a, b) =>
+        b.mtimeMs - a.mtimeMs ||
+        (a.abs < b.abs ? -1 : a.abs > b.abs ? 1 : 0),
+    );
+    const capped = withMtime.slice(0, DOC_TRAVERSAL_CAP);
+    for (const { abs, mtimeMs } of capped) {
+      if (seenAbs.has(abs)) continue;
+      seenAbs.add(abs);
+      const content = await storage.read(abs);
+      if (content === null) continue;
+      const rel = relativeToRoot(abs, paths.root);
+      const isReadme = basename(abs).toLowerCase() === 'readme.md';
+      const thisLoc: DocLocation = loc === 'root' && isReadme ? 'readme' : loc;
+      const parsed = parseFrontmatter(content);
+      const body = (parsed?.body ?? content).trim();
+      const firstHeading = firstHeadingOf(body);
+      const title = firstHeading ?? titleFromFilename(rel);
+      candidates.push({
+        rel,
+        absPath: abs,
+        location: thisLoc,
+        title,
+        firstHeading,
+        body,
+        provenance: provenanceForLocation(thisLoc),
+        mtimeMs,
+        score: 0,
+        relevance: 0,
+        recency: 0,
+        locBoost: 0,
+      });
+    }
+  }
+
+  // Root (non-recursive) includes README.md + any root-level *.md.
+  await gatherDir(projectDir, 'root');
+  await gatherDir(join(projectDir, 'outputs'), 'outputs');
+  await gatherDir(join(projectDir, 'working'), 'working');
+  await gatherDir(join(projectDir, 'inputs'), 'inputs');
+
+  if (candidates.length === 0) return empty;
+
+  // ---- 2. Score each candidate -------------------------------------------
+  // Query enrichment (pre-mortem R5): union the bare title with the project
+  // name/slug + caller-supplied extra tokens (area slug, attendee/project
+  // tokens) before tokenizing — so a short meeting title doesn't let recency
+  // dominate.
+  const queryText = [opts.topic ?? '', opts.queryExtra ?? '', slug.replace(/[-_]+/g, ' ')]
+    .filter((s) => s.length > 0)
+    .join(' ');
+  const queryTokens = tokenize(queryText);
+
+  for (const c of candidates) {
+    const surface = `${c.title} ${c.firstHeading ?? ''} ${c.body.slice(0, DOC_RELEVANCE_BODY_CHARS)}`;
+    const relevance =
+      queryTokens.length > 0
+        ? jaccardSimilarity(queryTokens, tokenize(surface))
+        : 0;
+    const ageDays =
+      c.mtimeMs > 0 ? (referenceMs - c.mtimeMs) / (1000 * 60 * 60 * 24) : DOC_RECENCY_HALFLIFE_DAYS;
+    const recency = Math.max(0, Math.min(1, 1 - ageDays / DOC_RECENCY_HALFLIFE_DAYS));
+    const locBoost = useLocationBoost ? locationBoostValue(c.location) : 0;
+    c.relevance = relevance;
+    c.recency = recency;
+    c.locBoost = locBoost;
+    c.score = 0.55 * relevance + 0.3 * recency + locBoost;
+  }
+
+  // ---- 3. Sort deterministically -----------------------------------------
+  // score desc; tie-break: locationBoost desc → mtime desc → lexical rel asc.
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.locBoost !== a.locBoost) return b.locBoost - a.locBoost;
+    if (b.mtimeMs !== a.mtimeMs) return b.mtimeMs - a.mtimeMs;
+    return a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0;
+  });
+
+  // ---- 4. Tiered expand vs. list -----------------------------------------
+  // working/ + inputs/ are LISTED by default (expandWorking gates working/).
+  // Walk sorted candidates: expand the eligible ones until the budget or
+  // maxExpanded is hit; everything else (incl. budget overflow) is listed.
+  const expanded: SelectedExpandedDoc[] = [];
+  const listed: ListedDoc[] = [];
+  let usedChars = 0;
+  let truncated = false;
+
+  for (const c of candidates) {
+    const expandable =
+      c.location === 'readme' ||
+      c.location === 'root' ||
+      c.location === 'outputs' ||
+      (c.location === 'working' && expandWorking);
+    if (
+      expandable &&
+      expanded.length < maxExpanded &&
+      usedChars + c.body.length <= budgetChars
+    ) {
+      expanded.push({
+        rel: c.rel,
+        heading: c.title,
+        body: c.body,
+        provenance: c.provenance,
+        score: Number(c.score.toFixed(6)),
+      });
+      usedChars += c.body.length;
+    } else {
+      // Demoted (budget overflow, maxExpanded reached, or non-expandable tier).
+      if (expandable && usedChars + c.body.length > budgetChars) truncated = true;
+      listed.push({
+        rel: c.rel,
+        title: c.title,
+        firstHeading: c.firstHeading,
+        provenance: c.provenance,
+      });
+    }
+  }
+
+  // ---- 5. Zero-result safety ("pick wrong > pick none") -------------------
+  // Never return empty `expanded` when ≥1 doc exists. Fall back to the
+  // most-recent root-or-README doc (or, failing that, the most-recent doc).
+  let lowConfidence = false;
+  if (expanded.length === 0) {
+    lowConfidence = true;
+    const rootish = candidates
+      .filter((c) => c.location === 'readme' || c.location === 'root')
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const pick = rootish[0] ?? candidates[0];
+    if (pick) {
+      // Promote out of `listed` if present.
+      const idx = listed.findIndex((l) => l.rel === pick.rel);
+      if (idx >= 0) listed.splice(idx, 1);
+      const body =
+        pick.body.length > budgetChars ? pick.body.slice(0, budgetChars) : pick.body;
+      // Mid-doc cut only happens in the degenerate fallback where a single
+      // doc exceeds the whole budget; mark truncated so it's visible.
+      if (pick.body.length > budgetChars) truncated = true;
+      expanded.push({
+        rel: pick.rel,
+        heading: pick.title,
+        body,
+        provenance: pick.provenance,
+        score: Number(pick.score.toFixed(6)),
+      });
+      usedChars = body.length;
+    }
+  } else if (expanded[0]) {
+    // Low-confidence when the top pick's TOPIC RELEVANCE (not composite score)
+    // is below the floor — i.e. it was chosen mostly on recency/location, not
+    // because it matches the query. Surfaced so a wrong pick is visible (R5).
+    const top = candidates.find((c) => c.rel === expanded[0].rel);
+    if (top && top.relevance < DOC_LOW_CONFIDENCE_FLOOR) lowConfidence = true;
+  }
+
+  return {
+    expanded,
+    listed,
+    budgetChars,
+    usedChars,
+    truncated,
+    ...(lowConfidence ? { lowConfidence: true } : {}),
+  };
 }
 
 export interface AreaTaggedItem {
