@@ -521,7 +521,7 @@ Areté ships with default ("managed") skills for core PM workflows. They live in
 | **Async & Inbox** | slack-digest, inbox-triage, email-triage |
 | **Winddown** | daily-winddown, weekly-winddown |
 | **Scheduling** | schedule-meeting |
-| **Operations** | finalize-project, periodic-review |
+| **Operations** | wrap, finalize-project, periodic-review |
 
 Run `arete skill list` to see all available skills (this list is illustrative — the command is the source of truth).
 

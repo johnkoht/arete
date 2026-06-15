@@ -156,3 +156,20 @@ The generated command then includes: `Adopt the voice and approach described in 
 - Profile names must match filenames in `packages/runtime/profiles/` (without `.md` extension)
 - Not all skills need profiles — only skills that benefit from a distinct behavioral persona
 - For Cursor IDE, profiles are informational; for Claude Code, they're injected into slash commands
+
+---
+
+## 2026-06-14: An unquoted `description:` with a colon SILENTLY wipes the whole frontmatter
+
+**What broke**: `wrap/SKILL.md` had `description: Close out completed work: assess outcomes ...`. The embedded colon makes the YAML block invalid (mapping-value-not-allowed). `readSkillFrontmatter` (`packages/core/src/services/skills.ts`) runs `parseYaml` on the entire frontmatter inside a try/catch that returns `{}` on ANY error — so the WHOLE frontmatter (triggers, work_type, category, profile) is silently dropped. No warning is logged. `getInfo` then falls back to routing the skill on `id = basename(skillPath)` alone, so the skill still "works" enough to hide the failure.
+
+**Why it matters**: A skill with a colon in its description routes on id only — all its trigger phrases and metadata vanish without any error. This is invisible in `arete skill list` output unless you specifically check triggers.
+
+**How to avoid**: ALWAYS quote any frontmatter value containing a colon (or other YAML-special chars). Descriptions are the usual offender:
+```yaml
+# Correct:
+description: "Close out completed work: assess outcomes, extract decisions and learnings."
+# Wrong (swallows the entire frontmatter to {}):
+description: Close out completed work: assess outcomes, extract decisions and learnings.
+```
+When editing a SKILL.md description, if it contains `:` confirm it's quoted, then sanity-check `arete route "<a trigger phrase>"` still picks the skill. Related scorer invariants live in `packages/core/src/services/LEARNINGS.md` (Skill router scoreMatch).

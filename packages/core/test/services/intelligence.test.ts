@@ -727,4 +727,98 @@ describe('IntelligenceService (via compat)', () => {
       assert.equal(r!.skill, 'construct-roadmap');
     });
   });
+
+  // WS-3 scorer fix: common-word over-matching previously let the read-only
+  // `project` skill and `week-plan` win finalize/wrap queries. Fixtures copied
+  // from packages/runtime/skills/*/SKILL.md frontmatter.
+  describe('routing: finalize-project / wrap vs common-word skills (WS-3)', () => {
+    const WS3_CANDIDATES: SkillCandidate[] = [
+      {
+        id: 'finalize-project',
+        name: 'finalize-project',
+        description: 'Complete projects, commit changes to context, and archive. Use when the user wants to finalize, complete, wrap up, or archive a project.',
+        path: '/ws/.agents/skills/finalize-project',
+        triggers: ['finalize project', 'complete this project', 'archive project', 'archive this project', 'commit changes to context'],
+        work_type: 'operations',
+        category: 'essential',
+      },
+      {
+        id: 'wrap',
+        name: 'wrap',
+        description: 'Close out completed work: assess outcomes, extract decisions and learnings.',
+        path: '/ws/.agents/skills/wrap',
+        triggers: ['wrap up', 'close out', 'post-mortem', 'what did we learn'],
+        work_type: 'analysis',
+        category: 'essential',
+      },
+      {
+        id: 'project',
+        name: 'project',
+        description: 'Open a project with holistic context — the project brief plus what changed since the README was last touched. Read-only.',
+        path: '/ws/.agents/skills/project',
+        triggers: ['open project', '/project', 'work on project', "let's work on", 'pull up project', 'project context for', 'load project', 'load the project', 'load up', 'review project', 'look at project', 'look at the project'],
+        work_type: 'general',
+        category: 'essential',
+        primitives: [],
+      },
+      {
+        id: 'update-project',
+        name: 'update-project',
+        description: 'Reconcile a project README from recent meetings and conversations — approval-gated write-back.',
+        path: '/ws/.agents/skills/update-project',
+        triggers: ['update project', '/update-project', 'update the project', 'sync the project', 'pull that into the project', 'bring the project up to date', 'refresh the project from my meetings'],
+        work_type: 'operations',
+        category: 'essential',
+      },
+      {
+        id: 'week-plan',
+        name: 'week-plan',
+        description: 'Plan the week — agent does all gather + carryover work upfront, then engages twice (priorities confirm → plan draft).',
+        path: '/ws/.agents/skills/week-plan',
+        triggers: ['weekly plan', 'plan my week', 'plan the week', 'week planning', 'set weekly priorities', 'prepare a weekly plan', 'prepare weekly plan'],
+        work_type: 'planning',
+        category: 'essential',
+      },
+      {
+        id: 'weekly-winddown',
+        name: 'weekly-winddown',
+        description: 'End-of-week reconciliation — agent does all gather + judgment work upfront across the full week, then engages once.',
+        path: '/ws/.agents/skills/weekly-winddown',
+        triggers: ['weekly winddown', 'end of week', 'close the week', 'friday winddown', 'weekly review and plan', 'wind down the week', 'review the week', 'week review', 'what did I accomplish this week'],
+        work_type: 'planning',
+        category: 'essential',
+      },
+    ];
+
+    const WS3_GATE: Array<[string, string]> = [
+      ['finalize project', 'finalize-project'],
+      ['complete this project', 'finalize-project'],
+      ['archive this project', 'finalize-project'],
+      ['wrap up', 'wrap'],
+      ['what did we learn', 'wrap'],
+    ];
+
+    for (const [query, expected] of WS3_GATE) {
+      it(`routes "${query}" to ${expected}`, () => {
+        const r = routeToSkill(query, WS3_CANDIDATES);
+        assert.ok(r, `Should find a match for "${query}"`);
+        assert.equal(r!.skill, expected);
+      });
+    }
+
+    it('"week plan" id no longer over-matches "we" from "what did we learn"', () => {
+      // Regression guard for bug #1 (substring id match): "we" must not pull
+      // the query toward week-plan.
+      const r = routeToSkill('what did we learn', WS3_CANDIDATES);
+      assert.ok(r);
+      assert.notEqual(r!.skill, 'week-plan');
+    });
+
+    it('single-word "project" id no longer wins finalize queries via dashify misfire', () => {
+      // Regression guard for bug #2 (single-word dashified id misfire).
+      const r = routeToSkill('finalize project', WS3_CANDIDATES);
+      assert.ok(r);
+      assert.notEqual(r!.skill, 'project');
+    });
+  });
 });

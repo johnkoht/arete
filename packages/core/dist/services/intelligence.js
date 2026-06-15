@@ -31,6 +31,18 @@ function tokenize(text) {
         .split(/\s+/)
         .filter(t => t.length > 1 && !STOP_WORDS.has(t));
 }
+// scoreMatch — natural-language → skill scorer.
+//
+// Three fixes here address common-word over-matching that let the read-only
+// `project` skill and `week-plan` win queries that belong to
+// `finalize-project`/`wrap`:
+//   1. id match uses token EQUALITY, not substring (so "we" no longer matches
+//      the id "week plan").
+//   2. the dashified id bonus only fires for genuine multi-word ids, compared
+//      dash-to-dash (so a single word like "project" no longer misfires).
+//   3. trigger matches are weighted by specificity, so a single-token generic
+//      trigger like "/project" can't tie a precise multi-token phrase like
+//      "finalize project".
 function scoreMatch(query, skill) {
     const q = query.toLowerCase().trim();
     const qTokens = tokenize(q);
@@ -41,20 +53,26 @@ function scoreMatch(query, skill) {
     const desc = (skill.description || '').toLowerCase();
     const triggerPhrases = (skill.triggers || []).map(t => t.toLowerCase());
     let score = 0;
-    if (id && (q.includes(id) || id.includes(qTokens.join(' ')) || qTokens.some(t => id.includes(t)))) {
+    const idTokens = id ? id.split(/\s+/).filter(Boolean) : [];
+    if (id && (q.includes(id) || id.includes(qTokens.join(' ')) || idTokens.some(it => qTokenSet.has(it)))) {
         score += 20;
     }
-    if (id && q.replace(/\s+/g, '-').includes(id)) {
+    const dashId = id.replace(/\s+/g, '-');
+    if (id && id.includes(' ') && q.replace(/\s+/g, '-').includes(dashId)) {
         score += 15;
     }
     for (const phrase of triggerPhrases) {
         const exactMatch = q.includes(phrase);
-        // Tokenize trigger phrase the same way we tokenize the query
-        // This ensures stop words like "in", "and", "this" don't break matching
+        // Tokenize trigger phrase the same way we tokenize the query so stop
+        // words don't break matching.
         const phraseTokens = tokenize(phrase);
         const tokenMatch = phraseTokens.length > 0 && phraseTokens.every(t => qTokenSet.has(t));
         if (exactMatch || tokenMatch) {
-            score += 18;
+            // An explicit, configured multi-token trigger is the strongest intent
+            // signal — it must outweigh an incidental single-token overlap with a
+            // skill's id (+20). Single generic-word triggers (e.g. "/project" →
+            // ["project"]) stay low so they can't outscore a precise phrase match.
+            score += phraseTokens.length >= 2 ? 22 : 10;
         }
     }
     const descTokens = tokenize(desc);
