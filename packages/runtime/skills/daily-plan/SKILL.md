@@ -121,6 +121,21 @@ This is a deeper-than-prerequisite check: 2a nudges about freshness;
 - **Read** `now/scratchpad.md` for ad-hoc items.
 - **Calendar** (if configured): Run `arete pull calendar --today --json` (or `--tomorrow` if planning for tomorrow). If successful, use events as meeting list. Otherwise, ask user.
 - **Commitments**: Run `arete commitments list --json` to surface relevant items.
+- **Plan context (in-flight project/topic state)**: Run `arete plan-context --day --json`.
+  This scopes to **today's areas** (areas-of-today, derived from today's meeting
+  index — pure read, no network) and returns the same frozen bundle as
+  `--week`: `{ mode, projects[], topics[], goals[], lastWeek, generatedAt }`,
+  each `projects[]` = `{ slug, status, whatsNew, selectedDocs[], openQuestions[],
+  source, lowConfidence? }`. Use it alongside the per-meeting
+  `contextual_memory_search` (Step 5) — the bundle is the project/topic SIDE of
+  today's context that `arete search --scope memory` does not surface.
+  - **Never silent-empty (R13):** if `reason: "no-area-today"`, today's meetings
+    didn't bind to a project-bearing area — fall back to commitments + week
+    priorities for task selection. If `reason: "recent-active-fallback"`, the
+    bundle is recently-touched projects (not area-scoped) — treat as a hint, not
+    a hard today-scope.
+  - A `lowConfidence` project means its doc was picked on recency, not a strong
+    topic match — verify before asserting its state.
 
 ### 3.5. Score and Select Tasks
 
@@ -132,6 +147,11 @@ Use intelligent task scoring to recommend today's focus from the week's task lis
 3. **Week priorities**: Extract priority text from `now/week.md` Outcomes section
 4. **Focus hours**: Estimate available focus time from calendar gaps
 5. **Needs attention**: People with `needs_attention: true` in their profile
+6. **In-flight project state** (from `arete plan-context --day`): for each
+   project in today's areas, its `status`, `whatsNew`, and `openQuestions[]`.
+   Use this to recommend concrete next steps — a project's `openQuestions[]`
+   often name the real task ("decide X") better than the week's task list, and
+   a `status: blocked` project in today's area is a flag to surface.
 
 **Score Tasks**:
 1. Get all incomplete tasks from `now/week.md` Tasks sections (Must/Should/Could)
