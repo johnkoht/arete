@@ -48,7 +48,7 @@ factory.ts (createServices) ─── wires everything
 
 **Dependencies**: `ContextService`, `MemoryService`, `EntityService` (NOT storage/search directly)
 
-**Important**: `routeToSkill()` scores via stop words, trigger matching, description overlap, work type keywords. If a capability isn't routable, check skill frontmatter triggers.
+**Important**: `routeToSkill()` is argmax over `scoreMatch` (floor: best < 4 → null; no tie-break). Scoring is specificity-ranked: a multi-token trigger match (+22) outweighs an id mention (+20, matched by TOKEN-equality, never substring), which outweighs a single-token trigger (+10); description overlap (≥2 tokens) and work_type keywords add less. The dashified-id bonus (+15) is multi-word-ids only. Changing any weight reweights ALL routing — always run a full per-skill trigger sweep. If a capability isn't routable, check its frontmatter `triggers:` array (prose "When to Use" is NOT parsed).
 
 ### ContextService
 `services/context.ts`
@@ -239,7 +239,7 @@ The v2 effort added several service clusters. They are not all barrel-exported; 
 
 - **Brief assemblers** — `services/brief-assemblers.ts`, `services/brief-formatters.ts`. Back the typed `arete brief --person/--project/--area/--meeting` modes (Phase 9). Pure aggregators — no LLM synthesis. Restored a capability that `prepare-meeting-agenda` regressed on after earlier over-stripping.
 - **Topic detection & wiki** — `services/topic-detection.ts` (shared lexical detector), `services/topic-memory.ts`, plus the summaries leg: `services/summary-writer.ts`, `services/memory-summary-loader.ts` (models `source-summary.ts`, `memory-summary.ts`). Gives memory the "raw → summaries + concepts" shape. (The organization-entity service/model pair was removed in wiki-repair W3 — dark code on the live path.)
-- **Area memory** — `services/area-memory.ts`, `services/area-parser.ts`. L3 area snapshots; consumed by `arete memory refresh`.
+- **Area memory** — `services/area-memory.ts`, `services/area-parser.ts`. L3 area snapshots; consumed by `arete memory refresh`. `getOpenItemsBySlug()` harvests persisted per-topic `open_items` from area files to feed `getActiveTopics` boot ranking (the `openItemsBySlug` signal).
 - **Commitment v2 + dedup** — `services/commitments.ts`, `services/commitments-hash-v2.ts`, `services/commitments-counterparty-parser.ts`, `services/commitments-v2-flag.ts` (`COMMITMENTS_V2_ACTIVE`, default false). Dedup pipeline: `services/background-dedup.ts`, `services/commitment-dedup-pipeline.ts`, `services/commitment-dedup-extract.ts`, `services/commitment-dedup-reverse-stamp.ts`, `services/dedup-decisions-log.ts`, `services/dedup-explain.ts`, `services/dedup-winddown-surface.ts`, `services/extract-dedup-wiring.ts`. Backs `arete dedup`.
 - **Commitment external resolution (gated OFF)** — `services/commitment-resolution-pipeline.ts`, `services/resolution-decisions-log.ts`, `services/resolution-directives.ts`, `services/resolution-ordering.ts`. Gmail-evidence auto-resolution behind `PHASE_11_AUTO_RESOLVE_ENABLED` (default false). Propose-never-write even when enabled.
 - **Skills split (managed + user fork)** — `services/skills-local.ts` (managed-vs-fork resolution), `services/skill-fork.ts` (`forkSkill`), `services/skill-resolver.ts`. Managed skills in `.arete/skills/`, forks in `.agents/skills/`; fork wins at load time. Backs `arete skill fork/diff/merge`.

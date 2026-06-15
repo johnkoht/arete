@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.17.0] — 2026-06-14 — Active Topics ranked by open work; skill routing stops misfiring on common words
+
+The agent's boot "Active Topics" list now surfaces and ranks topics by their open work, not just recency — reviving a filter/sort signal that had been dead because no live caller populated it. Separately, the `wrap` and `finalize-project` skills no longer collide, and the natural-language skill router stops letting a common word in a skill's name (or a bare single-word trigger) hijack queries — e.g. "finalize project" was landing on the read-only `project` brief.
+
+### Added
+- **`AreaMemoryService.getOpenItemsBySlug()`** — harvests the per-topic `open_items` already persisted in area-memory frontmatter (`.arete/memory/areas/*.md`) into a `Map<slug, count>`; bounded by the number of areas, parsed with the `yaml` package, never throws. Wired into the two boot-context call sites (`arete` memory-refresh CLAUDE.md regen and `arete update`) so `getActiveTopics` finally receives `openItemsBySlug`. The extraction-bias slug-list callers are deliberately left untouched.
+- **Real `triggers:` on `finalize-project`** — the skill previously had no `triggers:` array, so it routed only by id/description luck. It now owns the project-archival phrases ("finalize project", "complete this project", "archive project", "archive this project", "commit changes to context").
+
+### Changed
+- **Active Topics rank by open work** — `getActiveTopics`' previously-dead `openItems > 0` keep-arm and open-items sort key are now live: a topic with open work stays in boot context regardless of age, and topics order by open-item weight (then recency, then slug). The v0.16.0 durable-status arm is retained as a complementary signal. The count is a deliberately-approximate ranking signal (a sum of never-decremented extraction snapshots, bounded by area-memory's 60-day exclusion), not a ledger.
+- **`wrap` is lightweight-only for projects** — `wrap` drops the `archive this project` trigger and re-scopes its description to "close out completed work"; its archive step now structurally refuses to archive a `projects/active/` directory, redirecting to `finalize-project` for the full ceremony (dated archive, context reconciliation, closed-project retro) with an up-front hand-off — so `wrap` can never produce a second, divergent archive path. `work_type` corrected `review` → `analysis`.
+
+### Fixed
+- **Skill router no longer over-matches common words** — `scoreMatch` had three bugs: it matched a skill id against query tokens by *substring* (so "we" matched `week-plan`'s id), a dashified-id bonus that only ever misfired for single-word ids like `project` (granting +15 on any query containing that word), and a flat trigger weight that let a bare single-token trigger (`/project` → `["project"]`) tie a precise multi-word trigger. Now: id matches by token-equality; the dashified bonus applies to multi-word ids only (compared dash-to-dash); and trigger weight is specificity-ranked (multi-token 22 > id mention 20 > single-token 10). Result: "finalize project" / "complete this project" / "archive this project" route to `finalize-project`, "what did we learn" routes to `wrap`, and `weekly-winddown`'s own triggers no longer lose to `week-plan` — verified by a full per-skill routing sweep with zero new regressions.
+
 ## [0.16.0] — 2026-06-14 — Project search distinguishes drafts from decisions
 
 `arete search` now labels project results by source folder and ranks in-progress `working/` drafts below everything else, so scratch no longer outranks a real decision. The qmd index is unchanged — results are reordered and labeled, not excluded. Also fixes durable-but-quiet topics silently dropping from the agent's boot context after 90 days.
