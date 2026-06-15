@@ -417,6 +417,27 @@ that user already declined last week):
   fuzzy. Don't auto-defer; surface with the cover-by reference for
   the user to confirm.
 
+## Invoking daily-plan at full fidelity (WS-4)
+
+When week-plan triggers `daily-plan` (e.g. to scaffold today within the weekly
+flow), daily-plan **runs its complete step sequence — do NOT corner-cut.** The
+week-plan context you've already gathered is passed in to *supplement*, never to
+*replace*, daily-plan's required steps. Specifically, even when invoked from
+week-plan, daily-plan MUST still:
+
+- Run **per-meeting** `arete search "<term>" --scope memory --limit 2` for each
+  prep-worthy meeting (daily-plan Step 4.5 / contextual_memory_search) — the
+  week-level bundle does NOT substitute for per-meeting memory recall.
+- Run **per-meeting** `arete plan-context --day` / agenda offers (daily-plan
+  Step 5) for each meeting — week-plan's `--week` bundle is broader and is not a
+  substitute for the day-scoped, per-meeting prep.
+- Run **@due tagging** (daily-plan Step 3.6) for the confirmed focus tasks.
+
+Rationale: a passed-in week bundle tempts the agent to skip the day's
+per-meeting recall and agenda offers, which is the exact fidelity loss WS-4
+fixes. Reused context is an INPUT, not a license to skip steps. (See
+daily-plan/SKILL.md Steps 3, 3.6, 4.5, 5.)
+
 ## References
 
 - **PATTERNS.md** — chef-orchestrator patterns (two-engage variant

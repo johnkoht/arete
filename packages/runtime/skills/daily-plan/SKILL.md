@@ -117,6 +117,15 @@ This is a deeper-than-prerequisite check: 2a nudges about freshness;
 
 ### 3. Gather Context
 
+> **Invocation contract (WS-4) — full fidelity even when called from week-plan.**
+> When daily-plan is invoked by `week-plan` (or any orchestrator), the caller may
+> pass in already-gathered week context. That context **supplements, it does not
+> replace** the required steps below. Run the **complete** step sequence
+> regardless of how you were invoked — in particular: per-meeting
+> `arete search --scope memory` (Step 4.5), per-meeting `arete plan-context --day`
+> + agenda offers (Step 5), and `@due` tagging (Step 3.6) MUST all run. Reused
+> context is an INPUT, never a license to skip per-meeting recall or agenda offers.
+
 - **Read** `now/week.md` (current week priorities, outcomes, tasks).
 - **Read** `now/scratchpad.md` for ad-hoc items.
 - **Calendar** (if configured): Run `arete pull calendar --today --json` (or `--tomorrow` if planning for tomorrow). If successful, use events as meeting list. Otherwise, ask user.
@@ -127,7 +136,7 @@ This is a deeper-than-prerequisite check: 2a nudges about freshness;
   `--week`: `{ mode, projects[], topics[], goals[], lastWeek, generatedAt }`,
   each `projects[]` = `{ slug, status, whatsNew, selectedDocs[], openQuestions[],
   source, lowConfidence? }`. Use it alongside the per-meeting
-  `contextual_memory_search` (Step 5) — the bundle is the project/topic SIDE of
+  `contextual_memory_search` (Step 4.5) — the bundle is the project/topic SIDE of
   today's context that `arete search --scope memory` does not surface.
   - **Never silent-empty (R13):** if `reason: "no-area-today"`, today's meetings
     didn't bind to a project-bearing area — fall back to commitments + week
@@ -210,9 +219,26 @@ After the user confirms their focus tasks, tag each selected task in `now/week.m
 
 **How**:
 1. For each confirmed focus task, find its line in `now/week.md` (in Must/Should/Could sections)
-2. If the task already has `@due(...)`, update it to today's date
-3. If the task has no `@due(...)`, append `@due(YYYY-MM-DD)` to the task line
-4. Only tag tasks the user confirmed — do NOT tag tasks they removed from focus
+2. If the task has no `@due(...)`, append `@due(YYYY-MM-DD)` (the plan date — today, or tomorrow when planning ahead).
+3. If the task **already has** `@due(...)`, RECONCILE — do **not** blindly overwrite:
+   - **Real future deadline → PRESERVE it.** If the existing `@due` is a genuine
+     deadline on a later day (e.g. a multi-day commitment due Thursday that you're
+     starting today), KEEP the real deadline. Working a task today does not change
+     when it is *due*. The Today view surfaces it via "needs attention today"
+     selection, not by rewriting its due date to today.
+   - **Stale / past `@due` (e.g. yesterday's plan-date tag that winddown didn't
+     clear) → UPDATE it to the plan date.** A plan-date tag is a "selected for
+     this day" marker, not a deadline; refreshing it to today is correct.
+   - When unsure whether an existing `@due` is a real deadline or a leftover
+     plan-date marker, prefer to PRESERVE it and ask the user rather than silently
+     overwrite a real deadline.
+4. Only tag tasks the user confirmed — do NOT tag tasks they removed from focus.
+
+> **@due semantics (reconciled, WS-4):** `@due` carries two roles — a real
+> **deadline** and a daily-plan **"selected for today"** marker. A real deadline
+> on a multi-day commitment is preserved across a week-plan-triggered daily-plan
+> run; only stale/past plan-date markers are refreshed to the plan date. Never
+> overwrite a real future deadline with the plan date.
 
 **Example**:
 ```markdown
@@ -361,7 +387,7 @@ After writing, confirm:
 
 | Phase | Action | Who |
 |-------|--------|-----|
-| Daily plan (step 3.6) | Add `@due(YYYY-MM-DD)` to selected focus tasks | daily-plan skill |
+| Daily plan (step 3.6) | Add `@due(YYYY-MM-DD)` to untagged focus tasks; RECONCILE existing tags — preserve a real future deadline, refresh only stale/past plan-date markers (never overwrite a real deadline with the plan date) | daily-plan skill |
 | During the day | Task UI Today view shows `@due(today)` items | web UI |
 | Task completion | `@due` tag preserved on `[x]` completed line | user / TaskService |
 | Daily winddown | Clear `@due` from previous day's incomplete items | daily-winddown skill |
