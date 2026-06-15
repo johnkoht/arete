@@ -4,16 +4,16 @@ Spun out of the v0.16.0 work (project search provenance + active-topics durable-
 
 ## Fast-follows (small, scoped)
 
-### 1. Populate `openItemsBySlug` at boot (the fuller WS-A fix)
-WS-A shipped a *workaround*: durable-status topics (`active`/`stable`/`blocked`) now survive the 90-day boot cutoff. But the *intended* "a topic with open work stays in boot context" branch is still dead — `getActiveTopics`'s optional `openItemsBySlug` map is never populated by any live caller (the `loadMemorySummary` path: `update.ts`, `intelligence.ts`, `meeting.ts`).
-- Compute per-topic open-item counts (open commitments / action items attributable to each topic slug) and pass the map into `getActiveTopics`.
-- **The real work is the count source**, not the wiring: decide what "open items for a topic" means and whether it's cheap enough to compute at boot. Once that's settled, threading the map through is trivial.
+### 1. Populate `openItemsBySlug` at boot (the fuller WS-A fix) — ✅ SHIPPED v0.17.0
+Resolved by **harvesting the area cache**: new `AreaMemoryService.getOpenItemsBySlug()` reads the per-topic `open_items` already persisted in area-memory frontmatter and passes the map into `getActiveTopics` at the two boot sites (`intelligence.ts`, `update.ts`). The dead `openItems>0` keep-arm + open-items sort key are live again; durable-status arm retained. The "count source" question was answered pragmatically: the count is a deliberately-approximate ranking signal (a never-decremented snapshot sum), not a ledger — a live-count fix (add `@topic` to commitments/tasks) remains punted. See `memory/entries/2026-06-14_active-topics-openitems-learnings.md`.
 
 ### 2. Provenance denylist expansion — ONLY if it proves noisy
 The search down-rank denylist is intentionally minimal (`working/` only). `prototypes/` and `sessions/` were left neutral on purpose (primary design history / research, not the abandoned-brainstorm failure mode). Revisit only if real searches show them outranking durable content.
 
-### 3. Reconcile `wrap` vs `finalize-project` overlap
-The two skills overlap and even share trigger phrases ("wrap up", "archive project"). `finalize-project` = project-specific, full-ceremony close-out (context reconciliation, dated archive, briefs-surfacing retro); `wrap` = general lightweight retro. Decide: merge, differentiate triggers cleanly, or have one delegate to the other.
+### 3. Reconcile `wrap` vs `finalize-project` overlap — ✅ SHIPPED v0.17.0
+Resolved by **differentiate triggers + structural hand-off**: `finalize-project` got a real `triggers:` array (it had none) and owns the project-archival phrases; `wrap` dropped `archive this project`, re-scoped its description, and step 6 now *structurally refuses* to archive a `projects/active/` dir (redirects to `finalize-project`) with an up-front hand-off. Real-router testing revealed the actual collision was the read-only `project` skill shadowing finalize-project (common-word id), so the fix also corrected three `scoreMatch` bugs (substring id-match, inverted dashify bonus, flat trigger weight → specificity hierarchy multi-trigger 22 > id 20 > single-trigger 10). Full per-skill routing sweep, zero new regressions. See `memory/entries/2026-06-14_wrap-finalize-router-learnings.md`.
+
+**Residual (open):** `weekly-winddown` wins its "week" triggers over `week-plan` by only +2 (genuinely ambiguous; no router tie-break surface). Candidate future fix: an exact-contiguous-phrase bonus.
 
 ## Backlog (larger — punted)
 
