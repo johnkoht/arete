@@ -42,15 +42,26 @@ import {
 } from './brief-assemblers.js';
 
 /**
- * Default expanded-body budget (chars) shared across the top projects in a
- * plan-context bundle. Tighter than the generic `/project` read
- * (`PROJECT_DOC_BUDGET_DEFAULT` = 12k) because a plan bundle stacks many
- * projects + topics + goals into one agent turn.
+ * PER-PROJECT expanded-body budget (chars) — each chosen project gets this,
+ * NOT a shared total divided down (the divided model starved real docs to
+ * filename-only: 8k / 6 projects ≈ 1.3k < any real doc → 0 expanded).
+ * `--week` runs ~weekly, so it spends freely; `--day` is area-scoped (few
+ * projects) so it stays tighter. The generic single-project `/project` read
+ * stays at `PROJECT_DOC_BUDGET_DEFAULT` (12k).
  */
-export const PLAN_CONTEXT_PROJECT_DOC_BUDGET = 8_000;
+export const PLAN_CONTEXT_WEEK_PER_PROJECT_BUDGET = 10_000;
+export const PLAN_CONTEXT_DAY_PER_PROJECT_BUDGET = 6_000;
+/** Back-compat default (single-project plan-context read). */
+export const PLAN_CONTEXT_PROJECT_DOC_BUDGET = 12_000;
 
-/** Max projects expanded per bundle (recency/area-ranked). Rest are summarized. */
-export const PLAN_CONTEXT_MAX_PROJECTS = 6;
+/**
+ * Max projects expanded per bundle (recency/area-ranked); rest summarized.
+ * Raised to cover a realistic active-project set; with per-project budgets the
+ * worst case is bounded (cap × per-project). NOTE: project weighting (surface
+ * driving vs reference projects) is a deferred follow-up — for now `--week`
+ * surfaces all recency-ranked active projects up to this cap.
+ */
+export const PLAN_CONTEXT_MAX_PROJECTS = 12;
 
 /** "Recently active" window (days) for the --day fallback (pre-mortem R13). */
 export const PLAN_CONTEXT_RECENT_DAYS = 7;
@@ -251,7 +262,14 @@ export async function assemblePlanContext(
   opts: AssemblePlanContextOptions = {},
 ): Promise<PlanContextBundle> {
   const referenceDate = opts.referenceDate ?? new Date();
-  const budgetChars = opts.budgetChars ?? PLAN_CONTEXT_PROJECT_DOC_BUDGET;
+  // Per-project budget (NOT a shared total divided down — see constant docs).
+  const perProjectBudget =
+    opts.budgetChars ??
+    (mode === 'day'
+      ? PLAN_CONTEXT_DAY_PER_PROJECT_BUDGET
+      : mode === 'week'
+        ? PLAN_CONTEXT_WEEK_PER_PROJECT_BUDGET
+        : PLAN_CONTEXT_PROJECT_DOC_BUDGET);
   const maxProjects = opts.maxProjects ?? PLAN_CONTEXT_MAX_PROJECTS;
   const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
 
@@ -302,11 +320,11 @@ export async function assemblePlanContext(
   );
   const chosen = ranked.slice(0, maxProjects);
 
-  // ---- 3. Per-project selection (shared budget — R9) --------------------
-  // Share the expanded budget across the chosen projects so ≥1 doc expands
-  // per project when one fits; selectProjectDocs' zero-result safety also
+  // ---- 3. Per-project selection (real per-project budget — R9) ----------
+  // Each chosen project gets the full per-project budget (computed above by
+  // mode), so its top doc(s) actually expand — incl. the README's
+  // `## Open Questions` section. selectProjectDocs' zero-result safety also
   // guarantees ≥1 expanded doc when the project has any doc at all.
-  const perProjectBudget = Math.max(1, Math.floor(budgetChars / Math.max(1, chosen.length)));
   const projects: PlanContextProject[] = [];
   for (const c of chosen) {
     const meta = candidates.find((p) => p.slug === c.slug);
