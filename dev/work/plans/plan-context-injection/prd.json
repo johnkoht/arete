@@ -1,0 +1,128 @@
+{
+  "name": "plan-context-injection",
+  "branchName": "feature/plan-context-injection",
+  "goal": "Make in-flight project documents reach planning surfaces: a deterministic project-doc selection engine feeding agendas (WS-1), a composing `arete plan-context` aggregator feeding week-plan (WS-2) and daily-plan (WS-3), and week→daily invocation fidelity (WS-4). WS-5 cache is DEFERRED.",
+  "globalConstraints": [
+    "Run ENTIRELY in the worktree (feature/plan-context-injection). Never switch branches in the main repo.",
+    "arete-reserv (~/code/arete-reserv) is READ-ONLY. No writes, no commits, no index refresh there. The spike-compare harness must run against a `cp -r` snapshot or assert zero writes.",
+    "Commit dist/ build artifacts (users install from GitHub).",
+    "Quality gates per task: `npm run typecheck` and `npm test` MUST pass. Do NOT weaken, .skip, or delete any AC test to make a gate pass (pre-mortem R8). A blocked AC → STOP and report.",
+    "COMPOSE, DON'T DUPLICATE: project body content is obtained ONLY via `selectProjectDocs`/`assembleBriefForProject` through IntelligenceService. No markdown body parsing in the `plan-context` CLI command (pre-mortem R6).",
+    "NO LLM/embeddings in selection — lexical only (tokenize + jaccardSimilarity + getModified). The `brief-no-llm.test.ts` invariant must stay green (pre-mortem R2)."
+  ],
+  "requiredReading": [
+    ".pi/expertise/core/PROFILE.md — packages/core domain map (invariants, anti-patterns, key abstractions)",
+    ".pi/expertise/cli/PROFILE.md — packages/cli command architecture, CLI↔core mapping, formatters",
+    "dev/work/plans/plan-context-injection/plan.md — full plan with pinned contract, algorithm, ACs, testing strategy",
+    "dev/work/plans/plan-context-injection/pre-mortem.md — risk mitigations (embed per-task)",
+    "packages/core/src/services/LEARNINGS.md and packages/core/src/search/LEARNINGS.md — gotchas",
+    "packages/core/test/services/brief-project.test.ts and brief-no-llm.test.ts — the fixture pattern (mkdtempSync + FileStorageAdapter) and the invariant guard"
+  ],
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "selectProjectDocs service — traverse + deterministic lexical selection + budget",
+      "workstream": "WS-1",
+      "area": "core",
+      "description": "Add a NEW pure, no-LLM function `selectProjectDocs(slug, paths, deps, opts)` to packages/core/src/services/brief-assemblers.ts (MUST be this file so the brief-no-llm grep guard covers it — R2). Returns a ProjectDocSelection descriptor (NOT rendered markdown). Traverse {README.md, root *.md, outputs/*, working/*, inputs/*} via StorageAdapter.list/getModified ONLY (never fs); apply list({extensions:['.md']}) to ALL dirs including outputs/ (R12). Score each candidate: 0.55*jaccard(tokenize(topic), tokenize(title∪firstHeading∪firstNchars)) + 0.30*recency(getModified, injected referenceDate) + locationBoost(opts.locationBoost ? outputs:+0.15|root:+0.10|working:+0.05 : 0). Tie-break locationBoost→mtime→lexical relpath. Budget: expand top docs until next exceeds budgetChars, demote overflow to listed (no mid-doc truncation), set truncated. Zero-result safety: never empty expanded when ≥1 doc exists (fall back to most-recent root-or-README); surface chosen rel+score; emit low-confidence flag when top score < threshold. Surface via IntelligenceService. locationBoost/expandWorking default FALSE (R11).",
+      "acceptanceCriteria": [
+        "AC1.1 expanded[] includes ≥1 doc from {README,root *.md,outputs/*} when any exists; listed[] contains every working/* and inputs/*.md with non-empty title (fixture: 1 root + 2 working).",
+        "AC1.2 project with NO outputs/ dir returns without error, selects highest-scoring root doc.",
+        "AC1.3 budgetChars=2000 + 5000-char root doc → doc in listed[], truncated===true, no expanded body cut mid-content.",
+        "AC1.4 deterministic: identical inputs + injected referenceDate → byte-identical ordering; ties break locationBoost→mtime→lexical relpath.",
+        "AC1.7 brief-no-llm.test.ts passes unchanged (no AIService/callLLM/embedding).",
+        "AC-R11 default (no-boost) call ranks outputs/ above a more-recent working/ draft.",
+        "AC-R12 a .png/.csv in outputs/ is neither expanded nor causes error.",
+        "AC-R5 short title (≤2 content tokens) with 3 docs where correct doc is NOT most recent → relevance still wins (query enriched with area slug + project/attendee tokens)."
+      ],
+      "mitigations": [
+        "R1: any new param on assembleBriefForProject is optional (opts?:…, default {}), append-only; do NOT change 2-arg call sites (brief-no-llm.test.ts:122, brief-project.test.ts:210, intelligence.ts:438) or edit those tests.",
+        "R2: selectProjectDocs defined IN brief-assemblers.ts (or extend the no-LLM guard path list).",
+        "R5: enrich selection query with resolved area slug + project/attendee tokens (brief resolves at :2172-2187), not bare title.",
+        "R11: locationBoost + expandWorking default false.",
+        "R12: list({extensions:['.md']}) on ALL traversed dirs; cap ~20 files by mtime, list rest."
+      ],
+      "tests": "packages/core/test/services/project-doc-selection.test.ts (new) — mkdtempSync + FileStorageAdapter fixtures per brief-project.test.ts; permutations README-only / +root+working / outputs present-vs-absent / oversized-root / empty-working / non-.md input / short-title.",
+      "files": ["packages/core/src/services/brief-assemblers.ts", "packages/core/src/services/intelligence.ts", "packages/core/src/storage/adapter.ts"]
+    },
+    {
+      "id": "T2",
+      "title": "Scaffold project-doc extractor + routing + recurring-template fix; wire into agenda path",
+      "workstream": "WS-1",
+      "area": "core",
+      "description": "Add a `project-doc` candidate extractor + heading regex + routing case to packages/core/src/services/agenda-scaffold.ts (:155-195, 362-398). Route project-doc candidates into BOTH priorities and general cases with a consumed.projectDoc flag; fall to unrouted only when no section consumes (R3). Dedupe vs recent-meeting candidates when the selected doc is under resources/meetings/ or overlaps (R4). Wire selectProjectDocs into the meeting-brief/agenda path so a resolved project's selected doc reaches sections[].candidates[] with source:'project-doc'. Recurring-meeting template: ADDITIVE — only meetings with a prior same-titled instance in resources/meetings/ derive template from it; 2-attendee meetings WITHOUT a prior instance still get 1on1 (R10).",
+      "acceptanceCriteria": [
+        "AC1.5 assembleAgendaScaffold routes the project-document section into sections[].candidates[] with source:'project-doc'; agenda whose resolved project has a selected doc yields ≥1 such candidate (assert on scaffold object).",
+        "AC1.6 chosen doc's relative path and score appear in scaffold --json output.",
+        "AC1.8 recurring meeting with prior instance → templateType !== '1on1' derived from that instance.",
+        "AC-R3 with a MINIMAL skeleton template (no general heading) the project-doc candidate is reachable (a section OR explicitly unrouted), not silently dropped.",
+        "AC-R4 when highest-scoring doc IS the last meeting instance, it is not emitted as BOTH a recent-meeting and a project-doc candidate.",
+        "AC-R10 genuine 1:1 with no prior instance still yields templateType==='1on1' and attendee-scoped Priorities seeding (:263-314)."
+      ],
+      "mitigations": ["R3 route to real sections", "R4 dedupe meeting-instance docs", "R10 additive recurring-template, regression-test 1:1"],
+      "tests": "extend packages/core/test/services/agenda-scaffold.test.ts — project-doc-bearing MeetingBrief; minimal-skeleton fixture; meeting-instance dedupe fixture; 1:1 regression fixture.",
+      "files": ["packages/core/src/services/agenda-scaffold.ts", "packages/core/src/services/brief-assemblers.ts"]
+    },
+    {
+      "id": "T3",
+      "title": "Agenda integration test + spike-compare harness (AC1.9 stand-in)",
+      "workstream": "WS-1",
+      "area": "cli",
+      "description": "Add packages/cli/test/integration/agenda-project-doc.test.ts (new): temp workspace mirroring the glance case (area-inferring meeting + project with a roadmap root doc); run the scaffold path; assert ≥1 project-doc candidate referencing the fixture doc's SPECIFIC content (not length>=0 — R8). Must NOT touch arete-reserv. Add dev/work/plans/plan-context-injection/spike-compare.sh: runs `arete agenda scaffold --meeting \"Jira Roadmap Sync\" --json` with cwd=a `cp -r` snapshot of ~/code/arete-reserv (READ-ONLY; no --apply, --skip-qmd, no index write), diffs against the Phase-0 hand-assembled bundle, prints which roadmap concerns surfaced. Operator runs once pre-merge.",
+      "acceptanceCriteria": [
+        "AC1.9-auto integration test asserts a specific fixture project-doc candidate reaches the agenda; runs in CI; does not reference arete-reserv.",
+        "spike-compare.sh exists, runs read-only against a snapshot, emits a concern-surfaced report (manual gate, not CI)."
+      ],
+      "mitigations": ["R8 assert specific content, never relax assertions"],
+      "tests": "packages/cli/test/integration/agenda-project-doc.test.ts",
+      "files": ["packages/cli/test/integration/agenda-project-doc.test.ts", "dev/work/plans/plan-context-injection/spike-compare.sh"]
+    },
+    {
+      "id": "T4",
+      "title": "arete plan-context --week aggregator + JSON schema + week-plan + AGENTS.md norm",
+      "workstream": "WS-2",
+      "area": "cli",
+      "description": "Add `arete plan-context --week --json` command that COMPOSES selectProjectDocs/assembleBriefForProject/assembleProjectWhatsNew/retrieveWiki/topic-find via IntelligenceService (NO body parsing in the command — R6). Returns {projects[], topics[], goals[], lastWeek, generatedAt}; each projects[] entry {slug, status, whatsNew, selectedDocs[], openQuestions[], source}. Reconcile openQuestions[] source FIRST (R7): a labeled expanded entry whose heading matches /open questions/i, or a pinned new descriptor field — decide and freeze before coding consumers. Multi-project: per-project selection, shared budget (R9 — assert ≥1 doc expanded, never all-listed when ≥1 fits), slug-tag candidates. Freeze + snapshot-test the --json shape (skill contract). Wire into week-plan SKILL.md gather (replace inert ls/topic-list :142-161) + priority/task-draft logic. Add the read-before-asserting norm to AGENTS.md.",
+      "acceptanceCriteria": [
+        "AC2.1 --week --json returns {projects[],topics[],goals[],lastWeek,generatedAt}; each projects[] entry carries {slug,status,whatsNew,selectedDocs[],openQuestions[],source}; shape snapshot-tested.",
+        "AC2.2 fixture blocked project with ≥1 open commitment appears with status + ≥1 open item, source-tagged.",
+        "AC2.3 lastWeek = prior now/week.md content when present, null when absent (no error).",
+        "AC2.4 project unedited >14d but status active with open work still appears.",
+        "AC2.5 AGENTS.md contains the read-before-asserting norm referencing arete plan-context --project / arete project open.",
+        "AC-R9 2 projects each with a doc >½ shared budget → ≥1 doc expanded (not all-listed)."
+      ],
+      "mitigations": ["R6 no body parsing in command (reviewer grep parseFrontmatter|match(/##|readFileSync → zero)", "R7 freeze openQuestions source before consumers", "R9 shared-budget ≥1 expanded"],
+      "tests": "packages/cli/test/integration/plan-context.test.ts (new) — temp workspace; frozen JSON snapshot; filtering/presence ACs.",
+      "files": ["packages/cli/src/commands/plan-context.ts", "packages/cli/src/index.ts", "packages/runtime/skills/week-plan/SKILL.md", "AGENTS.md"]
+    },
+    {
+      "id": "T5",
+      "title": "plan-context --day mode + daily-plan wiring",
+      "workstream": "WS-3",
+      "area": "cli",
+      "description": "Add `--day` mode (areas-of-today scope) to plan-context, same schema as --week, projects filtered to today's areas. Fallback (R13): when areas-of-today resolves empty (e.g. sub-confidence area inference), fall back to recently-active projects (last ~7d) OR emit reason:'no-area-today' — never a silent empty bundle. Wire into daily-plan SKILL.md gather alongside the existing contextual_memory_search.",
+      "acceptanceCriteria": [
+        "AC3.1 --day --json same schema as --week, projects[] filtered to today's areas (fixture 3 projects/2 areas, calendar touches 1 → only that area's projects).",
+        "AC3.2 --day with no project-bearing area today returns projects:[] (not error) + populated generatedAt.",
+        "AC-R13 a day whose meetings all infer area below confidence threshold yields recent-active projects OR explicit empty-reason, never silent empty."
+      ],
+      "mitigations": ["R13 --day fallback or explicit empty-reason"],
+      "tests": "extend packages/cli/test/integration/plan-context.test.ts with --day fixtures.",
+      "files": ["packages/cli/src/commands/plan-context.ts", "packages/runtime/skills/daily-plan/SKILL.md"]
+    },
+    {
+      "id": "T6",
+      "title": "week→daily fidelity contract + @due reconciliation (SKILL.md doc work)",
+      "workstream": "WS-4",
+      "area": "docs",
+      "description": "Document the week-plan→daily-plan invocation contract in the SKILL.md files: daily-plan runs its full step sequence (per-meeting memory search, agenda offers, @due tagging) even when invoked from week-plan; passed-in context may supplement but not replace required steps. Reconcile the @due rule for multi-day deadlines: preserve real deadlines, do not overwrite with the plan date. Documentation-only (rubric doc exception).",
+      "acceptanceCriteria": [
+        "AC4.1 daily-plan/SKILL.md documents that per-meeting arete search --scope memory runs for each prep-worthy meeting even with passed-in context.",
+        "AC4.2 the @due rule documents that a multi-day-deadline commitment retains its real due date after a week-plan-triggered run."
+      ],
+      "mitigations": [],
+      "tests": "doc-only; verify content accuracy + cross-references.",
+      "files": ["packages/runtime/skills/week-plan/SKILL.md", "packages/runtime/skills/daily-plan/SKILL.md"]
+    }
+  ]
+}
