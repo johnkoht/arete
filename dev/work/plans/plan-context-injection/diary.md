@@ -32,3 +32,52 @@ Guardrails in force:
 - 9 concrete change requests + drafted ACs (WS-1..WS-5) + test strategy delivered. Key catches: scaffold needs a NEW `project-doc` candidate extractor (else WS-1 fails silently); pin `selectProjectDocs` signature as the WS-1 contract WS-2/3 consume; `assembleBriefForProject` is 2-arg (no options) — needs signature change; WS-5 caches a no-LLM computation (token win not actually being paid) → demote/descope; invalidate by max-mtime not content-hash; multi-project meetings + no-area projects + --json schema freeze unhandled.
 - Also answered John's mid-run question: /review-plan + execute-prd + orchestrator auto-inject expert profiles by package-touched (core+cli here); pre-mortem does not (by design). Confirmed I injected both profiles into the eng lead correctly. Will set has_review:true so /ship skips redundant Phase 1.3.
 - **Action:** incorporating all 9 CRs into plan.md (pin signature, deterministic heuristic, scaffold extractor deliverable, AC/test sections, descope WS-5, fix cache key, add missed risks) → then pre-mortem → approve.
+
+### 2026-06-14 night — Pre-mortem + ship setup
+- Pre-mortem returned: **0 CRITICAL** (build gate passes), 4 HIGH (R1 optional-signature, R2 selection-in-brief-assemblers, R3 candidates-reach-a-section, R5 short-title-jaccard-wrong-doc), 7 MEDIUM, 2 LOW. All mitigations embedded per-task in prd.json. Saved pre-mortem.md + review.md.
+- Authored PRD directly (6 tasks: T1 selectProjectDocs service → T2 scaffold extractor+wire → T3 integration test+spike harness → T4 plan-context --week+week-plan → T5 --day+daily-plan → T6 week→daily fidelity docs). WS-5 deferred. prd.md + prd.json.
+- Committed artifacts on main: d775f752 (markdown only, not code; not a branch switch — per /ship Phase 2.3).
+- Created worktree `.claude/worktrees/plan-context-injection` on `feature/plan-context-injection`; PRD present.
+- Worktree had no node_modules (root workspaces:none) → running `npm install` in worktree (bg b79at68to) before launching build.
+- **Next:** launch suborchestrator (background) to execute PRD in worktree with HIGH mitigations + READ-ONLY arete-reserv guard; I review at gates; hold merge for John's morning spike-comparison approval.
+
+### 2026-06-14 night — WS-1 build launched
+- Deps installed (exit 0); baseline `npm run typecheck` GREEN before any build code (so failures are attributable).
+- Launched suborchestrator (bg) scoped to **WS-1 = T1 selectProjectDocs service, T2 scaffold extractor+wire, T3 integration test+spike harness**. Stops after T3 for my review (mid-build gate). T4-T6 released only after I verify WS-1 + run the AC1.9 spike comparison.
+- Suborchestrator briefed with: orchestrator/developer/reviewer personas, execute-prd protocol, core+cli profiles, the 4 HIGH mitigations (R1/R2/R3/R5) + R4/R8/R10/R11/R12, READ-ONLY arete-reserv (snapshot for spike), no-merge/no-push, dark-code audit, anti-gate-gaming. Progress in dev/executions/plan-context-injection/progress.md.
+- **Awaiting completion notification.** On return: eng-lead review of WS-1 → spike comparison → feedback/rework → release T4-T6.
+
+### 2026-06-15 morning — WS-1 returned GREEN-but-BROKEN; caught at the real gate
+- Suborchestrator reported WS-1 done: 3 commits (6fc7efee/46e62fe3/3448742c), +24 tests, 0 new failures, invariants green, dark-code clean. Independently re-verified: typecheck green; 109/109 WS-1+invariant tests pass via tsx; integration test 1/1.
+- **BUT the AC1.9 spike comparison against a snapshot of the REAL arete-reserv FAILED: "NONE — no project-doc candidate surfaced."** Diagnosed (not rubber-stamped):
+  1. **Service is CORRECT** — direct `selectProjectDocs('glance-2-roadmap', …)` on real data expands `glance-1.5-roadmap.md` (the right payload) + lists all working/ docs. T1 is good.
+  2. **Harness invalid** — static snapshot has no live calendar → meeting `resolved:false`, `attendees:[]` → no area → no project → selectProjectDocs never called. AC1.9-via-snapshot can't validate.
+  3. **Wiring gap A** — `--project glance-2-roadmap` override yields 0 candidates when meeting unresolved; the documented escape hatch is dead when resolved:false (project section skipped entirely).
+  4. **Wiring gap B** — `assembleBriefForProject` NOT wired to selectProjectDocs; `/project` + `brief --project` show a "Project context" section with no selected docs (plan required this).
+- **Verdict: WS-1 NOT done.** Holding T4-T6. Sending suborchestrator precise rework: wire assembleBriefForProject (B); make --project override drive selectProjectDocs even when meeting unresolved (A); fix spike harness to drive via --project (calendar-independent) so AC1.9 is checkable + re-run until ≥1 glance-2-roadmap concern surfaces; add AC tests for both wiring paths.
+
+### 2026-06-15 morning — Rework delegated
+- SendMessage unavailable in this harness → spawned a fresh rework suborchestrator (bg) with precise diagnosis + existing commits to build on (not a rewrite).
+- Scope: Defect A (--project override must drive selectProjectDocs when meeting unresolved), Defect B (wire assembleBriefForProject so /project + brief --project surface selected docs), Defect C (fix spike-compare.sh to drive via --project, calendar-independent; re-run must surface ≥1 glance-2-roadmap concern) + 2 new AC regression tests. Invariants must stay green; arete-reserv READ-ONLY; no merge.
+- Awaiting completion. On return: re-run real spike comparison; if it surfaces glance-2-roadmap concerns, release T4-T6; else iterate.
+
+### 2026-06-15 morning — WS-1 DONE + verified (rework landed)
+- Rework fixed all 3 defects: A (--project drives selection on unresolved meetings, feedbf4b), B (assembleBriefForProject wired via optional projectDocBudgetChars, 0a11a214 — extracted shared buildProjectDocBullets helper, DRY), C (harness drives calendar-independent --project path, de4579ec). dist rebuilt e8cad744.
+- **Independently re-verified (not rubber-stamped):** typecheck green; build green; full suite 4766 tests → 4764 pass / 0 fail / 2 pre-existing skips; invariants (brief-no-llm, brief-project) green; 112/112 targeted.
+- **AC1.9 spike comparison PASSES (exit 0)** against snapshot of real arete-reserv: Dave "Jira Roadmap Sync" agenda surfaces glance-1.5-roadmap.md + README + working/ structure-model/epic, carrying concerns: capacity, parity, slice-zero, notion, jira — WITHOUT naming a file. arete-reserv READ-ONLY throughout (rsync snapshot, zero-write asserted).
+- **Eng-lead notes for John:** (1) selectProjectDocs flags the real glance doc `[low-confidence]` (score 0.306) — correct doc picked but weak relevance on the 2-token title (pre-mortem R5 partially materialized); service is frozen this ship → TUNING FOLLOW-UP, not a blocker. (2) Defect-B budget hardcoded 12k at 2 CLI sites → asked T4 to introduce a named default.
+- **WS-1 accepted.** Released T4 (plan-context --week + week-plan), T5 (--day + daily-plan), T6 (week→daily fidelity docs) to a suborchestrator (bg). R7 resolved: openQuestions[] = extract /open questions/i section from expanded doc bodies (option a). Merge still held for John.
+
+### 2026-06-15 morning — T4-T6 built; WS-2 --week budget gap found at real-data gate
+- T4-T6 committed (6be2d797/625d2493/9909d98a). typecheck green; full suite 4784→4782 pass/0 fail; 18/18 new tests; R6 no-body-parsing holds (matches were comments only).
+- **--project mode VERIFIED on real data:** glance-2-roadmap → 11 selectedDocs, 5 openQuestions (real ones: Financials timeline, Dual-write coverage). Excellent.
+- **--week mode GAP (real data):** 6 projects, all 6 have selectedDocs but ALL listed (filename-only), 0 expanded, 0 openQuestions. Cause: PLAN_CONTEXT_PROJECT_DOC_BUDGET=8000 divided by 6 projects = ~1333ch/project < any real doc → demote-on-overflow demotes everything. Pre-mortem R9 materialized. selectProjectDocs zero-result safety is relevance-floor-based, not budget-based, so it doesn't rescue here. Frozen service is fine — fix belongs in aggregator budget allocation.
+- Decision needed from John: week-plan attention allocation (deep-on-few vs shallow-across-all). Asking before the fix.
+
+### 2026-06-15 morning — Budget fix landed; build functionally complete
+- John: skip weighting/opt-out feature (test & circle back), up the token counts.
+- Found the real flaw via real-data probe: WS-1 does whole-doc-or-nothing expansion, so under a tight per-project budget only SMALL docs fit (idea-backlog 5.8k expanded; README 6k + 26k roadmap demoted to listed) → 0 open questions. Not a constant problem alone — an expansion/relevance interaction.
+- Fix: replaced shared-total-divided budget with PER-PROJECT budget by mode (week 10k / day 6k), cap 12. Commits e38507a3 + dist 182c048d. typecheck green; full suite 4784→4782 pass / 0 fail.
+- **Real-data --week now surfaces open questions:** glance-2-roadmap 5 OQ (Financials timeline…), glance-2-runyon 6, email-signatures 6. Motivating case works.
+- Known follow-ups (NOT blockers, test-and-circle-back): (1) project weighting (driving vs reference — recency alone misclassifies recently-edited reference projects like adjuster-shadowing 6.9d); (2) large-doc (>budget) partial expansion / always-extract-OQ so a 26k roadmap doc's own OQ surfaces; (3) selectProjectDocs low-confidence on short meeting titles (R5); (4) WS-5 disk cache (deferred); (5) package-lock.json 0.15.1→0.16.0 drift (pre-existing) — glance at merge.
+- **Merge HELD for John.** arete-reserv READ-ONLY throughout (rsync snapshot to /tmp; zero-write asserted). Nothing merged/pushed.
