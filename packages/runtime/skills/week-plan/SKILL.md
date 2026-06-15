@@ -136,12 +136,23 @@ ls goals/2026-Q*.md 2>/dev/null  # individual goal files (post-migration)
 # 1b. Areas
 ls areas/
 
-# 1c. Last week's plan
-cat now/week.md
-
-# 1d. Active projects
-ls projects/active/
-# (read each README briefly)
+# 1c. Plan context — in-flight project state + active topics + goals + last
+#     week's plan, in ONE pre-seeded, [source]-tagged bundle. This REPLACES the
+#     old inert `ls projects/active/ + read each README` and `arete topic list`
+#     steps: the bundle already carries, per active project, its status,
+#     whatsNew (new meetings/commitments/topics since last touched),
+#     selectedDocs[] (the relevant project document(s), traverse+selected — not
+#     just the README), and openQuestions[] (the live questions you're
+#     wrestling with). `lastWeek` carries prior now/week.md verbatim.
+arete plan-context --week --json
+#   Bundle shape (frozen contract):
+#     { mode, projects[], topics[], goals[], lastWeek, generatedAt }
+#     projects[] = { slug, status, whatsNew, selectedDocs[], openQuestions[],
+#                    source, lowConfidence? }
+#   Read the selectedDocs[] / openQuestions[] for any project you'll surface as
+#   a priority — that is the detail/task-level substance week-plan slipped on
+#   before. A `lowConfidence` flag means the doc was picked on recency, not a
+#   strong topic match — verify before asserting.
 
 # 1e. Scratchpad / carryovers
 cat now/scratchpad.md 2>/dev/null
@@ -156,10 +167,14 @@ arete pull calendar --days 7 --json 2>/dev/null
 ls .arete/memory/summaries/meetings/2026-W* 2>/dev/null
 # Or scan resources/meetings/<recent dates>.md frontmatter for
 # importance + topics
-
-# 1i. Recent topic activity (compounding themes)
-arete topic list --active --slugs --json 2>/dev/null
 ```
+
+> Note: `plan-context --week` already folds in last week's plan (`lastWeek`),
+> active projects, and active topics — do NOT separately `cat now/week.md`,
+> `ls projects/active/`, or `arete topic list`. If you need a specific
+> project's full current state mid-plan, read it via the project-read service
+> (`arete plan-context --project <slug>` / `arete project open <slug>`),
+> never from memory or wiki — those lag in-flight work.
 
 ### Step 2 — Apply judgment for Engage 1 (priorities)
 
@@ -179,6 +194,13 @@ confirm:
   @person, 9d old."
 - **Calendar pressure** — major meetings this week (customer / leadership)
   that need prep. Reason: "customer review on Wed."
+- **In-flight project momentum / blockers** — from the `plan-context --week`
+  bundle: a `status: blocked` project with open commitments, or an active
+  project whose `whatsNew` shows movement (new meetings/commitments) or whose
+  `openQuestions[]` name a decision now owed. Reason: "blocked on vendor SOW,
+  3 open items" or "open question: Notion-vs-Jira source of truth — decide
+  this week." Surface **stalled-but-important** projects (quiet `whatsNew`,
+  status still active) with a concrete next task rather than dropping them.
 
 Cap suggested priorities at **5 max** (3-5 sweet spot per the
 "top-3-to-5 priorities" pattern). Items beyond that go to a
@@ -256,8 +278,12 @@ Wait for user response. Acceptable shapes:
 With confirmed priorities, build the full week plan:
 
 - **Tasks per priority** — derived from open commitments tied to
-  priority + carryovers + calendar prep. Each task with reason
-  label.
+  priority + carryovers + calendar prep + **the project's
+  `selectedDocs[]` / `openQuestions[]` from the `plan-context` bundle**
+  (the concrete next step often lives in the doc, not the commitment
+  list). Each task with reason label. For a priority backed by a project,
+  pull its `openQuestions[]` into specific tasks ("decide X", "draft Y")
+  rather than a vague "work on project Z".
 - **Tasks beyond priorities** — fold into Should / Could tiers
   rather than Must.
 - **Daily allocation** — light scaffold based on calendar (Tue/Wed

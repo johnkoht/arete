@@ -14,7 +14,7 @@
  * refreshQmdIndex after workspace writes (+ `--skip-qmd`).
  */
 import chalk from 'chalk';
-import { createServices, loadConfig, refreshQmdIndex, listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, formatProjectBriefMarkdown, computeProjectTopicsRefresh, applyProjectTopics, PROJECT_TOPICS_SCORE_FLOOR, } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, formatProjectBriefMarkdown, computeProjectTopicsRefresh, applyProjectTopics, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_DOC_BUDGET_DEFAULT, } from '@arete/core';
 import { error, info, success, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 /** Confidence floor for area inference (pre-mortem R3 — non-negotiable). */
@@ -315,7 +315,7 @@ export function registerProjectCommand(program) {
         // WS-1: /project inherits traverse+select via the shared body-reader so
         // the relevant project doc surfaces, not just metadata (Defect B).
         const brief = await services.intelligence.assembleBriefForProject(topSlug, paths, {
-            projectDocBudgetChars: 12000,
+            projectDocBudgetChars: PROJECT_DOC_BUDGET_DEFAULT,
         });
         const whatsNew = await services.intelligence.assembleProjectWhatsNew(topSlug, paths);
         if (opts.json) {

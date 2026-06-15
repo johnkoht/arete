@@ -7,6 +7,7 @@
  */
 import { assembleBriefForPerson as assemblePersonImpl, assembleBriefForProject as assembleProjectImpl, assembleProjectWhatsNew as assembleProjectWhatsNewImpl, selectProjectDocs as selectProjectDocsImpl, assembleBriefForArea as assembleAreaImpl, assembleBriefForMeeting as assembleMeetingImpl, loadMeetingIndex, } from './brief-assemblers.js';
 import { deriveRecurringTemplateType } from './agenda-scaffold.js';
+import { assemblePlanContext as assemblePlanContextImpl, } from './plan-context.js';
 import { loadAreaAliasMap } from './area-parser.js';
 // ---------------------------------------------------------------------------
 // routeToSkill — ported from skill-router.ts
@@ -373,6 +374,23 @@ export class IntelligenceService {
     async selectProjectDocs(slug, paths, opts = {}) {
         const deps = this.requireBriefDeps();
         return selectProjectDocsImpl(slug, paths, { storage: deps.storage }, opts);
+    }
+    /**
+     * Aggregate the plan-context bundle for `arete plan-context --week|--day`
+     * (WS-2/WS-3 — plan-context-injection). COMPOSES selectProjectDocs +
+     * assembleProjectWhatsNew + getActiveTopics + last-week read into one
+     * source-tagged bundle. Pure read, NO LLM. The CLI command is a thin shell
+     * over this — no body parsing in the command (pre-mortem R6).
+     */
+    async assemblePlanContext(mode, paths, opts = {}) {
+        const deps = this.requireBriefDeps();
+        return assemblePlanContextImpl(mode, paths, {
+            storage: deps.storage,
+            commitments: deps.commitments,
+            topicMemory: deps.topicMemory,
+            areaMemory: deps.areaMemory,
+            entities: this.entities,
+        }, opts);
     }
     /**
      * Derive a recurring meeting's agenda template type from its own last

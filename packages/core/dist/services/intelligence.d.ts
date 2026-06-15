@@ -17,6 +17,7 @@ import type { SearchProvider } from '../search/types.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
 import type { BriefingRequest, PrimitiveBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief } from '../models/index.js';
 import { type ProjectBriefOptions, type ProjectWhatsNew, type ProjectDocSelection, type SelectProjectDocsOptions, type MeetingBriefOptions } from './brief-assemblers.js';
+import { type PlanContextBundle, type PlanContextMode, type AssemblePlanContextOptions } from './plan-context.js';
 export declare class IntelligenceService {
     private context;
     private memory;
@@ -65,6 +66,14 @@ export declare class IntelligenceService {
      * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
      */
     selectProjectDocs(slug: string, paths: WorkspacePaths, opts?: SelectProjectDocsOptions): Promise<ProjectDocSelection>;
+    /**
+     * Aggregate the plan-context bundle for `arete plan-context --week|--day`
+     * (WS-2/WS-3 — plan-context-injection). COMPOSES selectProjectDocs +
+     * assembleProjectWhatsNew + getActiveTopics + last-week read into one
+     * source-tagged bundle. Pure read, NO LLM. The CLI command is a thin shell
+     * over this — no body parsing in the command (pre-mortem R6).
+     */
+    assemblePlanContext(mode: PlanContextMode, paths: WorkspacePaths, opts?: AssemblePlanContextOptions): Promise<PlanContextBundle>;
     /**
      * Derive a recurring meeting's agenda template type from its own last
      * instance in resources/meetings/ (WS-1 / pre-mortem R10). ADDITIVE: a

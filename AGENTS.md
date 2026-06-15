@@ -62,6 +62,7 @@
 |self_improve:After ANY correction, update nearest LEARNINGS.md with the pattern. Ruthlessly iterate until mistake rate drops.
 |isolation_gate:NEVER switch branches in the main repo — ask builder "here or worktree?" before any code changes
 |one_task_one_subagent:Use subagents liberally for research/exploration/parallel work. Keep each focused on a single task.
+|read_before_asserting:When work touches a project OTHER than the one in focus and you need its current state, READ it via the project-read service (`arete plan-context --project <slug>` or `arete project open <slug>`) rather than asserting from memory or the wiki — those LAG in-flight work (memory/wiki = finalized knowledge; the project-read service = the live current-state source). Don't pull for incidental mentions; pull when you're about to assert or act on its state.
 
 [CLI]
 |tool_selection:"What do you know about X?"→context --for; "What decisions about X?"→memory search; "Who is X?"→resolve; "History of X?"→memory timeline; "Prep for X"→brief --for
@@ -70,6 +71,7 @@
 |arete route "<query>":Route user message to best skill and suggest model tier
 |arete skill route "<query>":Route to skill only (for agents before loading skill)
 |arete brief --for "task" --skill <name>:Assemble primitive briefing (context + memory + entities + relationships)
+|arete plan-context --week|--day|--project <slug>:Pre-seeded planning bundle — active projects (status + whatsNew + selectedDocs[] + openQuestions[]), active topics, goals, last week's plan. --week (all active), --day (today's areas), --project (single project current-state). Composes the project-read engine; pure read. Canonical current-state source over memory/wiki (see read_before_asserting)
 |arete context --for "query":Get relevant workspace files for a task (includes meetings, conversations, projects)
 |arete context --for "query" --inventory:Show context freshness dashboard with coverage gaps
 |arete memory search "query":Search explicit decisions, learnings, and observations only

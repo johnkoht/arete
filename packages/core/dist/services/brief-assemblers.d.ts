@@ -21,6 +21,15 @@ import type { AreaMemoryService } from './area-memory.js';
 import type { WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief, BriefSection, Commitment } from '../models/index.js';
 /** Global per-brief soft cap (characters). Matches old BRIEF_MAX_CONTEXT_CHARS. */
 export declare const BRIEF_GLOBAL_CAP_CHARS = 12000;
+/**
+ * Default project-doc expansion budget (chars) for the generic, single-project
+ * read surfaces — `arete project open` and `arete brief --project` (WS-1/WS-2,
+ * plan-context-injection). De-magic-numbers the prior hardcoded `12000` at
+ * those two CLI call sites (eng-lead ask). The per-meeting agenda path uses a
+ * tighter budget (`MEETING_PROJECT_DOC_BUDGET`); plan-context sets its own
+ * per-mode budget (`PLAN_CONTEXT_PROJECT_DOC_BUDGET`).
+ */
+export declare const PROJECT_DOC_BUDGET_DEFAULT = 12000;
 /** Per-section caps (chars). v2 MC1 — mini-brief truncation drops tail. */
 export declare const PER_SECTION_CAPS: Record<string, number>;
 /** Per-mode wiki retrieval cap. Q6 in plan v3 — knock to 5 if too crowded. */
@@ -205,6 +214,39 @@ export interface ProjectBriefDeps {
     areaMemory: AreaMemoryService;
     entities: EntityService;
 }
+export interface ActiveProject {
+    slug: string;
+    name: string;
+    area?: string;
+    /** Provenance for `area` — `manual` | `creation` | `backfill` (Phase 12 AC1/AC2). */
+    areaSetBy?: string;
+    /**
+     * R9 (Phase 12 pre-mortem): set when frontmatter `area:` and a prose
+     * `**Area**:` line BOTH resolve and disagree. Frontmatter wins; the
+     * divergence is surfaced as a one-line warning instead of being silent.
+     */
+    areaDivergence?: string;
+    status?: string;
+    started?: string;
+    /**
+     * Phase 13 AC7 — read-only surfacing of the `jira:` frontmatter block
+     * (hand-maintained map like `jira: {idea: GL-12}`). Values stringified,
+     * arrays comma-joined. Absent when missing or malformed. No write path.
+     */
+    jira?: Record<string, string>;
+    /**
+     * Phase 14 AC2 — system-owned topics cache read from frontmatter.
+     * Display/convenience ONLY (pre-mortem R10): populated on read, written
+     * exclusively by `arete project refresh-topics --apply`, and NOTHING in
+     * brief assembly or formatting may branch on it (guarded by the R10
+     * no-consumer test in project-topics.test.ts).
+     */
+    topics?: string[];
+    /** Date the topics cache last changed (R2: bumped only on slug-set change). */
+    topicsRefreshed?: string;
+    readmePath: string;
+    readmeContent: string;
+}
 /**
  * Parse the system-owned `topics:` cache pair out of project frontmatter
  * (Phase 14 AC2). Tolerant: non-array/non-string shapes → undefined (never
@@ -251,6 +293,7 @@ export declare function resolveProjectArea(fm: Record<string, unknown>, body: st
  * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
  */
 export declare function projectDisplayName(fm: Record<string, unknown>, slug: string): string;
+export declare function listActiveProjects(storage: StorageAdapter, paths: WorkspacePaths, aliasMap?: Map<string, string>): Promise<ActiveProject[]>;
 /**
  * Extract renderable status-update paragraphs from a `## Status Updates`
  * section body (Phase 13 AC8(7)).

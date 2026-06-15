@@ -14,6 +14,10 @@ export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProje
 export type { ProjectBackfillCandidate } from './project-area.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
 export { selectProjectDocs } from './brief-assemblers.js';
+export { listActiveProjects, PROJECT_DOC_BUDGET_DEFAULT, } from './brief-assemblers.js';
+export type { ActiveProject } from './brief-assemblers.js';
+export { assemblePlanContext, resolveTodayAreas, extractOpenQuestions, PLAN_CONTEXT_PROJECT_DOC_BUDGET, PLAN_CONTEXT_MAX_PROJECTS, PLAN_CONTEXT_RECENT_DAYS, } from './plan-context.js';
+export type { PlanContextBundle, PlanContextMode, PlanContextProject, PlanContextTopic, PlanContextGoal, PlanContextWhatsNew, PlanContextSelectedDoc, AssemblePlanContextOptions, } from './plan-context.js';
 export type { ProjectDocSelection, SelectProjectDocsOptions, SelectedExpandedDoc, ListedDoc, } from './brief-assemblers.js';
 export { computeProjectTopicsRefresh, applyProjectTopics, sameSlugSet, PROJECT_TOPICS_CAP, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_TOPICS_OWNERSHIP_COMMENT, } from './project-topics.js';
 export type { ProjectTopicsRefresh, ComputedProjectTopic, ApplyProjectTopicsResult, } from './project-topics.js';

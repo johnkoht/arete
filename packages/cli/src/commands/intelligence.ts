@@ -11,6 +11,7 @@ import {
   formatProjectBriefMarkdown,
   formatAreaBriefMarkdown,
   formatMeetingBriefMarkdown,
+  PROJECT_DOC_BUDGET_DEFAULT,
 } from '@arete/core';
 import { promises as fs } from 'fs';
 import { join } from 'path';
@@ -1053,7 +1054,7 @@ export function registerBriefCommand(program: Command): void {
         // WS-1: enable the shared body-reader so the project doc traverse+select
         // surfaces in a `Project document` section (Defect B).
         const brief = await services.intelligence.assembleBriefForProject(opts.project, paths, {
-          projectDocBudgetChars: 12000,
+          projectDocBudgetChars: PROJECT_DOC_BUDGET_DEFAULT,
         });
         await appendBriefInvocationTelemetry(root, '--project', opts.project);
         if (opts.json) {

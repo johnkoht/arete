@@ -27,6 +27,7 @@ import {
   computeProjectTopicsRefresh,
   applyProjectTopics,
   PROJECT_TOPICS_SCORE_FLOOR,
+  PROJECT_DOC_BUDGET_DEFAULT,
 } from '@arete/core';
 import { error, info, success, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
@@ -390,7 +391,7 @@ export function registerProjectCommand(program: Command): void {
       // WS-1: /project inherits traverse+select via the shared body-reader so
       // the relevant project doc surfaces, not just metadata (Defect B).
       const brief = await services.intelligence.assembleBriefForProject(topSlug, paths, {
-        projectDocBudgetChars: 12000,
+        projectDocBudgetChars: PROJECT_DOC_BUDGET_DEFAULT,
       });
       const whatsNew = await services.intelligence.assembleProjectWhatsNew(topSlug, paths);
 

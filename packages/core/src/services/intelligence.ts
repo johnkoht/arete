@@ -51,6 +51,12 @@ import {
   loadMeetingIndex,
 } from './brief-assemblers.js';
 import { deriveRecurringTemplateType } from './agenda-scaffold.js';
+import {
+  assemblePlanContext as assemblePlanContextImpl,
+  type PlanContextBundle,
+  type PlanContextMode,
+  type AssemblePlanContextOptions,
+} from './plan-context.js';
 import { loadAreaAliasMap } from './area-parser.js';
 
 // ---------------------------------------------------------------------------
@@ -493,6 +499,28 @@ export class IntelligenceService {
   ): Promise<ProjectDocSelection> {
     const deps = this.requireBriefDeps();
     return selectProjectDocsImpl(slug, paths, { storage: deps.storage }, opts);
+  }
+
+  /**
+   * Aggregate the plan-context bundle for `arete plan-context --week|--day`
+   * (WS-2/WS-3 — plan-context-injection). COMPOSES selectProjectDocs +
+   * assembleProjectWhatsNew + getActiveTopics + last-week read into one
+   * source-tagged bundle. Pure read, NO LLM. The CLI command is a thin shell
+   * over this — no body parsing in the command (pre-mortem R6).
+   */
+  async assemblePlanContext(
+    mode: PlanContextMode,
+    paths: WorkspacePaths,
+    opts: AssemblePlanContextOptions = {},
+  ): Promise<PlanContextBundle> {
+    const deps = this.requireBriefDeps();
+    return assemblePlanContextImpl(mode, paths, {
+      storage: deps.storage,
+      commitments: deps.commitments,
+      topicMemory: deps.topicMemory,
+      areaMemory: deps.areaMemory,
+      entities: this.entities,
+    }, opts);
   }
 
   /**

@@ -22,6 +22,15 @@ import { tokenize } from '../search/tokenize.js';
 // ---------------------------------------------------------------------------
 /** Global per-brief soft cap (characters). Matches old BRIEF_MAX_CONTEXT_CHARS. */
 export const BRIEF_GLOBAL_CAP_CHARS = 12_000;
+/**
+ * Default project-doc expansion budget (chars) for the generic, single-project
+ * read surfaces — `arete project open` and `arete brief --project` (WS-1/WS-2,
+ * plan-context-injection). De-magic-numbers the prior hardcoded `12000` at
+ * those two CLI call sites (eng-lead ask). The per-meeting agenda path uses a
+ * tighter budget (`MEETING_PROJECT_DOC_BUDGET`); plan-context sets its own
+ * per-mode budget (`PLAN_CONTEXT_PROJECT_DOC_BUDGET`).
+ */
+export const PROJECT_DOC_BUDGET_DEFAULT = 12_000;
 /** Per-section caps (chars). v2 MC1 — mini-brief truncation drops tail. */
 export const PER_SECTION_CAPS = {
     attendee_minibrief: 2000,
@@ -859,7 +868,7 @@ export function projectDisplayName(fm, slug) {
     }
     return slug;
 }
-async function listActiveProjects(storage, paths, aliasMap = new Map()) {
+export async function listActiveProjects(storage, paths, aliasMap = new Map()) {
     const activeDir = join(paths.projects, 'active');
     const exists = await storage.exists(activeDir);
     if (!exists)

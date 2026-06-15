@@ -15,6 +15,9 @@ export { resolveProjectArea } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
 // WS-1 (plan-context-injection) — deterministic project-doc selection engine
 export { selectProjectDocs } from './brief-assemblers.js';
+export { listActiveProjects, PROJECT_DOC_BUDGET_DEFAULT, } from './brief-assemblers.js';
+// WS-2/WS-3 (plan-context-injection) — plan-context aggregator
+export { assemblePlanContext, resolveTodayAreas, extractOpenQuestions, PLAN_CONTEXT_PROJECT_DOC_BUDGET, PLAN_CONTEXT_MAX_PROJECTS, PLAN_CONTEXT_RECENT_DAYS, } from './plan-context.js';
 // Phase 14 AC2 — project topics-cache compute/diff/write (R1/R2 in tested code)
 export { computeProjectTopicsRefresh, applyProjectTopics, sameSlugSet, PROJECT_TOPICS_CAP, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_TOPICS_OWNERSHIP_COMMENT, } from './project-topics.js';
 export { parseTopicsCache } from './brief-assemblers.js';
