@@ -387,7 +387,11 @@ export function registerProjectCommand(program: Command): void {
       }
 
       const topSlug = top.slug ?? name;
-      const brief = await services.intelligence.assembleBriefForProject(topSlug, paths);
+      // WS-1: /project inherits traverse+select via the shared body-reader so
+      // the relevant project doc surfaces, not just metadata (Defect B).
+      const brief = await services.intelligence.assembleBriefForProject(topSlug, paths, {
+        projectDocBudgetChars: 12000,
+      });
       const whatsNew = await services.intelligence.assembleProjectWhatsNew(topSlug, paths);
 
       if (opts.json) {

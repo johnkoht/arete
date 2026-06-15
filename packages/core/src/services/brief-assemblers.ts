@@ -1351,11 +1351,30 @@ export async function resolveArchivedProjectReadme(
   return null;
 }
 
+/**
+ * Options for {@link assembleBriefForProject}. OPTIONAL (R1: the 2-arg/3-arg
+ * public signature stays working) — when omitted, behavior is unchanged.
+ */
+export interface ProjectBriefOptions {
+  /**
+   * WS-1 (plan-context-injection): when > 0, run selectProjectDocs over the
+   * project and emit a `Project document` section (shared body-reader) so
+   * `/project` and `arete brief --project` inherit traverse+select. Default 0
+   * (off) — the 2-arg/no-opts callers keep their exact prior output.
+   */
+  projectDocBudgetChars?: number;
+  /** Lexical selection topic; defaults to the project name when omitted. */
+  topic?: string;
+  /** Injected referenceDate for deterministic project-doc recency in tests. */
+  referenceDate?: Date;
+}
+
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
 export async function assembleBriefForProject(
   slug: string,
   paths: WorkspacePaths,
   deps: ProjectBriefDeps,
+  opts: ProjectBriefOptions = {},
 ): Promise<ProjectBrief> {
   const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
   const project = await readProjectBySlug(deps.storage, paths, slug, aliasMap);
@@ -1416,6 +1435,39 @@ export async function assembleBriefForProject(
       body: finalBody,
       truncated,
     });
+  }
+
+  // 1b. Project document(s) — DEFECT B fix: the shared body-reader so
+  // `/project` and `arete brief --project` inherit traverse+select (WS-1).
+  // OPT-IN via projectDocBudgetChars (R1: default off keeps the 2-arg/no-opts
+  // callers byte-identical). Surfaced as a `Project document` section — same
+  // shape the meeting brief emits — so JSON/markdown carry it without widening
+  // the ProjectBrief return type.
+  const projectDocBudget = opts.projectDocBudgetChars ?? 0;
+  if (projectDocBudget > 0) {
+    const { bullets: docBullets, sources: docSources } = await buildProjectDocBullets(
+      [{ slug, name: project.name }],
+      paths,
+      deps.storage,
+      {
+        topic: opts.topic ?? project.name,
+        queryExtra: [project.area ?? '', `${project.name} ${slug}`]
+          .filter(Boolean)
+          .join(' '),
+        budgetChars: projectDocBudget,
+        ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+      },
+    );
+    sources.push(...docSources);
+    if (docBullets.length > 0) {
+      const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
+      sections.push({
+        heading: 'Project document',
+        bullets: capped.kept,
+        truncated: capped.truncatedCount > 0,
+        truncatedCount: capped.truncatedCount,
+      });
+    }
   }
 
   // 2. Recent activity — meetings tagged to project's area
@@ -2027,7 +2079,7 @@ export async function selectProjectDocs(
  * selection failure on one project is skipped, never thrown.
  */
 async function buildProjectDocBullets(
-  projects: ActiveProject[],
+  projects: Array<Pick<ActiveProject, 'slug' | 'name'>>,
   paths: WorkspacePaths,
   storage: StorageAdapter,
   opts: {

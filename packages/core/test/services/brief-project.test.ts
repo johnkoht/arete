@@ -402,6 +402,67 @@ Legacy-format fallback entry.
     assert.equal(brief.subjectSlug, 'nonexistent');
     assert.equal(brief.sections.length, 0);
   });
+
+  it('DEFECT B: with projectDocBudgetChars opt, surfaces a Project document section carrying the root doc body', async () => {
+    writeFile(tmpDir, '.arete/commitments.json', JSON.stringify({ commitments: [] }));
+    writeFile(
+      tmpDir,
+      'projects/active/doc-bearing/README.md',
+      `---
+name: Doc Bearing
+area: glance-modernization
+status: active
+---
+
+# Doc Bearing
+
+## Background
+Container project.
+`,
+    );
+    writeFile(
+      tmpDir,
+      'projects/active/doc-bearing/roadmap-detail.md',
+      `---
+status: active
+---
+
+# Roadmap Detail
+
+The slice-zero parity plan and the Notion-vs-Jira source-of-truth decision.
+`,
+    );
+
+    const intel = buildIntel(tmpDir);
+
+    // 2-arg call (no opts) MUST behave exactly as before — no Project document
+    // section (R1 invariant).
+    const baseline = await intel.assembleBriefForProject('doc-bearing', paths);
+    assert.ok(
+      !baseline.sections.some((s) => /^Project document/i.test(s.heading)),
+      'baseline (no opts) must NOT emit a Project document section',
+    );
+
+    // opt-in enables the shared body-reader.
+    const brief = await intel.assembleBriefForProject('doc-bearing', paths, {
+      projectDocBudgetChars: 12000,
+      referenceDate: new Date('2026-06-14T00:00:00Z'),
+    });
+    const docSection = brief.sections.find((s) => /^Project document/i.test(s.heading));
+    assert.ok(docSection, `expected a Project document section; got ${brief.sections.map((s) => s.heading).join(', ')}`);
+    const text = docSection!.bullets.join('\n');
+    assert.match(text, /roadmap-detail\.md/, 'doc section references the root doc file');
+    assert.match(
+      text,
+      /(slice-zero|parity|Notion)/,
+      `doc section carries the doc body; got:\n${text}`,
+    );
+    // R8: source path folded into sources.
+    assert.ok(
+      brief.sources.some((s) => /roadmap-detail\.md/.test(s)),
+      'selected doc path folded into brief.sources',
+    );
+  });
 });
 
 describe('project name fallback (W6.3)', () => {

@@ -39,6 +39,7 @@ import type {
 import {
   assembleBriefForPerson as assemblePersonImpl,
   assembleBriefForProject as assembleProjectImpl,
+  type ProjectBriefOptions,
   assembleProjectWhatsNew as assembleProjectWhatsNewImpl,
   type ProjectWhatsNew,
   selectProjectDocs as selectProjectDocsImpl,
@@ -444,15 +445,21 @@ export class IntelligenceService {
   async assembleBriefForProject(
     slug: string,
     paths: WorkspacePaths,
+    opts: ProjectBriefOptions = {},
   ): Promise<ProjectBrief> {
     const deps = this.requireBriefDeps();
-    return assembleProjectImpl(slug, paths, {
-      storage: deps.storage,
-      commitments: deps.commitments,
-      topicMemory: deps.topicMemory,
-      areaMemory: deps.areaMemory,
-      entities: this.entities,
-    });
+    return assembleProjectImpl(
+      slug,
+      paths,
+      {
+        storage: deps.storage,
+        commitments: deps.commitments,
+        topicMemory: deps.topicMemory,
+        areaMemory: deps.areaMemory,
+        entities: this.entities,
+      },
+      opts,
+    );
   }
 
   /**
