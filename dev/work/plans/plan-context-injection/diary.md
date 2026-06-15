@@ -89,3 +89,11 @@ Guardrails in force:
 - **Reconciled:** merged main into feature (93832149). Only conflicts were the 2 dist .map files (gitboss called it exactly); source/MEMORY/LEARNINGS auto-merged. Resolved by `npm run build:packages` (regenerate dist, never hand-edit sourcemaps) + stage. Version now 0.17.0 (from main).
 - **Re-verified:** typecheck green; full suite 4791→4789 pass/0 fail (ran per the "full suite after merging main into a long-lived branch" learning — no cross-file semantic break); AC1.9 spike-compare PASSES post-merge (capacity/parity/slice-zero/notion/jira). Tree clean.
 - Re-invoking gitboss for the merge gate. Release (0.18.0) held for John's explicit confirmation (outward-facing).
+
+### 2026-06-15 — SHIPPED v0.18.0 ✅
+- Gitboss re-gate PASSED: merged `feature/plan-context-injection` → main `--no-ff` (00316fc3), conflict-free, unrelated files untouched.
+- Release: bumped 3 package.json 0.17.0→0.18.0, CHANGELOG [0.18.0], rebuilt dist (no version-embedded changes), commit 910d0c91, tag v0.18.0.
+- **Pushed to origin/main (e66932fe..910d0c91) + tag v0.18.0.** Live.
+- Cleanup: worktree removed, feature branch deleted (merged), /tmp snapshot removed.
+- Pre-existing unrelated dirty files (web-ui-enhancements.md, winddown-approval-doc/) left untouched throughout.
+- Follow-ups parked in dev/work/backlog/plan-context-injection-followups.md (weighting, large-doc partial expansion, low-confidence tuning, WS-5 cache).
