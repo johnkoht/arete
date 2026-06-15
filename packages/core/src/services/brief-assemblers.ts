@@ -2016,6 +2016,68 @@ export async function selectProjectDocs(
   };
 }
 
+/**
+ * Shared body-reader: run {@link selectProjectDocs} over a set of projects and
+ * render the deterministic `Project document` section bullets. WS-1 wiring —
+ * used by the meeting brief (resolved AND unresolved-with-override paths) and
+ * by the project brief so all surfaces inherit traverse+select identically.
+ *
+ * Returns the rendered bullets plus the workspace-relative source paths the
+ * caller should fold into its `sources` array. Best-effort per project: a
+ * selection failure on one project is skipped, never thrown.
+ */
+async function buildProjectDocBullets(
+  projects: ActiveProject[],
+  paths: WorkspacePaths,
+  storage: StorageAdapter,
+  opts: {
+    topic: string;
+    queryExtra: string;
+    budgetChars: number;
+    referenceDate?: Date;
+    /** Tag each doc with its project slug (multi-project meetings). */
+    multiProject?: boolean;
+  },
+): Promise<{ bullets: string[]; sources: string[] }> {
+  const bullets: string[] = [];
+  const sources: string[] = [];
+  if (projects.length === 0 || opts.budgetChars <= 0) return { bullets, sources };
+  // Share the budget across projects (≥1 expanded each when it fits).
+  const perProjectBudget = Math.max(1, Math.floor(opts.budgetChars / projects.length));
+  for (const p of projects) {
+    let selection: ProjectDocSelection;
+    try {
+      selection = await selectProjectDocs(
+        p.slug,
+        paths,
+        { storage },
+        {
+          topic: opts.topic,
+          queryExtra: opts.queryExtra,
+          budgetChars: perProjectBudget,
+          ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+        },
+      );
+    } catch {
+      continue; // best-effort — selection must never break the brief
+    }
+    for (const d of selection.expanded) {
+      sources.push(d.rel);
+      const slugTag = opts.multiProject ? ` _(${p.slug})_` : '';
+      const conf = selection.lowConfidence ? ' _[low-confidence]_' : '';
+      bullets.push(
+        `**${d.heading}**${slugTag} — \`${d.rel}\` _(score ${d.score.toFixed(3)})_${conf}`,
+      );
+      const excerpt = d.body.replace(/\s+/g, ' ').trim().slice(0, 280);
+      if (excerpt.length > 0) bullets.push(`  - ${excerpt}`);
+    }
+    for (const l of selection.listed.slice(0, 3)) {
+      bullets.push(`_listed:_ \`${l.rel}\` — ${l.title}`);
+    }
+  }
+  return { bullets, sources };
+}
+
 export interface AreaTaggedItem {
   type: 'decision' | 'learning';
   text: string;
@@ -2464,7 +2526,7 @@ export async function assembleBriefForMeeting(
   );
 
   if (resolution.kind === 'unresolved') {
-    return await buildUnresolvedMeetingBrief(input, paths, deps);
+    return await buildUnresolvedMeetingBrief(input, paths, deps, opts, aliasMap);
   }
 
   const sources: string[] = [];
@@ -2621,46 +2683,21 @@ export async function assembleBriefForMeeting(
       .filter(Boolean)
       .join(' ');
     const topic = title.replace(/^\d{4}-\d{2}-\d{2}-?\s*/, '');
-    // Share the budget across resolved projects (≥1 expanded each when it fits).
-    const perProjectBudget = Math.max(
-      1,
-      Math.floor(projectDocBudget / resolvedProjects.length),
+    // The rel + score in each bullet are load-bearing for the audit AC (AC1.6)
+    // and for the scaffold's dedupe (R4) — see buildProjectDocBullets.
+    const { bullets: docBullets, sources: docSources } = await buildProjectDocBullets(
+      resolvedProjects,
+      paths,
+      deps.storage,
+      {
+        topic,
+        queryExtra,
+        budgetChars: projectDocBudget,
+        multiProject: resolvedProjects.length > 1,
+        ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+      },
     );
-    const docBullets: string[] = [];
-    for (const p of resolvedProjects) {
-      let selection: ProjectDocSelection;
-      try {
-        selection = await selectProjectDocs(
-          p.slug,
-          paths,
-          { storage: deps.storage },
-          {
-            topic,
-            queryExtra,
-            budgetChars: perProjectBudget,
-            ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
-          },
-        );
-      } catch {
-        continue; // best-effort — selection must never break the brief
-      }
-      for (const d of selection.expanded) {
-        sources.push(d.rel);
-        // The rel + score are load-bearing for the audit AC (AC1.6) and for
-        // the scaffold's dedupe (R4). Keep the rel inside backticks.
-        const slugTag = resolvedProjects.length > 1 ? ` _(${p.slug})_` : '';
-        const conf = selection.lowConfidence ? ' _[low-confidence]_' : '';
-        docBullets.push(
-          `**${d.heading}**${slugTag} — \`${d.rel}\` _(score ${d.score.toFixed(3)})_${conf}`,
-        );
-        // Body excerpt as a sub-bullet so curation has the actual content.
-        const excerpt = d.body.replace(/\s+/g, ' ').trim().slice(0, 280);
-        if (excerpt.length > 0) docBullets.push(`  - ${excerpt}`);
-      }
-      for (const l of selection.listed.slice(0, 3)) {
-        docBullets.push(`_listed:_ \`${l.rel}\` — ${l.title}`);
-      }
-    }
+    sources.push(...docSources);
     if (docBullets.length > 0) {
       const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
       sections.push({
@@ -2854,6 +2891,8 @@ async function buildUnresolvedMeetingBrief(
   input: string,
   paths: WorkspacePaths,
   deps: MeetingBriefDeps,
+  opts: MeetingBriefOptions = {},
+  aliasMap?: Map<string, string>,
 ): Promise<MeetingBrief> {
   const sources: string[] = [];
   const sections: BriefSection[] = [];
@@ -2862,10 +2901,66 @@ async function buildUnresolvedMeetingBrief(
     heading: 'Attendees',
     bullets: ['_(unresolved — no calendar match, no saved file)_'],
   });
-  sections.push({
-    heading: 'Meeting area & projects',
-    bullets: ['_(unresolved — no calendar match, no saved file)_'],
-  });
+
+  // DEFECT A fix: the `--project` override is the DOCUMENTED escape hatch
+  // (daily-plan passes it). It MUST drive selectProjectDocs regardless of
+  // calendar resolution — when the meeting can't be resolved (no calendar /
+  // no saved file) but a project is pinned, still surface its metadata AND a
+  // `Project document` section so the scaffold routes `source:'project-doc'`
+  // candidates.
+  let resolvedOverride: ActiveProject | null = null;
+  if (opts.projectOverride) {
+    const map = aliasMap ?? (await loadAreaAliasMap(deps.storage, paths.root));
+    resolvedOverride = await readProjectBySlug(
+      deps.storage,
+      paths,
+      opts.projectOverride,
+      map,
+    );
+  }
+
+  if (resolvedOverride) {
+    const p = resolvedOverride;
+    const rel = relativeToRoot(p.readmePath, paths.root);
+    sources.push(rel);
+    sections.push({
+      heading: 'Meeting area & projects',
+      bullets: [
+        `_Project pinned via \`--project ${opts.projectOverride}\`._`,
+        `**${p.name}** (area: ${p.area ?? '—'}, status: ${p.status ?? '—'}) — \`${rel}\``,
+      ],
+    });
+
+    const projectDocBudget = opts.projectDocBudgetChars ?? MEETING_PROJECT_DOC_BUDGET;
+    const topic = input.replace(/^\d{4}-\d{2}-\d{2}-?\s*/, '');
+    const queryExtra = [p.area ?? '', `${p.name} ${p.slug}`].filter(Boolean).join(' ');
+    const { bullets: docBullets, sources: docSources } = await buildProjectDocBullets(
+      [p],
+      paths,
+      deps.storage,
+      {
+        topic,
+        queryExtra,
+        budgetChars: projectDocBudget,
+        ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+      },
+    );
+    sources.push(...docSources);
+    if (docBullets.length > 0) {
+      const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
+      sections.push({
+        heading: 'Project document',
+        bullets: capped.kept,
+        truncated: capped.truncatedCount > 0,
+        truncatedCount: capped.truncatedCount,
+      });
+    }
+  } else {
+    sections.push({
+      heading: 'Meeting area & projects',
+      bullets: ['_(unresolved — no calendar match, no saved file)_'],
+    });
+  }
 
   // Best-effort wiki match against title
   try {
@@ -2897,6 +2992,7 @@ async function buildUnresolvedMeetingBrief(
       attendees: [],
       resolved: false,
       unresolved: true,
+      ...(resolvedOverride ? { projectOverride: opts.projectOverride } : {}),
     },
     attendeeMiniBriefs: [],
   };

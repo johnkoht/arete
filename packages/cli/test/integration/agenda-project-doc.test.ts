@@ -160,4 +160,70 @@ slug: dave-builder
       `project-doc candidate carries a specific roadmap concern; got:\n${joined}`,
     );
   });
+
+  it('DEFECT A: an UNRESOLVED meeting (no calendar match, no saved file) WITH --project still yields a project-doc candidate', () => {
+    // Project with a roadmap root doc — but NO saved meeting file and NO area
+    // recurring-meeting hook, so the meeting title cannot resolve (the original
+    // T3 fixture had a resolvable meeting, masking this gap). The documented
+    // `--project` escape hatch (daily-plan passes it) MUST drive selection.
+    write(
+      'projects/active/glance-2-roadmap/README.md',
+      `---
+name: Glance 2 Roadmap
+area: glance-roadmap
+status: active
+---
+
+# Glance 2 Roadmap
+
+## Background
+Overall roadmap container.
+`,
+    );
+    write(
+      'projects/active/glance-2-roadmap/glance-1.5-roadmap.md',
+      `---
+status: active
+---
+
+# Glance 1.5 Roadmap
+
+The Jira roadmap decision: keep the roadmap in Notion, mirror epics to Jira.
+Open risks: engineering capacity for Q3, slice-zero parity with the legacy
+surface, and Notion-vs-Jira source-of-truth drift.
+`,
+    );
+
+    const output = runCli(
+      [
+        'agenda',
+        'scaffold',
+        '--meeting',
+        'Totally Unknown Meeting Title',
+        '--project',
+        'glance-2-roadmap',
+        '--json',
+      ],
+      { cwd: workspace },
+    );
+    const result = JSON.parse(output) as ScaffoldResult;
+    assert.equal(result.success, true);
+
+    const allCandidates = [
+      ...result.scaffold.sections.flatMap((s) => s.candidates),
+      ...result.scaffold.unrouted,
+    ];
+    const projectDocCandidates = allCandidates.filter((c) => c.source === 'project-doc');
+
+    assert.ok(
+      projectDocCandidates.length >= 1,
+      `expected ≥1 project-doc candidate from --project override on an unresolved meeting; got sources ${[...new Set(allCandidates.map((c) => c.source))].join(', ')}`,
+    );
+    const joined = projectDocCandidates.map((c) => c.text).join('\n');
+    assert.match(
+      joined,
+      /glance-1\.5-roadmap\.md/,
+      'project-doc candidate references the roadmap doc even when the meeting is unresolved',
+    );
+  });
 });
