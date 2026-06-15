@@ -76,6 +76,16 @@ describe('getActiveTopics', () => {
     }
   });
 
+  it('does not resurrect an aged-out topic that is present in the map with openItems: 0', () => {
+    // Regression guard for the keep-filter arm: a stale, old topic explicitly
+    // present in openItemsBySlug with a 0 count must NOT be kept — a map entry
+    // is not, by itself, a resurrection signal.
+    const pages = [page('stale-zero', { status: 'stale', last_refreshed: '2025-01-01' })];
+    const openItems = new Map([['stale-zero', 0]]);
+    const out = getActiveTopics(pages, { today: REF_TODAY, openItemsBySlug: openItems });
+    assert.deepStrictEqual(out.map((e) => e.slug), []);
+  });
+
   it('sorts by (openItems desc, lastRefreshed desc, slug asc)', () => {
     const pages = [
       page('a-three', { last_refreshed: '2026-04-22' }),

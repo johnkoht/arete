@@ -116,6 +116,25 @@ export declare class AreaMemoryService {
      */
     getLastRefreshed(areaSlug: string, workspacePaths: WorkspacePaths): Promise<string | null>;
     /**
+     * Harvest per-topic `open_items` counts already persisted in area-memory
+     * frontmatter into a `Map<topicSlug, openItemCount>`.
+     *
+     * Cheap boot-ranking helper: reads each `.arete/memory/areas/*.md` file
+     * once (bounded I/O — one read per area, not per meeting) and sums the
+     * `open_items` field of each entry in the frontmatter `topics:` list. The
+     * result feeds `getActiveTopics`'s `openItemsBySlug` seam so the keep-filter
+     * and sort can weight topics by open work.
+     *
+     * The counts inherit the known snapshot over-count of the underlying
+     * `open_action_items` extraction signal — acceptable for a filter/sort
+     * signal, not a ledger.
+     *
+     * Never throws: a missing dir yields an empty map; a malformed/unreadable
+     * file or an area with no `topics:` block is skipped silently. Worst case
+     * is an empty or partial map.
+     */
+    getOpenItemsBySlug(workspacePaths: WorkspacePaths): Promise<Map<string, number>>;
+    /**
      * List all area memory files with staleness info.
      */
     listAreaMemoryStatus(workspacePaths: WorkspacePaths, staleDays?: number): Promise<Array<{

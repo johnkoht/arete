@@ -68,7 +68,15 @@ export function registerUpdateCommand(program: Command): void {
       // load degrades gracefully to `memorySummary: undefined` (strips
       // topics for this one update; next refresh restores them).
       const paths = services.workspace.getPaths(root);
-      const memorySummary = await loadMemorySummary(services.topicMemory, paths).catch(() => undefined);
+      // Harvest persisted per-topic open-item counts to weight Active Topics.
+      // Area files may be stale here (`update` doesn't refresh area memory
+      // first) — acceptable, graceful by design. Non-throwing by contract.
+      const memorySummary = await (async () => {
+        const openItemsBySlug = await services.areaMemory.getOpenItemsBySlug(paths);
+        return loadMemorySummary(services.topicMemory, paths, {
+          activeTopics: { openItemsBySlug },
+        });
+      })().catch(() => undefined);
 
       // Phase 3.5 E1 — warn before update when a backend is
       // detected. Stale backends silently bypass new event writers /

@@ -16,6 +16,8 @@ Nothing is hidden — your `working/` notes stay fully searchable and visible in
 
 Also: long-running topics no longer drop out of the agent's boot context just because they've gone quiet. A topic that's still `active`, `stable`, or `blocked` stays in the Active Topics list past the 90-day window — so when you pick a project back up months later, the agent still knows about it.
 
+And the Active Topics list is now ranked by open work: topics with more open items float to the top of the agent's boot context, so what's actually in flight surfaces first. (The count is an approximate signal drawn from your area memory, not a precise to-do tally.)
+
 ## Areté v2 — Faster daily flow, forkable skills, sharper memory
 
 A big update. The daily and weekly winddown skills now do all their analysis up front and then come back to you with a short list of curated proposals — each with a reason label — instead of walking you through one item at a time. In practice winddown went from a 30–45 minute slog to roughly half that.
