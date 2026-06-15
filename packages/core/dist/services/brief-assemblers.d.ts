@@ -462,6 +462,17 @@ export interface MeetingBriefOptions {
         date?: string;
         attendees?: string[];
     }>;
+    /**
+     * WS-1 (plan-context-injection): per-meeting char budget for the
+     * project-document section. When > 0, the meeting brief calls
+     * selectProjectDocs for each resolved project and emits a `Project document`
+     * section (scaffold routes it to `source:'project-doc'`). Default ~3500 so
+     * the agenda path gets project body without a separate flag. Pass 0 to skip
+     * (e.g. minimal/no-LLM invariant paths that only need metadata bullets).
+     */
+    projectDocBudgetChars?: number;
+    /** Injected referenceDate for deterministic project-doc recency in tests. */
+    referenceDate?: Date;
 }
 /**
  * Resolve the meeting input string to a meeting file path or, failing that,

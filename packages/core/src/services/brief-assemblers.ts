@@ -2343,7 +2343,21 @@ export interface MeetingBriefOptions {
   projectOverride?: string;
   /** Calendar events fetched by caller (optional — when absent, we skip calendar resolution). */
   calendarEvents?: Array<{ title: string; date?: string; attendees?: string[] }>;
+  /**
+   * WS-1 (plan-context-injection): per-meeting char budget for the
+   * project-document section. When > 0, the meeting brief calls
+   * selectProjectDocs for each resolved project and emits a `Project document`
+   * section (scaffold routes it to `source:'project-doc'`). Default ~3500 so
+   * the agenda path gets project body without a separate flag. Pass 0 to skip
+   * (e.g. minimal/no-LLM invariant paths that only need metadata bullets).
+   */
+  projectDocBudgetChars?: number;
+  /** Injected referenceDate for deterministic project-doc recency in tests. */
+  referenceDate?: Date;
 }
+
+/** Default per-meeting project-doc budget (tightened from /project's 12k). */
+const MEETING_PROJECT_DOC_BUDGET = 3500;
 
 /**
  * Resolve the meeting input string to a meeting file path or, failing that,
@@ -2588,6 +2602,74 @@ export async function assembleBriefForMeeting(
       truncated: capped.truncatedCount > 0,
       truncatedCount: capped.truncatedCount,
     });
+  }
+
+  // 2b. Project document(s) — WS-1: traverse + select the relevant project doc
+  // for the meeting topic so the agenda surfaces the actual prep substance
+  // (not just metadata bullets). Per-project selection shares a budget across
+  // the (≤2) resolved projects (R9 in WS-2; here ≤2 projects). The scaffold
+  // routes these into `source:'project-doc'` candidates (R3).
+  const projectDocBudget = opts.projectDocBudgetChars ?? MEETING_PROJECT_DOC_BUDGET;
+  if (resolvedProjects.length > 0 && projectDocBudget > 0) {
+    // R5: enrich the lexical query beyond the bare title — union resolved
+    // area slug + project name/slug + attendee tokens.
+    const queryExtra = [
+      explicitArea ?? inferredArea?.slug ?? '',
+      ...resolvedProjects.map((p) => `${p.name} ${p.slug}`),
+      ...attendeeMiniBriefs.map((mb) => mb.name),
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const topic = title.replace(/^\d{4}-\d{2}-\d{2}-?\s*/, '');
+    // Share the budget across resolved projects (≥1 expanded each when it fits).
+    const perProjectBudget = Math.max(
+      1,
+      Math.floor(projectDocBudget / resolvedProjects.length),
+    );
+    const docBullets: string[] = [];
+    for (const p of resolvedProjects) {
+      let selection: ProjectDocSelection;
+      try {
+        selection = await selectProjectDocs(
+          p.slug,
+          paths,
+          { storage: deps.storage },
+          {
+            topic,
+            queryExtra,
+            budgetChars: perProjectBudget,
+            ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+          },
+        );
+      } catch {
+        continue; // best-effort — selection must never break the brief
+      }
+      for (const d of selection.expanded) {
+        sources.push(d.rel);
+        // The rel + score are load-bearing for the audit AC (AC1.6) and for
+        // the scaffold's dedupe (R4). Keep the rel inside backticks.
+        const slugTag = resolvedProjects.length > 1 ? ` _(${p.slug})_` : '';
+        const conf = selection.lowConfidence ? ' _[low-confidence]_' : '';
+        docBullets.push(
+          `**${d.heading}**${slugTag} — \`${d.rel}\` _(score ${d.score.toFixed(3)})_${conf}`,
+        );
+        // Body excerpt as a sub-bullet so curation has the actual content.
+        const excerpt = d.body.replace(/\s+/g, ' ').trim().slice(0, 280);
+        if (excerpt.length > 0) docBullets.push(`  - ${excerpt}`);
+      }
+      for (const l of selection.listed.slice(0, 3)) {
+        docBullets.push(`_listed:_ \`${l.rel}\` — ${l.title}`);
+      }
+    }
+    if (docBullets.length > 0) {
+      const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
+      sections.push({
+        heading: 'Project document',
+        bullets: capped.kept,
+        truncated: capped.truncatedCount > 0,
+        truncatedCount: capped.truncatedCount,
+      });
+    }
   }
 
   // 3. Recent meetings with this group — cross-attendee overlap

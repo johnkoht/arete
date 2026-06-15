@@ -25,7 +25,30 @@
  *   (approach 3 — deterministic floor) — AC1, AC2, AC3.
  */
 import type { MeetingBrief, Commitment } from '../models/index.js';
-import type { DiscussionTopicGroup, NextFocusExtract } from './brief-assemblers.js';
+import type { DiscussionTopicGroup, NextFocusExtract, MeetingIndexEntry } from './brief-assemblers.js';
+/**
+ * Heuristic template type from a title + attendee count, mirroring the CLI's
+ * `inferType` so the recurring path and the default path agree. A "1:1"/
+ * "weekly"/"check-in" title or a ≤2-person meeting → `one-on-one`, else
+ * `other`.
+ */
+export declare function inferTemplateType(title: string, attendeeCount: number): string;
+/**
+ * Derive a recurring meeting's agenda template type from its OWN last instance
+ * in `resources/meetings/` (pre-mortem R10 / AC1.8). ADDITIVE: a meeting only
+ * derives from a prior instance when one with the SAME normalized title (and a
+ * different path) exists; its template type is inferred from THAT instance's
+ * attendee count — so a team bi-weekly that shows 2 attendees this time but had
+ * 5 before is typed `other`, not a spurious `one-on-one`. A genuine 1:1 with NO
+ * prior instance falls through to the bare-attendee-count heuristic and stays
+ * `one-on-one` (AC-R10 — no regression). Pure; exported for tests.
+ *
+ * @param title          this meeting's title (date prefix tolerated)
+ * @param attendeeCount  this meeting's attendee count
+ * @param index          the meeting index (prior instances live here)
+ * @param selfPath       this meeting's own path, excluded from the match
+ */
+export declare function deriveRecurringTemplateType(title: string, attendeeCount: number, index: MeetingIndexEntry[], selfPath?: string): string;
 /** Per-attendee qualitative signal the typed brief does not itself surface. */
 export interface AttendeeScaffoldInput {
     slug: string;
@@ -59,7 +82,7 @@ export interface ScaffoldCandidate {
     /** Markdown bullet text (no leading `- `). */
     text: string;
     /** Provenance tag for transparency + agent curation. */
-    source: 'commitment' | 'recent-meeting' | 'discussion-topic' | 'next-focus' | 'wiki' | 'attendee-highlight';
+    source: 'commitment' | 'recent-meeting' | 'discussion-topic' | 'next-focus' | 'wiki' | 'attendee-highlight' | 'project-doc';
 }
 /** A scaffold section: a template heading pre-populated with candidates. */
 export interface ScaffoldSection {

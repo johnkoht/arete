@@ -1560,8 +1560,13 @@ export async function selectProjectDocs(slug, paths, deps, opts = {}) {
             usedChars = body.length;
         }
     }
-    else if (expanded[0] && expanded[0].score < DOC_LOW_CONFIDENCE_FLOOR) {
-        lowConfidence = true;
+    else if (expanded[0]) {
+        // Low-confidence when the top pick's TOPIC RELEVANCE (not composite score)
+        // is below the floor — i.e. it was chosen mostly on recency/location, not
+        // because it matches the query. Surfaced so a wrong pick is visible (R5).
+        const top = candidates.find((c) => c.rel === expanded[0].rel);
+        if (top && top.relevance < DOC_LOW_CONFIDENCE_FLOOR)
+            lowConfidence = true;
     }
     return {
         expanded,
@@ -1823,6 +1828,8 @@ export async function assembleBriefForArea(slug, paths, deps) {
         },
     };
 }
+/** Default per-meeting project-doc budget (tightened from /project's 12k). */
+const MEETING_PROJECT_DOC_BUDGET = 3500;
 /**
  * Resolve the meeting input string to a meeting file path or, failing that,
  * to a calendar event. Returns null when nothing resolved (AC4d path).
@@ -2022,6 +2029,65 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
             truncated: capped.truncatedCount > 0,
             truncatedCount: capped.truncatedCount,
         });
+    }
+    // 2b. Project document(s) — WS-1: traverse + select the relevant project doc
+    // for the meeting topic so the agenda surfaces the actual prep substance
+    // (not just metadata bullets). Per-project selection shares a budget across
+    // the (≤2) resolved projects (R9 in WS-2; here ≤2 projects). The scaffold
+    // routes these into `source:'project-doc'` candidates (R3).
+    const projectDocBudget = opts.projectDocBudgetChars ?? MEETING_PROJECT_DOC_BUDGET;
+    if (resolvedProjects.length > 0 && projectDocBudget > 0) {
+        // R5: enrich the lexical query beyond the bare title — union resolved
+        // area slug + project name/slug + attendee tokens.
+        const queryExtra = [
+            explicitArea ?? inferredArea?.slug ?? '',
+            ...resolvedProjects.map((p) => `${p.name} ${p.slug}`),
+            ...attendeeMiniBriefs.map((mb) => mb.name),
+        ]
+            .filter(Boolean)
+            .join(' ');
+        const topic = title.replace(/^\d{4}-\d{2}-\d{2}-?\s*/, '');
+        // Share the budget across resolved projects (≥1 expanded each when it fits).
+        const perProjectBudget = Math.max(1, Math.floor(projectDocBudget / resolvedProjects.length));
+        const docBullets = [];
+        for (const p of resolvedProjects) {
+            let selection;
+            try {
+                selection = await selectProjectDocs(p.slug, paths, { storage: deps.storage }, {
+                    topic,
+                    queryExtra,
+                    budgetChars: perProjectBudget,
+                    ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+                });
+            }
+            catch {
+                continue; // best-effort — selection must never break the brief
+            }
+            for (const d of selection.expanded) {
+                sources.push(d.rel);
+                // The rel + score are load-bearing for the audit AC (AC1.6) and for
+                // the scaffold's dedupe (R4). Keep the rel inside backticks.
+                const slugTag = resolvedProjects.length > 1 ? ` _(${p.slug})_` : '';
+                const conf = selection.lowConfidence ? ' _[low-confidence]_' : '';
+                docBullets.push(`**${d.heading}**${slugTag} — \`${d.rel}\` _(score ${d.score.toFixed(3)})_${conf}`);
+                // Body excerpt as a sub-bullet so curation has the actual content.
+                const excerpt = d.body.replace(/\s+/g, ' ').trim().slice(0, 280);
+                if (excerpt.length > 0)
+                    docBullets.push(`  - ${excerpt}`);
+            }
+            for (const l of selection.listed.slice(0, 3)) {
+                docBullets.push(`_listed:_ \`${l.rel}\` — ${l.title}`);
+            }
+        }
+        if (docBullets.length > 0) {
+            const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
+            sections.push({
+                heading: 'Project document',
+                bullets: capped.kept,
+                truncated: capped.truncatedCount > 0,
+                truncatedCount: capped.truncatedCount,
+            });
+        }
     }
     // 3. Recent meetings with this group — cross-attendee overlap
     const groupSlugs = attendeeMiniBriefs

@@ -47,7 +47,10 @@ import {
   assembleBriefForArea as assembleAreaImpl,
   assembleBriefForMeeting as assembleMeetingImpl,
   type MeetingBriefOptions,
+  loadMeetingIndex,
 } from './brief-assemblers.js';
+import { deriveRecurringTemplateType } from './agenda-scaffold.js';
+import { loadAreaAliasMap } from './area-parser.js';
 
 // ---------------------------------------------------------------------------
 // routeToSkill — ported from skill-router.ts
@@ -483,6 +486,24 @@ export class IntelligenceService {
   ): Promise<ProjectDocSelection> {
     const deps = this.requireBriefDeps();
     return selectProjectDocsImpl(slug, paths, { storage: deps.storage }, opts);
+  }
+
+  /**
+   * Derive a recurring meeting's agenda template type from its own last
+   * instance in resources/meetings/ (WS-1 / pre-mortem R10). ADDITIVE: a
+   * genuine 1:1 with no prior instance still resolves to `one-on-one`. Pure
+   * read; loads the meeting index internally.
+   */
+  async deriveAgendaTemplateType(
+    title: string,
+    attendeeCount: number,
+    paths: WorkspacePaths,
+    selfPath?: string,
+  ): Promise<string> {
+    const deps = this.requireBriefDeps();
+    const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
+    const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
+    return deriveRecurringTemplateType(title, attendeeCount, index, selfPath);
   }
 
   /** Assemble a structured brief for an area — AC3. Pure aggregator. */

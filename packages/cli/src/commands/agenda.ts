@@ -53,19 +53,6 @@ function parseOwnerName(profileContent: string): string | undefined {
 }
 
 /**
- * Infer the agenda template variant from the meeting title + attendee count,
- * mirroring the SKILL.md context-inference rules. A two-person sync (the person
- * + the owner) or a "1:1"/"weekly"/"check-in" title → one-on-one; otherwise the
- * general "other" template. Pass `--type` to override.
- */
-function inferType(title: string, attendeeCount: number): string {
-  const t = title.toLowerCase();
-  if (/\b1:1\b|\bone[- ]on[- ]one\b|\bweekly\b|\bcheck[- ]?in\b/.test(t)) return 'one-on-one';
-  if (attendeeCount <= 2) return 'one-on-one';
-  return 'other';
-}
-
-/**
  * Parse a resolved agenda template's frontmatter + body into the shape the
  * scaffold helper needs (ordered `## ` headings + per-section minutes).
  */
@@ -165,7 +152,17 @@ export function registerAgendaCommands(program: Command): void {
       }
 
       // 3. Resolve the agenda template (variant from --type or inferred).
-      const type = opts.type ?? inferType(brief.metadata.title, brief.metadata.attendees.length);
+      // WS-1 / R10: when not overridden, derive the type from a prior same-
+      // titled instance (recurring meeting) — additive, a genuine 1:1 with no
+      // prior instance still resolves to one-on-one.
+      const type =
+        opts.type ??
+        (await services.intelligence.deriveAgendaTemplateType(
+          brief.metadata.title,
+          brief.metadata.attendees.length,
+          paths,
+          brief.subjectSlug ? join(paths.resources, 'meetings', `${brief.subjectSlug}.md`) : undefined,
+        ));
       const known = TEMPLATE_REGISTRY['prepare-meeting-agenda'];
       if (opts.type && known && !known.includes(opts.type)) {
         const msg = `Unknown agenda variant '${opts.type}'. Known: ${known.join(', ')}`;

@@ -22,7 +22,7 @@ export { parseTopicsCache } from './brief-assemblers.js';
 export { listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, } from './meeting-area.js';
 // Phase 13 AC4 — archive-prefix-tolerant project lookup (claim validation reuse)
 export { resolveArchivedProjectReadme } from './brief-assemblers.js';
-export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, } from './agenda-scaffold.js';
+export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, inferTemplateType, deriveRecurringTemplateType, } from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
 export { seedSkillsLocal, renderSkillsLocalTemplate, PHASE_2_CHEF_ORCHESTRATOR_SKILLS, PHASE_4_CHEF_ORCHESTRATOR_SKILLS, CHEF_ORCHESTRATOR_SKILLS, } from './skills-local.js';

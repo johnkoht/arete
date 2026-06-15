@@ -21,7 +21,7 @@ export { parseTopicsCache } from './brief-assemblers.js';
 export { listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, } from './meeting-area.js';
 export type { MeetingBackfillCandidate, MeetingAreaQualification, ApplyAreaResult, } from './meeting-area.js';
 export { resolveArchivedProjectReadme } from './brief-assemblers.js';
-export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, } from './agenda-scaffold.js';
+export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, inferTemplateType, deriveRecurringTemplateType, } from './agenda-scaffold.js';
 export type { AgendaScaffold, ScaffoldSection, ScaffoldCandidate, AttendeeScaffoldInput, TemplateInput, AssembleScaffoldOptions, } from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';

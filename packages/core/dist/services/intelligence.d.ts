@@ -65,6 +65,13 @@ export declare class IntelligenceService {
      * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
      */
     selectProjectDocs(slug: string, paths: WorkspacePaths, opts?: SelectProjectDocsOptions): Promise<ProjectDocSelection>;
+    /**
+     * Derive a recurring meeting's agenda template type from its own last
+     * instance in resources/meetings/ (WS-1 / pre-mortem R10). ADDITIVE: a
+     * genuine 1:1 with no prior instance still resolves to `one-on-one`. Pure
+     * read; loads the meeting index internally.
+     */
+    deriveAgendaTemplateType(title: string, attendeeCount: number, paths: WorkspacePaths, selfPath?: string): Promise<string>;
     /** Assemble a structured brief for an area — AC3. Pure aggregator. */
     assembleBriefForArea(slug: string, paths: WorkspacePaths): Promise<AreaBrief>;
     /**

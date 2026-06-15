@@ -76,6 +76,8 @@ export {
   renderScaffoldMarkdown,
   classifySection,
   splitOwed,
+  inferTemplateType,
+  deriveRecurringTemplateType,
 } from './agenda-scaffold.js';
 export type {
   AgendaScaffold,
