@@ -7,6 +7,7 @@
  * All I/O via StorageAdapter — no direct fs imports.
  */
 import { join, basename } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 import { parseMeetingFile } from './meeting-context.js';
 import { getTopicHeadline } from '../models/topic-page.js';
@@ -502,6 +503,65 @@ export class AreaMemoryService {
             return null;
         const match = content.match(/^last_refreshed:\s*"?([^"\n]+)"?\s*$/m);
         return match?.[1] ?? null;
+    }
+    /**
+     * Harvest per-topic `open_items` counts already persisted in area-memory
+     * frontmatter into a `Map<topicSlug, openItemCount>`.
+     *
+     * Cheap boot-ranking helper: reads each `.arete/memory/areas/*.md` file
+     * once (bounded I/O — one read per area, not per meeting) and sums the
+     * `open_items` field of each entry in the frontmatter `topics:` list. The
+     * result feeds `getActiveTopics`'s `openItemsBySlug` seam so the keep-filter
+     * and sort can weight topics by open work.
+     *
+     * The counts inherit the known snapshot over-count of the underlying
+     * `open_action_items` extraction signal — acceptable for a filter/sort
+     * signal, not a ledger.
+     *
+     * Never throws: a missing dir yields an empty map; a malformed/unreadable
+     * file or an area with no `topics:` block is skipped silently. Worst case
+     * is an empty or partial map.
+     */
+    async getOpenItemsBySlug(workspacePaths) {
+        const map = new Map();
+        const dir = join(workspacePaths.root, AREA_MEMORY_DIR);
+        let files;
+        try {
+            files = await this.storage.list(dir, { extensions: ['.md'] });
+        }
+        catch {
+            return map;
+        }
+        for (const filePath of files) {
+            try {
+                const content = await this.storage.read(filePath);
+                if (!content)
+                    continue;
+                // Slice the leading `---`-delimited YAML frontmatter block.
+                const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+                if (!fmMatch)
+                    continue;
+                const fm = parseYaml(fmMatch[1]);
+                const topics = fm?.topics;
+                if (!Array.isArray(topics))
+                    continue;
+                for (const t of topics) {
+                    if (t === null || typeof t !== 'object')
+                        continue;
+                    const entry = t;
+                    if (typeof entry.slug !== 'string')
+                        continue;
+                    const openItems = Number(entry.open_items);
+                    if (!Number.isFinite(openItems))
+                        continue;
+                    map.set(entry.slug, (map.get(entry.slug) ?? 0) + openItems);
+                }
+            }
+            catch {
+                // Malformed/unreadable file — skip silently, never throw.
+            }
+        }
+        return map;
     }
     /**
      * List all area memory files with staleness info.

@@ -1,5 +1,6 @@
 # Build memory (Arete project)
 
+- [Active Topics openItemsBySlug from area-memory cache (WS-1)](entries/2026-06-14_active-topics-openitems-learnings.md) — no topic-keyed open-items store exists; area-memory frontmatter `open_items` (a never-decremented snapshot sum) is the only per-topic count, and it feeds BOTH sort + keep-filter so stale nonzero sums can resurrect a dead topic (known wart, live-count fix punted); worktree stale-dist build gotcha
 - [Project search provenance + active-topics durable-status](entries/2026-06-14_project-search-provenance-learnings.md) — down-rank `working/` drafts in search (not exclude); durable-status topics survive boot; eng-review + real-workspace gates caught 2 show-stoppers; shipped v0.16.0
 - [Area aliases + areas check](entries/2026-06-11_area-aliases-hotfix-learnings.md) — rename safety via canonicalize-at-load-boundary; write paths persist canonical only; worktrees branch from origin/main (rebase first)
 - [Phase 14 project write-back build](entries/2026-06-11_phase-14-project-write-back-learnings.md) — D5: recon caught an approved-plan premise error (topic refresh never consumed items/); floor 0.35 calibrated live; relevantL2 is a dark channel (parked)

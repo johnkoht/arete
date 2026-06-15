@@ -408,7 +408,14 @@ export function registerMemoryCommand(program) {
                 const { loadMemorySummary } = await import('@arete/core');
                 const config = await loadConfig(services.storage, root);
                 const skillList = await services.skills.list(root);
-                const memorySummary = await loadMemorySummary(services.topicMemory, paths);
+                // Harvest persisted per-topic open-item counts (fresh as of the
+                // refreshAllAreaMemory above) so Active Topics keep-filter + sort
+                // weight open work. Non-throwing by contract; the surrounding
+                // try/catch is the backstop.
+                const openItemsBySlug = await services.areaMemory.getOpenItemsBySlug(paths);
+                const memorySummary = await loadMemorySummary(services.topicMemory, paths, {
+                    activeTopics: { openItemsBySlug },
+                });
                 claudeMdRegen = await services.workspace.regenerateRootFiles(config, paths, { skills: skillList, memorySummary });
             }
             catch (err) {

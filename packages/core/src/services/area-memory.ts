@@ -8,6 +8,7 @@
  */
 
 import { join, basename } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import { canonicalizeAreaSlug, loadAreaAliasMap, type AreaParserService } from './area-parser.js';
 import type { CommitmentsService } from './commitments.js';
@@ -648,6 +649,64 @@ export class AreaMemoryService {
 
     const match = content.match(/^last_refreshed:\s*"?([^"\n]+)"?\s*$/m);
     return match?.[1] ?? null;
+  }
+
+  /**
+   * Harvest per-topic `open_items` counts already persisted in area-memory
+   * frontmatter into a `Map<topicSlug, openItemCount>`.
+   *
+   * Cheap boot-ranking helper: reads each `.arete/memory/areas/*.md` file
+   * once (bounded I/O — one read per area, not per meeting) and sums the
+   * `open_items` field of each entry in the frontmatter `topics:` list. The
+   * result feeds `getActiveTopics`'s `openItemsBySlug` seam so the keep-filter
+   * and sort can weight topics by open work.
+   *
+   * The counts inherit the known snapshot over-count of the underlying
+   * `open_action_items` extraction signal — acceptable for a filter/sort
+   * signal, not a ledger.
+   *
+   * Never throws: a missing dir yields an empty map; a malformed/unreadable
+   * file or an area with no `topics:` block is skipped silently. Worst case
+   * is an empty or partial map.
+   */
+  async getOpenItemsBySlug(workspacePaths: WorkspacePaths): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const dir = join(workspacePaths.root, AREA_MEMORY_DIR);
+
+    let files: string[];
+    try {
+      files = await this.storage.list(dir, { extensions: ['.md'] });
+    } catch {
+      return map;
+    }
+
+    for (const filePath of files) {
+      try {
+        const content = await this.storage.read(filePath);
+        if (!content) continue;
+
+        // Slice the leading `---`-delimited YAML frontmatter block.
+        const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        if (!fmMatch) continue;
+
+        const fm = parseYaml(fmMatch[1]) as { topics?: unknown } | null;
+        const topics = fm?.topics;
+        if (!Array.isArray(topics)) continue;
+
+        for (const t of topics) {
+          if (t === null || typeof t !== 'object') continue;
+          const entry = t as { slug?: unknown; open_items?: unknown };
+          if (typeof entry.slug !== 'string') continue;
+          const openItems = Number(entry.open_items);
+          if (!Number.isFinite(openItems)) continue;
+          map.set(entry.slug, (map.get(entry.slug) ?? 0) + openItems);
+        }
+      } catch {
+        // Malformed/unreadable file — skip silently, never throw.
+      }
+    }
+
+    return map;
   }
 
   /**

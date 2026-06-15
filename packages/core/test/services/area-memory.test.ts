@@ -1099,3 +1099,157 @@ describe('area alias join (rename safety)', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// getOpenItemsBySlug
+// ---------------------------------------------------------------------------
+
+describe('AreaMemoryService.getOpenItemsBySlug', () => {
+  let storage: StorageAdapter & { store: MockStore };
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    paths = makeWorkspacePaths();
+  });
+
+  {
+    // Build an area-memory file whose frontmatter is byte-identical to what
+    // the (unexported) renderAreaMemory emits: quoted area_name/last_referenced,
+    // two-space-indented topics list, `open_items` as a bare number.
+    type FixtureTopic = {
+      slug: string;
+      name?: string;
+      meetingCount?: number;
+      openItems: number;
+      lastReferenced?: string;
+      pageStatus?: string;
+    };
+
+    function renderAreaFile(
+      opts: { slug: string; name: string; lastRefreshed?: string; topics?: FixtureTopic[] | null },
+    ): string {
+      const lines: string[] = [];
+      lines.push('---');
+      lines.push(`area_slug: ${opts.slug}`);
+      lines.push(`area_name: "${opts.name}"`);
+      lines.push(`last_refreshed: "${opts.lastRefreshed ?? '2026-04-22'}"`);
+      const topics = opts.topics;
+      if (topics && topics.length > 0) {
+        lines.push('topics:');
+        for (const t of topics) {
+          lines.push(`  - slug: ${t.slug}`);
+          lines.push(`    name: ${t.name ?? slugName(t.slug)}`);
+          lines.push(`    meeting_count: ${t.meetingCount ?? 1}`);
+          lines.push(`    open_items: ${t.openItems}`);
+          lines.push(`    last_referenced: "${t.lastReferenced ?? '2026-04-22'}"`);
+          if (t.pageStatus !== undefined) {
+            lines.push(`    page_status: ${t.pageStatus}`);
+          }
+        }
+      }
+      lines.push('---');
+      lines.push('');
+      lines.push(`# ${opts.name} — Area Memory`);
+      lines.push('');
+      return lines.join('\n');
+    }
+
+    function slugName(slug: string): string {
+      return slug
+        .split('-')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    }
+
+    function areaPath(slug: string): string {
+      return join(WORKSPACE_ROOT, '.arete/memory/areas', `${slug}.md`);
+    }
+
+    it('harvests open_items across multiple areas', async () => {
+      storage.store.set(areaPath('alpha'), renderAreaFile({
+        slug: 'alpha', name: 'Alpha',
+        topics: [
+          { slug: 'rollout', openItems: 3 },
+          { slug: 'pricing', openItems: 1 },
+        ],
+      }));
+      storage.store.set(areaPath('beta'), renderAreaFile({
+        slug: 'beta', name: 'Beta',
+        topics: [{ slug: 'hiring', openItems: 5 }],
+      }));
+
+      const service = new AreaMemoryService(storage, createStubAreaParser(), createStubCommitments(), createStubMemory());
+      const map = await service.getOpenItemsBySlug(paths);
+
+      assert.strictEqual(map.get('rollout'), 3);
+      assert.strictEqual(map.get('pricing'), 1);
+      assert.strictEqual(map.get('hiring'), 5);
+      assert.strictEqual(map.size, 3);
+    });
+
+    it('includes topics with open_items: 0', async () => {
+      storage.store.set(areaPath('alpha'), renderAreaFile({
+        slug: 'alpha', name: 'Alpha',
+        topics: [{ slug: 'quiet-topic', openItems: 0 }],
+      }));
+
+      const service = new AreaMemoryService(storage, createStubAreaParser(), createStubCommitments(), createStubMemory());
+      const map = await service.getOpenItemsBySlug(paths);
+
+      assert.strictEqual(map.get('quiet-topic'), 0);
+      assert.ok(map.has('quiet-topic'));
+    });
+
+    it('sums the same slug appearing under two areas', async () => {
+      storage.store.set(areaPath('alpha'), renderAreaFile({
+        slug: 'alpha', name: 'Alpha',
+        topics: [{ slug: 'shared', openItems: 2 }],
+      }));
+      storage.store.set(areaPath('beta'), renderAreaFile({
+        slug: 'beta', name: 'Beta',
+        topics: [{ slug: 'shared', openItems: 4 }],
+      }));
+
+      const service = new AreaMemoryService(storage, createStubAreaParser(), createStubCommitments(), createStubMemory());
+      const map = await service.getOpenItemsBySlug(paths);
+
+      assert.strictEqual(map.get('shared'), 6);
+    });
+
+    it('skips a frontmatter file with no topics: block', async () => {
+      storage.store.set(areaPath('peopleonly'), renderAreaFile({
+        slug: 'peopleonly', name: 'People Only', topics: null,
+      }));
+
+      const service = new AreaMemoryService(storage, createStubAreaParser(), createStubCommitments(), createStubMemory());
+      const map = await service.getOpenItemsBySlug(paths);
+
+      assert.strictEqual(map.size, 0);
+    });
+
+    it('skips a malformed file without throwing', async () => {
+      // Valid file alongside a malformed one — the valid one must still land.
+      storage.store.set(areaPath('alpha'), renderAreaFile({
+        slug: 'alpha', name: 'Alpha',
+        topics: [{ slug: 'rollout', openItems: 3 }],
+      }));
+      // No frontmatter delimiters at all.
+      storage.store.set(areaPath('broken-nofm'), 'not a frontmatter file at all');
+      // Frontmatter present but invalid YAML inside the block.
+      storage.store.set(areaPath('broken-yaml'), '---\ntopics: [ : : :\n  - bad\n---\n\nbody');
+
+      const service = new AreaMemoryService(storage, createStubAreaParser(), createStubCommitments(), createStubMemory());
+      const map = await service.getOpenItemsBySlug(paths);
+
+      assert.strictEqual(map.get('rollout'), 3);
+      assert.strictEqual(map.size, 1);
+    });
+
+    it('returns an empty map for a missing/empty areas dir', async () => {
+      const service = new AreaMemoryService(storage, createStubAreaParser(), createStubCommitments(), createStubMemory());
+      const map = await service.getOpenItemsBySlug(paths);
+      assert.strictEqual(map.size, 0);
+    });
+  }
+});
