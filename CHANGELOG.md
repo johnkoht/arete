@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.18.0] — 2026-06-15 — Planning surfaces pull in-flight project documents
+
+Agendas, week-plan, and daily-plan now surface the actual *content* of your active projects — open questions, decisions, working notes — not just project names. The gap this closes: a meeting agenda for "Jira Roadmap Sync" used to show attendees + recent meetings but none of the roadmap thinking living in the project; now it surfaces the relevant project document automatically, without anyone naming a file. A new deterministic (no-LLM) selection engine reads a project's directory and picks the doc(s) relevant to the meeting/plan, and a new `arete plan-context` aggregator composes that into the planning skills.
+
+### Added
+- **`selectProjectDocs` (project-document selection engine)** — traverses a project directory (`README` + root `*.md` + `outputs/` + `working/` + `inputs/`) and selects the relevant doc(s) for a topic, **deterministically and with no LLM/embeddings** (lexical jaccard + mtime). Expands the top docs within a budget, lists the rest (title + first heading) for on-demand pull, never returns empty when a doc exists, and flags low-confidence picks. Surfaced via `IntelligenceService`; inherited by agendas, `arete brief --project`, and `/project`. Lives in `packages/core/src/services/brief-assemblers.ts`; keeps the `brief`/`scaffold` no-LLM invariant green.
+- **`arete plan-context --week | --day | --project`** — composes `selectProjectDocs` + `whatsNew` + active topics + goals + last week's plan into one `[source]`-tagged JSON bundle for the planning skills. Per-project budget (week 10k / day 6k chars); `--day` is area-scoped to today's meetings with a recently-active fallback (never a silent-empty bundle); `--project` is the calendar-independent on-demand read. Composes existing assemblers — no duplicate body parsing.
+- **Project-document candidates in agenda scaffolds** — the relevant project doc (incl. its `## Open Questions`) now routes into agenda sections as `[project:<slug>]` candidates, resolved from the meeting's inferred area or an explicit `--project`. Recurring meetings template off their own last instance rather than a generic attendee-count type.
+
+### Changed
+- **week-plan / daily-plan gather now consumes `arete plan-context`** — project + topic state shapes suggested priorities and the task draft, replacing the previous inert `ls projects/active/` + topic listing that was gathered but never reasoned over.
+- **week→daily invocation contract documented** — daily-plan runs its full per-meeting sequence (memory search, agenda offers, `@due` tagging) even when invoked from week-plan; passed-in context supplements but never replaces required steps, and multi-day deadlines are preserved rather than overwritten with the plan date.
+
 ## [0.17.0] — 2026-06-14 — Active Topics ranked by open work; skill routing stops misfiring on common words
 
 The agent's boot "Active Topics" list now surfaces and ranks topics by their open work, not just recency — reviving a filter/sort signal that had been dead because no live caller populated it. Separately, the `wrap` and `finalize-project` skills no longer collide, and the natural-language skill router stops letting a common word in a skill's name (or a bare single-word trigger) hijack queries — e.g. "finalize project" was landing on the read-only `project` brief.
