@@ -29,14 +29,25 @@ import type { TopicMemoryService } from './topic-memory.js';
 import type { AreaMemoryService } from './area-memory.js';
 import type { WorkspacePaths } from '../models/index.js';
 /**
- * Default expanded-body budget (chars) shared across the top projects in a
- * plan-context bundle. Tighter than the generic `/project` read
- * (`PROJECT_DOC_BUDGET_DEFAULT` = 12k) because a plan bundle stacks many
- * projects + topics + goals into one agent turn.
+ * PER-PROJECT expanded-body budget (chars) — each chosen project gets this,
+ * NOT a shared total divided down (the divided model starved real docs to
+ * filename-only: 8k / 6 projects ≈ 1.3k < any real doc → 0 expanded).
+ * `--week` runs ~weekly, so it spends freely; `--day` is area-scoped (few
+ * projects) so it stays tighter. The generic single-project `/project` read
+ * stays at `PROJECT_DOC_BUDGET_DEFAULT` (12k).
  */
-export declare const PLAN_CONTEXT_PROJECT_DOC_BUDGET = 8000;
-/** Max projects expanded per bundle (recency/area-ranked). Rest are summarized. */
-export declare const PLAN_CONTEXT_MAX_PROJECTS = 6;
+export declare const PLAN_CONTEXT_WEEK_PER_PROJECT_BUDGET = 10000;
+export declare const PLAN_CONTEXT_DAY_PER_PROJECT_BUDGET = 6000;
+/** Back-compat default (single-project plan-context read). */
+export declare const PLAN_CONTEXT_PROJECT_DOC_BUDGET = 12000;
+/**
+ * Max projects expanded per bundle (recency/area-ranked); rest summarized.
+ * Raised to cover a realistic active-project set; with per-project budgets the
+ * worst case is bounded (cap × per-project). NOTE: project weighting (surface
+ * driving vs reference projects) is a deferred follow-up — for now `--week`
+ * surfaces all recency-ranked active projects up to this cap.
+ */
+export declare const PLAN_CONTEXT_MAX_PROJECTS = 12;
 /** "Recently active" window (days) for the --day fallback (pre-mortem R13). */
 export declare const PLAN_CONTEXT_RECENT_DAYS = 7;
 export type PlanContextMode = 'week' | 'day' | 'project';
