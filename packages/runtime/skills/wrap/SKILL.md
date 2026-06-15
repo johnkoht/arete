@@ -1,13 +1,12 @@
 ---
 name: wrap
-description: Close out completed work with outcomes assessment, decision/learning extraction, and archival.
+description: "Close out completed work: assess outcomes, extract decisions and learnings."
 triggers:
   - wrap up
   - close out
   - post-mortem
   - what did we learn
-  - archive this project
-work_type: review
+work_type: analysis
 category: essential
 profile: pm-orchestrator
 requires_briefing: false
@@ -15,14 +14,13 @@ requires_briefing: false
 
 # Wrap Skill
 
-Close out completed work: assess outcomes against goals, extract decisions and learnings, archive if applicable. Lightweight post-mortem for any completed project, plan, or initiative.
+Close out completed work: assess outcomes against goals, extract decisions and learnings. Lightweight post-mortem for any completed project, plan, or initiative. For the full close-out of an **active project** (context reconciliation, dated archive, closed-project retro), use `finalize-project` instead — `wrap` deliberately does not archive active projects.
 
 ## When to Use
 
 - After completing a project or initiative
 - "What did we learn from this?"
 - "Let's close this out"
-- "Archive this project"
 - End of a quarter or major milestone
 
 ## Workflow
@@ -34,6 +32,12 @@ Ask: "What are we wrapping up?" Determine the scope:
 - A plan or initiative
 - A quarter goal
 - Ad-hoc work
+
+**Active-project hand-off**: If the scope is a directory under `projects/active/`, surface this offer up front before going further:
+
+> "This is an active project. For the full close-out (context reconciliation, dated archive, closed-project retro), run `finalize-project` instead. Continue with a lightweight wrap (decisions/learnings only, NO archive)? (y/n)"
+
+This early nudge is layered on top of the step-6 refusal below: the refusal is the backstop (wrap will not archive an active project even if this offer is skipped), and this nudge catches the case early so the user can switch to `finalize-project` before doing any work.
 
 Read relevant context:
 - Project README, goals, success criteria
@@ -94,14 +98,20 @@ Format:
 - YYYY-MM-DD: [Item text] (from: [project/work name])
 ```
 
-### 6. Archive (Optional)
+### 6. Archive (Optional, non-projects only)
 
-If this was a project in `projects/active/`:
+**If the scope is a directory under `projects/active/`: do NOT archive it here.** `wrap` deliberately does not move or archive active projects — that would produce a second, divergent archive path (no dated `YYYY-MM_` prefix, no context `_history`, no activity-log entry, no closed-project retro). Instead, hard-redirect:
 
-> "Would you like to archive this project? This moves it from `projects/active/` to `projects/archive/`."
+> "Wrapping up an active project? `wrap` doesn't archive it — run `finalize-project` for the full close-out (dated archive, context reconciliation, `_history`, activity log, and the closed-project retro). I've captured the decisions and learnings above; `finalize-project` will pick those up and complete the archival."
+
+Stop here for active projects — point the user to `finalize-project` rather than moving the directory.
+
+**For non-project work only** (a plan, a quarter goal, or ad-hoc work that is NOT a `projects/active/` project), the lightweight archive still applies:
+
+> "Would you like to archive this work? This moves it to its archive location."
 
 If yes:
-- Move the project directory
+- Move the directory/file to its archive location
 - Update any references in week.md or goals
 
 ### 7. Summarize and Close
@@ -134,7 +144,7 @@ Suggest next steps if applicable:
 
 - Don't skip the "what didn't work" question -- that's where the best learnings live
 - Keep decisions and learnings specific enough to be useful later
-- Archive promptly -- stale active projects create noise
+- For active projects, route archival to `finalize-project` -- wrap only does the lightweight retro
 
 ## References
 

@@ -8,6 +8,12 @@ primitives:
   - Market
   - Risk
 work_type: operations
+triggers:
+  - finalize project
+  - complete this project
+  - archive project
+  - archive this project
+  - commit changes to context
 category: essential
 intelligence:
   - context_injection
@@ -23,7 +29,6 @@ Guide users through completing projects, committing changes to context, and arch
 
 - "finalize project"
 - "complete this project"
-- "wrap up"
 - "archive project"
 - "commit changes"
 

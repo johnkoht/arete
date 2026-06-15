@@ -61,6 +61,7 @@ Four commands registered from one file. The intelligence hub.
 - **`update`** → `services.workspace.update(root, { sourcePaths })` → `ensureQmdCollection()`
 - Options: `--check` (dry run), `--skip-qmd`
 - Loads config for `ide_target` to select correct rules subdirectory
+- The CLAUDE.md "Active Topics" boot-context regen (here and in the memory-refresh path) harvests `services.areaMemory.getOpenItemsBySlug(paths)` and passes it via `loadMemorySummary({ activeTopics: { openItemsBySlug } })`; the two extraction-bias `loadMemorySummary` callers must NOT populate it.
 
 ### status.ts — Workspace Health
 - **`status`** → `services.workspace.getStatus()` + `loadConfig()` + `getAdapterFromConfig()`
