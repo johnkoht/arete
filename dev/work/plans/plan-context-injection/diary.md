@@ -81,3 +81,11 @@ Guardrails in force:
 - **Real-data --week now surfaces open questions:** glance-2-roadmap 5 OQ (Financials timeline…), glance-2-runyon 6, email-signatures 6. Motivating case works.
 - Known follow-ups (NOT blockers, test-and-circle-back): (1) project weighting (driving vs reference — recency alone misclassifies recently-edited reference projects like adjuster-shadowing 6.9d); (2) large-doc (>budget) partial expansion / always-extract-OQ so a 26k roadmap doc's own OQ surfaces; (3) selectProjectDocs low-confidence on short meeting titles (R5); (4) WS-5 disk cache (deferred); (5) package-lock.json 0.15.1→0.16.0 drift (pre-existing) — glance at merge.
 - **Merge HELD for John.** arete-reserv READ-ONLY throughout (rsync snapshot to /tmp; zero-write asserted). Nothing merged/pushed.
+
+### 2026-06-15 — Wrap + gitboss gate + reconcile with main
+- Wrap done (feature branch dde4b62e): 5-section build memory entry + 4 LEARNINGS gotchas + MEMORY.md index. typecheck green, tree clean.
+- Reset the trivial package-lock 0.15.1→0.16.0 drift for a clean feature merge (version-sync left as a main-level backlog item).
+- **Gitboss REFUSED the first merge (correctly):** branch was 7 commits behind main — v0.17.0 (bb7820e4) shipped to main CONCURRENTLY during the overnight run (Active Topics + skill-router work), plus my diary/backlog commits. 2 conflicts, both committed dist sourcemaps (intelligence.*.map). Diff review otherwise clean (58 files, +4442/-101, coherent). Version recommendation revised to 0.17.0→0.18.0.
+- **Reconciled:** merged main into feature (93832149). Only conflicts were the 2 dist .map files (gitboss called it exactly); source/MEMORY/LEARNINGS auto-merged. Resolved by `npm run build:packages` (regenerate dist, never hand-edit sourcemaps) + stage. Version now 0.17.0 (from main).
+- **Re-verified:** typecheck green; full suite 4791→4789 pass/0 fail (ran per the "full suite after merging main into a long-lived branch" learning — no cross-file semantic break); AC1.9 spike-compare PASSES post-merge (capacity/parity/slice-zero/notion/jira). Tree clean.
+- Re-invoking gitboss for the merge gate. Release (0.18.0) held for John's explicit confirmation (outward-facing).
