@@ -4,6 +4,14 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## `wrap` and `finalize-project` stop stepping on each other
+
+The two close-out skills now route cleanly. `finalize-project` (the full project ceremony — context reconciliation, dated archive, closed-project retro) now routes on its own trigger phrases like "finalize project", "complete this project", and "archive this project". Previously `wrap` quietly claimed those project-archival phrases, so asking to "archive this project" landed you in the lightweight retro instead.
+
+`wrap` is now what it says on the tin: a lightweight close-out for any completed work (decisions and learnings). If you point it at an active project, it offers to hand off to `finalize-project` for the full archival and will not produce its own divergent archive.
+
+---
+
 ## Project search now tells decisions from drafts
 
 `arete search` (and the `/guide` agent) now label project results by where the file lives and rank your in-progress notes last, so a half-formed draft doesn't outrank a real decision:

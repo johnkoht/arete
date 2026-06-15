@@ -1,5 +1,6 @@
 # Build memory (Arete project)
 
+- [wrap / finalize-project reconcile + router common-word over-matching](entries/2026-06-14_wrap-finalize-router-learnings.md) — real collision was read-only `project` skill shadowing finalize-project (route the FULL set, not a 2-skill subset); 3 scorer bugs (substring id-match, inverted dashify bonus, flat trigger weight) → hierarchy multi-trigger 22 > id 20 > single-trigger 10; unquoted `description:` colon silently nukes skill frontmatter to `{}`
 - [Project search provenance + active-topics durable-status](entries/2026-06-14_project-search-provenance-learnings.md) — down-rank `working/` drafts in search (not exclude); durable-status topics survive boot; eng-review + real-workspace gates caught 2 show-stoppers; shipped v0.16.0
 - [Area aliases + areas check](entries/2026-06-11_area-aliases-hotfix-learnings.md) — rename safety via canonicalize-at-load-boundary; write paths persist canonical only; worktrees branch from origin/main (rebase first)
 - [Phase 14 project write-back build](entries/2026-06-11_phase-14-project-write-back-learnings.md) — D5: recon caught an approved-plan premise error (topic refresh never consumed items/); floor 0.35 calibrated live; relevantL2 is a dark channel (parked)
