@@ -297,8 +297,25 @@ export declare function parseSiblingSlugs(body: string, selfSlug: string): strin
  * commitments-claim project validation (Phase 13 AC5).
  */
 export declare function resolveArchivedProjectReadme(storage: StorageAdapter, paths: WorkspacePaths, slug: string): Promise<string | null>;
+/**
+ * Options for {@link assembleBriefForProject}. OPTIONAL (R1: the 2-arg/3-arg
+ * public signature stays working) — when omitted, behavior is unchanged.
+ */
+export interface ProjectBriefOptions {
+    /**
+     * WS-1 (plan-context-injection): when > 0, run selectProjectDocs over the
+     * project and emit a `Project document` section (shared body-reader) so
+     * `/project` and `arete brief --project` inherit traverse+select. Default 0
+     * (off) — the 2-arg/no-opts callers keep their exact prior output.
+     */
+    projectDocBudgetChars?: number;
+    /** Lexical selection topic; defaults to the project name when omitted. */
+    topic?: string;
+    /** Injected referenceDate for deterministic project-doc recency in tests. */
+    referenceDate?: Date;
+}
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
-export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
+export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps, opts?: ProjectBriefOptions): Promise<ProjectBrief>;
 /** Delta of workspace activity since the project README was last modified. */
 export interface ProjectWhatsNew {
     /** README mtime as ISO timestamp. Absent when sinceUnknown. */

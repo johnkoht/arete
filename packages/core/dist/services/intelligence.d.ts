@@ -16,7 +16,7 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
 import type { BriefingRequest, PrimitiveBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief } from '../models/index.js';
-import { type ProjectWhatsNew, type ProjectDocSelection, type SelectProjectDocsOptions, type MeetingBriefOptions } from './brief-assemblers.js';
+import { type ProjectBriefOptions, type ProjectWhatsNew, type ProjectDocSelection, type SelectProjectDocsOptions, type MeetingBriefOptions } from './brief-assemblers.js';
 export declare class IntelligenceService {
     private context;
     private memory;
@@ -52,7 +52,7 @@ export declare class IntelligenceService {
      */
     assembleBriefForPerson(slug: string, paths: WorkspacePaths): Promise<PersonBrief>;
     /** Assemble a structured brief for a project — AC2. Pure aggregator. */
-    assembleBriefForProject(slug: string, paths: WorkspacePaths): Promise<ProjectBrief>;
+    assembleBriefForProject(slug: string, paths: WorkspacePaths, opts?: ProjectBriefOptions): Promise<ProjectBrief>;
     /**
      * "What's new since the README was last touched" for a project —
      * Phase 12 AC3 (read-only open flow). Pure read; no LLM, no writes.

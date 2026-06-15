@@ -340,7 +340,7 @@ export class IntelligenceService {
         });
     }
     /** Assemble a structured brief for a project — AC2. Pure aggregator. */
-    async assembleBriefForProject(slug, paths) {
+    async assembleBriefForProject(slug, paths, opts = {}) {
         const deps = this.requireBriefDeps();
         return assembleProjectImpl(slug, paths, {
             storage: deps.storage,
@@ -348,7 +348,7 @@ export class IntelligenceService {
             topicMemory: deps.topicMemory,
             areaMemory: deps.areaMemory,
             entities: this.entities,
-        });
+        }, opts);
     }
     /**
      * "What's new since the README was last touched" for a project —
