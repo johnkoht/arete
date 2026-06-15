@@ -16,7 +16,8 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
 import type { BriefingRequest, PrimitiveBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief } from '../models/index.js';
-import { type ProjectWhatsNew, type MeetingBriefOptions } from './brief-assemblers.js';
+import { type ProjectBriefOptions, type ProjectWhatsNew, type ProjectDocSelection, type SelectProjectDocsOptions, type MeetingBriefOptions } from './brief-assemblers.js';
+import { type PlanContextBundle, type PlanContextMode, type AssemblePlanContextOptions } from './plan-context.js';
 export declare class IntelligenceService {
     private context;
     private memory;
@@ -52,12 +53,34 @@ export declare class IntelligenceService {
      */
     assembleBriefForPerson(slug: string, paths: WorkspacePaths): Promise<PersonBrief>;
     /** Assemble a structured brief for a project — AC2. Pure aggregator. */
-    assembleBriefForProject(slug: string, paths: WorkspacePaths): Promise<ProjectBrief>;
+    assembleBriefForProject(slug: string, paths: WorkspacePaths, opts?: ProjectBriefOptions): Promise<ProjectBrief>;
     /**
      * "What's new since the README was last touched" for a project —
      * Phase 12 AC3 (read-only open flow). Pure read; no LLM, no writes.
      */
     assembleProjectWhatsNew(slug: string, paths: WorkspacePaths): Promise<ProjectWhatsNew | null>;
+    /**
+     * Deterministically select + budget a project's documents (WS-1 —
+     * plan-context-injection). Pure read, NO LLM (lexical jaccard + mtime).
+     * Surfaces the net-new `selectProjectDocs` engine so `/project`,
+     * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
+     */
+    selectProjectDocs(slug: string, paths: WorkspacePaths, opts?: SelectProjectDocsOptions): Promise<ProjectDocSelection>;
+    /**
+     * Aggregate the plan-context bundle for `arete plan-context --week|--day`
+     * (WS-2/WS-3 — plan-context-injection). COMPOSES selectProjectDocs +
+     * assembleProjectWhatsNew + getActiveTopics + last-week read into one
+     * source-tagged bundle. Pure read, NO LLM. The CLI command is a thin shell
+     * over this — no body parsing in the command (pre-mortem R6).
+     */
+    assemblePlanContext(mode: PlanContextMode, paths: WorkspacePaths, opts?: AssemblePlanContextOptions): Promise<PlanContextBundle>;
+    /**
+     * Derive a recurring meeting's agenda template type from its own last
+     * instance in resources/meetings/ (WS-1 / pre-mortem R10). ADDITIVE: a
+     * genuine 1:1 with no prior instance still resolves to `one-on-one`. Pure
+     * read; loads the meeting index internally.
+     */
+    deriveAgendaTemplateType(title: string, attendeeCount: number, paths: WorkspacePaths, selfPath?: string): Promise<string>;
     /** Assemble a structured brief for an area — AC3. Pure aggregator. */
     assembleBriefForArea(slug: string, paths: WorkspacePaths): Promise<AreaBrief>;
     /**

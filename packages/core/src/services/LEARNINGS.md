@@ -30,6 +30,14 @@ The services layer provides seven domain-specific classes: `ContextService`, `Me
 
 ## Gotchas
 
+- **Project-doc selection is whole-doc-or-nothing; a doc bigger than the per-project budget never expands** (2026-06-15). `selectProjectDocs` (`brief-assemblers.ts`) demotes any doc exceeding `budgetChars` to `listed` (no mid-doc truncation, by design). Under a tight per-project budget the SMALL docs win expansion and the large important ones (README/roadmap) get listed — so anything *derived from expanded bodies* (e.g. `plan-context` open-questions) comes back silently empty. Symptom that bit us: `--week` showed 0 open questions despite every project having selectedDocs. Fix was a real per-project budget (`PLAN_CONTEXT_WEEK_PER_PROJECT_BUDGET=10k`); the residual (a >budget doc's own content) is a backlog partial-expansion item. Source: plan-context-injection.
+
+- **Meeting resolution needs the LIVE calendar — a static workspace snapshot can't resolve a future meeting.** `assembleBriefForMeeting` returns `resolved:false, attendees:[]` for a meeting with no calendar match and no saved `resources/meetings/` file, and then skips the whole area/project section — so `--project` overrides were silently ignored too (fixed: override now drives selection even when unresolved). For calendar-independent testing/automation, use the `--project <slug>` escape hatch, not `--meeting` against a snapshot. Source: plan-context-injection (AC1.9 spike harness).
+
+- **`agenda-scaffold` candidate routing is per-section-bucket, not per-source.** A new candidate `source` (e.g. `project-doc`) needs an explicit routing `case` (added to BOTH `priorities` and `general` with a `consumed.*` flag) or it falls to `unrouted` and never appears in a lean skeleton template. Growing the brief body alone does nothing. Source: plan-context-injection (T2).
+
+- **The no-LLM invariant guard (`brief-no-llm.test.ts`) greps ONLY `brief-assemblers.ts`.** Keep no-LLM-sensitive code (e.g. `selectProjectDocs`) in that file, or extend the guard's path list — otherwise an accidental embedding/`AIService` call in a sibling file passes the invariant test green. Source: plan-context-injection (pre-mortem R2).
+
 - **`createServices()` is async — it loads `arete.yaml` from disk.** Callers must `await createServices(process.cwd())`. Forgetting the `await` gives a Promise, not `AreteServices`. Every CLI command in `packages/cli/src/commands/` correctly awaits it — follow that pattern. Defined in `packages/core/src/factory.ts` L54.
 
 - **Services must NOT call `fs` directly.** The `2026-02-15_monorepo-intelligence-refactor-learnings.md` entry explicitly lists "No direct fs in services" (Risk 9) as a key invariant. All file reads go through the `StorageAdapter` injected at construction. Violating this makes services untestable (can't mock fs) and breaks the StorageAdapter abstraction.

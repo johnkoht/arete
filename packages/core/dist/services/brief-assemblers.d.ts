@@ -21,6 +21,15 @@ import type { AreaMemoryService } from './area-memory.js';
 import type { WorkspacePaths, PersonBrief, ProjectBrief, AreaBrief, MeetingBrief, BriefSection, Commitment } from '../models/index.js';
 /** Global per-brief soft cap (characters). Matches old BRIEF_MAX_CONTEXT_CHARS. */
 export declare const BRIEF_GLOBAL_CAP_CHARS = 12000;
+/**
+ * Default project-doc expansion budget (chars) for the generic, single-project
+ * read surfaces — `arete project open` and `arete brief --project` (WS-1/WS-2,
+ * plan-context-injection). De-magic-numbers the prior hardcoded `12000` at
+ * those two CLI call sites (eng-lead ask). The per-meeting agenda path uses a
+ * tighter budget (`MEETING_PROJECT_DOC_BUDGET`); plan-context sets its own
+ * per-mode budget (`PLAN_CONTEXT_PROJECT_DOC_BUDGET`).
+ */
+export declare const PROJECT_DOC_BUDGET_DEFAULT = 12000;
 /** Per-section caps (chars). v2 MC1 — mini-brief truncation drops tail. */
 export declare const PER_SECTION_CAPS: Record<string, number>;
 /** Per-mode wiki retrieval cap. Q6 in plan v3 — knock to 5 if too crowded. */
@@ -205,6 +214,39 @@ export interface ProjectBriefDeps {
     areaMemory: AreaMemoryService;
     entities: EntityService;
 }
+export interface ActiveProject {
+    slug: string;
+    name: string;
+    area?: string;
+    /** Provenance for `area` — `manual` | `creation` | `backfill` (Phase 12 AC1/AC2). */
+    areaSetBy?: string;
+    /**
+     * R9 (Phase 12 pre-mortem): set when frontmatter `area:` and a prose
+     * `**Area**:` line BOTH resolve and disagree. Frontmatter wins; the
+     * divergence is surfaced as a one-line warning instead of being silent.
+     */
+    areaDivergence?: string;
+    status?: string;
+    started?: string;
+    /**
+     * Phase 13 AC7 — read-only surfacing of the `jira:` frontmatter block
+     * (hand-maintained map like `jira: {idea: GL-12}`). Values stringified,
+     * arrays comma-joined. Absent when missing or malformed. No write path.
+     */
+    jira?: Record<string, string>;
+    /**
+     * Phase 14 AC2 — system-owned topics cache read from frontmatter.
+     * Display/convenience ONLY (pre-mortem R10): populated on read, written
+     * exclusively by `arete project refresh-topics --apply`, and NOTHING in
+     * brief assembly or formatting may branch on it (guarded by the R10
+     * no-consumer test in project-topics.test.ts).
+     */
+    topics?: string[];
+    /** Date the topics cache last changed (R2: bumped only on slug-set change). */
+    topicsRefreshed?: string;
+    readmePath: string;
+    readmeContent: string;
+}
 /**
  * Parse the system-owned `topics:` cache pair out of project frontmatter
  * (Phase 14 AC2). Tolerant: non-array/non-string shapes → undefined (never
@@ -251,6 +293,7 @@ export declare function resolveProjectArea(fm: Record<string, unknown>, body: st
  * `project:` → slug (W6.3: 0 of 7 live project READMEs use `name:`).
  */
 export declare function projectDisplayName(fm: Record<string, unknown>, slug: string): string;
+export declare function listActiveProjects(storage: StorageAdapter, paths: WorkspacePaths, aliasMap?: Map<string, string>): Promise<ActiveProject[]>;
 /**
  * Extract renderable status-update paragraphs from a `## Status Updates`
  * section body (Phase 13 AC8(7)).
@@ -297,8 +340,25 @@ export declare function parseSiblingSlugs(body: string, selfSlug: string): strin
  * commitments-claim project validation (Phase 13 AC5).
  */
 export declare function resolveArchivedProjectReadme(storage: StorageAdapter, paths: WorkspacePaths, slug: string): Promise<string | null>;
+/**
+ * Options for {@link assembleBriefForProject}. OPTIONAL (R1: the 2-arg/3-arg
+ * public signature stays working) — when omitted, behavior is unchanged.
+ */
+export interface ProjectBriefOptions {
+    /**
+     * WS-1 (plan-context-injection): when > 0, run selectProjectDocs over the
+     * project and emit a `Project document` section (shared body-reader) so
+     * `/project` and `arete brief --project` inherit traverse+select. Default 0
+     * (off) — the 2-arg/no-opts callers keep their exact prior output.
+     */
+    projectDocBudgetChars?: number;
+    /** Lexical selection topic; defaults to the project name when omitted. */
+    topic?: string;
+    /** Injected referenceDate for deterministic project-doc recency in tests. */
+    referenceDate?: Date;
+}
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
-export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectBrief>;
+export declare function assembleBriefForProject(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps, opts?: ProjectBriefOptions): Promise<ProjectBrief>;
 /** Delta of workspace activity since the project README was last modified. */
 export interface ProjectWhatsNew {
     /** README mtime as ISO timestamp. Absent when sinceUnknown. */
@@ -329,6 +389,70 @@ export interface ProjectWhatsNew {
  * services/LEARNINGS.md).
  */
 export declare function assembleProjectWhatsNew(slug: string, paths: WorkspacePaths, deps: ProjectBriefDeps): Promise<ProjectWhatsNew | null>;
+/** A document selected for expansion (its body is included). */
+export interface SelectedExpandedDoc {
+    /** Workspace-relative path. */
+    rel: string;
+    /** First markdown heading (or filename-derived title when no heading). */
+    heading: string;
+    /** Full document body (frontmatter stripped). */
+    body: string;
+    provenance: 'published' | 'reference' | 'draft';
+    /** Composite selection score (auditable). */
+    score: number;
+}
+/** A document listed (title-only) but not expanded into the budget. */
+export interface ListedDoc {
+    rel: string;
+    title: string;
+    firstHeading?: string;
+    provenance: 'published' | 'reference' | 'draft';
+}
+/**
+ * Result of {@link selectProjectDocs}. A descriptor, not rendered markdown.
+ */
+export interface ProjectDocSelection {
+    expanded: SelectedExpandedDoc[];
+    listed: ListedDoc[];
+    budgetChars: number;
+    usedChars: number;
+    truncated: boolean;
+    /** True when the top expanded doc scored below the relevance floor (the
+     * zero-result safety fallback fired or selection is low-confidence). */
+    lowConfidence?: boolean;
+}
+export interface SelectProjectDocsOptions {
+    /** Meeting/plan title — the LEXICAL selection query. Enriched internally
+     * with the resolved area slug + project name/slug tokens (pre-mortem R5). */
+    topic?: string;
+    /** Extra query tokens (attendee names, area slug) the caller resolves and
+     * unions into the lexical query before tokenizing (pre-mortem R5). */
+    queryExtra?: string;
+    /** Hard cap on TOTAL expanded body bytes; caller sets per use. Default 12k. */
+    budgetChars?: number;
+    /** Default false: working/ is listed, not expanded (pre-mortem R11). */
+    expandWorking?: boolean;
+    /** Max docs to expand. Default 3. */
+    maxExpanded?: number;
+    /** Caller opts in to the location boost (outputs/root/working). Default
+     * false so the generic /project read does not invert provenance (R11). */
+    locationBoost?: boolean;
+    /** Injected for deterministic recency scoring in tests. Default now. */
+    referenceDate?: Date;
+}
+/**
+ * Deterministically select and budget project documents (WS-1).
+ *
+ * PURE READ — no writes, NO LLM/embedding. Traversal + lexical jaccard +
+ * mtime recency only. Zero-result safety: never returns an empty `expanded`
+ * when ≥1 doc exists (falls back to the most-recent root-or-README doc).
+ *
+ * @param slug   project slug (under projects/active/<slug>/)
+ * @param paths  workspace paths
+ * @param deps   storage adapter (only `storage` is consulted)
+ * @param opts   selection options (see {@link SelectProjectDocsOptions})
+ */
+export declare function selectProjectDocs(slug: string, paths: WorkspacePaths, deps: Pick<ProjectBriefDeps, 'storage'>, opts?: SelectProjectDocsOptions): Promise<ProjectDocSelection>;
 export interface AreaTaggedItem {
     type: 'decision' | 'learning';
     text: string;
@@ -398,6 +522,17 @@ export interface MeetingBriefOptions {
         date?: string;
         attendees?: string[];
     }>;
+    /**
+     * WS-1 (plan-context-injection): per-meeting char budget for the
+     * project-document section. When > 0, the meeting brief calls
+     * selectProjectDocs for each resolved project and emits a `Project document`
+     * section (scaffold routes it to `source:'project-doc'`). Default ~3500 so
+     * the agenda path gets project body without a separate flag. Pass 0 to skip
+     * (e.g. minimal/no-LLM invariant paths that only need metadata bullets).
+     */
+    projectDocBudgetChars?: number;
+    /** Injected referenceDate for deterministic project-doc recency in tests. */
+    referenceDate?: Date;
 }
 /**
  * Resolve the meeting input string to a meeting file path or, failing that,

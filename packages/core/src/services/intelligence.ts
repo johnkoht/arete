@@ -39,12 +39,25 @@ import type {
 import {
   assembleBriefForPerson as assemblePersonImpl,
   assembleBriefForProject as assembleProjectImpl,
+  type ProjectBriefOptions,
   assembleProjectWhatsNew as assembleProjectWhatsNewImpl,
   type ProjectWhatsNew,
+  selectProjectDocs as selectProjectDocsImpl,
+  type ProjectDocSelection,
+  type SelectProjectDocsOptions,
   assembleBriefForArea as assembleAreaImpl,
   assembleBriefForMeeting as assembleMeetingImpl,
   type MeetingBriefOptions,
+  loadMeetingIndex,
 } from './brief-assemblers.js';
+import { deriveRecurringTemplateType } from './agenda-scaffold.js';
+import {
+  assemblePlanContext as assemblePlanContextImpl,
+  type PlanContextBundle,
+  type PlanContextMode,
+  type AssemblePlanContextOptions,
+} from './plan-context.js';
+import { loadAreaAliasMap } from './area-parser.js';
 
 // ---------------------------------------------------------------------------
 // routeToSkill — ported from skill-router.ts
@@ -456,15 +469,21 @@ export class IntelligenceService {
   async assembleBriefForProject(
     slug: string,
     paths: WorkspacePaths,
+    opts: ProjectBriefOptions = {},
   ): Promise<ProjectBrief> {
     const deps = this.requireBriefDeps();
-    return assembleProjectImpl(slug, paths, {
-      storage: deps.storage,
-      commitments: deps.commitments,
-      topicMemory: deps.topicMemory,
-      areaMemory: deps.areaMemory,
-      entities: this.entities,
-    });
+    return assembleProjectImpl(
+      slug,
+      paths,
+      {
+        storage: deps.storage,
+        commitments: deps.commitments,
+        topicMemory: deps.topicMemory,
+        areaMemory: deps.areaMemory,
+        entities: this.entities,
+      },
+      opts,
+    );
   }
 
   /**
@@ -483,6 +502,61 @@ export class IntelligenceService {
       areaMemory: deps.areaMemory,
       entities: this.entities,
     });
+  }
+
+  /**
+   * Deterministically select + budget a project's documents (WS-1 —
+   * plan-context-injection). Pure read, NO LLM (lexical jaccard + mtime).
+   * Surfaces the net-new `selectProjectDocs` engine so `/project`,
+   * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
+   */
+  async selectProjectDocs(
+    slug: string,
+    paths: WorkspacePaths,
+    opts: SelectProjectDocsOptions = {},
+  ): Promise<ProjectDocSelection> {
+    const deps = this.requireBriefDeps();
+    return selectProjectDocsImpl(slug, paths, { storage: deps.storage }, opts);
+  }
+
+  /**
+   * Aggregate the plan-context bundle for `arete plan-context --week|--day`
+   * (WS-2/WS-3 — plan-context-injection). COMPOSES selectProjectDocs +
+   * assembleProjectWhatsNew + getActiveTopics + last-week read into one
+   * source-tagged bundle. Pure read, NO LLM. The CLI command is a thin shell
+   * over this — no body parsing in the command (pre-mortem R6).
+   */
+  async assemblePlanContext(
+    mode: PlanContextMode,
+    paths: WorkspacePaths,
+    opts: AssemblePlanContextOptions = {},
+  ): Promise<PlanContextBundle> {
+    const deps = this.requireBriefDeps();
+    return assemblePlanContextImpl(mode, paths, {
+      storage: deps.storage,
+      commitments: deps.commitments,
+      topicMemory: deps.topicMemory,
+      areaMemory: deps.areaMemory,
+      entities: this.entities,
+    }, opts);
+  }
+
+  /**
+   * Derive a recurring meeting's agenda template type from its own last
+   * instance in resources/meetings/ (WS-1 / pre-mortem R10). ADDITIVE: a
+   * genuine 1:1 with no prior instance still resolves to `one-on-one`. Pure
+   * read; loads the meeting index internally.
+   */
+  async deriveAgendaTemplateType(
+    title: string,
+    attendeeCount: number,
+    paths: WorkspacePaths,
+    selfPath?: string,
+  ): Promise<string> {
+    const deps = this.requireBriefDeps();
+    const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
+    const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
+    return deriveRecurringTemplateType(title, attendeeCount, index, selfPath);
   }
 
   /** Assemble a structured brief for an area — AC3. Pure aggregator. */

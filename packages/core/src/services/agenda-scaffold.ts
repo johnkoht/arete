@@ -26,7 +26,74 @@
  */
 
 import type { MeetingBrief, Commitment } from '../models/index.js';
-import type { DiscussionTopicGroup, NextFocusExtract } from './brief-assemblers.js';
+import type {
+  DiscussionTopicGroup,
+  NextFocusExtract,
+  MeetingIndexEntry,
+} from './brief-assemblers.js';
+
+// ---------------------------------------------------------------------------
+// Recurring-meeting template derivation (WS-1, pre-mortem R10)
+// ---------------------------------------------------------------------------
+
+/** Strip a leading `YYYY-MM-DD-` date prefix and normalize for title match. */
+function normalizeMeetingTitle(title: string): string {
+  return title
+    .replace(/^\d{4}-\d{2}-\d{2}-?\s*/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Heuristic template type from a title + attendee count, mirroring the CLI's
+ * `inferType` so the recurring path and the default path agree. A "1:1"/
+ * "weekly"/"check-in" title or a ≤2-person meeting → `one-on-one`, else
+ * `other`.
+ */
+export function inferTemplateType(title: string, attendeeCount: number): string {
+  const t = title.toLowerCase();
+  if (/\b1:1\b|\bone[- ]on[- ]one\b|\bweekly\b|\bcheck[- ]?in\b/.test(t)) return 'one-on-one';
+  if (attendeeCount <= 2) return 'one-on-one';
+  return 'other';
+}
+
+/**
+ * Derive a recurring meeting's agenda template type from its OWN last instance
+ * in `resources/meetings/` (pre-mortem R10 / AC1.8). ADDITIVE: a meeting only
+ * derives from a prior instance when one with the SAME normalized title (and a
+ * different path) exists; its template type is inferred from THAT instance's
+ * attendee count — so a team bi-weekly that shows 2 attendees this time but had
+ * 5 before is typed `other`, not a spurious `one-on-one`. A genuine 1:1 with NO
+ * prior instance falls through to the bare-attendee-count heuristic and stays
+ * `one-on-one` (AC-R10 — no regression). Pure; exported for tests.
+ *
+ * @param title          this meeting's title (date prefix tolerated)
+ * @param attendeeCount  this meeting's attendee count
+ * @param index          the meeting index (prior instances live here)
+ * @param selfPath       this meeting's own path, excluded from the match
+ */
+export function deriveRecurringTemplateType(
+  title: string,
+  attendeeCount: number,
+  index: MeetingIndexEntry[],
+  selfPath?: string,
+): string {
+  const norm = normalizeMeetingTitle(title);
+  if (norm.length === 0) return inferTemplateType(title, attendeeCount);
+  // Find the most-recent prior instance with the same normalized title.
+  const prior = index
+    .filter(
+      (m) =>
+        m.path !== selfPath &&
+        normalizeMeetingTitle(m.title) === norm,
+    )
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0];
+  if (!prior) return inferTemplateType(title, attendeeCount);
+  // Derive from the prior instance's real attendee count.
+  const priorCount = prior.attendeeIds.length || prior.attendeeNames.length;
+  return inferTemplateType(prior.title, priorCount || attendeeCount);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,7 +140,8 @@ export interface ScaffoldCandidate {
     | 'discussion-topic'
     | 'next-focus'
     | 'wiki'
-    | 'attendee-highlight';
+    | 'attendee-highlight'
+    | 'project-doc';
 }
 
 /** A scaffold section: a template heading pre-populated with candidates. */
@@ -155,6 +223,20 @@ function classifyTopicGroup(label: string): Bucket {
 const COMMITMENTS_HEADING_RE = /^Open commitments/i;
 const RECENT_MEETINGS_HEADING_RE = /^Recent meetings/i;
 const WIKI_HEADING_RE = /^Related wiki pages/i;
+// WS-1 (plan-context-injection): the meeting brief's `Project document`
+// section carries the selectProjectDocs output (heading + rel + score + body
+// excerpt). The scaffold routes these into agenda sections with
+// `source:'project-doc'` (CR-3 named deliverable — without this the project
+// body never reaches sections[].candidates[]).
+const PROJECT_DOC_HEADING_RE = /^Project document/i;
+/** Match a workspace-relative path inside backticks: `path/to/file.md`. */
+const REL_PATH_RE = /`([^`]+\.md)`/;
+
+/** Normalize a bullet to its referenced rel-path (for R4 dedupe), or null. */
+function bulletRelPath(text: string): string | null {
+  const m = text.match(REL_PATH_RE);
+  return m ? m[1].trim().toLowerCase() : null;
+}
 
 /** Pull commitment bullets (already ID-tagged) out of the brief sections. */
 function commitmentCandidates(brief: MeetingBrief): ScaffoldCandidate[] {
@@ -189,6 +271,27 @@ function wikiCandidates(brief: MeetingBrief): ScaffoldCandidate[] {
     if (!WIKI_HEADING_RE.test(section.heading)) continue;
     for (const bullet of section.bullets) {
       out.push({ text: bullet, source: 'wiki' });
+    }
+  }
+  return out;
+}
+
+/**
+ * Pull project-document candidates out of the brief's `Project document`
+ * section (WS-1, CR-3 named deliverable). Sub-bullets (the indented
+ * body-excerpt lines) are folded onto their parent doc bullet so each
+ * candidate reads as one entry with its excerpt.
+ */
+function projectDocCandidates(brief: MeetingBrief): ScaffoldCandidate[] {
+  const out: ScaffoldCandidate[] = [];
+  for (const section of brief.sections) {
+    if (!PROJECT_DOC_HEADING_RE.test(section.heading)) continue;
+    for (const bullet of section.bullets) {
+      if (/^\s+/.test(bullet) && out.length > 0) {
+        out[out.length - 1].text += ` — ${bullet.trim()}`;
+        continue;
+      }
+      out.push({ text: bullet, source: 'project-doc' });
     }
   }
   return out;
@@ -316,6 +419,19 @@ export function assembleAgendaScaffold(
   const recentMeetings = recentMeetingCandidates(brief);
   const wiki = wikiCandidates(brief);
 
+  // WS-1: project-document candidates. R4 — dedupe against recent-meeting
+  // candidates: when a selected doc's rel-path is ALSO a recent-meeting bullet
+  // (the highest-scoring doc IS the last meeting instance), drop it from the
+  // project-doc set (prefer the recent-meeting candidate) so the same decision
+  // isn't emitted twice.
+  const recentMeetingRels = new Set(
+    recentMeetings.map((c) => bulletRelPath(c.text)).filter((r): r is string => r !== null),
+  );
+  const projectDocs = projectDocCandidates(brief).filter((c) => {
+    const rel = bulletRelPath(c.text);
+    return !(rel && recentMeetingRels.has(rel));
+  });
+
   // Flatten discussion topics, tagged with the bucket each group feeds.
   const topicsByBucket: Record<Bucket, ScaffoldCandidate[]> = {
     priorities: [],
@@ -356,6 +472,7 @@ export function assembleAgendaScaffold(
     wiki: false,
     topics: false,
     sweep: false,
+    projectDoc: false,
   };
 
   const sections: ScaffoldSection[] = [];
@@ -366,9 +483,13 @@ export function assembleAgendaScaffold(
 
     switch (bucket) {
       case 'priorities':
-        candidates = [...commitments, ...recentMeetings];
+        // R3: project-doc candidates LEAD priorities (they're the prep
+        // substance) — routed into BOTH priorities and general so a template
+        // with either heading consumes them; only unrouted if neither exists.
+        candidates = [...projectDocs, ...commitments, ...recentMeetings];
         consumed.commitments = true;
         consumed.recentMeetings = true;
+        if (projectDocs.length > 0) consumed.projectDoc = true;
         break;
       case 'feedback-growth':
         candidates = [...topicsByBucket['feedback-growth']];
@@ -385,6 +506,7 @@ export function assembleAgendaScaffold(
         break;
       case 'general':
         candidates = [
+          ...projectDocs,
           ...commitments,
           ...recentMeetings,
           ...allTopicCandidates,
@@ -394,6 +516,7 @@ export function assembleAgendaScaffold(
         consumed.recentMeetings = true;
         consumed.topics = true;
         consumed.wiki = true;
+        if (projectDocs.length > 0) consumed.projectDoc = true;
         break;
     }
 
@@ -407,7 +530,11 @@ export function assembleAgendaScaffold(
   }
 
   // Anything unconsumed → unrouted (so the agent doesn't silently drop signal).
+  // R3: project-doc candidates fall here ONLY when neither a priorities nor a
+  // general section existed in the template (e.g. a minimal skeleton) — they
+  // are surfaced, never silently dropped.
   const unrouted: ScaffoldCandidate[] = [];
+  if (!consumed.projectDoc) unrouted.push(...projectDocs);
   if (!consumed.commitments) unrouted.push(...commitments);
   if (!consumed.recentMeetings) unrouted.push(...recentMeetings);
   if (!consumed.wiki) unrouted.push(...wiki);
@@ -438,6 +565,7 @@ const SOURCE_LABEL: Record<ScaffoldCandidate['source'], string> = {
   'next-focus': 'owed / sweep',
   wiki: 'wiki',
   'attendee-highlight': 'highlight',
+  'project-doc': 'project doc',
 };
 
 /**

@@ -5,7 +5,10 @@
  * Orchestrates ContextService, MemoryService, and EntityService.
  * No direct fs imports — uses injected services only.
  */
-import { assembleBriefForPerson as assemblePersonImpl, assembleBriefForProject as assembleProjectImpl, assembleProjectWhatsNew as assembleProjectWhatsNewImpl, assembleBriefForArea as assembleAreaImpl, assembleBriefForMeeting as assembleMeetingImpl, } from './brief-assemblers.js';
+import { assembleBriefForPerson as assemblePersonImpl, assembleBriefForProject as assembleProjectImpl, assembleProjectWhatsNew as assembleProjectWhatsNewImpl, selectProjectDocs as selectProjectDocsImpl, assembleBriefForArea as assembleAreaImpl, assembleBriefForMeeting as assembleMeetingImpl, loadMeetingIndex, } from './brief-assemblers.js';
+import { deriveRecurringTemplateType } from './agenda-scaffold.js';
+import { assemblePlanContext as assemblePlanContextImpl, } from './plan-context.js';
+import { loadAreaAliasMap } from './area-parser.js';
 // ---------------------------------------------------------------------------
 // routeToSkill — ported from skill-router.ts
 // ---------------------------------------------------------------------------
@@ -356,7 +359,7 @@ export class IntelligenceService {
         });
     }
     /** Assemble a structured brief for a project — AC2. Pure aggregator. */
-    async assembleBriefForProject(slug, paths) {
+    async assembleBriefForProject(slug, paths, opts = {}) {
         const deps = this.requireBriefDeps();
         return assembleProjectImpl(slug, paths, {
             storage: deps.storage,
@@ -364,7 +367,7 @@ export class IntelligenceService {
             topicMemory: deps.topicMemory,
             areaMemory: deps.areaMemory,
             entities: this.entities,
-        });
+        }, opts);
     }
     /**
      * "What's new since the README was last touched" for a project —
@@ -379,6 +382,45 @@ export class IntelligenceService {
             areaMemory: deps.areaMemory,
             entities: this.entities,
         });
+    }
+    /**
+     * Deterministically select + budget a project's documents (WS-1 —
+     * plan-context-injection). Pure read, NO LLM (lexical jaccard + mtime).
+     * Surfaces the net-new `selectProjectDocs` engine so `/project`,
+     * `arete brief`, agendas, and `plan-context` all inherit one body-reader.
+     */
+    async selectProjectDocs(slug, paths, opts = {}) {
+        const deps = this.requireBriefDeps();
+        return selectProjectDocsImpl(slug, paths, { storage: deps.storage }, opts);
+    }
+    /**
+     * Aggregate the plan-context bundle for `arete plan-context --week|--day`
+     * (WS-2/WS-3 — plan-context-injection). COMPOSES selectProjectDocs +
+     * assembleProjectWhatsNew + getActiveTopics + last-week read into one
+     * source-tagged bundle. Pure read, NO LLM. The CLI command is a thin shell
+     * over this — no body parsing in the command (pre-mortem R6).
+     */
+    async assemblePlanContext(mode, paths, opts = {}) {
+        const deps = this.requireBriefDeps();
+        return assemblePlanContextImpl(mode, paths, {
+            storage: deps.storage,
+            commitments: deps.commitments,
+            topicMemory: deps.topicMemory,
+            areaMemory: deps.areaMemory,
+            entities: this.entities,
+        }, opts);
+    }
+    /**
+     * Derive a recurring meeting's agenda template type from its own last
+     * instance in resources/meetings/ (WS-1 / pre-mortem R10). ADDITIVE: a
+     * genuine 1:1 with no prior instance still resolves to `one-on-one`. Pure
+     * read; loads the meeting index internally.
+     */
+    async deriveAgendaTemplateType(title, attendeeCount, paths, selfPath) {
+        const deps = this.requireBriefDeps();
+        const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
+        const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
+        return deriveRecurringTemplateType(title, attendeeCount, index, selfPath);
     }
     /** Assemble a structured brief for an area — AC3. Pure aggregator. */
     async assembleBriefForArea(slug, paths) {

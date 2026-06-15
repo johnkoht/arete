@@ -34,6 +34,38 @@ export {
 } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
+// WS-1 (plan-context-injection) — deterministic project-doc selection engine
+export { selectProjectDocs } from './brief-assemblers.js';
+export {
+  listActiveProjects,
+  PROJECT_DOC_BUDGET_DEFAULT,
+} from './brief-assemblers.js';
+export type { ActiveProject } from './brief-assemblers.js';
+// WS-2/WS-3 (plan-context-injection) — plan-context aggregator
+export {
+  assemblePlanContext,
+  resolveTodayAreas,
+  extractOpenQuestions,
+  PLAN_CONTEXT_PROJECT_DOC_BUDGET,
+  PLAN_CONTEXT_MAX_PROJECTS,
+  PLAN_CONTEXT_RECENT_DAYS,
+} from './plan-context.js';
+export type {
+  PlanContextBundle,
+  PlanContextMode,
+  PlanContextProject,
+  PlanContextTopic,
+  PlanContextGoal,
+  PlanContextWhatsNew,
+  PlanContextSelectedDoc,
+  AssemblePlanContextOptions,
+} from './plan-context.js';
+export type {
+  ProjectDocSelection,
+  SelectProjectDocsOptions,
+  SelectedExpandedDoc,
+  ListedDoc,
+} from './brief-assemblers.js';
 // Phase 14 AC2 — project topics-cache compute/diff/write (R1/R2 in tested code)
 export {
   computeProjectTopicsRefresh,
@@ -68,6 +100,8 @@ export {
   renderScaffoldMarkdown,
   classifySection,
   splitOwed,
+  inferTemplateType,
+  deriveRecurringTemplateType,
 } from './agenda-scaffold.js';
 export type {
   AgendaScaffold,

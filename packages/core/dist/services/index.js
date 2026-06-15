@@ -13,6 +13,11 @@ export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.j
 // Phase 12 AC1/AC2 — project area resolution + backfill helpers
 export { resolveProjectArea } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
+// WS-1 (plan-context-injection) — deterministic project-doc selection engine
+export { selectProjectDocs } from './brief-assemblers.js';
+export { listActiveProjects, PROJECT_DOC_BUDGET_DEFAULT, } from './brief-assemblers.js';
+// WS-2/WS-3 (plan-context-injection) — plan-context aggregator
+export { assemblePlanContext, resolveTodayAreas, extractOpenQuestions, PLAN_CONTEXT_PROJECT_DOC_BUDGET, PLAN_CONTEXT_MAX_PROJECTS, PLAN_CONTEXT_RECENT_DAYS, } from './plan-context.js';
 // Phase 14 AC2 — project topics-cache compute/diff/write (R1/R2 in tested code)
 export { computeProjectTopicsRefresh, applyProjectTopics, sameSlugSet, PROJECT_TOPICS_CAP, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_TOPICS_OWNERSHIP_COMMENT, } from './project-topics.js';
 export { parseTopicsCache } from './brief-assemblers.js';
@@ -20,7 +25,7 @@ export { parseTopicsCache } from './brief-assemblers.js';
 export { listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, } from './meeting-area.js';
 // Phase 13 AC4 — archive-prefix-tolerant project lookup (claim validation reuse)
 export { resolveArchivedProjectReadme } from './brief-assemblers.js';
-export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, } from './agenda-scaffold.js';
+export { assembleAgendaScaffold, renderScaffoldMarkdown, classifySection, splitOwed, inferTemplateType, deriveRecurringTemplateType, } from './agenda-scaffold.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
 export { seedSkillsLocal, renderSkillsLocalTemplate, PHASE_2_CHEF_ORCHESTRATOR_SKILLS, PHASE_4_CHEF_ORCHESTRATOR_SKILLS, CHEF_ORCHESTRATOR_SKILLS, } from './skills-local.js';

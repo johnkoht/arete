@@ -41,6 +41,7 @@ import { registerCostCommand } from './commands/cost.js';
 import { registerEventsCommand } from './commands/events.js';
 import { registerDedupCommand } from './commands/dedup.js';
 import { registerAgendaCommands } from './commands/agenda.js';
+import { registerPlanContextCommand } from './commands/plan-context.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -167,5 +168,6 @@ registerCostCommand(program);
 registerEventsCommand(program);
 registerDedupCommand(program);
 registerAgendaCommands(program);
+registerPlanContextCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

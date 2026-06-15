@@ -16,11 +16,21 @@ import { parse as parseYaml } from 'yaml';
 import { tokenizeSlug } from './topic-memory.js';
 import { canonicalizeAreaSlug, loadAreaAliasMap } from './area-parser.js';
 import { jaccardSimilarity } from '../utils/similarity.js';
+import { tokenize } from '../search/tokenize.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 /** Global per-brief soft cap (characters). Matches old BRIEF_MAX_CONTEXT_CHARS. */
 export const BRIEF_GLOBAL_CAP_CHARS = 12_000;
+/**
+ * Default project-doc expansion budget (chars) for the generic, single-project
+ * read surfaces — `arete project open` and `arete brief --project` (WS-1/WS-2,
+ * plan-context-injection). De-magic-numbers the prior hardcoded `12000` at
+ * those two CLI call sites (eng-lead ask). The per-meeting agenda path uses a
+ * tighter budget (`MEETING_PROJECT_DOC_BUDGET`); plan-context sets its own
+ * per-mode budget (`PLAN_CONTEXT_PROJECT_DOC_BUDGET`).
+ */
+export const PROJECT_DOC_BUDGET_DEFAULT = 12_000;
 /** Per-section caps (chars). v2 MC1 — mini-brief truncation drops tail. */
 export const PER_SECTION_CAPS = {
     attendee_minibrief: 2000,
@@ -858,7 +868,7 @@ export function projectDisplayName(fm, slug) {
     }
     return slug;
 }
-async function listActiveProjects(storage, paths, aliasMap = new Map()) {
+export async function listActiveProjects(storage, paths, aliasMap = new Map()) {
     const activeDir = join(paths.projects, 'active');
     const exists = await storage.exists(activeDir);
     if (!exists)
@@ -1058,7 +1068,7 @@ export async function resolveArchivedProjectReadme(storage, paths, slug) {
     return null;
 }
 /** Assemble a ProjectBrief — pure aggregator. AC2. */
-export async function assembleBriefForProject(slug, paths, deps) {
+export async function assembleBriefForProject(slug, paths, deps, opts = {}) {
     const aliasMap = await loadAreaAliasMap(deps.storage, paths.root);
     const project = await readProjectBySlug(deps.storage, paths, slug, aliasMap);
     if (!project) {
@@ -1118,6 +1128,33 @@ export async function assembleBriefForProject(slug, paths, deps) {
             body: finalBody,
             truncated,
         });
+    }
+    // 1b. Project document(s) — DEFECT B fix: the shared body-reader so
+    // `/project` and `arete brief --project` inherit traverse+select (WS-1).
+    // OPT-IN via projectDocBudgetChars (R1: default off keeps the 2-arg/no-opts
+    // callers byte-identical). Surfaced as a `Project document` section — same
+    // shape the meeting brief emits — so JSON/markdown carry it without widening
+    // the ProjectBrief return type.
+    const projectDocBudget = opts.projectDocBudgetChars ?? 0;
+    if (projectDocBudget > 0) {
+        const { bullets: docBullets, sources: docSources } = await buildProjectDocBullets([{ slug, name: project.name }], paths, deps.storage, {
+            topic: opts.topic ?? project.name,
+            queryExtra: [project.area ?? '', `${project.name} ${slug}`]
+                .filter(Boolean)
+                .join(' '),
+            budgetChars: projectDocBudget,
+            ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+        });
+        sources.push(...docSources);
+        if (docBullets.length > 0) {
+            const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
+            sections.push({
+                heading: 'Project document',
+                bullets: capped.kept,
+                truncated: capped.truncatedCount > 0,
+                truncatedCount: capped.truncatedCount,
+            });
+        }
     }
     // 2. Recent activity — meetings tagged to project's area
     const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
@@ -1322,6 +1359,304 @@ export async function assembleProjectWhatsNew(slug, paths, deps) {
             commitments.push({ id: c.id, text: c.text, date: c.date });
     }
     return { since: sinceIso, meetings, topics, commitments };
+}
+/** Recency half-life in days (score → 0 as age → halflife). */
+const DOC_RECENCY_HALFLIFE_DAYS = 30;
+/** Chars of body sampled into the relevance query for each candidate. */
+const DOC_RELEVANCE_BODY_CHARS = 600;
+/** Below this composite score the top pick is flagged low-confidence. */
+const DOC_LOW_CONFIDENCE_FLOOR = 0.12;
+/** Cap on the number of files traversed per dir (by mtime); rest are listed. */
+const DOC_TRAVERSAL_CAP = 20;
+/** First markdown heading text (`# ...` or `## ...`) in a body, or undefined. */
+function firstHeadingOf(body) {
+    for (const line of body.split('\n')) {
+        const m = line.match(/^#{1,6}\s+(.+?)\s*$/);
+        if (m)
+            return m[1].trim();
+    }
+    return undefined;
+}
+/** Human-ish title from a filename: strip ext, replace separators. */
+function titleFromFilename(rel) {
+    const base = basename(rel).replace(/\.md$/i, '');
+    return base.replace(/[-_]+/g, ' ').trim() || base;
+}
+/**
+ * Provenance per location, mirroring the v0.16.0 search convention:
+ * outputs/ = published, README/root = reference, working/inputs = draft.
+ */
+function provenanceForLocation(loc) {
+    if (loc === 'outputs')
+        return 'published';
+    if (loc === 'working' || loc === 'inputs')
+        return 'draft';
+    return 'reference';
+}
+function locationBoostValue(loc) {
+    if (loc === 'outputs')
+        return 0.15;
+    if (loc === 'readme' || loc === 'root')
+        return 0.1;
+    if (loc === 'working')
+        return 0.05;
+    return 0;
+}
+/**
+ * Deterministically select and budget project documents (WS-1).
+ *
+ * PURE READ — no writes, NO LLM/embedding. Traversal + lexical jaccard +
+ * mtime recency only. Zero-result safety: never returns an empty `expanded`
+ * when ≥1 doc exists (falls back to the most-recent root-or-README doc).
+ *
+ * @param slug   project slug (under projects/active/<slug>/)
+ * @param paths  workspace paths
+ * @param deps   storage adapter (only `storage` is consulted)
+ * @param opts   selection options (see {@link SelectProjectDocsOptions})
+ */
+export async function selectProjectDocs(slug, paths, deps, opts = {}) {
+    const storage = deps.storage;
+    const budgetChars = opts.budgetChars ?? BRIEF_GLOBAL_CAP_CHARS;
+    const maxExpanded = opts.maxExpanded ?? 3;
+    const expandWorking = opts.expandWorking ?? false;
+    const useLocationBoost = opts.locationBoost ?? false;
+    const referenceMs = (opts.referenceDate ?? new Date()).getTime();
+    const empty = {
+        expanded: [],
+        listed: [],
+        budgetChars,
+        usedChars: 0,
+        truncated: false,
+    };
+    const projectDir = join(paths.projects, 'active', slug);
+    if (!(await storage.exists(projectDir)))
+        return empty;
+    // ---- 1. Gather candidate .md files across the traversed dirs ------------
+    // README + root *.md (non-recursive); outputs/ working/ inputs/ (each, .md
+    // only — pre-mortem R12). Cap each dir at DOC_TRAVERSAL_CAP files by mtime;
+    // overflow is still listed (not expanded). The README is forced into `root`
+    // location classification overridden to `readme` below.
+    const seenAbs = new Set();
+    const candidates = [];
+    async function gatherDir(dir, loc) {
+        if (!(await storage.exists(dir)))
+            return;
+        // Non-recursive .md listing. The root dir also contains README.md, which
+        // we classify separately below.
+        let files;
+        try {
+            files = await storage.list(dir, { extensions: ['.md'] });
+        }
+        catch {
+            return;
+        }
+        // Attach mtimes, sort newest-first, cap traversal.
+        const withMtime = [];
+        for (const abs of files) {
+            const mod = await storage.getModified(abs);
+            withMtime.push({ abs, mtimeMs: mod ? mod.getTime() : 0 });
+        }
+        withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs ||
+            (a.abs < b.abs ? -1 : a.abs > b.abs ? 1 : 0));
+        const capped = withMtime.slice(0, DOC_TRAVERSAL_CAP);
+        for (const { abs, mtimeMs } of capped) {
+            if (seenAbs.has(abs))
+                continue;
+            seenAbs.add(abs);
+            const content = await storage.read(abs);
+            if (content === null)
+                continue;
+            const rel = relativeToRoot(abs, paths.root);
+            const isReadme = basename(abs).toLowerCase() === 'readme.md';
+            const thisLoc = loc === 'root' && isReadme ? 'readme' : loc;
+            const parsed = parseFrontmatter(content);
+            const body = (parsed?.body ?? content).trim();
+            const firstHeading = firstHeadingOf(body);
+            const title = firstHeading ?? titleFromFilename(rel);
+            candidates.push({
+                rel,
+                absPath: abs,
+                location: thisLoc,
+                title,
+                firstHeading,
+                body,
+                provenance: provenanceForLocation(thisLoc),
+                mtimeMs,
+                score: 0,
+                relevance: 0,
+                recency: 0,
+                locBoost: 0,
+            });
+        }
+    }
+    // Root (non-recursive) includes README.md + any root-level *.md.
+    await gatherDir(projectDir, 'root');
+    await gatherDir(join(projectDir, 'outputs'), 'outputs');
+    await gatherDir(join(projectDir, 'working'), 'working');
+    await gatherDir(join(projectDir, 'inputs'), 'inputs');
+    if (candidates.length === 0)
+        return empty;
+    // ---- 2. Score each candidate -------------------------------------------
+    // Query enrichment (pre-mortem R5): union the bare title with the project
+    // name/slug + caller-supplied extra tokens (area slug, attendee/project
+    // tokens) before tokenizing — so a short meeting title doesn't let recency
+    // dominate.
+    const queryText = [opts.topic ?? '', opts.queryExtra ?? '', slug.replace(/[-_]+/g, ' ')]
+        .filter((s) => s.length > 0)
+        .join(' ');
+    const queryTokens = tokenize(queryText);
+    for (const c of candidates) {
+        const surface = `${c.title} ${c.firstHeading ?? ''} ${c.body.slice(0, DOC_RELEVANCE_BODY_CHARS)}`;
+        const relevance = queryTokens.length > 0
+            ? jaccardSimilarity(queryTokens, tokenize(surface))
+            : 0;
+        const ageDays = c.mtimeMs > 0 ? (referenceMs - c.mtimeMs) / (1000 * 60 * 60 * 24) : DOC_RECENCY_HALFLIFE_DAYS;
+        const recency = Math.max(0, Math.min(1, 1 - ageDays / DOC_RECENCY_HALFLIFE_DAYS));
+        const locBoost = useLocationBoost ? locationBoostValue(c.location) : 0;
+        c.relevance = relevance;
+        c.recency = recency;
+        c.locBoost = locBoost;
+        c.score = 0.55 * relevance + 0.3 * recency + locBoost;
+    }
+    // ---- 3. Sort deterministically -----------------------------------------
+    // score desc; tie-break: locationBoost desc → mtime desc → lexical rel asc.
+    candidates.sort((a, b) => {
+        if (b.score !== a.score)
+            return b.score - a.score;
+        if (b.locBoost !== a.locBoost)
+            return b.locBoost - a.locBoost;
+        if (b.mtimeMs !== a.mtimeMs)
+            return b.mtimeMs - a.mtimeMs;
+        return a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0;
+    });
+    // ---- 4. Tiered expand vs. list -----------------------------------------
+    // working/ + inputs/ are LISTED by default (expandWorking gates working/).
+    // Walk sorted candidates: expand the eligible ones until the budget or
+    // maxExpanded is hit; everything else (incl. budget overflow) is listed.
+    const expanded = [];
+    const listed = [];
+    let usedChars = 0;
+    let truncated = false;
+    for (const c of candidates) {
+        const expandable = c.location === 'readme' ||
+            c.location === 'root' ||
+            c.location === 'outputs' ||
+            (c.location === 'working' && expandWorking);
+        if (expandable &&
+            expanded.length < maxExpanded &&
+            usedChars + c.body.length <= budgetChars) {
+            expanded.push({
+                rel: c.rel,
+                heading: c.title,
+                body: c.body,
+                provenance: c.provenance,
+                score: Number(c.score.toFixed(6)),
+            });
+            usedChars += c.body.length;
+        }
+        else {
+            // Demoted (budget overflow, maxExpanded reached, or non-expandable tier).
+            if (expandable && usedChars + c.body.length > budgetChars)
+                truncated = true;
+            listed.push({
+                rel: c.rel,
+                title: c.title,
+                firstHeading: c.firstHeading,
+                provenance: c.provenance,
+            });
+        }
+    }
+    // ---- 5. Zero-result safety ("pick wrong > pick none") -------------------
+    // Never return empty `expanded` when ≥1 doc exists. Fall back to the
+    // most-recent root-or-README doc (or, failing that, the most-recent doc).
+    let lowConfidence = false;
+    if (expanded.length === 0) {
+        lowConfidence = true;
+        const rootish = candidates
+            .filter((c) => c.location === 'readme' || c.location === 'root')
+            .sort((a, b) => b.mtimeMs - a.mtimeMs);
+        const pick = rootish[0] ?? candidates[0];
+        if (pick) {
+            // Promote out of `listed` if present.
+            const idx = listed.findIndex((l) => l.rel === pick.rel);
+            if (idx >= 0)
+                listed.splice(idx, 1);
+            const body = pick.body.length > budgetChars ? pick.body.slice(0, budgetChars) : pick.body;
+            // Mid-doc cut only happens in the degenerate fallback where a single
+            // doc exceeds the whole budget; mark truncated so it's visible.
+            if (pick.body.length > budgetChars)
+                truncated = true;
+            expanded.push({
+                rel: pick.rel,
+                heading: pick.title,
+                body,
+                provenance: pick.provenance,
+                score: Number(pick.score.toFixed(6)),
+            });
+            usedChars = body.length;
+        }
+    }
+    else if (expanded[0]) {
+        // Low-confidence when the top pick's TOPIC RELEVANCE (not composite score)
+        // is below the floor — i.e. it was chosen mostly on recency/location, not
+        // because it matches the query. Surfaced so a wrong pick is visible (R5).
+        const top = candidates.find((c) => c.rel === expanded[0].rel);
+        if (top && top.relevance < DOC_LOW_CONFIDENCE_FLOOR)
+            lowConfidence = true;
+    }
+    return {
+        expanded,
+        listed,
+        budgetChars,
+        usedChars,
+        truncated,
+        ...(lowConfidence ? { lowConfidence: true } : {}),
+    };
+}
+/**
+ * Shared body-reader: run {@link selectProjectDocs} over a set of projects and
+ * render the deterministic `Project document` section bullets. WS-1 wiring —
+ * used by the meeting brief (resolved AND unresolved-with-override paths) and
+ * by the project brief so all surfaces inherit traverse+select identically.
+ *
+ * Returns the rendered bullets plus the workspace-relative source paths the
+ * caller should fold into its `sources` array. Best-effort per project: a
+ * selection failure on one project is skipped, never thrown.
+ */
+async function buildProjectDocBullets(projects, paths, storage, opts) {
+    const bullets = [];
+    const sources = [];
+    if (projects.length === 0 || opts.budgetChars <= 0)
+        return { bullets, sources };
+    // Share the budget across projects (≥1 expanded each when it fits).
+    const perProjectBudget = Math.max(1, Math.floor(opts.budgetChars / projects.length));
+    for (const p of projects) {
+        let selection;
+        try {
+            selection = await selectProjectDocs(p.slug, paths, { storage }, {
+                topic: opts.topic,
+                queryExtra: opts.queryExtra,
+                budgetChars: perProjectBudget,
+                ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+            });
+        }
+        catch {
+            continue; // best-effort — selection must never break the brief
+        }
+        for (const d of selection.expanded) {
+            sources.push(d.rel);
+            const slugTag = opts.multiProject ? ` _(${p.slug})_` : '';
+            const conf = selection.lowConfidence ? ' _[low-confidence]_' : '';
+            bullets.push(`**${d.heading}**${slugTag} — \`${d.rel}\` _(score ${d.score.toFixed(3)})_${conf}`);
+            const excerpt = d.body.replace(/\s+/g, ' ').trim().slice(0, 280);
+            if (excerpt.length > 0)
+                bullets.push(`  - ${excerpt}`);
+        }
+        for (const l of selection.listed.slice(0, 3)) {
+            bullets.push(`_listed:_ \`${l.rel}\` — ${l.title}`);
+        }
+    }
+    return { bullets, sources };
 }
 /**
  * Parse memory-item entries in BOTH live and legacy formats (W6, review
@@ -1574,6 +1909,8 @@ export async function assembleBriefForArea(slug, paths, deps) {
         },
     };
 }
+/** Default per-meeting project-doc budget (tightened from /project's 12k). */
+const MEETING_PROJECT_DOC_BUDGET = 3500;
 /**
  * Resolve the meeting input string to a meeting file path or, failing that,
  * to a calendar event. Returns null when nothing resolved (AC4d path).
@@ -1649,7 +1986,7 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
     const index = await loadMeetingIndex(deps.storage, paths, aliasMap);
     const resolution = await resolveMeetingInput(input, paths, deps.storage, index, opts.calendarEvents);
     if (resolution.kind === 'unresolved') {
-        return await buildUnresolvedMeetingBrief(input, paths, deps);
+        return await buildUnresolvedMeetingBrief(input, paths, deps, opts, aliasMap);
     }
     const sources = [];
     let title;
@@ -1773,6 +2110,43 @@ export async function assembleBriefForMeeting(input, paths, deps, opts = {}) {
             truncated: capped.truncatedCount > 0,
             truncatedCount: capped.truncatedCount,
         });
+    }
+    // 2b. Project document(s) — WS-1: traverse + select the relevant project doc
+    // for the meeting topic so the agenda surfaces the actual prep substance
+    // (not just metadata bullets). Per-project selection shares a budget across
+    // the (≤2) resolved projects (R9 in WS-2; here ≤2 projects). The scaffold
+    // routes these into `source:'project-doc'` candidates (R3).
+    const projectDocBudget = opts.projectDocBudgetChars ?? MEETING_PROJECT_DOC_BUDGET;
+    if (resolvedProjects.length > 0 && projectDocBudget > 0) {
+        // R5: enrich the lexical query beyond the bare title — union resolved
+        // area slug + project name/slug + attendee tokens.
+        const queryExtra = [
+            explicitArea ?? inferredArea?.slug ?? '',
+            ...resolvedProjects.map((p) => `${p.name} ${p.slug}`),
+            ...attendeeMiniBriefs.map((mb) => mb.name),
+        ]
+            .filter(Boolean)
+            .join(' ');
+        const topic = title.replace(/^\d{4}-\d{2}-\d{2}-?\s*/, '');
+        // The rel + score in each bullet are load-bearing for the audit AC (AC1.6)
+        // and for the scaffold's dedupe (R4) — see buildProjectDocBullets.
+        const { bullets: docBullets, sources: docSources } = await buildProjectDocBullets(resolvedProjects, paths, deps.storage, {
+            topic,
+            queryExtra,
+            budgetChars: projectDocBudget,
+            multiProject: resolvedProjects.length > 1,
+            ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+        });
+        sources.push(...docSources);
+        if (docBullets.length > 0) {
+            const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
+            sections.push({
+                heading: 'Project document',
+                bullets: capped.kept,
+                truncated: capped.truncatedCount > 0,
+                truncatedCount: capped.truncatedCount,
+            });
+        }
     }
     // 3. Recent meetings with this group — cross-attendee overlap
     const groupSlugs = attendeeMiniBriefs
@@ -1931,17 +2305,61 @@ function formatAttendeeMiniBriefBullets(mb) {
     }
     return lines;
 }
-async function buildUnresolvedMeetingBrief(input, paths, deps) {
+async function buildUnresolvedMeetingBrief(input, paths, deps, opts = {}, aliasMap) {
     const sources = [];
     const sections = [];
     sections.push({
         heading: 'Attendees',
         bullets: ['_(unresolved — no calendar match, no saved file)_'],
     });
-    sections.push({
-        heading: 'Meeting area & projects',
-        bullets: ['_(unresolved — no calendar match, no saved file)_'],
-    });
+    // DEFECT A fix: the `--project` override is the DOCUMENTED escape hatch
+    // (daily-plan passes it). It MUST drive selectProjectDocs regardless of
+    // calendar resolution — when the meeting can't be resolved (no calendar /
+    // no saved file) but a project is pinned, still surface its metadata AND a
+    // `Project document` section so the scaffold routes `source:'project-doc'`
+    // candidates.
+    let resolvedOverride = null;
+    if (opts.projectOverride) {
+        const map = aliasMap ?? (await loadAreaAliasMap(deps.storage, paths.root));
+        resolvedOverride = await readProjectBySlug(deps.storage, paths, opts.projectOverride, map);
+    }
+    if (resolvedOverride) {
+        const p = resolvedOverride;
+        const rel = relativeToRoot(p.readmePath, paths.root);
+        sources.push(rel);
+        sections.push({
+            heading: 'Meeting area & projects',
+            bullets: [
+                `_Project pinned via \`--project ${opts.projectOverride}\`._`,
+                `**${p.name}** (area: ${p.area ?? '—'}, status: ${p.status ?? '—'}) — \`${rel}\``,
+            ],
+        });
+        const projectDocBudget = opts.projectDocBudgetChars ?? MEETING_PROJECT_DOC_BUDGET;
+        const topic = input.replace(/^\d{4}-\d{2}-\d{2}-?\s*/, '');
+        const queryExtra = [p.area ?? '', `${p.name} ${p.slug}`].filter(Boolean).join(' ');
+        const { bullets: docBullets, sources: docSources } = await buildProjectDocBullets([p], paths, deps.storage, {
+            topic,
+            queryExtra,
+            budgetChars: projectDocBudget,
+            ...(opts.referenceDate ? { referenceDate: opts.referenceDate } : {}),
+        });
+        sources.push(...docSources);
+        if (docBullets.length > 0) {
+            const capped = capBulletsByChars(docBullets, PER_SECTION_CAPS.project_context);
+            sections.push({
+                heading: 'Project document',
+                bullets: capped.kept,
+                truncated: capped.truncatedCount > 0,
+                truncatedCount: capped.truncatedCount,
+            });
+        }
+    }
+    else {
+        sections.push({
+            heading: 'Meeting area & projects',
+            bullets: ['_(unresolved — no calendar match, no saved file)_'],
+        });
+    }
     // Best-effort wiki match against title
     try {
         const wiki = await retrieveWiki(deps.topicMemory, paths, input);
@@ -1972,6 +2390,7 @@ async function buildUnresolvedMeetingBrief(input, paths, deps) {
             attendees: [],
             resolved: false,
             unresolved: true,
+            ...(resolvedOverride ? { projectOverride: opts.projectOverride } : {}),
         },
         attendeeMiniBriefs: [],
     };

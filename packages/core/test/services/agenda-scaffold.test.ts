@@ -19,9 +19,12 @@ import {
   renderScaffoldMarkdown,
   classifySection,
   splitOwed,
+  inferTemplateType,
+  deriveRecurringTemplateType,
   type AttendeeScaffoldInput,
   type TemplateInput,
 } from '../../src/services/agenda-scaffold.js';
+import type { MeetingIndexEntry } from '../../src/services/brief-assemblers.js';
 import type { MeetingBrief, Commitment } from '../../src/models/index.js';
 
 // --- Fixtures --------------------------------------------------------------
@@ -510,5 +513,221 @@ describe('renderScaffoldMarkdown', () => {
     const s = assembleAgendaScaffold(makeBrief(), [attendeeFromFile()], OTHER_TEMPLATE);
     const md = renderScaffoldMarkdown(s);
     assert.match(md, /## Unrouted signal/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WS-1 (plan-context-injection) — project-doc routing (T2)
+// ---------------------------------------------------------------------------
+
+/** A MeetingBrief carrying a `Project document` section (selectProjectDocs out). */
+function briefWithProjectDoc(overrides: Partial<MeetingBrief> = {}): MeetingBrief {
+  return {
+    mode: 'meeting',
+    subject: 'Jira Roadmap Sync',
+    subjectSlug: '2026-06-09-jira-roadmap-sync',
+    sections: [
+      {
+        heading: 'Meeting area & projects',
+        bullets: ['**Glance Roadmap** (area: glance-operations, status: active) — `projects/active/glance-2-roadmap/README.md`'],
+      },
+      {
+        heading: 'Project document',
+        bullets: [
+          '**Glance 1.5 Roadmap** — `projects/active/glance-2-roadmap/glance-1.5-roadmap.md` _(score 0.412)_',
+          '  - Notion vs Jira decision: keep roadmap in Notion; capacity and slice-zero parity are the open risks.',
+          '_listed:_ `projects/active/glance-2-roadmap/working/capacity.md` — Capacity',
+        ],
+      },
+    ],
+    sources: ['projects/active/glance-2-roadmap/README.md'],
+    truncated: false,
+    metadata: {
+      title: 'Jira Roadmap Sync',
+      date: '2026-06-09',
+      attendees: ['Dave'],
+      resolved: true,
+    },
+    attendeeMiniBriefs: [],
+    ...overrides,
+  };
+}
+
+const PRIORITIES_ONLY_TEMPLATE: TemplateInput = {
+  type: 'other',
+  sectionHeadings: ['Priorities', 'Next Steps'],
+};
+
+// A truly minimal skeleton: a single non-priorities, non-general heading.
+const MINIMAL_SKELETON_TEMPLATE: TemplateInput = {
+  type: 'other',
+  sectionHeadings: ['Notes'],
+};
+
+describe('assembleAgendaScaffold — project-doc routing (WS-1)', () => {
+  it('AC1.5: routes the project-document section into sections[].candidates[] with source:project-doc', () => {
+    const s = assembleAgendaScaffold(briefWithProjectDoc(), [], PRIORITIES_ONLY_TEMPLATE);
+    const allCandidates = s.sections.flatMap((sec) => sec.candidates);
+    const projDoc = allCandidates.filter((c) => c.source === 'project-doc');
+    assert.ok(projDoc.length >= 1, 'at least one project-doc candidate reaches a section');
+    // AC1.6: the chosen doc's rel path + score are present in the candidate text.
+    assert.ok(
+      projDoc.some(
+        (c) =>
+          /glance-2-roadmap\/glance-1\.5-roadmap\.md/.test(c.text) &&
+          /score 0\.412/.test(c.text),
+      ),
+      'rel path + score surfaced for the audit (AC1.6)',
+    );
+    // The body excerpt (specific content, R8) is folded onto the doc bullet.
+    assert.ok(
+      projDoc.some((c) => /Notion vs Jira decision/.test(c.text)),
+      'specific roadmap concern present (not length>=0)',
+    );
+  });
+
+  it('AC-R3: with a MINIMAL skeleton template (no priorities/general heading) the project-doc candidate is reachable in unrouted (not dropped)', () => {
+    const s = assembleAgendaScaffold(briefWithProjectDoc(), [], MINIMAL_SKELETON_TEMPLATE);
+    const inSection = s.sections
+      .flatMap((sec) => sec.candidates)
+      .some((c) => c.source === 'project-doc');
+    const inUnrouted = s.unrouted.some((c) => c.source === 'project-doc');
+    assert.ok(inSection || inUnrouted, 'project-doc candidate is reachable, not silently dropped');
+    // 'Notes' classifies to general → in this template it IS consumed. Assert
+    // the candidate landed SOMEWHERE with its specific content intact.
+    const all = [...s.sections.flatMap((sec) => sec.candidates), ...s.unrouted];
+    assert.ok(all.some((c) => /Notion vs Jira decision/.test(c.text)));
+  });
+
+  it('AC-R3 strict: a skeleton with ONLY a next-steps heading still surfaces project-doc in unrouted', () => {
+    const nextOnly: TemplateInput = { type: 'other', sectionHeadings: ['Next Steps'] };
+    const s = assembleAgendaScaffold(briefWithProjectDoc(), [], nextOnly);
+    assert.ok(
+      s.unrouted.some((c) => c.source === 'project-doc' && /Notion vs Jira/.test(c.text)),
+      'project-doc falls to unrouted when no consuming section exists',
+    );
+  });
+
+  it('AC-R4: when the selected doc IS the last meeting instance, it is not emitted as BOTH recent-meeting and project-doc', () => {
+    const sharedRel = 'resources/meetings/2026-06-02-jira-roadmap-sync.md';
+    const brief = briefWithProjectDoc({
+      sections: [
+        {
+          heading: 'Recent meetings with this group (1)',
+          bullets: [`**Jira Roadmap Sync** (2026-06-02) — \`${sharedRel}\``],
+        },
+        {
+          heading: 'Project document',
+          bullets: [
+            `**Jira Roadmap Sync** — \`${sharedRel}\` _(score 0.5)_`,
+            '  - duplicate of the recent meeting instance',
+          ],
+        },
+      ],
+    });
+    const s = assembleAgendaScaffold(brief, [], PRIORITIES_ONLY_TEMPLATE);
+    const all = [...s.sections.flatMap((sec) => sec.candidates), ...s.unrouted];
+    const refs = all.filter((c) => c.text.includes(sharedRel));
+    // The shared doc must appear via recent-meeting, not duplicated as project-doc.
+    assert.ok(
+      !refs.some((c) => c.source === 'project-doc'),
+      'overlapping doc dropped from project-doc set (deduped)',
+    );
+    assert.ok(refs.some((c) => c.source === 'recent-meeting'), 'recent-meeting candidate kept');
+  });
+
+  it('project-doc candidate leads the Priorities section (substance first)', () => {
+    const s = assembleAgendaScaffold(briefWithProjectDoc(), [], PRIORITIES_ONLY_TEMPLATE);
+    const priorities = s.sections.find((sec) => sec.heading === 'Priorities');
+    assert.ok(priorities);
+    assert.equal(priorities!.candidates[0].source, 'project-doc');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WS-1 — recurring-meeting template derivation (R10 / AC1.8 / AC-R10)
+// ---------------------------------------------------------------------------
+
+function meetingEntry(over: Partial<MeetingIndexEntry>): MeetingIndexEntry {
+  return {
+    path: '/w/resources/meetings/x.md',
+    date: '2026-06-01',
+    title: 'x',
+    attendeeIds: [],
+    attendeeNames: [],
+    topics: [],
+    ...over,
+  };
+}
+
+describe('deriveRecurringTemplateType (WS-1 R10)', () => {
+  it('AC1.8: recurring meeting with a prior 5-person instance → type derived from it (NOT one-on-one)', () => {
+    // This instance shows only 2 attendees, but the prior same-titled instance
+    // had 5 → it is a team meeting, typed `other`.
+    const index = [
+      meetingEntry({
+        path: '/w/resources/meetings/2026-05-20-platform-biweekly.md',
+        date: '2026-05-20',
+        title: 'Platform Biweekly',
+        attendeeIds: ['a', 'b', 'c', 'd', 'e'],
+      }),
+    ];
+    const type = deriveRecurringTemplateType(
+      'Platform Biweekly',
+      2,
+      index,
+      '/w/resources/meetings/2026-06-03-platform-biweekly.md',
+    );
+    assert.notEqual(type, 'one-on-one');
+    assert.equal(type, 'other');
+  });
+
+  it('AC1.8: derivation tolerates a date-prefixed title and matches the prior instance', () => {
+    const index = [
+      meetingEntry({
+        path: '/w/resources/meetings/2026-05-20-platform-biweekly.md',
+        date: '2026-05-20',
+        title: '2026-05-20 Platform Biweekly',
+        attendeeIds: ['a', 'b', 'c', 'd', 'e'],
+      }),
+    ];
+    const type = deriveRecurringTemplateType('2026-06-03-Platform Biweekly', 2, index);
+    assert.equal(type, 'other');
+  });
+
+  it('AC-R10: genuine 1:1 with NO prior instance still yields one-on-one', () => {
+    const index = [
+      meetingEntry({ title: 'Some Other Meeting', attendeeIds: ['x', 'y', 'z'] }),
+    ];
+    const type = deriveRecurringTemplateType('Anthony / John', 2, index);
+    assert.equal(type, 'one-on-one');
+  });
+
+  it('AC-R10: empty index → one-on-one for a 2-person meeting (no regression)', () => {
+    assert.equal(deriveRecurringTemplateType('Dave Sync', 2, []), 'one-on-one');
+  });
+
+  it('a recurring 1:1 (prior 2-person instance) stays one-on-one', () => {
+    const index = [
+      meetingEntry({
+        path: '/w/resources/meetings/2026-05-26-anthony-john-weekly.md',
+        date: '2026-05-26',
+        title: 'Anthony / John Weekly',
+        attendeeIds: ['anthony-avina', 'john-koht'],
+      }),
+    ];
+    const type = deriveRecurringTemplateType(
+      'Anthony / John Weekly',
+      2,
+      index,
+      '/w/resources/meetings/2026-06-09-anthony-john-weekly.md',
+    );
+    assert.equal(type, 'one-on-one');
+  });
+
+  it('inferTemplateType: title keywords + attendee count heuristics', () => {
+    assert.equal(inferTemplateType('Weekly Sync', 6), 'one-on-one'); // keyword wins
+    assert.equal(inferTemplateType('Big Planning', 6), 'other');
+    assert.equal(inferTemplateType('Dave / John', 2), 'one-on-one');
   });
 });
