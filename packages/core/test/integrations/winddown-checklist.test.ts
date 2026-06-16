@@ -22,6 +22,9 @@ import {
   renderWinddownDoc,
   renderChoices,
   renderActions,
+  buildChecklistMeeting,
+  ownerTag,
+  isOthersAction,
   itemAnchor,
   choiceAnchor,
   actionAnchor,
@@ -132,6 +135,168 @@ describe('winddown-checklist renderer (W1)', () => {
     assert.ok(m);
     assert.equal(m![1], 'ai_001');
     assert.equal(m![2], 'anthony');
+  });
+});
+
+describe('owner/direction tag + FYI routing (finding #8)', () => {
+  it('ownerTag renders each direction relative to the workspace owner', () => {
+    assert.equal(
+      ownerTag({ direction: 'i_owe_them', ownerSlug: 'john-koht', counterpartySlug: 'anthony' }),
+      '  · (you → @anthony)',
+    );
+    assert.equal(
+      ownerTag({ direction: 'they_owe_me', ownerSlug: 'anthony', counterpartySlug: 'john-koht' }),
+      '  · (@anthony → you)',
+    );
+    assert.equal(
+      ownerTag({ direction: 'none', ownerSlug: 'philip' }),
+      "  · (@philip's — FYI)",
+    );
+    // no direction → no tag (decisions/learnings, untyped items)
+    assert.equal(ownerTag({}), '');
+    assert.equal(ownerTag(undefined), '');
+  });
+
+  it('renders the owner/direction suffix on actionable action-item lines', () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'anthony',
+      title: 'Anthony',
+      sections: {
+        actionItems: [ai('ai_001', 'Send the recipient table'), ai('ai_002', 'Review the spike')],
+        decisions: [],
+        learnings: [],
+      },
+      meta: {
+        ai_001: { status: 'pending', direction: 'i_owe_them', ownerSlug: 'john-koht', counterpartySlug: 'anthony' },
+        ai_002: { status: 'pending', direction: 'they_owe_me', ownerSlug: 'anthony', counterpartySlug: 'john-koht' },
+      },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /- \[x\] Send the recipient table  · \(you → @anthony\)  <!-- ai_001@anthony -->/);
+    assert.match(out, /- \[x\] Review the spike  · \(@anthony → you\)  <!-- ai_002@anthony -->/);
+    // both stay in the actionable Action items section, none routed to FYI
+    assert.match(out, /### Action items/);
+    assert.doesNotMatch(out, /Others' actions/);
+  });
+
+  it("routes direction:none items into the FYI subsection, NOT pre-filled", () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'standup',
+      title: 'Claim Portal Comms',
+      sections: {
+        actionItems: [
+          ai('ai_001', 'John sends the survey'),
+          ai('ai_002', 'Philip updates the portal copy'),
+          ai('ai_003', 'Rachael reviews the layout'),
+        ],
+        decisions: [],
+        learnings: [],
+      },
+      meta: {
+        ai_001: { status: 'pending', direction: 'i_owe_them', ownerSlug: 'john-koht', counterpartySlug: 'team' },
+        ai_002: { status: 'pending', direction: 'none', ownerSlug: 'philip' },
+        ai_003: { status: 'pending', direction: 'none', ownerSlug: 'rachael' },
+      },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    // John's item is pre-filled in the actionable list
+    assert.match(out, /### Action items\n- \[x\] John sends the survey  · \(you → @team\)  <!-- ai_001@standup -->/);
+    // none items live under the FYI heading, unchecked, with their anchors
+    assert.match(out, /#### Others' actions \(FYI\)/);
+    assert.match(out, /- \[ \] Philip updates the portal copy  · \(@philip's — FYI\)  <!-- ai_002@standup -->/);
+    assert.match(out, /- \[ \] Rachael reviews the layout  · \(@rachael's — FYI\)  <!-- ai_003@standup -->/);
+    // none items are NOT pre-checked anywhere
+    assert.doesNotMatch(out, /- \[x\] Philip/);
+    assert.doesNotMatch(out, /- \[x\] Rachael/);
+    assert.equal(isOthersAction(meeting.meta.ai_002), true);
+    assert.equal(isOthersAction(meeting.meta.ai_001), false);
+  });
+
+  it('all-none meeting → empty actionable list, populated FYI', () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'eng-standup',
+      title: 'Eng Standup',
+      sections: {
+        actionItems: [ai('ai_001', 'Conner deploys'), ai('ai_002', 'Lindsay tests')],
+        decisions: [],
+        learnings: [],
+      },
+      meta: {
+        ai_001: { status: 'pending', direction: 'none', ownerSlug: 'conner' },
+        ai_002: { status: 'pending', direction: 'none', ownerSlug: 'lindsay' },
+      },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    // no actionable "### Action items" heading — everything collapsed into FYI
+    assert.doesNotMatch(out, /### Action items/);
+    assert.match(out, /#### Others' actions \(FYI\)/);
+    assert.match(out, /- \[ \] Conner deploys/);
+    assert.match(out, /- \[ \] Lindsay tests/);
+    assert.doesNotMatch(out, /- \[x\]/);
+  });
+
+  it('FYI anchors stay present + recoverable (no apply round-trip regression)', () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'standup',
+      title: 'Standup',
+      sections: { actionItems: [ai('ai_002', "Philip's task")], decisions: [], learnings: [] },
+      meta: { ai_002: { status: 'pending', direction: 'none', ownerSlug: 'philip' } },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    const anchorLine = out.split('\n').find((l) => l.includes('ai_002'))!;
+    const m = anchorLine.match(ITEM_ANCHOR_RE);
+    assert.ok(m, 'FYI line still carries a recoverable item anchor');
+    assert.equal(m![1], 'ai_002');
+    assert.equal(m![2], 'standup');
+    // un-pre-filled means apply (which only acts on [x] lines) ignores it
+    assert.match(anchorLine, /^- \[ \]/);
+  });
+
+  it('buildChecklistMeeting reads owner/direction from staged_item_owner frontmatter', () => {
+    const content = [
+      '---',
+      'title: Claim Portal Comms',
+      'staged_item_owner:',
+      '  ai_001:',
+      '    ownerSlug: john-koht',
+      '    direction: i_owe_them',
+      '    counterpartySlug: anthony',
+      '  ai_002:',
+      '    ownerSlug: philip',
+      '    direction: none',
+      '---',
+      '',
+      '## Staged Action Items',
+      '- ai_001: Send the recipient table',
+      '- ai_002: Philip updates the portal copy',
+    ].join('\n');
+    const meeting = buildChecklistMeeting(content, { slug: 'claim-portal', title: 'Claim Portal Comms' });
+    assert.equal(meeting.meta.ai_001.direction, 'i_owe_them');
+    assert.equal(meeting.meta.ai_001.counterpartySlug, 'anthony');
+    assert.equal(meeting.meta.ai_002.direction, 'none');
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /- \[x\] Send the recipient table  · \(you → @anthony\)/);
+    assert.match(out, /#### Others' actions \(FYI\)/);
+    assert.match(out, /- \[ \] Philip updates the portal copy  · \(@philip's — FYI\)/);
+  });
+
+  it('buildChecklistMeeting falls back to inline-text owner notation', () => {
+    const content = [
+      '---',
+      'title: Anthony',
+      '---',
+      '',
+      '## Staged Action Items',
+      '- ai_001: [@john-koht → @anthony] Send the recipient table',
+      '- ai_002: [@philip ·] Philip updates the portal copy',
+    ].join('\n');
+    const meeting = buildChecklistMeeting(content, { slug: 'anthony', title: 'Anthony' });
+    assert.equal(meeting.meta.ai_001.direction, 'i_owe_them');
+    assert.equal(meeting.meta.ai_001.counterpartySlug, 'anthony');
+    assert.equal(meeting.meta.ai_002.direction, 'none');
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /· \(you → @anthony\)/);
+    assert.match(out, /#### Others' actions \(FYI\)/);
   });
 });
 

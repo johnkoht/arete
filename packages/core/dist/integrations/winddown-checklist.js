@@ -25,7 +25,7 @@
  *   - choice: `<!-- choice:<key> -->`           e.g. `<!-- choice:ai_007>acc2a220 -->`
  *   - action: `<!-- act:<verb>:<id> -->`        e.g. `<!-- act:resolve:d9bee08c -->`
  */
-import { parseStagedSections, parseStagedItemStatus, parseStagedItemImportance, parseStagedItemUncertain, parseStagedItemLinks, parseStagedItemSkipReason, } from './staged-items.js';
+import { parseStagedSections, parseStagedItemStatus, parseStagedItemImportance, parseStagedItemUncertain, parseStagedItemLinks, parseStagedItemSkipReason, parseStagedItemOwner, } from './staged-items.js';
 // ---------------------------------------------------------------------------
 // Anchor helpers (single source of truth — apply mapper imports these)
 // ---------------------------------------------------------------------------
@@ -72,6 +72,33 @@ export function tierMarker(tier) {
         return '**[high]** ';
     return '';
 }
+/** Workspace owner slug — direction is always relative to John. */
+export const WORKSPACE_OWNER_SLUG = 'john-koht';
+/** True when this action item is a third-party action (`direction: none`). */
+export function isOthersAction(meta) {
+    return meta?.direction === 'none';
+}
+/**
+ * Owner/direction tag suffix for an ACTION ITEM line (single-pass D3 / D7).
+ * Direction is relative to the workspace owner (John):
+ *   - `i_owe_them` → ` · (you → @counterparty)` — John owes the counterparty
+ *   - `they_owe_me`→ ` · (@owner → you)`        — counterparty owes John
+ *   - `none`       → ` · (@owner's — FYI)`       — a third party's action
+ * Returns '' when there is no usable owner/direction (decisions/learnings, or
+ * action items the extractor left untyped). The chef may prettify slugs → names.
+ */
+export function ownerTag(meta) {
+    if (!meta || !meta.direction)
+        return '';
+    const owner = meta.ownerSlug ? `@${meta.ownerSlug}` : 'they';
+    const counterparty = meta.counterpartySlug ? `@${meta.counterpartySlug}` : 'them';
+    if (meta.direction === 'i_owe_them')
+        return `  · (you → ${counterparty})`;
+    if (meta.direction === 'they_owe_me')
+        return `  · (${owner} → you)`;
+    // none → third-party action, visibility-only (never John's commitment, D7)
+    return `  · (${owner}'s — FYI)`;
+}
 /** Link annotation suffix (↩ continues / ⤴ supersedes) from staged_item_links. */
 export function linkSuffix(links) {
     if (!links)
@@ -108,39 +135,66 @@ export function sortByTier(items, meta) {
 // ---------------------------------------------------------------------------
 /**
  * Render a single per-meeting item line (checkbox + markers + reason + anchor).
- * Returns undefined for uncertain items (they belong in the Your-call block).
+ *
+ * `isAction` adds the owner/direction tag (action items only — decisions and
+ * learnings have no direction). `forceUnchecked` renders `[ ]` regardless of
+ * the agent's recommendation — used for the "Others' actions (FYI)" group,
+ * which is visibility-only and must never read as John's pre-filled to-do (D7).
  */
-function renderItemLine(item, slug, meta) {
-    const checked = prefillChecked(meta);
+function renderItemLine(item, slug, meta, opts = {}) {
+    const checked = opts.forceUnchecked ? false : prefillChecked(meta);
     const box = checked ? '[x]' : '[ ]';
     const marker = tierMarker(meta?.tier);
     let text = item.text;
     // Skip reason inline (only on unchecked lines — the agent-recommended skip).
-    if (!checked && meta?.skipReason) {
+    // FYI (none) items are force-unchecked for visibility, NOT skipped, so we
+    // don't decorate them with a skip reason.
+    if (!checked && !opts.forceUnchecked && meta?.skipReason) {
         text = `${text} — skip: ${meta.skipReason}`;
     }
+    const owner = opts.isAction ? ownerTag(meta) : '';
     const link = linkSuffix(meta?.links);
-    return `- ${box} ${marker}${text}${link}  ${itemAnchor(item.id, slug)}`;
+    return `- ${box} ${marker}${text}${owner}${link}  ${itemAnchor(item.id, slug)}`;
 }
 /** Render a `### <Heading>` block for one item type, or '' if empty. */
-function renderSection(heading, items, slug, meta) {
+function renderSection(heading, items, slug, meta, opts = {}) {
     // Uncertain items are pulled into the Your-call block, not rendered here.
     const visible = items.filter((i) => !isUncertain(meta[i.id]));
     if (visible.length === 0)
         return '';
     const ordered = sortByTier(visible, meta);
-    const lines = ordered.map((i) => renderItemLine(i, slug, meta[i.id]));
+    const lines = ordered.map((i) => renderItemLine(i, slug, meta[i.id], opts));
     return `### ${heading}\n${lines.join('\n')}`;
 }
-/** Render one meeting's three sections under its `## <title>` header. */
+/**
+ * Render the "Others' actions (FYI)" block — `direction: none` action items
+ * (third-party actions). Visibility-only per D7: rendered NOT pre-filled `[ ]`,
+ * never reading as John's commitments, but keeping their anchors (apply ignores
+ * non-`[x]` lines + a `none` item creates no commitment regardless). Returns ''
+ * when there are no `none` items.
+ */
+function renderOthersActions(items, slug, meta) {
+    const visible = items.filter((i) => !isUncertain(meta[i.id]) && isOthersAction(meta[i.id]));
+    if (visible.length === 0)
+        return '';
+    const ordered = sortByTier(visible, meta);
+    const lines = ordered.map((i) => renderItemLine(i, slug, meta[i.id], { isAction: true, forceUnchecked: true }));
+    return `#### Others' actions (FYI)\n${lines.join('\n')}`;
+}
+/** Render one meeting's sections under its `## <title>` header. */
 export function renderMeeting(meeting) {
     const header = meeting.label
         ? `## ${meeting.title}   ·   ${meeting.label}`
         : `## ${meeting.title}`;
+    const meta = meeting.meta;
+    // Split action items: John's (i_owe_them / they_owe_me) stay in the actionable
+    // list; third-party (`direction: none`) move to the FYI subsection (finding #8).
+    const actionable = meeting.sections.actionItems.filter((i) => !isOthersAction(meta[i.id]));
     const blocks = [
-        renderSection('Action items', meeting.sections.actionItems, meeting.slug, meeting.meta),
-        renderSection('Decisions', meeting.sections.decisions, meeting.slug, meeting.meta),
-        renderSection('Learnings', meeting.sections.learnings, meeting.slug, meeting.meta),
+        renderSection('Action items', actionable, meeting.slug, meta, { isAction: true }),
+        renderOthersActions(meeting.sections.actionItems, meeting.slug, meta),
+        renderSection('Decisions', meeting.sections.decisions, meeting.slug, meta),
+        renderSection('Learnings', meeting.sections.learnings, meeting.slug, meta),
     ].filter((b) => b !== '');
     if (blocks.length === 0)
         return '';
@@ -283,13 +337,19 @@ export function buildChecklistMeeting(content, meta) {
     const uncertain = parseStagedItemUncertain(content);
     const links = parseStagedItemLinks(content);
     const skipReason = parseStagedItemSkipReason(content);
+    const owner = parseStagedItemOwner(content);
     const itemMeta = {};
-    const allIds = [
+    const allItems = [
         ...sections.actionItems,
         ...sections.decisions,
         ...sections.learnings,
-    ].map((i) => i.id);
-    for (const id of allIds) {
+    ];
+    // Owner/direction fields may live in the `staged_item_owner` frontmatter map
+    // OR be inline in the action-item text (parseStagedSections extracts both).
+    // Frontmatter takes precedence; text-parsed values are the fallback.
+    const itemById = new Map(allItems.map((i) => [i.id, i]));
+    for (const item of allItems) {
+        const id = item.id;
         const m = {};
         if (status[id])
             m.status = status[id];
@@ -302,6 +362,18 @@ export function buildChecklistMeeting(content, meta) {
             m.skipReason = skipReason[id].reason;
         if (links[id])
             m.links = links[id];
+        // Owner/direction (action items only). Frontmatter map > inline text.
+        const fmOwner = owner[id];
+        const textItem = itemById.get(id);
+        const direction = fmOwner?.direction ?? textItem?.direction;
+        const ownerSlug = fmOwner?.ownerSlug ?? textItem?.ownerSlug;
+        const counterpartySlug = fmOwner?.counterpartySlug ?? textItem?.counterpartySlug;
+        if (direction)
+            m.direction = direction;
+        if (ownerSlug)
+            m.ownerSlug = ownerSlug;
+        if (counterpartySlug)
+            m.counterpartySlug = counterpartySlug;
         itemMeta[id] = m;
     }
     return { slug: meta.slug, title: meta.title, label: meta.label, sections, meta: itemMeta };

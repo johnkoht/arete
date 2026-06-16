@@ -26,7 +26,7 @@
  *   - action: `<!-- act:<verb>:<id> -->`        e.g. `<!-- act:resolve:d9bee08c -->`
  */
 
-import type { StagedItem, StagedSections } from '../models/index.js';
+import type { StagedItem, StagedItemDirection, StagedSections } from '../models/index.js';
 import {
   parseStagedSections,
   parseStagedItemStatus,
@@ -34,6 +34,7 @@ import {
   parseStagedItemUncertain,
   parseStagedItemLinks,
   parseStagedItemSkipReason,
+  parseStagedItemOwner,
 } from './staged-items.js';
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,15 @@ export interface ChecklistItemMeta {
   skipReason?: string;
   /** `staged_item_links[id]`. */
   links?: { continuationOf?: string; supersedes?: string };
+  /**
+   * `staged_item_owner[id].direction` (single-pass D3). Drives the owner tag
+   * suffix + routing of `none` (third-party) action items into the FYI group.
+   */
+  direction?: StagedItemDirection;
+  /** `staged_item_owner[id].ownerSlug` — who is responsible. */
+  ownerSlug?: string;
+  /** `staged_item_owner[id].counterpartySlug` — the other party. */
+  counterpartySlug?: string;
 }
 
 /**
@@ -180,6 +190,33 @@ export function tierMarker(tier: ChecklistTier | undefined): string {
   return '';
 }
 
+/** Workspace owner slug — direction is always relative to John. */
+export const WORKSPACE_OWNER_SLUG = 'john-koht';
+
+/** True when this action item is a third-party action (`direction: none`). */
+export function isOthersAction(meta: ChecklistItemMeta | undefined): boolean {
+  return meta?.direction === 'none';
+}
+
+/**
+ * Owner/direction tag suffix for an ACTION ITEM line (single-pass D3 / D7).
+ * Direction is relative to the workspace owner (John):
+ *   - `i_owe_them` → ` · (you → @counterparty)` — John owes the counterparty
+ *   - `they_owe_me`→ ` · (@owner → you)`        — counterparty owes John
+ *   - `none`       → ` · (@owner's — FYI)`       — a third party's action
+ * Returns '' when there is no usable owner/direction (decisions/learnings, or
+ * action items the extractor left untyped). The chef may prettify slugs → names.
+ */
+export function ownerTag(meta: ChecklistItemMeta | undefined): string {
+  if (!meta || !meta.direction) return '';
+  const owner = meta.ownerSlug ? `@${meta.ownerSlug}` : 'they';
+  const counterparty = meta.counterpartySlug ? `@${meta.counterpartySlug}` : 'them';
+  if (meta.direction === 'i_owe_them') return `  · (you → ${counterparty})`;
+  if (meta.direction === 'they_owe_me') return `  · (${owner} → you)`;
+  // none → third-party action, visibility-only (never John's commitment, D7)
+  return `  · (${owner}'s — FYI)`;
+}
+
 /** Link annotation suffix (↩ continues / ⤴ supersedes) from staged_item_links. */
 export function linkSuffix(links: ChecklistItemMeta['links']): string {
   if (!links) return '';
@@ -217,19 +254,31 @@ export function sortByTier(items: StagedItem[], meta: Record<string, ChecklistIt
 
 /**
  * Render a single per-meeting item line (checkbox + markers + reason + anchor).
- * Returns undefined for uncertain items (they belong in the Your-call block).
+ *
+ * `isAction` adds the owner/direction tag (action items only — decisions and
+ * learnings have no direction). `forceUnchecked` renders `[ ]` regardless of
+ * the agent's recommendation — used for the "Others' actions (FYI)" group,
+ * which is visibility-only and must never read as John's pre-filled to-do (D7).
  */
-function renderItemLine(item: StagedItem, slug: string, meta: ChecklistItemMeta | undefined): string {
-  const checked = prefillChecked(meta);
+function renderItemLine(
+  item: StagedItem,
+  slug: string,
+  meta: ChecklistItemMeta | undefined,
+  opts: { isAction?: boolean; forceUnchecked?: boolean } = {},
+): string {
+  const checked = opts.forceUnchecked ? false : prefillChecked(meta);
   const box = checked ? '[x]' : '[ ]';
   const marker = tierMarker(meta?.tier);
   let text = item.text;
   // Skip reason inline (only on unchecked lines — the agent-recommended skip).
-  if (!checked && meta?.skipReason) {
+  // FYI (none) items are force-unchecked for visibility, NOT skipped, so we
+  // don't decorate them with a skip reason.
+  if (!checked && !opts.forceUnchecked && meta?.skipReason) {
     text = `${text} — skip: ${meta.skipReason}`;
   }
+  const owner = opts.isAction ? ownerTag(meta) : '';
   const link = linkSuffix(meta?.links);
-  return `- ${box} ${marker}${text}${link}  ${itemAnchor(item.id, slug)}`;
+  return `- ${box} ${marker}${text}${owner}${link}  ${itemAnchor(item.id, slug)}`;
 }
 
 /** Render a `### <Heading>` block for one item type, or '' if empty. */
@@ -238,24 +287,51 @@ function renderSection(
   items: StagedItem[],
   slug: string,
   meta: Record<string, ChecklistItemMeta>,
+  opts: { isAction?: boolean } = {},
 ): string {
   // Uncertain items are pulled into the Your-call block, not rendered here.
   const visible = items.filter((i) => !isUncertain(meta[i.id]));
   if (visible.length === 0) return '';
   const ordered = sortByTier(visible, meta);
-  const lines = ordered.map((i) => renderItemLine(i, slug, meta[i.id]));
+  const lines = ordered.map((i) => renderItemLine(i, slug, meta[i.id], opts));
   return `### ${heading}\n${lines.join('\n')}`;
 }
 
-/** Render one meeting's three sections under its `## <title>` header. */
+/**
+ * Render the "Others' actions (FYI)" block — `direction: none` action items
+ * (third-party actions). Visibility-only per D7: rendered NOT pre-filled `[ ]`,
+ * never reading as John's commitments, but keeping their anchors (apply ignores
+ * non-`[x]` lines + a `none` item creates no commitment regardless). Returns ''
+ * when there are no `none` items.
+ */
+function renderOthersActions(
+  items: StagedItem[],
+  slug: string,
+  meta: Record<string, ChecklistItemMeta>,
+): string {
+  const visible = items.filter((i) => !isUncertain(meta[i.id]) && isOthersAction(meta[i.id]));
+  if (visible.length === 0) return '';
+  const ordered = sortByTier(visible, meta);
+  const lines = ordered.map((i) =>
+    renderItemLine(i, slug, meta[i.id], { isAction: true, forceUnchecked: true }),
+  );
+  return `#### Others' actions (FYI)\n${lines.join('\n')}`;
+}
+
+/** Render one meeting's sections under its `## <title>` header. */
 export function renderMeeting(meeting: ChecklistMeeting): string {
   const header = meeting.label
     ? `## ${meeting.title}   ·   ${meeting.label}`
     : `## ${meeting.title}`;
+  const meta = meeting.meta;
+  // Split action items: John's (i_owe_them / they_owe_me) stay in the actionable
+  // list; third-party (`direction: none`) move to the FYI subsection (finding #8).
+  const actionable = meeting.sections.actionItems.filter((i) => !isOthersAction(meta[i.id]));
   const blocks = [
-    renderSection('Action items', meeting.sections.actionItems, meeting.slug, meeting.meta),
-    renderSection('Decisions', meeting.sections.decisions, meeting.slug, meeting.meta),
-    renderSection('Learnings', meeting.sections.learnings, meeting.slug, meeting.meta),
+    renderSection('Action items', actionable, meeting.slug, meta, { isAction: true }),
+    renderOthersActions(meeting.sections.actionItems, meeting.slug, meta),
+    renderSection('Decisions', meeting.sections.decisions, meeting.slug, meta),
+    renderSection('Learnings', meeting.sections.learnings, meeting.slug, meta),
   ].filter((b) => b !== '');
   if (blocks.length === 0) return '';
   return `${header}\n\n${blocks.join('\n\n')}`;
@@ -411,15 +487,21 @@ export function buildChecklistMeeting(
   const uncertain = parseStagedItemUncertain(content);
   const links = parseStagedItemLinks(content);
   const skipReason = parseStagedItemSkipReason(content);
+  const owner = parseStagedItemOwner(content);
 
   const itemMeta: Record<string, ChecklistItemMeta> = {};
-  const allIds = [
+  const allItems = [
     ...sections.actionItems,
     ...sections.decisions,
     ...sections.learnings,
-  ].map((i) => i.id);
+  ];
+  // Owner/direction fields may live in the `staged_item_owner` frontmatter map
+  // OR be inline in the action-item text (parseStagedSections extracts both).
+  // Frontmatter takes precedence; text-parsed values are the fallback.
+  const itemById = new Map(allItems.map((i) => [i.id, i]));
 
-  for (const id of allIds) {
+  for (const item of allItems) {
+    const id = item.id;
     const m: ChecklistItemMeta = {};
     if (status[id]) m.status = status[id];
     if (importance[id]) m.tier = importance[id];
@@ -427,6 +509,15 @@ export function buildChecklistMeeting(
     if (Object.prototype.hasOwnProperty.call(uncertain, id)) m.uncertainReason = uncertain[id];
     if (skipReason[id]) m.skipReason = skipReason[id].reason;
     if (links[id]) m.links = links[id];
+    // Owner/direction (action items only). Frontmatter map > inline text.
+    const fmOwner = owner[id];
+    const textItem = itemById.get(id);
+    const direction = fmOwner?.direction ?? textItem?.direction;
+    const ownerSlug = fmOwner?.ownerSlug ?? textItem?.ownerSlug;
+    const counterpartySlug = fmOwner?.counterpartySlug ?? textItem?.counterpartySlug;
+    if (direction) m.direction = direction;
+    if (ownerSlug) m.ownerSlug = ownerSlug;
+    if (counterpartySlug) m.counterpartySlug = counterpartySlug;
     itemMeta[id] = m;
   }
 

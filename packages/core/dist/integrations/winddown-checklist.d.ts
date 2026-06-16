@@ -25,7 +25,7 @@
  *   - choice: `<!-- choice:<key> -->`           e.g. `<!-- choice:ai_007>acc2a220 -->`
  *   - action: `<!-- act:<verb>:<id> -->`        e.g. `<!-- act:resolve:d9bee08c -->`
  */
-import type { StagedItem, StagedSections } from '../models/index.js';
+import type { StagedItem, StagedItemDirection, StagedSections } from '../models/index.js';
 /** Importance tier mirrored from single-pass `staged_item_importance`. */
 export type ChecklistTier = 'blocker' | 'high' | 'normal';
 /** Per-item judgment + status overlay sourced from meeting frontmatter maps. */
@@ -46,6 +46,15 @@ export interface ChecklistItemMeta {
         continuationOf?: string;
         supersedes?: string;
     };
+    /**
+     * `staged_item_owner[id].direction` (single-pass D3). Drives the owner tag
+     * suffix + routing of `none` (third-party) action items into the FYI group.
+     */
+    direction?: StagedItemDirection;
+    /** `staged_item_owner[id].ownerSlug` — who is responsible. */
+    ownerSlug?: string;
+    /** `staged_item_owner[id].counterpartySlug` — the other party. */
+    counterpartySlug?: string;
 }
 /**
  * One meeting's staged items + the frontmatter overlay maps keyed by item id.
@@ -133,6 +142,20 @@ export declare function isUncertain(meta: ChecklistItemMeta | undefined): boolea
 export declare function prefillChecked(meta: ChecklistItemMeta | undefined): boolean;
 /** Tier-prefix marker, e.g. "[BLOCKER] " / "[high] " / "" for normal. */
 export declare function tierMarker(tier: ChecklistTier | undefined): string;
+/** Workspace owner slug — direction is always relative to John. */
+export declare const WORKSPACE_OWNER_SLUG = "john-koht";
+/** True when this action item is a third-party action (`direction: none`). */
+export declare function isOthersAction(meta: ChecklistItemMeta | undefined): boolean;
+/**
+ * Owner/direction tag suffix for an ACTION ITEM line (single-pass D3 / D7).
+ * Direction is relative to the workspace owner (John):
+ *   - `i_owe_them` → ` · (you → @counterparty)` — John owes the counterparty
+ *   - `they_owe_me`→ ` · (@owner → you)`        — counterparty owes John
+ *   - `none`       → ` · (@owner's — FYI)`       — a third party's action
+ * Returns '' when there is no usable owner/direction (decisions/learnings, or
+ * action items the extractor left untyped). The chef may prettify slugs → names.
+ */
+export declare function ownerTag(meta: ChecklistItemMeta | undefined): string;
 /** Link annotation suffix (↩ continues / ⤴ supersedes) from staged_item_links. */
 export declare function linkSuffix(links: ChecklistItemMeta['links']): string;
 /**
@@ -140,7 +163,7 @@ export declare function linkSuffix(links: ChecklistItemMeta['links']): string;
  * Items with no tier sort as 'normal'.
  */
 export declare function sortByTier(items: StagedItem[], meta: Record<string, ChecklistItemMeta>): StagedItem[];
-/** Render one meeting's three sections under its `## <title>` header. */
+/** Render one meeting's sections under its `## <title>` header. */
 export declare function renderMeeting(meeting: ChecklistMeeting): string;
 /**
  * Public W1 entry point: render ONE meeting's staged items as the checklist

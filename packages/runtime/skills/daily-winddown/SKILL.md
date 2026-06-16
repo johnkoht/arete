@@ -1407,7 +1407,32 @@ After persisting, send the curated view as a single message. Wait for
 user response. Do not run any further primitives or writes until
 response received.
 
-Acceptable user responses:
+**WAIT-GATE — what counts as approval (SOAK finding #7 hardening).**
+The single message above opens a review; you stay in a WAIT state and
+mutate NOTHING until the user EXPLICITLY proceeds. The gate is robust to
+mid-review input that is NOT approval:
+
+- A clarifying **QUESTION** (e.g. "why did you keep CT1 open?", "what's
+  the evidence for ai_003?") → ANSWER it. Do NOT execute anything.
+  Re-state that you're waiting, then RE-WAIT.
+- A **PARTIAL EDIT** instruction (e.g. "keep CT1 open", "reframe ai_007
+  as a google survey", "drop the Doris line") → ABSORB the edit into the
+  persisted doc (`winddown-<date>.md`) — rewrite the affected line(s) and
+  re-`cp` the baseline if checklist mode — or note it for apply. Then
+  RE-WAIT. A partial edit is steering the doc, NOT a go signal.
+- Mixed input (a question + an edit) → handle both as above, still WAIT.
+
+A question or partial edit MUST NEVER trip execution — even when it names
+specific CTs/actions. Only one of these EXPLICIT signals executes any
+mutation:
+
+- an explicit proceed: `proceed`, `approve all`, `go`, `apply it`,
+  `run 1, 3`, `CT1, CT2`, `approve all staged`, or
+- the user having run `arete winddown apply <date>` themselves.
+
+When in doubt, you are still waiting. Mutations route through Step 6.
+
+Acceptable user responses (each is an EXPLICIT proceed — see gate above):
 - `1, 3` → execute actions 1 and 3
 - `CT1, CT3` → approve those proposed collapses (Closed today); leave
   others in queue. Approve to commit each collapse via the action-if-
@@ -1425,7 +1450,9 @@ Acceptable user responses:
 - `skip 2` → drop action 2
 - `approve all staged` → commit all `## Stage for approval` items via
   `arete meeting approve` per source meeting
-- Free-form pushback / questions → engage normally
+- Free-form pushback / questions / partial edits → these are NOT
+  approval (see WAIT-GATE above): answer / absorb the edit into the doc,
+  then RE-WAIT for an explicit proceed
 
 ### Step 6 — Execute approved actions + commit approved items
 
@@ -1438,6 +1465,19 @@ arete winddown apply <YYYY-MM-DD>          # interactive confirm
 arete winddown apply <YYYY-MM-DD> --dry-run  # preview the plan + summary only
 arete winddown apply <YYYY-MM-DD> --json     # machine-readable plan + result
 ```
+
+**ROUTE ALL EXECUTION THROUGH `apply` — do NOT hand-run primitives (SOAK
+finding #7).** `arete winddown apply <date>` is the SINGLE gated commit
+point: it diffs the doc against the baseline, prints ONE confirm summary
+(resolves + meeting approve/skip + week.md effects + draft bodies), and
+executes on `y`. Do NOT, as the primary path, conversationally hand-run
+`arete commitments resolve`, `arete meeting approve`, or week.md edits to
+"apply" what the user toggled — that bypasses the confirm summary that is
+the whole purpose of the checkbox flow, and risks executing edits the
+user was still steering. Conversational primitives are ONLY for things
+genuinely OUTSIDE apply's surface (e.g. sending an MCP DM/draft that apply
+echoes as `DRAFT <verb>:<id>` for you to send) — and even then only AFTER
+an explicit proceed has passed the Step-5 wait-gate.
 
 This reads `winddown-<date>.md` (the user's edited doc) + the
 `.baseline.md` you persisted in Step 5, diffs them, prints the CONFIRM

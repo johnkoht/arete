@@ -418,3 +418,60 @@ with the verbatim edited body). +2 tests; full core+cli suite green
 (4924 pass / 0 fail / 2 skip). Zero LLM calls. core+cli dist rebuilt +
 committed; backend pre-existing TS2322 in review.ts is unrelated and untouched.
 Not merged, not pushed; arete-reserv untouched.
+
+---
+
+## 2026-06-16 — findings #7 + #8 fix (winddown approval doc)
+
+Branch: `feat/winddown-approval-doc` (worktree `winddown-approval`). Zero LLM calls.
+
+**FIX A (finding #8) — owner/direction render + `direction: none` split out.**
+The checklist renderer showed tier + text only, and `direction: none` action
+items (other people's actions — 6/8 on claim-portal-comms) were pre-filled
+`[x]` in the MAIN "Action items" list, burying John's real to-dos. Data
+already existed in `staged_item_owner` frontmatter (and inline action-item
+text). `parseStagedItemOwner` already lived in staged-items.ts — wired it in:
+- `ChecklistItemMeta` gains `direction` / `ownerSlug` / `counterpartySlug`.
+- `buildChecklistMeeting` populates them, frontmatter `staged_item_owner` taking
+  precedence over inline text-parsed values.
+- New `ownerTag(meta)` renders the suffix relative to workspace owner
+  `john-koht`: `i_owe_them` → `· (you → @counterparty)`; `they_owe_me` →
+  `· (@owner → you)`; `none` → `· (@owner's — FYI)`. Empty for decisions/
+  learnings + untyped items. Applied to action-item lines only.
+- `renderMeeting` splits action items: John's (`i_owe_them`/`they_owe_me`) stay
+  in the pre-filled `### Action items` list; `direction: none` route to a new
+  `#### Others' actions (FYI)` subsection rendered FORCE-UNCHECKED `[ ]` (D7
+  visibility-only — never reads as John's to-do). FYI items keep their item
+  anchors, so apply (which only acts on `[x]` lines + treats `none` as inert)
+  ignores them harmlessly — no finding-#6 round-trip regression. All-`none`
+  meeting → no `### Action items` heading, everything under FYI (desired
+  collapse, e.g. eng standup).
+- +7 tests in winddown-checklist.test.ts (ownerTag per direction; suffix on
+  actionable lines; none→FYI un-pre-filled; all-none collapse; FYI anchor
+  recoverable + `[ ]`; buildChecklistMeeting from frontmatter AND inline-text
+  fallback). Files: `packages/core/src/integrations/winddown-checklist.ts`,
+  test file. staged-items.ts untouched (parser already present).
+
+**FIX B (finding #7) — wait-gate hardening + route execution through apply.**
+SKILL.md only (daily-winddown). Mid-review, a question + partial CT1 edit was
+treated as approval and the agent hand-ran the resolves/week.md batch
+conversationally, bypassing apply's confirm summary.
+- Step 5 gains an explicit **WAIT-GATE** block: a clarifying QUESTION → answer
+  + re-wait; a PARTIAL EDIT ("keep CT1 open", "reframe X") → absorb into the
+  persisted doc + re-wait; mixed → both, still wait. A question/edit NEVER
+  trips execution even when it names CTs/actions. Only an explicit proceed
+  (`proceed`/`approve all`/`run 1,3`/`CT1,CT2`/`approve all staged`) OR the
+  user running `arete winddown apply <date>` executes anything. Sharpened the
+  "free-form pushback / questions" response-list line to point at the gate.
+- Step 6 (checklist apply) gains a **ROUTE ALL EXECUTION THROUGH `apply`**
+  paragraph: `arete winddown apply <date>` is the single gated commit point;
+  do NOT hand-run `commitments resolve` / `meeting approve` / week.md edits as
+  the primary path. Conversational primitives only for things outside apply's
+  surface (MCP sends apply echoes as DRAFT), and only after an explicit
+  proceed. File: `packages/runtime/skills/daily-winddown/SKILL.md`.
+
+**Wrap.** core+cli dist rebuilt + committed (winddown-checklist.js/.d.ts).
+Full core+cli suite green: 4931 pass / 0 fail / 2 skip. Zero LLM calls.
+Not merged, not pushed; arete-reserv untouched.
+Re-sync reminder: `cp` SKILL.md → `arete-reserv/.arete/skills/daily-winddown/`;
+dist auto-picked-up via npm link.
