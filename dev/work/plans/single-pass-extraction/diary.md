@@ -374,3 +374,47 @@ as such in the report).
 core+cli suite; dist/ rebuilt + committed for core and cli (house rule).
 Zero LLM calls (the new CLI snapshot tests stub fetch at the transport
 layer). Not merged, not pushed; arete-reserv untouched.
+
+## 2026-06-16 — baseline-completeness fix (SOAK finding #6)
+
+**Root cause.** The W3 `arete winddown render <date> --write` path persisted
+ONLY the frontmatter-derived staged-items block as the apply baseline. But the
+agent's real SKILL.md flow hand-composes `## Proposed actions`
+(`<!-- act:verb:id -->`) into the doc AFTER render runs — those anchors never
+existed in the staged-block-only baseline. So in `winddown-apply.ts:299-304`,
+every `act:` anchor in the edited doc hit the no-match branch
+(`warnings.push("unknown anchor not in baseline"); continue`) and was SILENTLY
+DROPPED — half the approval surface (DMs / invites / resolves) never executed.
+SKILL.md was self-contradictory: the render step (~1162) claimed apply
+classifies the hand-written actions, while the baseline step (~1375) declared
+the staged-block-only baseline "sufficient." It is not. The render-build test
+only round-tripped render output against itself, so it never exercised a doc
+whose actions are absent from a partial baseline — the coverage gap that let
+this through to soak prep.
+
+**Fix (chosen: SKILL.md + CLI doc, no core change).** The apply mapper is
+already correct: it keys purely on anchors and ignores non-anchored narrative,
+so a COMPLETE-doc baseline correctly contains every anchor (items + ⛔/⚠
+choices + actions). The fix is the W3-era `cp` approach, restored:
+1. Checklist-render step now calls `arete winddown render <date> --stdout`
+   (NOT `--write`) — render only knows the staged block.
+2. Step 5 persists the baseline by `cp`-ing the FINALIZED complete doc
+   (`cp winddown-<date>.md winddown-<date>.baseline.md`) as the LAST step
+   before engaging the user — the agree-path round-trip is then byte-for-byte
+   zero-drift (AC1).
+3. Self-contradiction removed: both the render step (~1162) and the baseline
+   step (~1375) now agree the baseline is the complete doc.
+No core logic changed. `--write` is kept but documented as DEPRECATED-as-a-
+baseline-source (it omits the proposed actions). The apply "baseline not found"
+error and the render `--write`/command help now point at the `cp` flow.
+
+**New test.** `packages/core/test/integrations/winddown-apply.test.ts` →
+describe `finding #6: complete-doc baseline classifies actions (no silent
+drop)`, two cases: (1) baseline = complete doc (narrative + staged items +
+choices + 3 `## Proposed actions`) → all 3 action anchors classify, ZERO
+"unknown anchor not in baseline" warnings, items still classify; (2) a toggled
+action + an edited action body round-trip (both resolves execute, DM drafts
+with the verbatim edited body). +2 tests; full core+cli suite green
+(4924 pass / 0 fail / 2 skip). Zero LLM calls. core+cli dist rebuilt +
+committed; backend pre-existing TS2322 in review.ts is unrelated and untouched.
+Not merged, not pushed; arete-reserv untouched.

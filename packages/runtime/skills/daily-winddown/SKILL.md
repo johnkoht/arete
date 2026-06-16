@@ -1137,7 +1137,7 @@ RUN A CLI COMMAND that emits the deterministic checkbox block from today's
 meeting frontmatter:
 
 ```bash
-arete winddown render YYYY-MM-DD --write
+arete winddown render YYYY-MM-DD --stdout
 ```
 
 This reads today's staged meetings (`resources/meetings/YYYY-MM-DD-*.md`
@@ -1149,25 +1149,34 @@ pre-filled from tier+status (`[x]` keep / `[ ]` skip+reason),
 `[BLOCKER]`/`[high]`/⚠ markers, a leading `## ⛔ Blockers & ⚠ Your call
 first` block for uncertain items (option-checkboxes, NOT pre-filled), and
 a HIDDEN anchor on every line (`<!-- ai_001@slug -->` /
-`<!-- choice:... -->`). `--write` ALSO persists this block verbatim as the
-apply baseline (`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`)
-so Step 5 is handled in the same call.
+`<!-- choice:... -->`).
+
+Use `--stdout` (NOT `--write`) here: `render` only knows the
+frontmatter-derived staged block, but the apply baseline must capture the
+COMPLETE doc you are about to compose (incl. the hand-written
+`## Proposed actions`). The baseline is persisted in Step 5 by copying the
+finalized doc — see there. (Writing the baseline from `render --write` was
+the W3-era regression: it snapshotted only the staged block, BEFORE the
+proposed actions existed, so every `act:` anchor was missing from the
+baseline and silently dropped on apply. SOAK finding #6.)
 
 SPLICE the printed block into the curated view as the `## Stage for
 approval` surface (replacing the prose staged-items list). YOU compose the
 narrative around it — the summary, `## Closed today`, `## Threads`,
 `## Tomorrow`, and `## Proposed actions` (those need reconcile/calendar
 context not in frontmatter, so they stay agent-composed). The
-`## Proposed actions` checkboxes you write by hand still carry
-`<!-- act:verb:id -->` anchors so `arete winddown apply` classifies them.
-If you DO have the full structured view in-context (choices + proposed
-actions assembled), you may instead hand it in as JSON and render the full
-doc: `arete winddown render YYYY-MM-DD --view view.json --write`. The
+`## Proposed actions` checkboxes you write by hand carry
+`<!-- act:verb:id -->` anchors; `arete winddown apply` classifies them
+ONLY because the Step-5 baseline is the complete doc that contains those
+same anchors. If you DO have the full structured view in-context (choices
++ proposed actions assembled), you may instead hand it in as JSON and
+render the full doc: `arete winddown render YYYY-MM-DD --view view.json
+--stdout` (then persist the baseline the same way in Step 5). The
 frontmatter-only no-args path above is the normal flow. Do NOT call the
 `@arete/core` renderer function directly — run the CLI command.
 
 The user toggles disagreements in their editor and runs `/winddown apply`
-(Step 5/6), which diffs the saved doc against the `--write` baseline.}
+(Step 5/6), which diffs the saved doc against the complete-doc baseline.}
 
 - [ ] [BLOCKER] Glance can't roll out without license-profile assignment — compliance workshop
 - [ ] Send API spec to Anthony — open commitment to Anthony, 9d old (high)
@@ -1367,19 +1376,31 @@ silently overwrite earlier history.
 (`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`) is the
 agent's recommendation snapshot; `arete winddown apply` diffs the user's
 edited `winddown-YYYY-MM-DD.md` against it to classify each toggle/edit.
-The baseline is the rendered staged block VERBATIM (NOT re-derived) so the
-agree-path round-trip is zero-drift (AC1). `arete winddown render
-YYYY-MM-DD --write` (run in the checklist-render step above) ALREADY wrote
-this baseline — no separate copy step needed. The baseline keys purely on
-the hidden anchors; the narrative you composed around the staged block is
-ignored by apply, so a baseline containing just the anchored staged block
-is sufficient to classify every toggle. On a re-run, `--write` overwrites
-the baseline with the latest rendered block (apply always diffs against
-the most recent recommendation).
+
+The baseline MUST be the COMPLETE finalized doc you just wrote — copy it
+VERBATIM as the LAST step before engaging the user. Apply keys purely on
+the hidden anchors and ignores all non-anchored narrative, so a full-doc
+baseline correctly contains EVERY anchor it must classify: the staged
+items, the ⛔/⚠ choices, AND the hand-composed `## Proposed actions`
+(`<!-- act:verb:id -->`). `cp`-ing the finalized doc is what makes the
+agree-path round-trip zero-drift (AC1) — the user's untouched doc is
+byte-for-byte the baseline.
+
+Do NOT derive the baseline from `arete winddown render --write`: render
+only knows the frontmatter staged block, so a render-written baseline is
+MISSING every `act:` anchor — apply then files each proposed action under
+"unknown anchor not in baseline" and SILENTLY DROPS it (half the approval
+surface never executes). That was the regression SOAK finding #6 caught.
+Always `cp` the complete doc instead.
 
 ```bash
-# checklist mode only — render + persist the apply baseline in one call
-arete winddown render "$(date +%Y-%m-%d)" --write
+# checklist mode only — persist the COMPLETE finalized doc as the apply
+# baseline (LAST step, after the doc above is fully composed). Re-run:
+# this overwrites the baseline with the latest recommendation, matching
+# the re-written winddown-<date>.md (apply always diffs the most recent).
+DATE="$(date +%Y-%m-%d)"
+cp "now/archive/daily-winddown/winddown-$DATE.md" \
+   "now/archive/daily-winddown/winddown-$DATE.baseline.md"
 ```}
 
 After persisting, send the curated view as a single message. Wait for

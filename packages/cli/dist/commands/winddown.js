@@ -62,10 +62,14 @@ export function registerWinddownCommand(program) {
         .command('render <date>')
         .description('Render the deterministic staged-items/decisions/learnings checkbox block ' +
         'for a day (YYYY-MM-DD) from meeting frontmatter. The agent splices this ' +
-        'into the curated view as `## Stage for approval`; --write persists the ' +
-        'apply baseline.')
+        'into the curated view as `## Stage for approval`. Use --stdout (default); ' +
+        'the apply baseline is the COMPLETE composed doc (cp it in Step 5), NOT the ' +
+        'staged block alone — see --write.')
         .option('--stdout', 'Print the rendered block to stdout (default)')
-        .option('--write', 'Write/refresh the apply baseline (winddown-<date>.baseline.md)')
+        .option('--write', 'DEPRECATED as a baseline source: writes ONLY the staged block to ' +
+        'winddown-<date>.baseline.md — it omits the hand-composed ## Proposed ' +
+        'actions, so apply silently drops them. The baseline must be the COMPLETE ' +
+        'doc; cp winddown-<date>.md in Step 5 instead.')
         .option('--json', 'Emit { view, markdown } as JSON')
         .option('--view <file>', 'Render a FULL ChecklistView (with agent-composed choices + proposed actions) ' +
         'from a JSON file instead of the frontmatter-only staged block')
@@ -188,8 +192,9 @@ export function registerWinddownCommand(program) {
         }
         const baseline = await services.storage.read(blPath);
         if (baseline === null) {
-            const msg = `Baseline not found: ${blPath}. The baseline is written at render time ` +
-                `(winddown_render: checklist). Cannot diff without it.`;
+            const msg = `Baseline not found: ${blPath}. The baseline is the COMPLETE curated doc, ` +
+                `copied from winddown-${date}.md at the end of Step 5 ` +
+                `(cp winddown-${date}.md winddown-${date}.baseline.md). Cannot diff without it.`;
             if (opts.json)
                 console.log(JSON.stringify({ success: false, error: msg }));
             else

@@ -343,3 +343,132 @@ describe('choice resolution', () => {
     assert.equal(calls.commitMeeting.length, 0, 'no meeting committed');
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Finding #6 — baseline completeness (single-pass-extraction SOAK-FINDINGS).
+//
+// REGRESSION GUARD: the agent's real flow composes a COMPLETE curated doc
+// (narrative + staged items + ⛔/⚠ choices + `## Proposed actions`) and the
+// baseline MUST be that SAME complete doc (the W3 `cp` approach). The earlier
+// `render --write` regression captured ONLY the staged-items block as the
+// baseline — so every hand-composed `act:` anchor hit the "unknown anchor not
+// in baseline" branch in buildApplyPlan and was SILENTLY DROPPED (never
+// executed). The prior tests only round-tripped render output against itself,
+// so they never exercised a doc whose actions are absent from a partial
+// baseline. This block proves: with a complete-doc baseline, EVERY action
+// anchor classifies (execute/toggled), ZERO unknown-anchor warnings, items
+// still classify, and a toggled action + an edited action body round-trip.
+// ───────────────────────────────────────────────────────────────────────────
+
+// A COMPLETE curated doc: narrative the agent wrote by hand AROUND the staged
+// block, the ⛔/⚠ "your call" choices, AND the hand-composed `## Proposed
+// actions` with `act:` anchors + a D8 editable body. This is exactly what the
+// agent persists VERBATIM as `winddown-<date>.baseline.md`.
+const COMPLETE_DOC = [
+  '# Daily Winddown — 2026-06-09 (Tue)   ·   review & apply',
+  '',
+  'You closed three threads today and unblocked the Glance rollout.',
+  '',
+  '## ⛔ Blockers & ⚠ Your call first   (decide these — not pre-filled)',
+  '',
+  '⚠ **le_001 Customer validates pricing** — keep or skip?',
+  '   - [ ] keep (stage it)   <!-- choice:le_001@cust:keep -->',
+  '   - [ ] skip   <!-- choice:le_001@cust:skip -->',
+  '',
+  '## Stage for approval',
+  '',
+  '## Anthony / John Weekly',
+  '',
+  '### Action items',
+  '- [x] Set up tech spike  <!-- ai_004@anthony -->',
+  '- [ ] Confirm consolidation rules — skip: answered later  <!-- ai_006@anthony -->',
+  '',
+  '## Threads that moved today',
+  '',
+  '| Thread | What happened | Net status |',
+  '|---|---|---|',
+  '| Glance launch | Compliance signed off | Unblocked |',
+  '',
+  '## Proposed actions',
+  '',
+  '- [x] Resolve d9bee08c — done 6/9  <!-- act:resolve:d9bee08c -->',
+  '- [x] DM @nikki + @jenny the shadowing doc  <!-- act:dm:shadowing -->',
+  '      > _edit before apply — used verbatim:_',
+  '      > ```',
+  '      > Great session today — here is the doc: <link>.',
+  '      > Add your name.',
+  '      > ```',
+  '- [ ] Resolve batch-stale — let me look first  <!-- act:resolve:batch-stale -->',
+  '',
+  '## Notes',
+  '',
+  'No degraded integrations.',
+  '',
+  'What\'s your call?',
+].join('\n');
+
+describe('finding #6: complete-doc baseline classifies actions (no silent drop)', () => {
+  it('baseline = complete doc → every action anchor classifies, ZERO unknown-anchor warnings', () => {
+    // The agree-path: baseline IS the complete doc, user made no edits.
+    const plan = buildApplyPlan('2026-06-09', COMPLETE_DOC, COMPLETE_DOC);
+
+    // The regression: actions used to vanish into "unknown anchor not in baseline".
+    assert.equal(
+      plan.warnings.filter((w) => w.includes('unknown anchor not in baseline')).length,
+      0,
+      'no action (or item/choice) anchor falls through the no-baseline branch',
+    );
+    assert.equal(plan.warnings.length, 0, 'a clean complete-doc round-trip warns about nothing');
+
+    // All three proposed actions are present and classified — none dropped.
+    assert.equal(plan.actions.length, 3, 'all 3 act: anchors classified');
+    assert.deepEqual(
+      plan.actions.map((a) => `${a.verb}:${a.actionId}`).sort(),
+      ['dm:shadowing', 'resolve:batch-stale', 'resolve:d9bee08c'],
+    );
+    assert.equal(plan.actions.find((a) => a.actionId === 'd9bee08c')!.execute, true);
+    assert.equal(plan.actions.find((a) => a.actionId === 'batch-stale')!.execute, false);
+
+    // Items still classify correctly alongside the actions.
+    assert.equal(plan.items.find((i) => i.itemId === 'ai_004')!.decision, 'approve');
+    assert.equal(plan.items.find((i) => i.itemId === 'ai_006')!.decision, 'skip');
+  });
+
+  it('a toggled action + an edited action body round-trip from a complete-doc baseline', async () => {
+    // User toggles the deferred resolve ON, and edits the DM body.
+    const edited = COMPLETE_DOC
+      .replace(
+        '- [ ] Resolve batch-stale — let me look first  <!-- act:resolve:batch-stale -->',
+        '- [x] Resolve batch-stale — looked, it is done  <!-- act:resolve:batch-stale -->',
+      )
+      .replace('      > Add your name.', '      > Add your name, dates, and expertise.');
+
+    const plan = buildApplyPlan('2026-06-09', COMPLETE_DOC, edited);
+    assert.equal(
+      plan.warnings.filter((w) => w.includes('unknown anchor not in baseline')).length,
+      0,
+      'toggling/editing actions never trips the no-baseline branch',
+    );
+
+    // The toggled resolve flips to execute and is marked toggled.
+    const toggled = plan.actions.find((a) => a.actionId === 'batch-stale')!;
+    assert.equal(toggled.execute, true);
+    assert.equal(toggled.toggled, true);
+
+    // The edited DM body carries verbatim through the plan.
+    const dm = plan.actions.find((a) => a.verb === 'dm')!;
+    assert.equal(dm.bodyEdited, true);
+    assert.equal(dm.body, 'Great session today — here is the doc: <link>.\nAdd your name, dates, and expertise.');
+
+    // Execute: both resolves run (toggled-on + originally-on), the DM drafts
+    // with the edited body. NONE of the actions were dropped.
+    const { deps, calls } = makeDeps();
+    const res = await executeWinddownApply(plan, deps);
+    assert.equal(res.resolvedCommitments.length, 2, 'both resolves executed (toggled-on counted)');
+    assert.ok(res.resolvedCommitments.includes('batch-stale'));
+    assert.ok(res.resolvedCommitments.includes('d9bee08c'));
+    assert.equal(res.draftedActions, 1, 'DM drafted');
+    const drafted = calls.draftAction.find((d) => d.verb === 'dm')!;
+    assert.equal(drafted.body, 'Great session today — here is the doc: <link>.\nAdd your name, dates, and expertise.');
+  });
+});
