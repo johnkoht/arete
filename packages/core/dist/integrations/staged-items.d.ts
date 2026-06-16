@@ -55,6 +55,26 @@ export declare function parseStagedItemOwner(content: string): StagedItemOwner;
  * drop silently. The `commitApprovedItems` consumer is shape-tolerant.
  */
 export declare function parseStagedItemSkipReason(content: string): StagedItemSkipReason;
+/**
+ * Parse the `staged_item_importance` frontmatter field (single_pass D3).
+ * Map of item id → importance tier. Entries with an unrecognized value drop.
+ */
+export declare function parseStagedItemImportance(content: string): Record<string, 'blocker' | 'high' | 'normal'>;
+/**
+ * Parse the `staged_item_uncertain` frontmatter field (single_pass D3, the ⚠
+ * channel). Map of item id → uncertainty reason string. PRESENCE of an entry
+ * (even an empty string) means the item is uncertain. Non-string entries drop.
+ */
+export declare function parseStagedItemUncertain(content: string): Record<string, string>;
+/**
+ * Parse the `staged_item_links` frontmatter field (single_pass D3).
+ * Map of item id → `{ continuationOf?, supersedes? }`. Entries with no valid
+ * string field drop.
+ */
+export declare function parseStagedItemLinks(content: string): Record<string, {
+    continuationOf?: string;
+    supersedes?: string;
+}>;
 export type WriteItemStatusOptions = {
     /** New status to set on the item */
     status: 'approved' | 'skipped' | 'pending';

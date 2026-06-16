@@ -27,6 +27,14 @@
  */
 
 import type { StagedItem, StagedSections } from '../models/index.js';
+import {
+  parseStagedSections,
+  parseStagedItemStatus,
+  parseStagedItemImportance,
+  parseStagedItemUncertain,
+  parseStagedItemLinks,
+  parseStagedItemSkipReason,
+} from './staged-items.js';
 
 // ---------------------------------------------------------------------------
 // Input view types
@@ -369,4 +377,88 @@ export function renderWinddownDoc(view: ChecklistView): string {
   if (actionsBlock) parts.push(actionsBlock);
 
   return parts.join('\n\n---\n\n') + '\n';
+}
+
+// ---------------------------------------------------------------------------
+// View builder — frontmatter + body → ChecklistMeeting (deterministic, no I/O)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the per-meeting `ChecklistMeeting` portion of a `ChecklistView` from a
+ * meeting file's RAW markdown content (frontmatter + body). Pure: the caller
+ * reads the file; this assembles the staged sections + the overlay maps the
+ * renderer consumes. Mirrors the single_pass writer keys:
+ *   - `staged_item_status`     → ChecklistItemMeta.status
+ *   - `staged_item_importance` → .tier
+ *   - `staged_item_uncertain`  → .uncertainReason (presence ⇒ ⚠ channel)
+ *   - `staged_item_skip_reason`→ .skipReason (the `.reason` field)
+ *   - `staged_item_links`      → .links
+ *
+ * `slug` forms the second half of every item anchor (`<!-- ai_001@<slug> -->`)
+ * so the apply mapper resolves the line back to this meeting file.
+ */
+export function buildChecklistMeeting(
+  content: string,
+  meta: { slug: string; title: string; label?: string },
+): ChecklistMeeting {
+  // parseStagedSections takes the BODY; the frontmatter parsers take full content.
+  const fmMatch = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
+  const body = fmMatch ? fmMatch[1] : content;
+  const sections = parseStagedSections(body);
+
+  const status = parseStagedItemStatus(content);
+  const importance = parseStagedItemImportance(content);
+  const uncertain = parseStagedItemUncertain(content);
+  const links = parseStagedItemLinks(content);
+  const skipReason = parseStagedItemSkipReason(content);
+
+  const itemMeta: Record<string, ChecklistItemMeta> = {};
+  const allIds = [
+    ...sections.actionItems,
+    ...sections.decisions,
+    ...sections.learnings,
+  ].map((i) => i.id);
+
+  for (const id of allIds) {
+    const m: ChecklistItemMeta = {};
+    if (status[id]) m.status = status[id];
+    if (importance[id]) m.tier = importance[id];
+    // PRESENCE in the uncertain map (even empty string) ⇒ ⚠ channel fired.
+    if (Object.prototype.hasOwnProperty.call(uncertain, id)) m.uncertainReason = uncertain[id];
+    if (skipReason[id]) m.skipReason = skipReason[id].reason;
+    if (links[id]) m.links = links[id];
+    itemMeta[id] = m;
+  }
+
+  return { slug: meta.slug, title: meta.title, label: meta.label, sections, meta: itemMeta };
+}
+
+/**
+ * Render only the deterministic staged-items/decisions/learnings + auto-promoted
+ * "Your call" surface for a set of meetings — WITHOUT the doc title/legend
+ * header or proposed-actions block. This is the block the agent splices into the
+ * curated view as `## Stage for approval`, AND the verbatim baseline `apply`
+ * diffs against (apply keys on hidden anchors, ignoring narrative lines).
+ *
+ * Uncertain per-meeting items are promoted into a leading Your-call block, same
+ * as `renderWinddownDoc`, so ⚠ items always force a pick.
+ */
+export function renderStagedBlock(meetings: ChecklistMeeting[]): string {
+  const autoChoices: ChecklistChoice[] = [];
+  for (const m of meetings) {
+    const all = [...m.sections.actionItems, ...m.sections.decisions, ...m.sections.learnings];
+    for (const item of all) {
+      const meta = m.meta[item.id];
+      if (isUncertain(meta)) autoChoices.push(uncertainItemToChoice(item, m.slug, meta as ChecklistItemMeta));
+    }
+  }
+
+  const parts: string[] = [];
+  const choicesBlock = renderChoices(autoChoices);
+  if (choicesBlock) parts.push(choicesBlock);
+  for (const m of meetings) {
+    const block = renderMeeting(m);
+    if (block) parts.push(block);
+  }
+  return parts.join('\n\n---\n\n') + (parts.length > 0 ? '\n' : '');
 }

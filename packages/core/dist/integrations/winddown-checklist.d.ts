@@ -166,4 +166,34 @@ export declare function renderActions(actions: ChecklistAction[]): string;
  * pick for ⚠ items (D2/D5).
  */
 export declare function renderWinddownDoc(view: ChecklistView): string;
+/**
+ * Build the per-meeting `ChecklistMeeting` portion of a `ChecklistView` from a
+ * meeting file's RAW markdown content (frontmatter + body). Pure: the caller
+ * reads the file; this assembles the staged sections + the overlay maps the
+ * renderer consumes. Mirrors the single_pass writer keys:
+ *   - `staged_item_status`     → ChecklistItemMeta.status
+ *   - `staged_item_importance` → .tier
+ *   - `staged_item_uncertain`  → .uncertainReason (presence ⇒ ⚠ channel)
+ *   - `staged_item_skip_reason`→ .skipReason (the `.reason` field)
+ *   - `staged_item_links`      → .links
+ *
+ * `slug` forms the second half of every item anchor (`<!-- ai_001@<slug> -->`)
+ * so the apply mapper resolves the line back to this meeting file.
+ */
+export declare function buildChecklistMeeting(content: string, meta: {
+    slug: string;
+    title: string;
+    label?: string;
+}): ChecklistMeeting;
+/**
+ * Render only the deterministic staged-items/decisions/learnings + auto-promoted
+ * "Your call" surface for a set of meetings — WITHOUT the doc title/legend
+ * header or proposed-actions block. This is the block the agent splices into the
+ * curated view as `## Stage for approval`, AND the verbatim baseline `apply`
+ * diffs against (apply keys on hidden anchors, ignoring narrative lines).
+ *
+ * Uncertain per-meeting items are promoted into a leading Your-call block, same
+ * as `renderWinddownDoc`, so ⚠ items always force a pick.
+ */
+export declare function renderStagedBlock(meetings: ChecklistMeeting[]): string;
 //# sourceMappingURL=winddown-checklist.d.ts.map

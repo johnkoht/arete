@@ -99,6 +99,9 @@ export {
   parseStagedItemEdits,
   parseStagedItemOwner,
   parseStagedItemSkipReason,
+  parseStagedItemImportance,
+  parseStagedItemUncertain,
+  parseStagedItemLinks,
   writeItemStatusToFile,
   commitApprovedItems,
 } from './integrations/staged-items.js';
@@ -113,6 +116,8 @@ export type {
 export {
   renderStagedItemsAsChecklist,
   renderWinddownDoc,
+  renderStagedBlock,
+  buildChecklistMeeting,
   renderMeeting,
   renderChoices,
   renderActions,

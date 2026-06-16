@@ -1132,24 +1132,42 @@ single_pass`; legacy meetings render exactly as before):
 {CHECKLIST RENDER MODE (winddown-approval-doc plan, W1/W2) — ADDITIVE,
 flag-gated. ONLY when `winddown_render: checklist` in arete.yaml (default
 `prose` renders EXACTLY as below — byte-identical, AC6). When `checklist`:
-the chef builds a `ChecklistView` from today's staged meetings + their
-frontmatter maps (`staged_item_status` / `_importance` / `_uncertain` /
-`_links` / `_skip_reason` / `_owner`) and calls the core renderer
-`renderWinddownDoc(view)` (`@arete/core`) instead of hand-writing the
-`## Stage for approval` prose. The renderer emits per-meeting
-`### Action items / Decisions / Learnings` checkboxes pre-filled from
-tier+status (`[x]` keep / `[ ]` skip+reason), `[BLOCKER]`/`[high]`/⚠
-markers, a `## ⛔ Blockers & ⚠ Your call first` block for uncertain items
-(option-checkboxes, NOT pre-filled), and a `## Proposed actions` block
-(action-checkboxes pre-filled from the agent reco; payload-carrying
-actions — DM/Slack/email/jira — render their body inline as an editable
-fenced block). Every line carries a HIDDEN anchor
-(`<!-- ai_001@slug -->` / `<!-- choice:... -->` / `<!-- act:verb:id -->`).
-This whole doc IS the `## Stage for approval` + `## Uncertain` +
-`## Proposed actions` surface — do NOT also emit the prose versions of
-those sections. Persist the rendered doc verbatim as the apply baseline
-(Step 5). The user toggles disagreements in their editor and runs
-`/winddown apply` (Step 5/6).}
+do NOT hand-write the `## Stage for approval` staged-items prose. Instead
+RUN A CLI COMMAND that emits the deterministic checkbox block from today's
+meeting frontmatter:
+
+```bash
+arete winddown render YYYY-MM-DD --write
+```
+
+This reads today's staged meetings (`resources/meetings/YYYY-MM-DD-*.md`
+with status processed/approved) + their frontmatter maps
+(`staged_item_status` / `_importance` / `_uncertain` / `_links` /
+`_skip_reason`) and PRINTS the per-meeting
+`### Action items / Decisions / Learnings` checkbox block to stdout —
+pre-filled from tier+status (`[x]` keep / `[ ]` skip+reason),
+`[BLOCKER]`/`[high]`/⚠ markers, a leading `## ⛔ Blockers & ⚠ Your call
+first` block for uncertain items (option-checkboxes, NOT pre-filled), and
+a HIDDEN anchor on every line (`<!-- ai_001@slug -->` /
+`<!-- choice:... -->`). `--write` ALSO persists this block verbatim as the
+apply baseline (`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`)
+so Step 5 is handled in the same call.
+
+SPLICE the printed block into the curated view as the `## Stage for
+approval` surface (replacing the prose staged-items list). YOU compose the
+narrative around it — the summary, `## Closed today`, `## Threads`,
+`## Tomorrow`, and `## Proposed actions` (those need reconcile/calendar
+context not in frontmatter, so they stay agent-composed). The
+`## Proposed actions` checkboxes you write by hand still carry
+`<!-- act:verb:id -->` anchors so `arete winddown apply` classifies them.
+If you DO have the full structured view in-context (choices + proposed
+actions assembled), you may instead hand it in as JSON and render the full
+doc: `arete winddown render YYYY-MM-DD --view view.json --write`. The
+frontmatter-only no-args path above is the normal flow. Do NOT call the
+`@arete/core` renderer function directly — run the CLI command.
+
+The user toggles disagreements in their editor and runs `/winddown apply`
+(Step 5/6), which diffs the saved doc against the `--write` baseline.}
 
 - [ ] [BLOCKER] Glance can't roll out without license-profile assignment — compliance workshop
 - [ ] Send API spec to Anthony — open commitment to Anthony, 9d old (high)
@@ -1345,20 +1363,23 @@ HH:MM` divider and re-write the latest curated view below it; do not
 silently overwrite earlier history.
 
 {CHECKLIST MODE baseline (winddown-approval-doc plan, W3) — ONLY when
-`winddown_render: checklist`. After writing the doc, ALSO persist the
-EXACT rendered doc as the apply BASELINE alongside the archive:
-`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`. This is the
+`winddown_render: checklist`. The apply BASELINE
+(`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`) is the
 agent's recommendation snapshot; `arete winddown apply` diffs the user's
 edited `winddown-YYYY-MM-DD.md` against it to classify each toggle/edit.
-The baseline must be the renderer output verbatim (NOT re-derived) so the
-agree-path round-trip is zero-drift (AC1). On a re-run, overwrite the
-baseline with the latest rendered doc (the apply always diffs against the
-most recent recommendation).
+The baseline is the rendered staged block VERBATIM (NOT re-derived) so the
+agree-path round-trip is zero-drift (AC1). `arete winddown render
+YYYY-MM-DD --write` (run in the checklist-render step above) ALREADY wrote
+this baseline — no separate copy step needed. The baseline keys purely on
+the hidden anchors; the narrative you composed around the staged block is
+ignored by apply, so a baseline containing just the anchored staged block
+is sufficient to classify every toggle. On a re-run, `--write` overwrites
+the baseline with the latest rendered block (apply always diffs against
+the most recent recommendation).
 
 ```bash
-# checklist mode only — write the apply baseline (verbatim renderer output)
-cp "now/archive/daily-winddown/winddown-$(date +%Y-%m-%d).md" \
-   "now/archive/daily-winddown/winddown-$(date +%Y-%m-%d).baseline.md"
+# checklist mode only — render + persist the apply baseline in one call
+arete winddown render "$(date +%Y-%m-%d)" --write
 ```}
 
 After persisting, send the curated view as a single message. Wait for

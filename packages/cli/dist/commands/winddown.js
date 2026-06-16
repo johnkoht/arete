@@ -13,8 +13,8 @@
  * already `status: approved` → commit no-ops; commitment already resolved →
  * R7 guard).
  */
-import { join } from 'node:path';
-import { createServices, loadConfig, buildApplyPlan, renderApplySummary, executeWinddownApply, writeItemStatusToFile, commitApprovedItems, parseStagedItemStatus, } from '@arete/core';
+import { join, basename } from 'node:path';
+import { createServices, loadConfig, buildApplyPlan, renderApplySummary, executeWinddownApply, writeItemStatusToFile, commitApprovedItems, parseStagedItemStatus, buildChecklistMeeting, renderStagedBlock, renderWinddownDoc, } from '@arete/core';
 import { error, info, success } from '../formatters.js';
 function archiveDir(now) {
     return join(now, 'archive', 'daily-winddown');
@@ -26,10 +26,135 @@ export function baselinePath(now, date) {
 export function docPath(now, date) {
     return join(archiveDir(now), `winddown-${date}.md`);
 }
+/** Weekday label (e.g. "Tue") for a YYYY-MM-DD date, locally. */
+function weekdayLabel(date) {
+    const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m)
+        return undefined;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (Number.isNaN(d.getTime()))
+        return undefined;
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+}
+/** Title from a meeting file's frontmatter, falling back to the slug. */
+function titleFromContent(content, slug) {
+    const fm = content.match(/^---\n([\s\S]*?)\n---/);
+    if (fm) {
+        const t = fm[1].match(/^title:\s*(.+)$/m);
+        if (t)
+            return t[1].trim().replace(/^["']|["']$/g, '');
+    }
+    return slug;
+}
+/** `status:` value from a meeting file's frontmatter, or null. */
+function statusFromContent(content) {
+    const fm = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fm)
+        return null;
+    const s = fm[1].match(/^status:\s*(\S+)/m);
+    return s ? s[1] : null;
+}
 export function registerWinddownCommand(program) {
     const winddownCmd = program
         .command('winddown')
-        .description('Winddown approval-doc apply (checkbox review surface)');
+        .description('Winddown approval-doc render + apply (checkbox review surface)');
+    winddownCmd
+        .command('render <date>')
+        .description('Render the deterministic staged-items/decisions/learnings checkbox block ' +
+        'for a day (YYYY-MM-DD) from meeting frontmatter. The agent splices this ' +
+        'into the curated view as `## Stage for approval`; --write persists the ' +
+        'apply baseline.')
+        .option('--stdout', 'Print the rendered block to stdout (default)')
+        .option('--write', 'Write/refresh the apply baseline (winddown-<date>.baseline.md)')
+        .option('--json', 'Emit { view, markdown } as JSON')
+        .option('--view <file>', 'Render a FULL ChecklistView (with agent-composed choices + proposed actions) ' +
+        'from a JSON file instead of the frontmatter-only staged block')
+        .action(async (date, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json)
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            else
+                error('Not in an Areté workspace');
+            process.exit(1);
+        }
+        const paths = services.workspace.getPaths(root);
+        const meetingsDir = join(paths.resources, 'meetings');
+        let markdown;
+        let view;
+        if (opts.view) {
+            // FULL view path: the agent hands in choices + proposed actions.
+            const viewRaw = await services.storage.read(opts.view.startsWith('/') ? opts.view : join(root, opts.view));
+            if (viewRaw === null) {
+                const msg = `View file not found: ${opts.view}`;
+                if (opts.json)
+                    console.log(JSON.stringify({ success: false, error: msg }));
+                else
+                    error(msg);
+                process.exit(1);
+            }
+            view = JSON.parse(viewRaw);
+            markdown = renderWinddownDoc(view);
+        }
+        else {
+            // FRONTMATTER-ONLY path (no-args default): build the per-meeting
+            // staged portion from `resources/meetings/<date>-*.md` (processed/
+            // approved) and render the deterministic staged block.
+            const allFiles = await services.storage.list(meetingsDir, { extensions: ['.md'] });
+            const dayFiles = allFiles
+                .filter((p) => {
+                const b = basename(p);
+                return b.startsWith(`${date}-`) && b !== 'index.md';
+            })
+                .sort((a, b) => a.localeCompare(b));
+            const meetings = [];
+            for (const filePath of dayFiles) {
+                const content = await services.storage.read(filePath);
+                if (content === null)
+                    continue;
+                const status = statusFromContent(content);
+                if (status !== 'processed' && status !== 'approved')
+                    continue;
+                const slug = basename(filePath, '.md');
+                const title = titleFromContent(content, slug);
+                const cm = buildChecklistMeeting(content, { slug, title });
+                // Only include meetings that actually have staged items.
+                const hasItems = cm.sections.actionItems.length +
+                    cm.sections.decisions.length +
+                    cm.sections.learnings.length >
+                    0;
+                if (hasItems)
+                    meetings.push(cm);
+            }
+            view = {
+                date,
+                weekday: weekdayLabel(date),
+                meetings,
+                choices: [],
+                actions: [],
+            };
+            markdown = renderStagedBlock(meetings);
+        }
+        if (opts.write) {
+            const blPath = baselinePath(paths.now, date);
+            await services.storage.mkdir(archiveDir(paths.now));
+            await services.storage.write(blPath, markdown);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({ success: true, date, view, markdown, written: !!opts.write }, null, 2));
+            return;
+        }
+        // --stdout is the default surface; print the rendered block.
+        process.stdout.write(markdown);
+        if (markdown === '' && !opts.write) {
+            // Make the empty-day case visible on the error channel (stdout stays clean).
+            info(`No staged meetings found for ${date}.`);
+        }
+        if (opts.write) {
+            success(`Baseline written: ${baselinePath(paths.now, date)}`);
+        }
+    });
     winddownCmd
         .command('apply <date>')
         .description('Apply a saved winddown approval doc (YYYY-MM-DD): diff vs baseline, confirm, execute')

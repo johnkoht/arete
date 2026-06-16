@@ -306,6 +306,62 @@ export function parseStagedItemSkipReason(content: string): StagedItemSkipReason
   return result;
 }
 
+/**
+ * Parse the `staged_item_importance` frontmatter field (single_pass D3).
+ * Map of item id → importance tier. Entries with an unrecognized value drop.
+ */
+export function parseStagedItemImportance(
+  content: string,
+): Record<string, 'blocker' | 'high' | 'normal'> {
+  const { data } = parseFrontmatter(content);
+  const raw = data['staged_item_importance'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const result: Record<string, 'blocker' | 'high' | 'normal'> = {};
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === 'blocker' || v === 'high' || v === 'normal') result[id] = v;
+  }
+  return result;
+}
+
+/**
+ * Parse the `staged_item_uncertain` frontmatter field (single_pass D3, the ⚠
+ * channel). Map of item id → uncertainty reason string. PRESENCE of an entry
+ * (even an empty string) means the item is uncertain. Non-string entries drop.
+ */
+export function parseStagedItemUncertain(content: string): Record<string, string> {
+  const { data } = parseFrontmatter(content);
+  const raw = data['staged_item_uncertain'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const result: Record<string, string> = {};
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'string') result[id] = v;
+  }
+  return result;
+}
+
+/**
+ * Parse the `staged_item_links` frontmatter field (single_pass D3).
+ * Map of item id → `{ continuationOf?, supersedes? }`. Entries with no valid
+ * string field drop.
+ */
+export function parseStagedItemLinks(
+  content: string,
+): Record<string, { continuationOf?: string; supersedes?: string }> {
+  const { data } = parseFrontmatter(content);
+  const raw = data['staged_item_links'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const result: Record<string, { continuationOf?: string; supersedes?: string }> = {};
+  for (const [id, meta] of Object.entries(raw as Record<string, unknown>)) {
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) continue;
+    const m = meta as Record<string, unknown>;
+    const link: { continuationOf?: string; supersedes?: string } = {};
+    if (typeof m['continuationOf'] === 'string') link.continuationOf = m['continuationOf'];
+    if (typeof m['supersedes'] === 'string') link.supersedes = m['supersedes'];
+    if (link.continuationOf || link.supersedes) result[id] = link;
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // writeItemStatusToFile
 // ---------------------------------------------------------------------------

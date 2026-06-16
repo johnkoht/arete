@@ -244,6 +244,64 @@ export function parseStagedItemSkipReason(content) {
     return result;
 }
 /**
+ * Parse the `staged_item_importance` frontmatter field (single_pass D3).
+ * Map of item id → importance tier. Entries with an unrecognized value drop.
+ */
+export function parseStagedItemImportance(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_importance'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, v] of Object.entries(raw)) {
+        if (v === 'blocker' || v === 'high' || v === 'normal')
+            result[id] = v;
+    }
+    return result;
+}
+/**
+ * Parse the `staged_item_uncertain` frontmatter field (single_pass D3, the ⚠
+ * channel). Map of item id → uncertainty reason string. PRESENCE of an entry
+ * (even an empty string) means the item is uncertain. Non-string entries drop.
+ */
+export function parseStagedItemUncertain(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_uncertain'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, v] of Object.entries(raw)) {
+        if (typeof v === 'string')
+            result[id] = v;
+    }
+    return result;
+}
+/**
+ * Parse the `staged_item_links` frontmatter field (single_pass D3).
+ * Map of item id → `{ continuationOf?, supersedes? }`. Entries with no valid
+ * string field drop.
+ */
+export function parseStagedItemLinks(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_links'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, meta] of Object.entries(raw)) {
+        if (!meta || typeof meta !== 'object' || Array.isArray(meta))
+            continue;
+        const m = meta;
+        const link = {};
+        if (typeof m['continuationOf'] === 'string')
+            link.continuationOf = m['continuationOf'];
+        if (typeof m['supersedes'] === 'string')
+            link.supersedes = m['supersedes'];
+        if (link.continuationOf || link.supersedes)
+            result[id] = link;
+    }
+    return result;
+}
+/**
  * Update `staged_item_status` (and optionally `staged_item_edits`) for a
  * single item in a meeting file's frontmatter.
  *
