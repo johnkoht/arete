@@ -24,6 +24,24 @@ import type { MeetingContextBundle } from './meeting-context.js';
  * Accepts a prompt string and returns the LLM's text response.
  */
 export type LLMCallFn = (prompt: string) => Promise<string>;
+/**
+ * Thrown by `parseMeetingExtractionResponse` (single_pass / W1, D5) when the
+ * model response could not be parsed as JSON. DISTINCT from a legitimate
+ * trimmed-empty / model-emitted-empty response, which returns an empty result.
+ *
+ * Carries a truncated preview of the raw response so the failure is
+ * diagnosable from the snapshot alone (S1/AC7). NEVER retried by the AI
+ * transport (a retry would re-parse identically); surfaced loudly so the CLI
+ * can write a failure snapshot and exit non-zero rather than report "0 items."
+ */
+export declare class ParseError extends Error {
+    readonly code: "parse_error";
+    /** Truncated preview of the raw LLM response (for the failure snapshot). */
+    readonly preview: string;
+    constructor(message: string, preview: string);
+}
+/** Max chars of raw response retained in a ParseError preview / snapshot. */
+export declare const PARSE_ERROR_PREVIEW_CHARS = 500;
 /** Extraction mode determining prompt style and category limits. */
 export type ExtractionMode = 'light' | 'normal' | 'thorough';
 /**

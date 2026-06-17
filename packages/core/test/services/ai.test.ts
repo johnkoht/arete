@@ -7,7 +7,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Type } from '@sinclair/typebox';
-import { AIService, parseModelSpec } from '../../src/services/ai.js';
+import { AIService, parseModelSpec, TruncationError, isRetryableTransportError } from '../../src/services/ai.js';
 import type { AIServiceTestDeps, ModelSpec } from '../../src/services/ai.js';
 import type { AreteConfig, AITask, AITier } from '../../src/models/workspace.js';
 import type { AssistantMessage, Context, KnownProvider, Model, SimpleStreamOptions } from '@mariozechner/pi-ai';
@@ -296,6 +296,159 @@ describe('AIService', () => {
 
       assert.equal(deps.calls[0].model.provider, 'google');
       assert.equal(deps.calls[0].model.id, 'gemini-2.0-flash');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // single_pass W1 / S2 — transient retry + truncation taxonomy
+  // -------------------------------------------------------------------------
+  describe('transient retry + truncation (W1/S2)', () => {
+    it('retries a retryable transport error (overloaded) then succeeds', async () => {
+      const config = createTestConfig();
+      let calls = 0;
+      const deps: AIServiceTestDeps = {
+        completeSimple: (async () => {
+          calls += 1;
+          if (calls < 3) throw new Error('Anthropic API error: Overloaded (529)');
+          return createMockResponse('recovered');
+        }) as typeof completeSimple,
+        getModel: createMockDeps().getModel,
+        getEnvApiKey: createMockDeps().getEnvApiKey,
+      };
+      const service = new AIService(config, deps);
+
+      const result = await service.call('extraction', 'go');
+      assert.equal(result.text, 'recovered');
+      assert.equal(calls, 3); // failed twice, succeeded on the 3rd
+    });
+
+    it('surfaces a retryable error after exhausting attempts (≤3)', async () => {
+      const config = createTestConfig();
+      let calls = 0;
+      const deps: AIServiceTestDeps = {
+        completeSimple: (async () => {
+          calls += 1;
+          throw new Error('rate limit exceeded (429)');
+        }) as typeof completeSimple,
+        getModel: createMockDeps().getModel,
+        getEnvApiKey: createMockDeps().getEnvApiKey,
+      };
+      const service = new AIService(config, deps);
+
+      await assert.rejects(() => service.call('extraction', 'go'), /429|rate limit/i);
+      assert.equal(calls, 3); // capped at AI_MAX_ATTEMPTS
+    });
+
+    it('does NOT retry a non-retryable error (auth) — surfaced immediately', async () => {
+      const config = createTestConfig();
+      let calls = 0;
+      const deps: AIServiceTestDeps = {
+        completeSimple: (async () => {
+          calls += 1;
+          throw new Error('invalid x-api-key: authentication failed');
+        }) as typeof completeSimple,
+        getModel: createMockDeps().getModel,
+        getEnvApiKey: createMockDeps().getEnvApiKey,
+      };
+      const service = new AIService(config, deps);
+
+      await assert.rejects(() => service.call('extraction', 'go'), /api-key|authentication/i);
+      assert.equal(calls, 1); // never retried
+    });
+
+    it('treats stopReason:length as a TruncationError (surfaced, NOT retried)', async () => {
+      const config = createTestConfig();
+      let calls = 0;
+      const truncated: AssistantMessage = {
+        ...createMockResponse('partial {"action_items":['),
+        stopReason: 'length',
+      };
+      const deps: AIServiceTestDeps = {
+        completeSimple: (async () => {
+          calls += 1;
+          return truncated;
+        }) as typeof completeSimple,
+        getModel: createMockDeps().getModel,
+        getEnvApiKey: createMockDeps().getEnvApiKey,
+      };
+      const service = new AIService(config, deps);
+
+      await assert.rejects(
+        () => service.call('extraction', 'go'),
+        (err: unknown) => err instanceof TruncationError,
+      );
+      assert.equal(calls, 1); // truncation is never retried
+    });
+
+    it('still throws on stopReason:error with the provider message', async () => {
+      const config = createTestConfig();
+      const errored: AssistantMessage = {
+        ...createMockResponse(''),
+        stopReason: 'error',
+        errorMessage: 'context deadline exceeded',
+      };
+      // Non-retryable text ("context deadline exceeded" lacks a retryable token)
+      let calls = 0;
+      const deps: AIServiceTestDeps = {
+        completeSimple: (async () => {
+          calls += 1;
+          return errored;
+        }) as typeof completeSimple,
+        getModel: createMockDeps().getModel,
+        getEnvApiKey: createMockDeps().getEnvApiKey,
+      };
+      const service = new AIService(config, deps);
+
+      await assert.rejects(() => service.call('extraction', 'go'), /AI call failed/);
+      assert.equal(calls, 1);
+    });
+
+    it('a deliberate-empty SUCCESS is returned, not retried', async () => {
+      const config = createTestConfig();
+      let calls = 0;
+      const emptySuccess: AssistantMessage = {
+        ...createMockResponse(''),
+        stopReason: 'stop',
+      };
+      const deps: AIServiceTestDeps = {
+        completeSimple: (async () => {
+          calls += 1;
+          return emptySuccess;
+        }) as typeof completeSimple,
+        getModel: createMockDeps().getModel,
+        getEnvApiKey: createMockDeps().getEnvApiKey,
+      };
+      const service = new AIService(config, deps);
+
+      const result = await service.call('extraction', 'go');
+      assert.equal(result.text, '');
+      assert.equal(calls, 1); // never retried — empty success is a valid result
+    });
+  });
+
+  describe('isRetryableTransportError', () => {
+    it('classifies transport blips as retryable', () => {
+      for (const m of [
+        'Overloaded (529)',
+        'rate limit exceeded',
+        'HTTP 429 Too Many Requests',
+        'Internal Server Error (500)',
+        'bad gateway 502',
+        'service unavailable 503',
+        'gateway timeout 504',
+        'ECONNRESET',
+        'socket hang up',
+        'fetch failed',
+      ]) {
+        assert.equal(isRetryableTransportError(new Error(m)), true, m);
+      }
+    });
+
+    it('classifies auth / parse / truncation as non-retryable', () => {
+      assert.equal(isRetryableTransportError(new Error('invalid x-api-key')), false);
+      assert.equal(isRetryableTransportError(new Error('authentication error')), false);
+      assert.equal(isRetryableTransportError(new TruncationError()), false);
+      assert.equal(isRetryableTransportError(new Error('unexpected token in JSON')), false);
     });
   });
 

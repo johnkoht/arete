@@ -21,6 +21,28 @@
 import { calculateSpeakingRatio } from './meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 /**
+ * Thrown by `parseMeetingExtractionResponse` (single_pass / W1, D5) when the
+ * model response could not be parsed as JSON. DISTINCT from a legitimate
+ * trimmed-empty / model-emitted-empty response, which returns an empty result.
+ *
+ * Carries a truncated preview of the raw response so the failure is
+ * diagnosable from the snapshot alone (S1/AC7). NEVER retried by the AI
+ * transport (a retry would re-parse identically); surfaced loudly so the CLI
+ * can write a failure snapshot and exit non-zero rather than report "0 items."
+ */
+export class ParseError extends Error {
+    code = 'parse_error';
+    /** Truncated preview of the raw LLM response (for the failure snapshot). */
+    preview;
+    constructor(message, preview) {
+        super(message);
+        this.name = 'ParseError';
+        this.preview = preview;
+    }
+}
+/** Max chars of raw response retained in a ParseError preview / snapshot. */
+export const PARSE_ERROR_PREVIEW_CHARS = 500;
+/**
  * Strip line-start `---` separators that would corrupt downstream frontmatter
  * parsing if these LLM-generated strings get written into a YAML-frontmattered
  * file (e.g., a meeting markdown's staged section). Pure helper; safe to call
@@ -1376,8 +1398,17 @@ export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMIT
     try {
         raw = JSON.parse(jsonStr);
     }
-    catch {
-        // Malformed JSON — return empty result
+    catch (err) {
+        // single_pass (W1/D5): malformed JSON is a FAILURE, not a deliberate
+        // empty. Throw a tagged ParseError carrying a truncated preview so the
+        // CLI surfaces it (error in JSON + failure snapshot) instead of silently
+        // reporting "0 items." Legacy mode stays bit-identical: return empty.
+        if (singlePass) {
+            const parseMsg = err instanceof Error ? err.message : String(err);
+            const preview = trimmed.slice(0, PARSE_ERROR_PREVIEW_CHARS);
+            throw new ParseError(`Failed to parse extraction response as JSON: ${parseMsg}`, preview);
+        }
+        // Malformed JSON — return empty result (legacy)
         return emptyResult;
     }
     const validationWarnings = [];
@@ -1975,26 +2006,16 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
         });
         // Limits are unused in single-pass parsing (no caps) — pass the default
         // for signature compatibility.
-        try {
-            const response = await callLLM(prompt);
-            return parseMeetingExtractionResponse(response, CATEGORY_LIMITS, options?.ownerSlug, {
-                singlePass: true,
-            });
-        }
-        catch {
-            return {
-                intelligence: {
-                    summary: '',
-                    actionItems: [],
-                    nextSteps: [],
-                    decisions: [],
-                    learnings: [],
-                },
-                validationWarnings: [],
-                rawItems: [],
-                telemetryEvents: [],
-            };
-        }
+        //
+        // W1/D2: NO bare catch-and-return-empty here. A thrown callLLM error
+        // (transport, truncation) or a ParseError from the parser MUST propagate
+        // so the caller can surface it (CLI: error in JSON + failure snapshot +
+        // non-zero exit) instead of silently presenting "0 items." A silent empty
+        // extraction is a bug, not a result (POSTMORTEM guardrail 4).
+        const response = await callLLM(prompt);
+        return parseMeetingExtractionResponse(response, CATEGORY_LIMITS, options?.ownerSlug, {
+            singlePass: true,
+        });
     }
     switch (mode) {
         case 'light':
@@ -2014,24 +2035,15 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
             limits = CATEGORY_LIMITS;
             break;
     }
-    try {
-        const response = await callLLM(prompt);
-        return parseMeetingExtractionResponse(response, limits, options?.ownerSlug);
-    }
-    catch {
-        // LLM call failed — return empty result rather than propagating
-        return {
-            intelligence: {
-                summary: '',
-                actionItems: [],
-                nextSteps: [],
-                decisions: [],
-                learnings: [],
-            },
-            validationWarnings: [],
-            rawItems: [],
-        };
-    }
+    // W1/D2: legacy mirror — no bare catch-and-return-empty. On a thrown callLLM
+    // error, PROPAGATE. The two callers are compatible: the backend wraps in
+    // `callLLMWithErrorCapture` and already re-throws on empty (agent.ts:208-216,
+    // 252-253); the CLI extract command has an outer try/catch that exits
+    // non-zero. Neither relies on empty-on-error. Legacy parse behavior on a
+    // *successful but malformed* response is unchanged (parser returns empty in
+    // legacy mode), so flags-off output stays bit-identical.
+    const response = await callLLM(prompt);
+    return parseMeetingExtractionResponse(response, limits, options?.ownerSlug);
 }
 // ---------------------------------------------------------------------------
 // Staging Sections Formatting

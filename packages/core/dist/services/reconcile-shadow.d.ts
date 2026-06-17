@@ -49,7 +49,27 @@ export type RawExtractionSnapshot = {
     intelligence: MeetingIntelligence;
     /** Parse-time validation warnings (pre-persistence). */
     validationWarnings?: ValidationWarning[];
+    /**
+     * Why the extraction FAILED, when it did (single_pass W1 / S1, AC2/AC7).
+     * Absent on a successful snapshot. When present, `intelligence` is the empty
+     * shell — the extraction threw before producing items. Lets soak analysis
+     * tell a silent-empty bug (would be absent here entirely) from a diagnosable
+     * failure (call error / parse error / truncation), and makes the
+     * Anthony-class case recoverable from the snapshot alone.
+     */
+    failureReason?: ExtractionFailureReason;
+    /** Truncated raw-response preview / error message for a failed snapshot. */
+    failurePreview?: string;
+    /** The error message of the failure (failed snapshot only). */
+    failureMessage?: string;
 };
+/**
+ * Classification of an extraction failure recorded in a failure snapshot
+ * (single_pass W1 / S1). Maps to the W1 error taxonomy: a thrown transport
+ * error (`call_error`), a ParseError from the response parser (`parse_error`),
+ * a truncated response (`truncation`), or anything else (`unknown`).
+ */
+export type ExtractionFailureReason = 'call_error' | 'parse_error' | 'truncation' | 'unknown';
 export type ShadowLogEntry = {
     /** Entry type, e.g. 'shadow-run' | 'diff' | 'note' | 'soak-pause'. */
     type: string;
@@ -76,6 +96,29 @@ export declare function writeRawExtractionSnapshot(storage: StorageAdapter, work
     promptMode?: string;
     intelligence: MeetingIntelligence;
     validationWarnings?: ValidationWarning[];
+}): Promise<string | null>;
+/**
+ * Persist a FAILURE snapshot when an extraction threw (single_pass W1 / S1,
+ * AC2/AC7). Same path/shape as `writeRawExtractionSnapshot` but records
+ * `failureReason` + preview + message and an empty `intelligence` shell — the
+ * extraction never produced items.
+ *
+ * CRITICAL (S1): the CLI's success-path snapshot writer runs AFTER
+ * `extractMeetingIntelligence` returns; with W1's fail-loud propagation the
+ * CLI catch does `process.exit(1)` before that line, so without THIS write the
+ * exact failure being targeted would leave no snapshot → AC2/AC7 unreachable.
+ * The CLI calls this in its catch BEFORE exiting. Best-effort: callers wrap in
+ * try/catch and never let snapshot failure mask the original error.
+ *
+ * Returns the written path, or null when the filename has no date prefix.
+ */
+export declare function writeFailureSnapshot(storage: StorageAdapter, workspaceRoot: string, args: {
+    meetingPath: string;
+    extractionMode: string;
+    promptMode?: string;
+    failureReason: ExtractionFailureReason;
+    failureMessage: string;
+    failurePreview?: string;
 }): Promise<string | null>;
 /**
  * Append one JSONL entry to `<workspaceRoot>/dev/diary/reconcile-shadow.log`.

@@ -40,6 +40,30 @@ export interface AIStructuredResult<T> extends AICallResult {
     /** The parsed and validated data */
     data: T;
 }
+/**
+ * Thrown when the model response was truncated (`stopReason: 'length'`).
+ *
+ * single_pass W1 (S2): truncation is a FAILURE, not a success — a half-emitted
+ * JSON body parses to garbage/empty and used to slip through silently. This is
+ * NEVER retried (a retry would truncate identically); it surfaces loudly so the
+ * caller can bump `maxTokens` or split the input.
+ */
+export declare class TruncationError extends Error {
+    readonly code: "truncation";
+    constructor(message?: string);
+}
+/**
+ * Classify whether an error from the AI transport is a transient/retryable
+ * transport failure (single_pass W1 / S2). RETRYABLE = overload, rate limit
+ * (429), server errors (5xx), and network/connection blips. NOT retryable:
+ * auth/credential errors, truncation, malformed-output/parse errors,
+ * client/validation (4xx other than 429), or a deliberate empty success.
+ *
+ * Heuristic on message text + any numeric status, because pi-ai surfaces the
+ * provider error as a plain `Error` (no typed status). Conservative: defaults
+ * to NOT retryable so we never pay 3× for a non-transient failure.
+ */
+export declare function isRetryableTransportError(err: unknown): boolean;
 /** Dependency injection for testing */
 export interface AIServiceTestDeps {
     completeSimple: typeof completeSimple;

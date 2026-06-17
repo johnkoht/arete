@@ -477,7 +477,7 @@ export {
   isCommitmentsV2Active,
   isCommitmentsV2ActiveFromConfig,
 } from './commitments-v2-flag.js';
-export { AIService, parseModelSpec } from './ai.js';
+export { AIService, parseModelSpec, TruncationError, isRetryableTransportError } from './ai.js';
 export type {
   AICallOptions,
   AICallResult,
@@ -503,6 +503,8 @@ export {
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   TOPIC_BIAS_BLOCK_PROMPT,
+  ParseError,
+  PARSE_ERROR_PREVIEW_CHARS,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,
@@ -585,12 +587,13 @@ export type {
 // Reconcile-engine W7 shadow-soak infra (raw snapshots + shadow log)
 export {
   writeRawExtractionSnapshot,
+  writeFailureSnapshot,
   appendReconcileShadowLog,
   parseMeetingFilename,
   RAW_EXTRACTIONS_DIR,
   RECONCILE_SHADOW_LOG,
 } from './reconcile-shadow.js';
-export type { RawExtractionSnapshot, ShadowLogEntry } from './reconcile-shadow.js';
+export type { RawExtractionSnapshot, ShadowLogEntry, ExtractionFailureReason } from './reconcile-shadow.js';
 
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';

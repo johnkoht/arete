@@ -22,6 +22,7 @@ import {
   CATEGORY_LIMITS,
   MIRROR_PAIR_JACCARD_THRESHOLD,
   dedupMirrorPairs,
+  ParseError,
 } from '../../src/services/meeting-extraction.js';
 import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem, TopicWikiContext } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
@@ -1415,13 +1416,63 @@ describe('extractMeetingIntelligence', () => {
     assert.equal(result.intelligence.actionItems[0].owner, 'Alice');
   });
 
-  it('returns empty result on LLM error', async () => {
+  it('PROPAGATES an LLM error (W1/D2 — no silent empty-on-error)', async () => {
+    // W1: the legacy mirror used to swallow a thrown callLLM error and return
+    // an empty result. That silent "0 items" is the regression class POSTMORTEM
+    // guardrail 4 forbids. Both branches now propagate; the caller (CLI/backend)
+    // surfaces it. Legacy SUCCESS-path parsing is unchanged (see byte-identity
+    // tests below).
     const mockLLM: LLMCallFn = async () => {
       throw new Error('API rate limit');
     };
 
-    const result = await extractMeetingIntelligence('transcript', mockLLM);
+    await assert.rejects(
+      () => extractMeetingIntelligence('transcript', mockLLM),
+      /API rate limit/,
+    );
+  });
 
+  it('single_pass PROPAGATES an LLM error (W1)', async () => {
+    const mockLLM: LLMCallFn = async () => {
+      throw new Error('Overloaded (529)');
+    };
+
+    await assert.rejects(
+      () => extractMeetingIntelligence('transcript', mockLLM, { singlePass: true }),
+      /Overloaded/,
+    );
+  });
+
+  it('single_pass throws a tagged ParseError on malformed JSON (W1/D5)', async () => {
+    const garbage = 'Here are the items: {action_items: [unclosed';
+    const mockLLM: LLMCallFn = async () => garbage;
+
+    await assert.rejects(
+      () => extractMeetingIntelligence('transcript', mockLLM, { singlePass: true }),
+      (err: unknown) => {
+        assert.ok(err instanceof ParseError, 'expected ParseError');
+        assert.equal(err.code, 'parse_error');
+        assert.ok(err.preview.length > 0, 'preview carries a raw-response excerpt');
+        assert.ok(garbage.startsWith(err.preview.slice(0, 10)));
+        return true;
+      },
+    );
+  });
+
+  it('single_pass returns empty (NOT throw) on a deliberate trimmed-empty response', async () => {
+    // D5: a genuinely empty model response is the only legitimate silent empty.
+    const mockLLM: LLMCallFn = async () => '   \n  ';
+    const result = await extractMeetingIntelligence('transcript', mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.summary, '');
+    assert.equal(result.intelligence.actionItems.length, 0);
+  });
+
+  it('legacy parse on malformed JSON returns empty (byte-identity, NOT throw)', async () => {
+    // Overarching invariant: flags OFF stays bit-identical. Legacy parse of a
+    // *successful but malformed* response still returns empty (does NOT throw);
+    // only single_pass raises ParseError.
+    const mockLLM: LLMCallFn = async () => '{not valid json';
+    const result = await extractMeetingIntelligence('transcript', mockLLM);
     assert.equal(result.intelligence.summary, '');
     assert.equal(result.intelligence.actionItems.length, 0);
     assert.equal(result.validationWarnings.length, 0);

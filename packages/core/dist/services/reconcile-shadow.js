@@ -69,6 +69,50 @@ export async function writeRawExtractionSnapshot(storage, workspaceRoot, args) {
     return outPath;
 }
 /**
+ * Persist a FAILURE snapshot when an extraction threw (single_pass W1 / S1,
+ * AC2/AC7). Same path/shape as `writeRawExtractionSnapshot` but records
+ * `failureReason` + preview + message and an empty `intelligence` shell — the
+ * extraction never produced items.
+ *
+ * CRITICAL (S1): the CLI's success-path snapshot writer runs AFTER
+ * `extractMeetingIntelligence` returns; with W1's fail-loud propagation the
+ * CLI catch does `process.exit(1)` before that line, so without THIS write the
+ * exact failure being targeted would leave no snapshot → AC2/AC7 unreachable.
+ * The CLI calls this in its catch BEFORE exiting. Best-effort: callers wrap in
+ * try/catch and never let snapshot failure mask the original error.
+ *
+ * Returns the written path, or null when the filename has no date prefix.
+ */
+export async function writeFailureSnapshot(storage, workspaceRoot, args) {
+    const parsed = parseMeetingFilename(args.meetingPath);
+    if (!parsed)
+        return null;
+    const dir = join(workspaceRoot, RAW_EXTRACTIONS_DIR);
+    await storage.mkdir(dir);
+    const outPath = join(dir, `${parsed.date}-${parsed.slug}.json`);
+    const snapshot = {
+        v: 1,
+        capturedAt: new Date().toISOString(),
+        meetingPath: args.meetingPath,
+        date: parsed.date,
+        slug: parsed.slug,
+        extractionMode: args.extractionMode,
+        ...(args.promptMode ? { promptMode: args.promptMode } : {}),
+        intelligence: {
+            summary: '',
+            actionItems: [],
+            nextSteps: [],
+            decisions: [],
+            learnings: [],
+        },
+        failureReason: args.failureReason,
+        failureMessage: args.failureMessage,
+        ...(args.failurePreview ? { failurePreview: args.failurePreview } : {}),
+    };
+    await storage.write(outPath, JSON.stringify(snapshot, null, 2) + '\n');
+    return outPath;
+}
+/**
  * Append one JSONL entry to `<workspaceRoot>/dev/diary/reconcile-shadow.log`.
  *
  * Scaffolding for the W7 nightly diff: shadow-engine runs append

@@ -58,6 +58,10 @@ import {
   AreaParserService,
   // chef-holistic-reconcile W7 shadow-soak infra
   writeRawExtractionSnapshot,
+  // single-pass-extraction W1 — fail-loud + failure snapshot (S1/S2)
+  writeFailureSnapshot,
+  ParseError,
+  TruncationError,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -1281,9 +1285,21 @@ export function registerMeetingCommands(program: Command): void {
       // behavior. Light-importance meetings keep the light prompt either way.
       const singlePassMode = config.extraction_mode === 'single_pass' && mode !== 'light';
 
-      // Create LLM call wrapper using AIService
+      // Create LLM call wrapper using AIService.
+      // single_pass W1/S7: the single-pass prompt has NO category caps and can
+      // emit a large JSON body (tiered items + open questions + markers). The
+      // model-default maxTokens (~8k) can truncate that, and W1 now treats
+      // truncation as a loud failure (TruncationError). Raise the ceiling for
+      // single_pass so truncation only fires on a genuine overflow, not the
+      // common case. Legacy passes no maxTokens (model default) → unchanged,
+      // bit-identical to today.
+      const EXTRACTION_MAX_TOKENS_SINGLE_PASS = 16000;
       const callLLM: MeetingLLMCallFn = async (prompt: string) => {
-        const result = await services.ai.call('extraction', prompt);
+        const result = await services.ai.call(
+          'extraction',
+          prompt,
+          singlePassMode ? { maxTokens: EXTRACTION_MAX_TOKENS_SINGLE_PASS } : undefined,
+        );
         return result.text;
       };
 
@@ -1395,6 +1411,38 @@ export function registerMeetingCommands(program: Command): void {
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        // W1/S1: write a FAILURE snapshot BEFORE exiting. With fail-loud
+        // propagation the success-path snapshot writer below never runs on a
+        // failure (we exit here first), so without this the targeted failure
+        // would leave no snapshot → AC2/AC7 unreachable. Classify the failure
+        // by error type for the W1 taxonomy. Best-effort: never let snapshot
+        // failure mask the original error.
+        if (config.reconcile_shadow === true && !opts.dryRun) {
+          let failureReason: 'call_error' | 'parse_error' | 'truncation' | 'unknown' = 'call_error';
+          let failurePreview: string | undefined;
+          if (err instanceof ParseError) {
+            failureReason = 'parse_error';
+            failurePreview = err.preview;
+          } else if (err instanceof TruncationError) {
+            failureReason = 'truncation';
+          } else if (err instanceof Error) {
+            failureReason = 'call_error';
+          } else {
+            failureReason = 'unknown';
+          }
+          try {
+            await writeFailureSnapshot(services.storage, root, {
+              meetingPath,
+              extractionMode: singlePassMode ? 'single_pass' : 'legacy',
+              promptMode: mode,
+              failureReason,
+              failureMessage: msg,
+              failurePreview,
+            });
+          } catch {
+            // instrumentation only — surface the original failure regardless
+          }
+        }
         if (opts.json) {
           console.log(JSON.stringify({ success: false, error: `Extraction failed: ${msg}` }));
         } else {

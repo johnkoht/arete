@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import {
   writeRawExtractionSnapshot,
+  writeFailureSnapshot,
   appendReconcileShadowLog,
   parseMeetingFilename,
   RAW_EXTRACTIONS_DIR,
@@ -158,6 +159,56 @@ describe('writeRawExtractionSnapshot (CHR-W7)', () => {
     });
     const snapshot = JSON.parse(storage.files.get(out!)!) as RawExtractionSnapshot;
     assert.ok(!('validationWarnings' in snapshot));
+  });
+});
+
+describe('writeFailureSnapshot (single_pass W1 / S1)', () => {
+  it('records failureReason + message + preview with an empty intelligence shell', async () => {
+    const storage = createMockStorage();
+    const out = await writeFailureSnapshot(storage, '/ws', {
+      meetingPath: 'resources/meetings/2026-06-16-anthony-john-weekly.md',
+      extractionMode: 'single_pass',
+      promptMode: 'normal',
+      failureReason: 'parse_error',
+      failureMessage: 'Failed to parse extraction response as JSON: Unexpected token',
+      failurePreview: 'Here are the items: {action_items: [unclosed',
+    });
+    assert.ok(out);
+    assert.ok(storage.mkdirs.includes(join('/ws', RAW_EXTRACTIONS_DIR)));
+    const snap = JSON.parse(storage.files.get(out!)!) as RawExtractionSnapshot;
+    assert.equal(snap.failureReason, 'parse_error');
+    assert.equal(snap.failureMessage?.includes('Failed to parse'), true);
+    assert.equal(snap.failurePreview, 'Here are the items: {action_items: [unclosed');
+    // The intelligence is the empty shell — the extraction never produced items.
+    assert.equal(snap.intelligence.summary, '');
+    assert.equal(snap.intelligence.actionItems.length, 0);
+    assert.equal(snap.extractionMode, 'single_pass');
+    assert.equal(snap.promptMode, 'normal');
+  });
+
+  it('omits failurePreview when absent (e.g. a call_error)', async () => {
+    const storage = createMockStorage();
+    const out = await writeFailureSnapshot(storage, '/ws', {
+      meetingPath: 'resources/meetings/2026-06-16-x.md',
+      extractionMode: 'single_pass',
+      failureReason: 'call_error',
+      failureMessage: 'AI call failed: Overloaded (529)',
+    });
+    const snap = JSON.parse(storage.files.get(out!)!) as RawExtractionSnapshot;
+    assert.equal(snap.failureReason, 'call_error');
+    assert.ok(!('failurePreview' in snap));
+  });
+
+  it('returns null when the filename has no date prefix (no snapshot written)', async () => {
+    const storage = createMockStorage();
+    const out = await writeFailureSnapshot(storage, '/ws', {
+      meetingPath: 'notes.md',
+      extractionMode: 'single_pass',
+      failureReason: 'truncation',
+      failureMessage: 'AI response truncated',
+    });
+    assert.equal(out, null);
+    assert.equal(storage.files.size, 0);
   });
 });
 
