@@ -155,6 +155,113 @@ Jane Doe asked about budget timeline.
 });
 
 // ---------------------------------------------------------------------------
+// refreshPersonMemory — incremental sinceDays window
+// ---------------------------------------------------------------------------
+
+describe('EntityService.refreshPersonMemory — sinceDays window', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let service: EntityService;
+  // Fixed anchor so the relative window is deterministic against fixed-date fixtures.
+  const refDate = new Date('2026-02-15T12:00:00Z');
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-memory-since-'));
+    paths = makePaths(tmpDir);
+    service = new EntityService(new FileStorageAdapter());
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('sinceDays filters the meeting set to the window (excludes older meetings)', async () => {
+    writePerson(tmpDir, 'internal', 'jane-doe', 'Jane Doe');
+
+    // In-window: 2026-02-14 (1 day before anchor)
+    writeMeeting(
+      tmpDir,
+      '2026-02-14-recent.md',
+      `---\ntitle: "Recent"\ndate: "2026-02-14"\nattendee_ids:\n  - jane-doe\n---\n\nJane Doe asked about timeline risk for launch.\nJane Doe asked about timeline risk for launch.\n`,
+    );
+    // Out-of-window: 2026-01-01 (45 days before anchor)
+    writeMeeting(
+      tmpDir,
+      '2026-01-01-old.md',
+      `---\ntitle: "Old"\ndate: "2026-01-01"\nattendee_ids:\n  - jane-doe\n---\n\nJane Doe asked about budget runway concerns.\nJane Doe asked about budget runway concerns.\n`,
+    );
+
+    const result = await service.refreshPersonMemory(paths, {
+      sinceDays: 7,
+      referenceDate: refDate,
+    });
+
+    // Only the in-window meeting is scanned (not both).
+    assert.equal(result.scannedMeetings, 1, 'sinceDays must narrow the meeting set to the window');
+
+    const personContent = readFileSync(
+      join(tmpDir, 'people', 'internal', 'jane-doe.md'),
+      'utf8',
+    );
+    assert.ok(personContent.includes('timeline risk for launch'), 'in-window signal present');
+    assert.ok(!personContent.includes('budget runway'), 'out-of-window signal excluded');
+  });
+
+  it('unset sinceDays scans all meetings (90-day / --full default unchanged)', async () => {
+    writePerson(tmpDir, 'internal', 'jane-doe', 'Jane Doe');
+
+    writeMeeting(
+      tmpDir,
+      '2026-02-14-recent.md',
+      `---\ntitle: "Recent"\ndate: "2026-02-14"\nattendee_ids:\n  - jane-doe\n---\n\nJane Doe asked about timeline risk for launch.\nJane Doe asked about timeline risk for launch.\n`,
+    );
+    writeMeeting(
+      tmpDir,
+      '2026-01-01-old.md',
+      `---\ntitle: "Old"\ndate: "2026-01-01"\nattendee_ids:\n  - jane-doe\n---\n\nJane Doe asked about budget runway concerns.\nJane Doe asked about budget runway concerns.\n`,
+    );
+
+    // No sinceDays → full scan over both meetings.
+    const result = await service.refreshPersonMemory(paths, { referenceDate: refDate });
+
+    assert.equal(result.scannedMeetings, 2, 'unset sinceDays must scan all meetings');
+
+    const personContent = readFileSync(
+      join(tmpDir, 'people', 'internal', 'jane-doe.md'),
+      'utf8',
+    );
+    assert.ok(personContent.includes('timeline risk for launch'));
+    assert.ok(personContent.includes('budget runway'), 'old signal included when window is unset');
+  });
+
+  it('preserves name-mention scope inside the window (mentioned, not an attendee)', async () => {
+    writePerson(tmpDir, 'internal', 'jane-doe', 'Jane Doe');
+
+    // In-window meeting where Jane is MENTIONED in the body but NOT an attendee.
+    writeMeeting(
+      tmpDir,
+      '2026-02-13-mention.md',
+      `---\ntitle: "Planning"\ndate: "2026-02-13"\nattendee_ids:\n  - someone-else\n---\n\nJane Doe asked about the rollout plan.\nJane Doe asked about the rollout plan.\n`,
+    );
+
+    const result = await service.refreshPersonMemory(paths, {
+      sinceDays: 7,
+      referenceDate: refDate,
+    });
+
+    assert.equal(result.scannedMeetings, 1);
+    const personContent = readFileSync(
+      join(tmpDir, 'people', 'internal', 'jane-doe.md'),
+      'utf8',
+    );
+    assert.ok(
+      personContent.includes('rollout plan'),
+      'a person MENTIONED (not attending) in a window meeting must still be included',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // refreshPersonMemory — conversation scanning
 // ---------------------------------------------------------------------------
 

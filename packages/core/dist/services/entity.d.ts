@@ -132,6 +132,17 @@ export interface RefreshPersonMemoryOptions {
      * `Date.now()`, which otherwise turns fixed-date fixtures into time-bombs.
      */
     referenceDate?: Date;
+    /**
+     * When set, scope the meeting set to meetings whose filename date falls within
+     * the last `sinceDays` days (relative to `referenceDate` or wall-clock now).
+     * Used by incremental refreshes (e.g. daily/weekly winddown) so a refresh
+     * doesn't re-scan the full 90-day corpus on every run. Unset (the default)
+     * preserves the prior behavior of scanning ALL meeting files.
+     *
+     * The name-mention/attendee matching that determines WHICH people a meeting
+     * pertains to is unchanged — `sinceDays` only narrows the time WINDOW.
+     */
+    sinceDays?: number;
 }
 export interface RefreshPersonMemoryResult {
     updated: number;
