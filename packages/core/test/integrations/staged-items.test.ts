@@ -1423,6 +1423,82 @@ staged_item_skip_reason:
     assert.equal(skipReason['ai_0099']['setBy'], 'chef-proposed');
   });
 
+  it('finding #12 — single_pass judgment + owner maps are filtered CONSISTENTLY by approvedIds', async () => {
+    // Reproduces the claim-portal vs john-phil-shadow asymmetry: an approved
+    // action item and a skipped one, each with a FULL single_pass overlay
+    // (owner + importance + uncertain + links). Pre-fix, commit stripped
+    // staged_item_owner for the approved id but LEFT staged_item_importance/
+    // _uncertain/_links behind — orphan bookkeeping that made a post-approve
+    // render show tiers without owner. Now every staged sibling map is filtered
+    // the same way: the approved id vanishes from ALL of them; the skipped id
+    // survives in ALL of them.
+    const fixture = `---
+title: "Single-pass overlay"
+date: "2026-06-16"
+status: processed
+attendees:
+  - name: John Koht
+  - name: Phil Whisenhunt
+staged_item_status:
+  ai_001: approved
+  ai_002: skipped
+staged_item_owner:
+  ai_001:
+    ownerSlug: john-koht
+    direction: i_owe_them
+    counterpartySlug: phil-whisenhunt
+  ai_002:
+    ownerSlug: phil-whisenhunt
+    direction: they_owe_me
+    counterpartySlug: john-koht
+staged_item_importance:
+  ai_001: high
+  ai_002: normal
+staged_item_uncertain:
+  ai_002: expressed as intention, not a firm commitment
+staged_item_links:
+  ai_001:
+    continuationOf: prior-thread
+---
+
+## Staged Action Items
+- ai_001: Ship the dual-slug verification (@john-koht → @phil-whisenhunt)
+- ai_002: Phil to undraft the PR (@phil-whisenhunt → @john-koht)
+
+## Transcript
+.
+`;
+    storage.files.set(MEETING_FILE, fixture);
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    const fmMatch = updated!.match(/^---\n([\s\S]*?)\n---/);
+    assert.ok(fmMatch);
+    const fm = parseYaml(fmMatch![1]) as Record<string, unknown>;
+
+    // For EACH staged sibling map: approved ai_001 gone, skipped ai_002 kept.
+    for (const key of [
+      'staged_item_status',
+      'staged_item_owner',
+      'staged_item_importance',
+    ] as const) {
+      const map = fm[key] as Record<string, unknown> | undefined;
+      assert.ok(map, `${key} should survive (ai_002 not approved)`);
+      assert.ok(!('ai_001' in map!), `${key}: approved ai_001 must be stripped`);
+      assert.ok('ai_002' in map!, `${key}: skipped ai_002 must survive`);
+    }
+    // _uncertain only ever had ai_002 → survives intact.
+    const uncertain = fm['staged_item_uncertain'] as Record<string, unknown> | undefined;
+    assert.ok(uncertain && 'ai_002' in uncertain, 'uncertain ai_002 survives');
+    // _links only ever had the approved ai_001 → all entries approved →
+    // the whole key is dropped (legacy post-apply shape), NOT left orphaned.
+    assert.ok(
+      !('staged_item_links' in fm),
+      'staged_item_links (only ai_001, approved) must be removed entirely — no orphan bookkeeping',
+    );
+  });
+
   it('AC9 — onSkipped observer fires per skipped item with payload', async () => {
     const observed: Array<Record<string, unknown>> = [];
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR, {

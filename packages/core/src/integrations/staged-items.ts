@@ -300,6 +300,11 @@ export function parseStagedItemSkipReason(content: string): StagedItemSkipReason
       evidence: m['evidence'],
       setBy: m['setBy'],
       setAt: m['setAt'],
+      // Issue C: optional linkable dedup target. Non-string entries drop
+      // (the rest of the entry is still valid).
+      ...(typeof m['matchedRef'] === 'string' && m['matchedRef'].trim() !== ''
+        ? { matchedRef: m['matchedRef'] }
+        : {}),
     };
   }
 
@@ -781,6 +786,17 @@ export async function commitApprovedItems(
   // back to pending retain their sibling fields for the next round.
   // Only committed items lose their bookkeeping. Closes F5 + enables
   // AC11 (week-1 unskip survival).
+  //
+  // single_pass + finding #12: the single_pass judgment maps
+  // (`staged_item_importance` / `_uncertain` / `_links`) MUST be filtered
+  // alongside the originals. Pre-fix they were absent from this list, so a
+  // full approve stripped `staged_item_owner` (an approved-ID entry) while
+  // LEAVING the judgment maps behind — an inconsistency that left orphan
+  // tier/⚠ bookkeeping for committed items and made a post-approve render
+  // show tiers without owner (the asymmetry diagnosed in finding #12). All
+  // staged sibling maps are now filtered the same way, so a committed item
+  // loses ALL its bookkeeping and the surviving (pending/skipped) items keep
+  // every map consistently.
   for (const key of [
     'staged_item_status',
     'staged_item_edits',
@@ -788,6 +804,9 @@ export async function commitApprovedItems(
     'staged_item_source',
     'staged_item_confidence',
     'staged_item_skip_reason',
+    'staged_item_importance',
+    'staged_item_uncertain',
+    'staged_item_links',
   ] as const) {
     const map = data[key] as Record<string, unknown> | undefined;
     if (map === undefined) continue;
