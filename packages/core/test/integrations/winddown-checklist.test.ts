@@ -24,6 +24,7 @@ import {
   renderActions,
   buildChecklistMeeting,
   ownerTag,
+  skipSuffix,
   isOthersAction,
   itemAnchor,
   choiceAnchor,
@@ -135,6 +136,97 @@ describe('winddown-checklist renderer (W1)', () => {
     assert.ok(m);
     assert.equal(m![1], 'ai_001');
     assert.equal(m![2], 'anthony');
+  });
+});
+
+describe('skip/dedup reason on unchecked items (Issue C)', () => {
+  it('skipSuffix: dedup matchedRef renders a verifiable [[link]]', () => {
+    assert.equal(
+      skipSuffix({ status: 'skipped', skipReason: 'dupe_of_ai_003', skipMatchedRef: 'Map the Notion roadmap with Dave' }),
+      ' — skip: already captured as [[Map the Notion roadmap with Dave]]',
+    );
+  });
+
+  it('skipSuffix: falls back to the raw reason when no matchedRef', () => {
+    assert.equal(
+      skipSuffix({ status: 'skipped', skipReason: 'answered later at the workshop' }),
+      ' — skip: answered later at the workshop',
+    );
+  });
+
+  it('skipSuffix: empty when there is no reason at all', () => {
+    assert.equal(skipSuffix({ status: 'pending' }), '');
+    assert.equal(skipSuffix(undefined), '');
+  });
+
+  it('renders the dupe [[link]] suffix on a `[ ]` line', () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'phil-john',
+      title: 'Phil / John',
+      sections: { actionItems: [ai('ai_002', 'Set up the Notion roadmap meeting')], decisions: [], learnings: [] },
+      meta: {
+        ai_002: {
+          status: 'skipped',
+          skipReason: 'dupe_of_2530e74b',
+          skipMatchedRef: 'Set up meeting with Philip, Vita, Dave, Lindsay on team structure',
+        },
+      },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /- \[ \] Set up the Notion roadmap meeting — skip: already captured as \[\[Set up meeting with Philip, Vita, Dave, Lindsay on team structure\]\]  <!-- ai_002@phil-john -->/);
+  });
+
+  it('NEVER renders a skip reason on a `[x]` (kept) line', () => {
+    // Even with a skipReason+matchedRef in meta, an APPROVED item is `[x]` and
+    // must carry NO skip suffix (the reason is only meaningful when skipped).
+    const meeting: ChecklistMeeting = {
+      slug: 'm',
+      title: 'M',
+      sections: { actionItems: [ai('ai_001', 'A kept action')], decisions: [], learnings: [] },
+      meta: { ai_001: { status: 'approved', skipReason: 'dupe_of_x', skipMatchedRef: 'Some canonical' } },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /- \[x\] A kept action  <!-- ai_001@m -->/);
+    assert.doesNotMatch(out, /skip:/);
+    assert.doesNotMatch(out, /already captured/);
+  });
+
+  it('FYI (direction:none) items are force-unchecked but carry NO skip reason', () => {
+    // FYI items are `[ ]` for visibility, not skipped — they must not be
+    // decorated with a skip suffix.
+    const meeting: ChecklistMeeting = {
+      slug: 'm',
+      title: 'M',
+      sections: { actionItems: [ai('ai_001', "Phil's third-party action")], decisions: [], learnings: [] },
+      meta: { ai_001: { direction: 'none', ownerSlug: 'phil', skipReason: 'should-not-show', skipMatchedRef: 'x' } },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /#### Others' actions \(FYI\)/);
+    assert.doesNotMatch(out, /skip:/);
+  });
+
+  it('buildChecklistMeeting reads matchedRef from staged_item_skip_reason frontmatter', () => {
+    const content = `---
+title: M
+staged_item_status:
+  ai_001: skipped
+staged_item_skip_reason:
+  ai_001:
+    reason: dupe_of_ai_009
+    evidence: "cross-meeting dedup text-hash (canonical in other-meeting)"
+    setBy: chef
+    setAt: 2026-06-16T22:00:00Z
+    matchedRef: The canonical roadmap meeting
+---
+
+## Staged Action Items
+- ai_001: Set up the roadmap meeting
+`;
+    const meeting = buildChecklistMeeting(content, { slug: 'm', title: 'M' });
+    assert.equal(meeting.meta['ai_001'].skipReason, 'dupe_of_ai_009');
+    assert.equal(meeting.meta['ai_001'].skipMatchedRef, 'The canonical roadmap meeting');
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /already captured as \[\[The canonical roadmap meeting\]\]/);
   });
 });
 

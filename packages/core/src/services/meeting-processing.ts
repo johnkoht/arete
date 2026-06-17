@@ -131,6 +131,18 @@ export interface ProcessedMeetingResult {
   stagedItemOwner: Record<string, ItemOwnerMeta>;
   /** Map of item ID → matched completed text (for reconciled items only) */
   stagedItemMatchedText?: Record<string, string>;
+  /**
+   * Map of item ID → skip-reason metadata for items the EXTRACT auto-skipped
+   * (completed-task / open-task matches). Issue C: records WHY the agent
+   * pre-filled `[ ]` + the matched target (`matchedRef`) so the checklist can
+   * render `— skip: already captured as [[<match>]]` and the user can verify
+   * the dupe is actually stored. setBy 'chef' (a definitive extract-time
+   * decision). Absent for non-skipped items.
+   */
+  stagedItemSkipReason?: Record<
+    string,
+    { reason: string; evidence: string; setBy: 'chef'; setAt: string; matchedRef?: string }
+  >;
   /** Map of item ID → importance tier (single_pass only). */
   stagedItemImportance?: Record<string, ItemImportance>;
   /**
@@ -426,6 +438,14 @@ export function processMeetingExtraction(
   const stagedItemSource: Record<string, ItemSource> = {};
   const stagedItemOwner: Record<string, ItemOwnerMeta> = {};
   const stagedItemMatchedText: Record<string, string> = {};
+  // Issue C: skip-reason + matched target for extract-time auto-skips
+  // (completed-task / open-task matches). Rendered as
+  // `— skip: already captured as [[<matchedRef>]]` on the `[ ]` line.
+  const stagedItemSkipReason: Record<
+    string,
+    { reason: string; evidence: string; setBy: 'chef'; setAt: string; matchedRef?: string }
+  > = {};
+  const skipNowIso = new Date().toISOString();
   const stagedItemImportance: Record<string, ItemImportance> = {};
   const stagedItemUncertainReason: Record<string, string> = {};
   const stagedItemLinks: Record<string, { continuationOf?: string; supersedes?: string }> = {};
@@ -496,6 +516,15 @@ export function processMeetingExtraction(
       stagedItemConfidence[id] = confidence;
       stagedItemSource[id] = 'reconciled';
       stagedItemMatchedText[id] = matchedCompletedText;
+      // Issue C: record WHY (already completed) + the matched target so the
+      // checklist renders `— skip: already done — [[<match>]]`.
+      stagedItemSkipReason[id] = {
+        reason: 'already-completed',
+        evidence: `matched a completed task: "${matchedCompletedText}"`,
+        setBy: 'chef',
+        setAt: skipNowIso,
+        matchedRef: matchedCompletedText,
+      };
       continue;
     }
 
@@ -519,6 +548,15 @@ export function processMeetingExtraction(
       stagedItemConfidence[id] = confidence;
       stagedItemSource[id] = 'existing-task';
       stagedItemMatchedText[id] = matchedOpenTaskText;
+      // Issue C: record WHY (already tracked) + the matched target so the
+      // checklist renders `— skip: already captured as [[<match>]]`.
+      stagedItemSkipReason[id] = {
+        reason: 'already-tracked',
+        evidence: `matched an open task: "${matchedOpenTaskText}"`,
+        setBy: 'chef',
+        setAt: skipNowIso,
+        matchedRef: matchedOpenTaskText,
+      };
       continue;
     }
 
@@ -675,6 +713,8 @@ export function processMeetingExtraction(
     stagedItemOwner,
     // Only include stagedItemMatchedText if there are reconciled items
     ...(Object.keys(stagedItemMatchedText).length > 0 && { stagedItemMatchedText }),
+    // Issue C: extract-time auto-skip reasons (completed/open-task matches)
+    ...(Object.keys(stagedItemSkipReason).length > 0 && { stagedItemSkipReason }),
     // single_pass judgment maps — only when populated (legacy shape unchanged)
     ...(Object.keys(stagedItemImportance).length > 0 && { stagedItemImportance }),
     ...(Object.keys(stagedItemUncertainReason).length > 0 && { stagedItemUncertainReason }),

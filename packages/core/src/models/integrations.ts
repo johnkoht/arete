@@ -76,6 +76,16 @@ export type StagedItemSkipReasonMeta = {
   /** ISO 8601 timestamp when the entry was last written. Idempotent
    * re-writes update this on each call. */
   setAt: string;
+  /**
+   * Optional linkable target for a dedup / already-captured skip — the matched
+   * canonical item text (or topic/item ref) this item duplicates. When present,
+   * the winddown checklist renders the skip suffix as
+   * `— skip: already captured as [[<matchedRef>]]` on the `[ ]` line, so the
+   * user can verify Areté actually has the thing stored (single-pass Issue C).
+   * Absent on chef/user skips that aren't dedup-driven (those render the plain
+   * `reason`). Backward-compatible: pre-Issue-C entries have no matchedRef.
+   */
+  matchedRef?: string;
 };
 
 /** Map of itemId → skip reason metadata (set by chef OR user). */
