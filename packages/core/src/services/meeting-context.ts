@@ -104,6 +104,17 @@ export interface MeetingContextBundle {
   areaContext?: AreaContext | null;
   warnings: string[];
   /**
+   * Workspace owner identity (single_pass W3 / RC3). Read from
+   * `context/profile.md` frontmatter `name` (the canonical source, same as
+   * `entity.ts`), slugified via `slugifyPersonName`. Carries through the
+   * --context boundary (W2) so the single_pass extract command can set
+   * `ownerSlug`/`ownerName` and the prompt's "## Who is reading this" identity
+   * frame is populated — without it the model is told the direction RULES but
+   * not WHO the owner is, so it guesses direction (Nate backwards, 10c).
+   * Absent when `profile.md` has no `name` (CLI then falls back to git config).
+   */
+  owner?: { slug: string; name: string };
+  /**
    * Existing open tasks from now/week.md and now/tasks.md.
    * Included so the extraction LLM can avoid re-proposing already-tracked tasks.
    * Cap at 20 items to avoid bloating the prompt.
@@ -1080,6 +1091,10 @@ export async function buildMeetingContext(
     // Non-fatal: if task files can't be read, continue without them
   }
 
+  // 6b. Workspace owner identity (W3/RC3) — read from context/profile.md so the
+  // single_pass identity frame is populated and direction is owner-relative.
+  const owner = await readWorkspaceOwner(storage, paths);
+
   const bundle: MeetingContextBundle = {
     meeting,
     agenda,
@@ -1090,6 +1105,7 @@ export async function buildMeetingContext(
     areaContext,
     warnings,
     ...(existingTasks.length > 0 && { existingTasks }),
+    ...(owner && { owner }),
   };
 
   // 7. Topic-wiki context (delta-only extraction support)
@@ -1098,6 +1114,35 @@ export async function buildMeetingContext(
   if (wiki.warning) warnings.push(wiki.warning);
 
   return bundle;
+}
+
+/**
+ * Read the workspace owner identity from `context/profile.md` frontmatter
+ * `name` (single_pass W3 / RC3). Slugified via `slugifyPersonName` — the same
+ * canonical source/transform `entity.ts:1320-1331` uses for owner-direction
+ * classification, so the identity frame and direction logic agree.
+ *
+ * Best-effort: returns undefined when profile.md is absent or has no `name`.
+ * The CLI then falls back to `git config user.name`.
+ */
+export async function readWorkspaceOwner(
+  storage: StorageAdapter,
+  paths: WorkspacePaths,
+): Promise<{ slug: string; name: string } | undefined> {
+  try {
+    const profilePath = join(paths.context, 'profile.md');
+    const content = await storage.read(profilePath);
+    if (!content) return undefined;
+    // Extract the YAML frontmatter block and read `name`.
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) return undefined;
+    const fm = parseYaml(fmMatch[1]) as Record<string, unknown> | null;
+    const name = fm && typeof fm.name === 'string' ? fm.name.trim() : '';
+    if (!name) return undefined;
+    return { slug: slugifyPersonName(name), name };
+  } catch {
+    return undefined;
+  }
 }
 
 /**

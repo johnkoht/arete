@@ -1382,11 +1382,39 @@ export function registerMeetingCommands(program: Command): void {
         }
       }
 
+      // W3/RC3: resolve owner identity for single_pass so the prompt's
+      // "## Who is reading this" frame is populated and direction is
+      // owner-relative (fixes Nate-backwards, 10c). Prefer the bundle owner
+      // (read from context/profile.md by buildMeetingContext + carried through
+      // the W2 --context deserialization); fall back to `git config user.name`
+      // when profile.md is absent. Only set for single_pass — legacy is
+      // bit-identical.
+      let ownerSlug: string | undefined;
+      let ownerName: string | undefined;
+      if (singlePassMode) {
+        if (contextBundle?.owner?.slug) {
+          ownerSlug = contextBundle.owner.slug;
+          ownerName = contextBundle.owner.name;
+        } else {
+          try {
+            const gitName = execSync('git config user.name', { encoding: 'utf-8' }).trim();
+            if (gitName) {
+              ownerName = gitName;
+              ownerSlug = slugifyPersonName(gitName);
+            }
+          } catch {
+            // git unavailable — identity frame falls back to the prompt default
+          }
+        }
+      }
+
       // Extract intelligence
       let extractionResult: MeetingExtractionResult;
       try {
         extractionResult = await extractMeetingIntelligence(transcript, callLLM, {
           attendees: attendees.length > 0 ? attendees : undefined,
+          ownerSlug,
+          ownerName,
           context: contextBundle,
           priorItems,
           mode,

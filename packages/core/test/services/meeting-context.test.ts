@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import {
   buildMeetingContext,
   deserializeContextBundle,
+  readWorkspaceOwner,
   findRecentMeetings,
   findRecentMeetingsForAttendees,
   calculateCutoffDateString,
@@ -2095,5 +2096,78 @@ describe('deserializeContextBundle (W2/S5)', () => {
     assert.deepEqual(bundle.relatedContext.goals, []);
     assert.deepEqual(bundle.relatedContext.recentDecisions, []);
     assert.deepEqual(bundle.relatedContext.recentLearnings, []);
+  });
+
+  it('carries owner through the boundary when present (W3)', () => {
+    const bundle = deserializeContextBundle({
+      meeting: MEETING,
+      owner: { slug: 'john-koht', name: 'John Koht' },
+    } as unknown as Record<string, unknown>);
+    assert.deepEqual(bundle.owner, { slug: 'john-koht', name: 'John Koht' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readWorkspaceOwner (single_pass W3 / RC3)
+// ---------------------------------------------------------------------------
+
+describe('readWorkspaceOwner (W3/RC3)', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'arete-owner-'));
+    mkdirSync(join(tmpDir, 'context'), { recursive: true });
+  });
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('reads name from context/profile.md frontmatter and slugifies it', async () => {
+    writeFileSync(
+      join(tmpDir, 'context', 'profile.md'),
+      '---\nname: John Koht\nrole: PM\n---\n# Profile\n',
+    );
+    const storage = new FileStorageAdapter();
+    const owner = await readWorkspaceOwner(storage, makePaths(tmpDir));
+    assert.deepEqual(owner, { slug: 'john-koht', name: 'John Koht' });
+  });
+
+  it('returns undefined when profile.md is absent (CLI falls back to git)', async () => {
+    const storage = new FileStorageAdapter();
+    const owner = await readWorkspaceOwner(storage, makePaths(tmpDir));
+    assert.equal(owner, undefined);
+  });
+
+  it('returns undefined when profile.md has no name', async () => {
+    writeFileSync(join(tmpDir, 'context', 'profile.md'), '---\nrole: PM\n---\n# Profile\n');
+    const storage = new FileStorageAdapter();
+    const owner = await readWorkspaceOwner(storage, makePaths(tmpDir));
+    assert.equal(owner, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// single_pass identity frame is populated from the bundle owner (W3/AC4)
+// ---------------------------------------------------------------------------
+
+describe('single_pass identity frame from owner (W3/AC4)', () => {
+  it('prompt names the owner when ownerSlug is set', async () => {
+    const { buildSinglePassExtractionPrompt } = await import(
+      '../../src/services/meeting-extraction.js'
+    );
+    const prompt = buildSinglePassExtractionPrompt('John: hi', {
+      ownerSlug: 'john-koht',
+      ownerName: 'John Koht',
+    });
+    assert.ok(prompt.includes('## Who is reading this'), 'identity frame header present');
+    assert.ok(prompt.includes('@john-koht'), 'owner slug named');
+    assert.ok(prompt.includes('John Koht'), 'owner name present');
+  });
+
+  it('prompt omits the identity frame when no owner is provided', async () => {
+    const { buildSinglePassExtractionPrompt } = await import(
+      '../../src/services/meeting-extraction.js'
+    );
+    const prompt = buildSinglePassExtractionPrompt('John: hi', {});
+    assert.ok(!prompt.includes('## Who is reading this'), 'no identity frame without owner');
   });
 });

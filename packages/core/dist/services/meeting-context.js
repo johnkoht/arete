@@ -758,6 +758,9 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
     catch {
         // Non-fatal: if task files can't be read, continue without them
     }
+    // 6b. Workspace owner identity (W3/RC3) — read from context/profile.md so the
+    // single_pass identity frame is populated and direction is owner-relative.
+    const owner = await readWorkspaceOwner(storage, paths);
     const bundle = {
         meeting,
         agenda,
@@ -768,6 +771,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         areaContext,
         warnings,
         ...(existingTasks.length > 0 && { existingTasks }),
+        ...(owner && { owner }),
     };
     // 7. Topic-wiki context (delta-only extraction support)
     const wiki = await buildTopicWikiContext(deps, paths, transcript, options.referenceDate);
@@ -776,6 +780,35 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
     if (wiki.warning)
         warnings.push(wiki.warning);
     return bundle;
+}
+/**
+ * Read the workspace owner identity from `context/profile.md` frontmatter
+ * `name` (single_pass W3 / RC3). Slugified via `slugifyPersonName` — the same
+ * canonical source/transform `entity.ts:1320-1331` uses for owner-direction
+ * classification, so the identity frame and direction logic agree.
+ *
+ * Best-effort: returns undefined when profile.md is absent or has no `name`.
+ * The CLI then falls back to `git config user.name`.
+ */
+export async function readWorkspaceOwner(storage, paths) {
+    try {
+        const profilePath = join(paths.context, 'profile.md');
+        const content = await storage.read(profilePath);
+        if (!content)
+            return undefined;
+        // Extract the YAML frontmatter block and read `name`.
+        const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        if (!fmMatch)
+            return undefined;
+        const fm = parseYaml(fmMatch[1]);
+        const name = fm && typeof fm.name === 'string' ? fm.name.trim() : '';
+        if (!name)
+            return undefined;
+        return { slug: slugifyPersonName(name), name };
+    }
+    catch {
+        return undefined;
+    }
 }
 /**
  * Detect topics lexically in the transcript, render their wiki sections, and
