@@ -24,6 +24,9 @@ import {
   dedupMirrorPairs,
   ParseError,
   buildSinglePassExtractionPrompt,
+  EmptyExtractionError,
+  EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS,
+  isEmptyIntelligence,
 } from '../../src/services/meeting-extraction.js';
 import { deserializeContextBundle } from '../../src/services/meeting-context.js';
 import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem, TopicWikiContext } from '../../src/services/meeting-extraction.js';
@@ -1518,6 +1521,127 @@ describe('extractMeetingIntelligence', () => {
 
     // Should return a valid result (no type errors, no runtime errors)
     assert.equal(result.intelligence.summary, 'Meeting');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue B (finding #11/#13) — empty-for-content-transcript is FLAGGED, not silent
+// ---------------------------------------------------------------------------
+
+describe('single_pass empty-extraction guard (finding #11/#13)', () => {
+  // A content-ful transcript well above the threshold (the Anthony 6/16 case
+  // was 27.9k chars; this is ~700).
+  const CONTENT_TRANSCRIPT =
+    'John: Anthony, where are we on the determination service ticket? ' +
+    'Anthony: I started it but there are unknowns I need you to clarify before your PTO. ' +
+    'John: Lets sync tomorrow. Also the Kafka recipient routing change — did that land? ' +
+    'Anthony: Yes, merged this morning, I will verify in staging this afternoon. ' +
+    'John: Great. And the mockup share with Nate — you designed it, so can you post it in the channel? ' +
+    'Anthony: Will do by end of day. One more — the license-profile gate has to exist before the Snapsheet sunset. ' +
+    'John: Agreed, that is a blocker, lets track it explicitly so it does not slip.';
+  // Sanity: the fixture is above the threshold so the guard is exercised.
+  assert.ok(CONTENT_TRANSCRIPT.length >= EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS);
+
+  const emptyJson = JSON.stringify({
+    summary: '',
+    action_items: [],
+    decisions: [],
+    learnings: [],
+    open_questions: [],
+  });
+
+  it('THROWS EmptyExtractionError when a non-trivial transcript yields zero intelligence', async () => {
+    const mockLLM: LLMCallFn = async () => emptyJson;
+    await assert.rejects(
+      () => extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM, { singlePass: true }),
+      (err: unknown) => {
+        assert.ok(err instanceof EmptyExtractionError, 'expected EmptyExtractionError');
+        assert.equal(err.code, 'empty_extraction');
+        assert.equal(err.transcriptChars, CONTENT_TRANSCRIPT.trim().length);
+        return true;
+      },
+    );
+  });
+
+  it('does NOT throw for a genuinely short empty meeting (below threshold, D5)', async () => {
+    const mockLLM: LLMCallFn = async () => emptyJson;
+    const short = 'Alice: hi\nBob: bye'; // well under the threshold
+    const result = await extractMeetingIntelligence(short, mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.equal(result.intelligence.summary, '');
+  });
+
+  it('does NOT throw when the content-ful transcript yields ANY item', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        summary: '',
+        action_items: [],
+        decisions: [{ text: 'License-profile gate is a blocker before Snapsheet sunset' }],
+        learnings: [],
+      });
+    const result = await extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.decisions.length, 1);
+  });
+
+  it('does NOT throw when only the summary is populated (low-signal but not empty)', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({ summary: 'Status sync, nothing actionable.', action_items: [] });
+    const result = await extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.summary, 'Status sync, nothing actionable.');
+  });
+
+  it('LEGACY mode never throws EmptyExtractionError (byte-identity invariant)', async () => {
+    const mockLLM: LLMCallFn = async () => emptyJson;
+    const result = await extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM); // legacy
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.equal(result.intelligence.summary, '');
+  });
+
+  it('isEmptyIntelligence: true iff no items/decisions/learnings/oqs and blank summary+core', () => {
+    assert.equal(
+      isEmptyIntelligence({ summary: '', actionItems: [], nextSteps: [], decisions: [], learnings: [] }),
+      true,
+    );
+    assert.equal(
+      isEmptyIntelligence({ summary: 'x', actionItems: [], nextSteps: [], decisions: [], learnings: [] }),
+      false,
+    );
+    assert.equal(
+      isEmptyIntelligence({ summary: '', actionItems: [], nextSteps: [], decisions: [], learnings: [], openQuestions: ['q?'] }),
+      false,
+    );
+    assert.equal(
+      isEmptyIntelligence({ summary: '', actionItems: [], nextSteps: [], decisions: [], learnings: [], core: 'lead' }),
+      false,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue B — recurring-1:1 over-suppression: prompt MUST forbid empty-because-known
+// ---------------------------------------------------------------------------
+
+describe('buildSinglePassExtractionPrompt — anti-empty instruction (finding #13)', () => {
+  it('instructs the model to NEVER return all-empty for a transcript with content', () => {
+    const prompt = buildSinglePassExtractionPrompt('Some transcript');
+    assert.match(prompt, /Never return all-empty for a transcript with content/i);
+    assert.match(prompt, /"already known"\s+is NOT a reason to emit nothing/i);
+  });
+
+  it('still carries the mark-don\'t-skip continuation framing even when priorItems are heavy', () => {
+    // A commitment-heavy recurring 1:1 (the Anthony case): many priorItems.
+    const priorItems: PriorItem[] = Array.from({ length: 20 }, (_, i) => ({
+      type: 'action' as const,
+      text: `Open commitment number ${i} that Anthony owes`,
+      source: 'prior-1:1',
+    }));
+    const prompt = buildSinglePassExtractionPrompt('Recurring 1:1 transcript', { priorItems });
+    // The known-items block is present (mark-don't-skip), AND the anti-empty
+    // rule co-exists with it — so a heavy prior list cannot license an
+    // all-empty return.
+    assert.match(prompt, /Already-known items \(MARK, don't skip\)/);
+    assert.match(prompt, /Never return all-empty for a transcript with content/i);
+    assert.match(prompt, /continuation_of/);
   });
 });
 

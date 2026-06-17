@@ -57,6 +57,59 @@ export class ParseError extends Error {
 /** Max chars of raw response retained in a ParseError preview / snapshot. */
 export const PARSE_ERROR_PREVIEW_CHARS = 500;
 
+/**
+ * Below this transcript length (chars), a fully-empty single_pass extraction is
+ * treated as a plausibly-genuine empty meeting (D5 deliberate-empty) and is NOT
+ * flagged. At or above it, a fully-empty result is the finding #11 residual
+ * silent-empty signature — surfaced as an {@link EmptyExtractionError} rather
+ * than reported as a quiet "0 items." 500 chars ≈ a couple of utterances; the
+ * Anthony 6/16 silent-empty case was 27.9k chars (well above).
+ */
+export const EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS = 500;
+
+/**
+ * Thrown by `extractMeetingIntelligence` (single_pass only) when a non-trivial
+ * transcript (≥ {@link EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS}) yields ZERO
+ * intelligence — no action items, decisions, learnings, open questions, and no
+ * substantive summary/core. This is the residual silent-empty channel
+ * (SOAK-FINDINGS #11 / #13): the call SUCCEEDED and the JSON PARSED, but the
+ * model emitted nothing for a transcript that demonstrably has content. Per
+ * "mark, don't silently drop", surface it (CLI: failure snapshot with
+ * `empty_extraction` + non-zero exit) instead of a quiet 0. Never thrown in
+ * legacy mode. Never retried (a retry would re-extract identically).
+ */
+export class EmptyExtractionError extends Error {
+  readonly code = 'empty_extraction' as const;
+  /** Transcript length (chars) that produced the empty result — for the snapshot. */
+  readonly transcriptChars: number;
+  constructor(transcriptChars: number) {
+    super(
+      `single_pass extraction returned EMPTY intelligence for a ${transcriptChars}-char ` +
+        `transcript (no items/decisions/learnings/open-questions). Likely a silent ` +
+        `over-suppression (e.g. everything deduped as already-known) — flagged, not dropped.`,
+    );
+    this.name = 'EmptyExtractionError';
+    this.transcriptChars = transcriptChars;
+  }
+}
+
+/**
+ * True when a parsed intelligence result carries NO substantive content:
+ * no action items, no decisions, no learnings, no open questions, and a
+ * blank/whitespace summary AND core. Used by the single_pass empty-extraction
+ * guard. A meeting with a real summary OR any item is NOT empty.
+ */
+export function isEmptyIntelligence(intel: MeetingIntelligence): boolean {
+  return (
+    intel.actionItems.length === 0 &&
+    intel.decisions.length === 0 &&
+    intel.learnings.length === 0 &&
+    (intel.openQuestions === undefined || intel.openQuestions.length === 0) &&
+    intel.summary.trim() === '' &&
+    (intel.core === undefined || intel.core.trim() === '')
+  );
+}
+
 /** Extraction mode determining prompt style and category limits. */
 export type ExtractionMode = 'light' | 'normal' | 'thorough';
 
@@ -1429,6 +1482,17 @@ ${opts.activeTopicSlugs}
 8. **Open questions are first-class.** A real question raised and left
    unresolved goes in "open_questions" — not forced into a decision or
    dropped.
+
+9. **Never return all-empty for a transcript with content.** "Already known"
+   is NOT a reason to emit nothing. If everything in this meeting overlaps the
+   context blocks below (open commitments, known items, the topic wiki), you
+   STILL emit those items — each marked with "continuation_of" (restated/
+   advanced) or "supersedes" (changed/reversed). Returning empty arrays
+   silently leaves the reader's tracked items frozen and hides whether this
+   meeting touched them. The ONLY transcript that yields all-empty results is
+   one with genuinely no actions, decisions, learnings, or open questions —
+   not one where the substance is already tracked. When in doubt, emit WITH
+   "continuation_of" and the ⚠ flag.
 ${enhancedContext}${wikiContextSection}${openCommitmentsBlock}${seriesBlock}${knownItems}
 
 Transcript:
@@ -2466,9 +2530,23 @@ export async function extractMeetingIntelligence(
     // non-zero exit) instead of silently presenting "0 items." A silent empty
     // extraction is a bug, not a result (POSTMORTEM guardrail 4).
     const response = await callLLM(prompt);
-    return parseMeetingExtractionResponse(response, CATEGORY_LIMITS, options?.ownerSlug, {
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, options?.ownerSlug, {
       singlePass: true,
     });
+    // Finding #11/#13: the residual silent-empty channel. The call succeeded
+    // and the JSON parsed, but the model emitted NOTHING for a transcript that
+    // has real content (the Anthony 6/16 recurring-1:1 case: everything looked
+    // already-known, so the model returned `{}`). That is over-suppression, not
+    // a result — surface it (the CLI writes an `empty_extraction` failure
+    // snapshot + exits non-zero) rather than reporting a quiet "0 items." A
+    // genuinely empty short meeting (below the threshold) is left alone (D5).
+    if (
+      transcript.trim().length >= EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS &&
+      isEmptyIntelligence(result.intelligence)
+    ) {
+      throw new EmptyExtractionError(transcript.trim().length);
+    }
+    return result;
   }
 
   switch (mode) {

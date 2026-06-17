@@ -505,6 +505,9 @@ export {
   TOPIC_BIAS_BLOCK_PROMPT,
   ParseError,
   PARSE_ERROR_PREVIEW_CHARS,
+  EmptyExtractionError,
+  EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS,
+  isEmptyIntelligence,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,
