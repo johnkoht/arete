@@ -1307,7 +1307,7 @@ done
 # (draft) actions: confirm acknowledgment but do not execute
 
 # Refresh stakeholder memory for processed meetings
-arete people memory refresh
+arete people memory refresh --days 1
 
 # Update week.md (Tasks + Daily Progress)
 # (use TaskService.addTask / completeTask as applicable)
