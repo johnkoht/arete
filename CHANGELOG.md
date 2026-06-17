@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.1] — 2026-06-17 — People-memory refresh scoped to recent meetings (incremental)
+
+`arete people memory refresh` re-swept every refreshable person across **all meetings in the last 90 days** on every run — expensive enough to trip the interactive cost-confirmation gate, which the non-interactive daily/weekly winddown can't answer, so the refresh silently aborted (no person-memory update on real meeting days). It now scopes to the meetings in a recent window, making the winddown's refresh cheap, incremental, and gate-free; the full 90-day rebuild stays available on demand. The *unit* (people **named** in a meeting — attendees + mentions) is unchanged; only the time window narrows.
+
+### Fixed
+- **People-memory refresh no longer silently no-ops in the winddown.** Daily/weekly winddown now refreshes only the people named in recent meetings (`--days 1` / `--days 7`) instead of a full 90-day re-sweep, so it stays under the cost-confirmation gate. The cost-estimate is scoped to the same window and its date-parse aligned with the core scan (`extractDateFromPath`), so estimate ⊇ scan and a small/empty delta can't trip the gate.
+
+### Added
+- **`--days <n>` / `--full` on `arete people memory refresh`** — `--days` scopes the meeting set to the last N days (incremental); `--full` forces the full 90-day rebuild (overrides `--days`). Unflagged default is unchanged (90-day, backward-compatible) via a new optional `sinceDays` window on `RefreshPersonMemoryOptions`.
+
 ## [0.18.0] — 2026-06-15 — Planning surfaces pull in-flight project documents
 
 Agendas, week-plan, and daily-plan now surface the actual *content* of your active projects — open questions, decisions, working notes — not just project names. The gap this closes: a meeting agenda for "Jira Roadmap Sync" used to show attendees + recent meetings but none of the roadmap thinking living in the project; now it surfaces the relevant project document automatically, without anyone naming a file. A new deterministic (no-LLM) selection engine reads a project's directory and picks the doc(s) relevant to the meeting/plan, and a new `arete plan-context` aggregator composes that into the planning skills.
