@@ -294,6 +294,10 @@ ls now/agendas/$(date +%Y-%m-%d)-*.md 2>/dev/null
 # For each meeting file from 1b, run:
 arete meeting context <file> --json > /tmp/<slug>-context.json
 arete meeting extract <file> --context /tmp/<slug>-context.json --stage --reconcile --skip-qmd --json
+# NOTE (single_pass): do NOT hand-assemble or pass --prior-items. In single_pass
+# mode `arete meeting extract` AUTO-LOADS prior items from the last 7 days of
+# meetings (current meeting excluded) for cross-meeting dedup, mirroring the
+# backend. The chef stays out of prior-item assembly.
 # Process up to 4 in parallel; for batches larger than 4, process in waves of 4
 # (start the next wave when the previous wave completes; do not skip files).
 # This stages items but does NOT approve them — approval is user-driven below.

@@ -1382,6 +1382,46 @@ export function registerMeetingCommands(program: Command): void {
         }
       }
 
+      // W4/S6 (RC4): auto-load priorItems for cross-meeting dedup when
+      // --prior-items was not passed and we're in single_pass. The winddown
+      // runs extract WITHOUT --prior-items (SKILL.md 1h), so without this the
+      // priorItems block is never populated and recent cross-meeting dups
+      // (e.g. the week.md re-stage, 10b) slip through. Mirrors the backend
+      // recipe (agent.ts:681-700): 7-day batch, current meeting EXCLUDED via
+      // loadRecentMeetingBatch's excludePath (LEARNINGS 2026-04-29 trap — a
+      // reprocess must not feed its own staged items back as "already
+      // extracted"). buildKnownItemsSection is already MARK-don't-skip (S6),
+      // so this only ADDS dedup context; it cannot suppress a supersession arc.
+      // Best-effort: a load failure degrades to no prior items.
+      if (singlePassMode && !priorItems) {
+        try {
+          // paths.resources is ALREADY absolute (getPaths joins the workspace
+          // root) — do NOT join root again (that double-prefixes and
+          // loadRecentMeetingBatch silently returns []). Same correct form as
+          // the series block above; the legacy inline-reconcile blocks below
+          // carry the doubled join (pre-existing, left untouched for flags-off
+          // bit-identity).
+          const meetingsDir = join(paths.resources, 'meetings');
+          const recentBatch = await loadRecentMeetingBatch(
+            services.storage,
+            meetingsDir,
+            7,
+            meetingPath,
+          );
+          const loaded: PriorItem[] = recentBatch.flatMap((batch) => [
+            ...batch.extraction.decisions.map((text) => ({ type: 'decision' as const, text })),
+            ...batch.extraction.learnings.map((text) => ({ type: 'learning' as const, text })),
+            ...batch.extraction.actionItems.map((ai) => ({ type: 'action' as const, text: ai.description })),
+          ]);
+          if (loaded.length > 0) {
+            priorItems = loaded;
+            if (!opts.json) info(`Auto-loaded ${loaded.length} prior items from recent meetings (single_pass dedup)`);
+          }
+        } catch {
+          // degrade to no prior items — extraction proceeds
+        }
+      }
+
       // W3/RC3: resolve owner identity for single_pass so the prompt's
       // "## Who is reading this" frame is populated and direction is
       // owner-relative (fixes Nate-backwards, 10c). Prefer the bundle owner
