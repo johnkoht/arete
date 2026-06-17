@@ -109,6 +109,21 @@ export interface ProcessedMeetingResult {
     stagedItemOwner: Record<string, ItemOwnerMeta>;
     /** Map of item ID → matched completed text (for reconciled items only) */
     stagedItemMatchedText?: Record<string, string>;
+    /**
+     * Map of item ID → skip-reason metadata for items the EXTRACT auto-skipped
+     * (completed-task / open-task matches). Issue C: records WHY the agent
+     * pre-filled `[ ]` + the matched target (`matchedRef`) so the checklist can
+     * render `— skip: already captured as [[<match>]]` and the user can verify
+     * the dupe is actually stored. setBy 'chef' (a definitive extract-time
+     * decision). Absent for non-skipped items.
+     */
+    stagedItemSkipReason?: Record<string, {
+        reason: string;
+        evidence: string;
+        setBy: 'chef';
+        setAt: string;
+        matchedRef?: string;
+    }>;
     /** Map of item ID → importance tier (single_pass only). */
     stagedItemImportance?: Record<string, ItemImportance>;
     /**

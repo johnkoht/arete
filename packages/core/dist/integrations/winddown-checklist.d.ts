@@ -41,6 +41,13 @@ export interface ChecklistItemMeta {
     uncertainReason?: string;
     /** `staged_item_skip_reason[id].reason` — inline reason on a skip line. */
     skipReason?: string;
+    /**
+     * `staged_item_skip_reason[id].matchedRef` (Issue C) — the matched canonical
+     * item/topic this skip duplicates. When present on a `[ ]` line, the renderer
+     * shows `— skip: already captured as [[<matchedRef>]]` (a verifiable link)
+     * instead of the raw reason. Only meaningful on unchecked lines.
+     */
+    skipMatchedRef?: string;
     /** `staged_item_links[id]`. */
     links?: {
         continuationOf?: string;
@@ -156,6 +163,17 @@ export declare function isOthersAction(meta: ChecklistItemMeta | undefined): boo
  * action items the extractor left untyped). The chef may prettify slugs → names.
  */
 export declare function ownerTag(meta: ChecklistItemMeta | undefined): string;
+/**
+ * Terse skip-reason suffix for an UNCHECKED (`[ ]`) line (Issue C). Records WHY
+ * the agent pre-filled skip — one clause, only ever on `[ ]` items.
+ *
+ * Highest-value case: a dedup / already-captured skip carrying a `matchedRef`
+ * renders `— skip: already captured as [[<matchedRef>]]`, the matched target
+ * linked so the user can verify Areté has it stored (reusing the `[[…]]` link
+ * form). Otherwise falls back to the raw reason (`— skip: <reason>`). Returns ''
+ * when there is no reason. Kept short to avoid clutter (John's worry).
+ */
+export declare function skipSuffix(meta: ChecklistItemMeta | undefined): string;
 /** Link annotation suffix (↩ continues / ⤴ supersedes) from staged_item_links. */
 export declare function linkSuffix(links: ChecklistItemMeta['links']): string;
 /**

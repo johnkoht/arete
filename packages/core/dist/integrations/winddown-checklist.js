@@ -99,6 +99,27 @@ export function ownerTag(meta) {
     // none → third-party action, visibility-only (never John's commitment, D7)
     return `  · (${owner}'s — FYI)`;
 }
+/**
+ * Terse skip-reason suffix for an UNCHECKED (`[ ]`) line (Issue C). Records WHY
+ * the agent pre-filled skip — one clause, only ever on `[ ]` items.
+ *
+ * Highest-value case: a dedup / already-captured skip carrying a `matchedRef`
+ * renders `— skip: already captured as [[<matchedRef>]]`, the matched target
+ * linked so the user can verify Areté has it stored (reusing the `[[…]]` link
+ * form). Otherwise falls back to the raw reason (`— skip: <reason>`). Returns ''
+ * when there is no reason. Kept short to avoid clutter (John's worry).
+ */
+export function skipSuffix(meta) {
+    if (!meta)
+        return '';
+    if (meta.skipMatchedRef && meta.skipMatchedRef.trim() !== '') {
+        return ` — skip: already captured as [[${meta.skipMatchedRef.trim()}]]`;
+    }
+    if (meta.skipReason && meta.skipReason.trim() !== '') {
+        return ` — skip: ${meta.skipReason.trim()}`;
+    }
+    return '';
+}
 /** Link annotation suffix (↩ continues / ⤴ supersedes) from staged_item_links. */
 export function linkSuffix(links) {
     if (!links)
@@ -148,9 +169,10 @@ function renderItemLine(item, slug, meta, opts = {}) {
     let text = item.text;
     // Skip reason inline (only on unchecked lines — the agent-recommended skip).
     // FYI (none) items are force-unchecked for visibility, NOT skipped, so we
-    // don't decorate them with a skip reason.
-    if (!checked && !opts.forceUnchecked && meta?.skipReason) {
-        text = `${text} — skip: ${meta.skipReason}`;
+    // don't decorate them with a skip reason. Issue C: a dedup/already-captured
+    // skip renders `— skip: already captured as [[<match>]]` (verifiable link).
+    if (!checked && !opts.forceUnchecked) {
+        text = `${text}${skipSuffix(meta)}`;
     }
     const owner = opts.isAction ? ownerTag(meta) : '';
     const link = linkSuffix(meta?.links);
@@ -358,8 +380,11 @@ export function buildChecklistMeeting(content, meta) {
         // PRESENCE in the uncertain map (even empty string) ⇒ ⚠ channel fired.
         if (Object.prototype.hasOwnProperty.call(uncertain, id))
             m.uncertainReason = uncertain[id];
-        if (skipReason[id])
+        if (skipReason[id]) {
             m.skipReason = skipReason[id].reason;
+            if (skipReason[id].matchedRef)
+                m.skipMatchedRef = skipReason[id].matchedRef;
+        }
         if (links[id])
             m.links = links[id];
         // Owner/direction (action items only). Frontmatter map > inline text.

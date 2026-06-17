@@ -240,6 +240,11 @@ export function processMeetingExtraction(result, userNotes, options) {
     const stagedItemSource = {};
     const stagedItemOwner = {};
     const stagedItemMatchedText = {};
+    // Issue C: skip-reason + matched target for extract-time auto-skips
+    // (completed-task / open-task matches). Rendered as
+    // `— skip: already captured as [[<matchedRef>]]` on the `[ ]` line.
+    const stagedItemSkipReason = {};
+    const skipNowIso = new Date().toISOString();
     const stagedItemImportance = {};
     const stagedItemUncertainReason = {};
     const stagedItemLinks = {};
@@ -302,6 +307,15 @@ export function processMeetingExtraction(result, userNotes, options) {
             stagedItemConfidence[id] = confidence;
             stagedItemSource[id] = 'reconciled';
             stagedItemMatchedText[id] = matchedCompletedText;
+            // Issue C: record WHY (already completed) + the matched target so the
+            // checklist renders `— skip: already done — [[<match>]]`.
+            stagedItemSkipReason[id] = {
+                reason: 'already-completed',
+                evidence: `matched a completed task: "${matchedCompletedText}"`,
+                setBy: 'chef',
+                setAt: skipNowIso,
+                matchedRef: matchedCompletedText,
+            };
             continue;
         }
         // 1b. Open-task dedup: match against unchecked tasks already in week.md/tasks.md.
@@ -320,6 +334,15 @@ export function processMeetingExtraction(result, userNotes, options) {
             stagedItemConfidence[id] = confidence;
             stagedItemSource[id] = 'existing-task';
             stagedItemMatchedText[id] = matchedOpenTaskText;
+            // Issue C: record WHY (already tracked) + the matched target so the
+            // checklist renders `— skip: already captured as [[<match>]]`.
+            stagedItemSkipReason[id] = {
+                reason: 'already-tracked',
+                evidence: `matched an open task: "${matchedOpenTaskText}"`,
+                setBy: 'chef',
+                setAt: skipNowIso,
+                matchedRef: matchedOpenTaskText,
+            };
             continue;
         }
         // 2. Check for dedup: userNotes OR priorItems match → source: 'dedup'
@@ -466,6 +489,8 @@ export function processMeetingExtraction(result, userNotes, options) {
         stagedItemOwner,
         // Only include stagedItemMatchedText if there are reconciled items
         ...(Object.keys(stagedItemMatchedText).length > 0 && { stagedItemMatchedText }),
+        // Issue C: extract-time auto-skip reasons (completed/open-task matches)
+        ...(Object.keys(stagedItemSkipReason).length > 0 && { stagedItemSkipReason }),
         // single_pass judgment maps — only when populated (legacy shape unchanged)
         ...(Object.keys(stagedItemImportance).length > 0 && { stagedItemImportance }),
         ...(Object.keys(stagedItemUncertainReason).length > 0 && { stagedItemUncertainReason }),

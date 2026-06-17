@@ -740,3 +740,152 @@ Self-review (separate pass): ran the harness twice (before/after the stub recall
 guard) and read the restore path — confirmed arete.yaml + meeting files restored
 in a `finally`. The "No AI provider" first run correctly was NOT counted as a
 fail-loud extraction error (it's pre-extraction auth) once I configured ai.tiers.
+
+
+---
+
+# === DIAGNOSE-THEN-FIX: ISSUES A/B/C (mark/record, don't silently drop) — 2026-06-17 ===
+
+Orchestrator: DIAGNOSE-THEN-FIX agent (Claude Fable 5). Worktree `winddown-approval`
+@ fbef437e. ZERO LLM calls. NO MERGE/PUSH. arete-reserv read-only.
+Subagent tooling for review: will attempt via Task; otherwise disciplined separate-pass.
+
+## ISSUE A (#12) — DIAGNOSIS (read-only, cited)
+
+**Verdict: NEITHER pure fork (a) nor (b) as framed — it's a commit-step strip + a
+not-yet-deployed render. The model DID assign direction/owner; the WRITE path DID
+persist it; the APPROVE/COMMIT step strips it; and the render fix wasn't in the dist
+arete-reserv ran.**
+
+Evidence chain (claim-portal 6/16, all refs worktree unless `arete-reserv`):
+1. **Extraction assigns direction/owner unconditionally in single_pass.**
+   `meeting-extraction.ts:1949-1985`: `finalDirection` defaults to `none` on
+   invalid/missing (never dropped); `ownerSlug` always set (owner_slug or
+   `slugify(owner)`). So `ActionItem.direction`/`.ownerSlug` are ALWAYS populated.
+   `meeting-processing.ts:544-568`: `ownerMeta` built from those → `stagedItemOwner[id]`
+   set whenever any field present (always, for single_pass action items).
+2. **Proof owner WAS persisted at stage time:** `arete-reserv` claim-portal
+   `## Approved Action Items` (lines 131-138) carry inline owner notation —
+   `(@philip-sheperd ·)` [direction none], `(@anthony-avina ← @john-koht)`
+   [they_owe_me]. That notation is produced by `commitApprovedItems` →
+   `formatActionItemWithOwner` READING `staged_item_owner`. If the map hadn't
+   existed at approve time (22:31), the approved section would have no owner notation.
+   So extract (21:56) wrote it. **Fork (a) FALSIFIED — model assigned direction.**
+3. **The strip:** `staged-items.ts:784-804` (`commitApprovedItems`) filters SIX maps
+   by `approvedIds` — `staged_item_status/_edits/_owner/_source/_confidence/_skip_reason`
+   — deleting committed IDs, and DELETING the whole key when all entries were approved
+   (`:797-800`). It does **NOT** touch `staged_item_importance` / `_uncertain` / `_links`.
+   claim-portal: ALL 8 action items approved → every `staged_item_owner` entry removed
+   → key deleted. `staged_item_importance`/`_uncertain` left intact (ai_001..ai_008 still
+   present). **Exactly matches** the observed post-approve frontmatter (importance present,
+   owner absent). john-phil-shadow: ai_002/ai_003 were SKIPPED (user-rejected) so their
+   owner entries survived the filter; ai_001 was approved → its owner entry removed.
+   **Exactly matches** (`staged_item_owner` shows only ai_002/ai_003). The asymmetry
+   IS the bug: finding #12 inspected the file AFTER approve and saw the strip, concluding
+   "stage write dropped it" — actually the commit step stripped it, inconsistently with
+   the importance/uncertain maps it left behind.
+4. **Why the rendered 6/16 doc showed no owner tags at all:** the owner-render code
+   (`ownerTag` + FYI split, finding #8) is NOT in the dist arete-reserv executed.
+   Global `@arete/cli@0.18.0 -> /Users/john/code/arete` (main repo); main-repo
+   `packages/core/dist/integrations/winddown-checklist.js` has ZERO `Others' actions`
+   (grep -c = 0). Worktree dist HAS it (=3). So at 6/16 winddown time the render
+   simply could not emit owner tags — orthogonal to the frontmatter strip, fixed by
+   re-sync once merged.
+
+**Root cause (durable): `commitApprovedItems` strips `staged_item_owner` (+status/
+source/confidence/skip_reason) for approved IDs but LEAVES `staged_item_importance`/
+`_uncertain`/`_links` — an inconsistency that makes any render AFTER a (partial)
+approve show tiers but no owner.** Fix = make the commit step treat the judgment/owner
+maps consistently so a post-approve render still shows owner for the items that remain.
+(The pre-approve render is already correct once deployed.)
+
+### ISSUE A — FIX (committed below)
+- `commitApprovedItems` (`staged-items.ts:784-806`): added `staged_item_importance`,
+  `_uncertain`, `_links` to the approvedIds filter list → all staged sibling maps
+  now filtered consistently; no orphan bookkeeping for committed items; surviving
+  pending/skipped items keep every map. (+1 behavioral test: approved id gone from
+  EVERY map, skipped id survives in EVERY map, single-entry-approved key dropped.)
+- `meeting.ts:1906-1921`: single_pass now writes `staged_item_owner: undefined` when
+  empty (mirrors the judgment-map clear-on-re-extract pattern) so a re-extract can
+  CLEAR a stale owner map under partial-merge. Legacy keeps the length-guarded write
+  (byte-identical). Closes the stale-owner-survives-re-extract gap.
+- The render-shows-nothing symptom in the 6/16 doc was the owner-render code not being
+  in the dist arete-reserv ran (main-repo dist lacks `Others' actions`; worktree dist
+  has it) — resolved by re-sync, no code change.
+
+## ISSUE B (#13) — DIAGNOSIS (read-only, cited)
+
+**Verdict: W4 priorItems is NOT the volume culprit (it's already capped); the real gap
+is (1) no top-level prompt instruction forbidding "all-empty because all-known", and
+(2) no guard that an empty result for a content-ful transcript is a FLAGGED condition.**
+
+- The "mark, don't skip" framing exists per-item (`buildKnownItemsSection`
+  `meeting-extraction.ts:1230-1242` + open-commitments block `:1340-1342`) but there
+  was NO top-level rule against returning fully-empty. Combined with the delta
+  directive ("Do NOT emit restatements", `:1310-1338`) and a heavy known-items list,
+  the model can collapse "nothing NEW" → "emit nothing." That's the Anthony 6/16
+  recurring-1:1 case: 11 items on the raw transcript (W7 eval), `{}` in the live path
+  with priorItems auto-loaded.
+- **W4 volume is bounded:** `buildKnownItemsSection` slices each category to
+  `MAX_EXCLUSION_ITEMS_PER_CATEGORY=10` (`:1211`) and caps at `MAX_EXCLUSION_CHARS=4000`
+  (`:1215`). So priorItems can't literally drown the transcript — capping/summarizing
+  further is unnecessary. The trigger is the model's reasoning ("all known → nothing"),
+  not raw token volume. Fix is the prompt rule + the fail-loud guard, NOT a volume cap.
+  W4 dedup benefit (Philip/Dave dupe catch) is untouched — known-items framing intact.
+- **Residual silent-empty channel (finding #11):** W1 made thrown errors fail loud, but
+  a SUCCESSFUL call that PARSES to empty (`parseMeetingExtractionResponse` returns the
+  empty shell on a `{}`/all-empty-arrays response) returns a quiet 0 — no failureReason.
+  That is the exact channel the soak flagged to WATCH.
+
+### ISSUE B — FIX (committed below)
+1. **Prompt:** judgment rule 9 added to `buildSinglePassExtractionPrompt` — "Never return
+   all-empty for a transcript with content; 'already known' is NOT a reason to emit
+   nothing; emit WITH continuation_of/supersedes." Co-exists with the known-items block.
+2. **Guard (fail-loud):** new `EmptyExtractionError` + `isEmptyIntelligence` +
+   `EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS=500`. `extractMeetingIntelligence` (single_pass
+   only) throws it when transcript ≥500 chars yet intelligence is fully empty (no items/
+   decisions/learnings/open-questions + blank summary+core). New `ExtractionFailureReason:
+   'empty_extraction'`; CLI catch classifies it → failure snapshot + non-zero exit (the
+   residual #11 channel now surfaces, not a quiet 0). Genuinely-empty short meetings (<500
+   chars) and any meeting with a real summary or any item are left alone (D5). Legacy never
+   throws (byte-identity). priorItems cap UNCHANGED — dedup benefit preserved.
+   (+7 behavioral tests: throws-for-content-empty, no-throw-for-short, no-throw-for-any-item,
+   no-throw-summary-only, legacy-never-throws, isEmptyIntelligence truth table, prompt rule
+   present + co-exists with heavy priorItems.)
+
+## ISSUE C (NEW) — render the skip/dedup REASON on `[ ]` items + verifiable [[link]]
+
+**Shared root with B: RECORD why a thing was suppressed.** The renderer already showed
+`— skip: <reason>` on `[ ]` lines, but (a) extract-time auto-skips (completed/open-task
+matches) recorded NO `staged_item_skip_reason` (only `matched_text`), so they rendered
+bare; and (b) the dedup skip rendered the cryptic `dupe_of_<id>`, not a verifiable target.
+
+### Record path
+- `meeting-processing.ts`: completed-task match → `staged_item_skip_reason[id] =
+  {reason:'already-completed', matchedRef:<matched>, setBy:'chef', setAt}`; open-task
+  match → `{reason:'already-tracked', matchedRef:<matched>, …}`. New `stagedItemSkipReason`
+  on `ProcessedMeetingResult`, returned only when populated (legacy shape unchanged).
+- `commitment-dedup-extract.ts` `buildDupeSkipReasonEntries`: cross-meeting dupe now
+  carries `matchedRef = canonical.text` (the John-stated highest-value case — verify the
+  dupe is genuinely stored). `WireExtractDedupResult.skipReasonPatch` type widened.
+- `meeting.ts`: skip-reason merge now layers existing-chef/user + extract-time auto-skips
+  + dedup entries (was dedup-only). Extract-time/dedup `setBy:'chef'` take precedence over
+  a stale prior auto-skip; a user [[unskip]] deleted the entry so it can't be re-clobbered.
+- `StagedItemSkipReasonMeta.matchedRef?` added (optional, backward-compatible);
+  `parseStagedItemSkipReason` carries it (non-string drops, rest of entry still valid).
+
+### Render path
+- `winddown-checklist.ts`: new `skipSuffix(meta)` — terse, ONE clause, ONLY on `[ ]`:
+  `matchedRef` present → `— skip: already captured as [[<matchedRef>]]` (reuses the `[[…]]`
+  link form); else `— skip: <reason>`; else ''. `renderItemLine` uses it. NEVER on `[x]`
+  (the suffix is gated on `!checked`); FYI (`direction:none`) force-unchecked items get NO
+  suffix (visibility-only, not skipped). `ChecklistItemMeta.skipMatchedRef` populated in
+  `buildChecklistMeeting` from the frontmatter.
+  (+9 tests: skipSuffix link/fallback/empty; dupe [[link]] on `[ ]`; never on `[x]`; FYI
+  no suffix; frontmatter matchedRef round-trip; +2 record-path tests in meeting-processing;
+  +1 dedup matchedRef test.)
+
+### Process / wrap (all three issues)
+- Diagnosis spawned no subagent (Task tool unavailable in this run, consistent with prior
+  diary entries) → disciplined separate-pass self-review over the diff after each issue.
+- Full core+cli suite + dist rebuild + per-issue commits below.

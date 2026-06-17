@@ -42,6 +42,39 @@ export declare class ParseError extends Error {
 }
 /** Max chars of raw response retained in a ParseError preview / snapshot. */
 export declare const PARSE_ERROR_PREVIEW_CHARS = 500;
+/**
+ * Below this transcript length (chars), a fully-empty single_pass extraction is
+ * treated as a plausibly-genuine empty meeting (D5 deliberate-empty) and is NOT
+ * flagged. At or above it, a fully-empty result is the finding #11 residual
+ * silent-empty signature — surfaced as an {@link EmptyExtractionError} rather
+ * than reported as a quiet "0 items." 500 chars ≈ a couple of utterances; the
+ * Anthony 6/16 silent-empty case was 27.9k chars (well above).
+ */
+export declare const EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS = 500;
+/**
+ * Thrown by `extractMeetingIntelligence` (single_pass only) when a non-trivial
+ * transcript (≥ {@link EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS}) yields ZERO
+ * intelligence — no action items, decisions, learnings, open questions, and no
+ * substantive summary/core. This is the residual silent-empty channel
+ * (SOAK-FINDINGS #11 / #13): the call SUCCEEDED and the JSON PARSED, but the
+ * model emitted nothing for a transcript that demonstrably has content. Per
+ * "mark, don't silently drop", surface it (CLI: failure snapshot with
+ * `empty_extraction` + non-zero exit) instead of a quiet 0. Never thrown in
+ * legacy mode. Never retried (a retry would re-extract identically).
+ */
+export declare class EmptyExtractionError extends Error {
+    readonly code: "empty_extraction";
+    /** Transcript length (chars) that produced the empty result — for the snapshot. */
+    readonly transcriptChars: number;
+    constructor(transcriptChars: number);
+}
+/**
+ * True when a parsed intelligence result carries NO substantive content:
+ * no action items, no decisions, no learnings, no open questions, and a
+ * blank/whitespace summary AND core. Used by the single_pass empty-extraction
+ * guard. A meeting with a real summary OR any item is NOT empty.
+ */
+export declare function isEmptyIntelligence(intel: MeetingIntelligence): boolean;
 /** Extraction mode determining prompt style and category limits. */
 export type ExtractionMode = 'light' | 'normal' | 'thorough';
 /**

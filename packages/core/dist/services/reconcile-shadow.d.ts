@@ -67,9 +67,12 @@ export type RawExtractionSnapshot = {
  * Classification of an extraction failure recorded in a failure snapshot
  * (single_pass W1 / S1). Maps to the W1 error taxonomy: a thrown transport
  * error (`call_error`), a ParseError from the response parser (`parse_error`),
- * a truncated response (`truncation`), or anything else (`unknown`).
+ * a truncated response (`truncation`), an `empty_extraction` (the call
+ * succeeded + JSON parsed, but a non-trivial transcript yielded zero
+ * intelligence — finding #11/#13 over-suppression), or anything else
+ * (`unknown`).
  */
-export type ExtractionFailureReason = 'call_error' | 'parse_error' | 'truncation' | 'unknown';
+export type ExtractionFailureReason = 'call_error' | 'parse_error' | 'truncation' | 'empty_extraction' | 'unknown';
 export type ShadowLogEntry = {
     /** Entry type, e.g. 'shadow-run' | 'diff' | 'note' | 'soak-pause'. */
     type: string;

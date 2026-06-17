@@ -11,7 +11,7 @@ resolveMeetingSeries, renderSeriesContext, AreaParserService,
 // chef-holistic-reconcile W7 shadow-soak infra
 writeRawExtractionSnapshot, 
 // single-pass-extraction W1 — fail-loud + failure snapshot (S1/S2)
-writeFailureSnapshot, ParseError, TruncationError, } from '@arete/core';
+writeFailureSnapshot, ParseError, TruncationError, EmptyExtractionError, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -1224,6 +1224,11 @@ export function registerMeetingCommands(program) {
                 else if (err instanceof TruncationError) {
                     failureReason = 'truncation';
                 }
+                else if (err instanceof EmptyExtractionError) {
+                    // Finding #11/#13: call succeeded + parsed, but a real transcript
+                    // yielded nothing → over-suppression surfaced, not a silent 0.
+                    failureReason = 'empty_extraction';
+                }
                 else if (err instanceof Error) {
                     failureReason = 'call_error';
                 }
@@ -1583,7 +1588,19 @@ export function registerMeetingCommands(program) {
                     patch['staged_item_source'] = proc.stagedItemSource;
                     patch['staged_item_confidence'] = proc.stagedItemConfidence;
                     patch['staged_item_status'] = mergedStatus;
-                    if (Object.keys(proc.stagedItemOwner).length > 0) {
+                    // Owner/direction map (finding #12). single_pass ALWAYS assigns a
+                    // direction per action item (invalid/missing → `none`), so this is
+                    // normally non-empty — but mirror the judgment-map pattern: in
+                    // single_pass write explicit `undefined` when empty so a re-extract
+                    // CLEARS a stale owner map under the partial-merge contract (rather
+                    // than silently leaving last run's owners). Legacy keeps the
+                    // length-guarded write (no key mention → partial-merge preserves →
+                    // byte-identical).
+                    if (singlePassMode) {
+                        patch['staged_item_owner'] =
+                            Object.keys(proc.stagedItemOwner).length > 0 ? proc.stagedItemOwner : undefined;
+                    }
+                    else if (Object.keys(proc.stagedItemOwner).length > 0) {
                         patch['staged_item_owner'] = proc.stagedItemOwner;
                     }
                     if (proc.stagedItemMatchedText && Object.keys(proc.stagedItemMatchedText).length > 0) {
@@ -1607,16 +1624,26 @@ export function registerMeetingCommands(program) {
                                 ? proc.stagedItemLinks
                                 : undefined;
                     }
-                    // Phase 10b-min wiring — merge cross-meeting dedup skip_reason
-                    // entries on top of any existing entries. We explicitly merge
-                    // here (not relying on partial-merge) because adding NEW IDs
-                    // requires mentioning the key. Chef-proposed entries on OTHER
-                    // IDs (not in our patch) survive via partial-merge of the
-                    // existing currentSkipReason map.
-                    if (dedupResult && Object.keys(dedupResult.skipReasonPatch).length > 0) {
+                    // Skip-reason merge. We explicitly merge (not relying on
+                    // partial-merge) because adding NEW IDs requires mentioning the
+                    // key. Three sources, layered:
+                    //   1. existing chef/user entries (currentSkipReason) — preserved
+                    //   2. Issue C extract-time auto-skips (completed/open-task
+                    //      matches) with `matchedRef` for the `[[link]]` render
+                    //   3. Phase 10b-min cross-meeting dedup entries
+                    // (2)+(3) are definitive extract-time `setBy: 'chef'` decisions
+                    // and take precedence over a stale prior auto-skip on the same id;
+                    // a USER override ([[unskip]]) deletes the entry entirely so it
+                    // won't be in currentSkipReason to be re-clobbered.
+                    const extractSkipReason = proc.stagedItemSkipReason ?? {};
+                    const dedupSkipReason = dedupResult?.skipReasonPatch ?? {};
+                    const haveExtractSkips = Object.keys(extractSkipReason).length > 0;
+                    const haveDedupSkips = Object.keys(dedupSkipReason).length > 0;
+                    if (haveExtractSkips || haveDedupSkips) {
                         const mergedSkipReason = {
                             ...currentSkipReason,
-                            ...dedupResult.skipReasonPatch,
+                            ...extractSkipReason,
+                            ...dedupSkipReason,
                         };
                         patch['staged_item_skip_reason'] = mergedSkipReason;
                     }
