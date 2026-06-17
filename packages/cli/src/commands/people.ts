@@ -492,6 +492,8 @@ export function registerPeopleCommands(program: Command): void {
       'pass --no-llm to skip stance extraction.'
     )
     .option('--person <slug>', 'Refresh only one person by slug')
+    .option('--days <n>', 'Scope to meetings from the last N days (incremental; default scans the last 90 days)')
+    .option('--full', 'Full rebuild over the last 90 days (the default; explicit override for --days)')
     .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
     .option('--if-stale-days <n>', 'Only refresh when Last refreshed is older than N days')
     .option('--dry-run', 'Preview what would be extracted without writing files')
@@ -503,6 +505,8 @@ export function registerPeopleCommands(program: Command): void {
     .option('--json', 'Output as JSON')
     .action(async (opts: {
       person?: string;
+      days?: string;
+      full?: boolean;
       minMentions?: string;
       ifStaleDays?: string;
       dryRun?: boolean;
@@ -531,6 +535,14 @@ export function registerPeopleCommands(program: Command): void {
       const ifStaleDaysParsed = opts.ifStaleDays ? parseInt(opts.ifStaleDays, 10) : undefined;
       const ifStaleDays = typeof ifStaleDaysParsed === 'number' && !isNaN(ifStaleDaysParsed)
         ? ifStaleDaysParsed
+        : undefined;
+
+      // Incremental window. `--days N` scopes the meeting set (and the cost
+      // estimate below) to the last N days; `--full` (or no flag) keeps the
+      // 90-day default behavior. `--full` wins if both are passed.
+      const daysParsed = opts.days ? parseInt(opts.days, 10) : undefined;
+      const sinceDays = !opts.full && typeof daysParsed === 'number' && !isNaN(daysParsed) && daysParsed >= 0
+        ? daysParsed
         : undefined;
 
       // -----------------------------------------------------------------
@@ -571,7 +583,12 @@ export function registerPeopleCommands(program: Command): void {
 
           const meetingsDir = join(paths.resources, 'meetings');
           if (existsSync(meetingsDir)) {
-            const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+            // Scope the estimate to the SAME window the refresh will use:
+            // `--days N` → last N days, otherwise the 90-day default. Keeps an
+            // incremental run from estimating against the full corpus and
+            // tripping the cost-confirm gate.
+            const windowDays = typeof sinceDays === 'number' ? sinceDays : 90;
+            const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
               .toISOString()
               .slice(0, 10);
             const meetingFiles = readdirSync(meetingsDir).filter((f) => f.endsWith('.md') && f !== 'index.md');
@@ -579,7 +596,7 @@ export function registerPeopleCommands(program: Command): void {
               const nameLower = person.name.toLowerCase();
               for (const meetingFile of meetingFiles) {
                 const dateMatch = meetingFile.match(/^(\d{4}-\d{2}-\d{2})-/);
-                if (!dateMatch || dateMatch[1] < ninetyDaysAgo) continue;
+                if (!dateMatch || dateMatch[1] < cutoff) continue;
                 // Cheap: filename contains person slug, OR file content includes person name.
                 if (meetingFile.toLowerCase().includes(person.slug.toLowerCase())) {
                   stanceCallCount++;
@@ -666,6 +683,7 @@ export function registerPeopleCommands(program: Command): void {
         ifStaleDays,
         dryRun: opts.dryRun,
         commitments: services.commitments,
+        ...(typeof sinceDays === 'number' ? { sinceDays } : {}),
         ...(callLLM ? { callLLM } : {}),
       });
 
