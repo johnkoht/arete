@@ -475,3 +475,268 @@ Full core+cli suite green: 4931 pass / 0 fail / 2 skip. Zero LLM calls.
 Not merged, not pushed; arete-reserv untouched.
 Re-sync reminder: `cp` SKILL.md → `arete-reserv/.arete/skills/daily-winddown/`;
 dist auto-picked-up via npm link.
+
+
+---
+
+# === FIX SHIP (W1–W7 context-parity + fail-loud) — 2026-06-16 ===
+
+
+Orchestrator: SHIP ORCHESTRATOR. Worktree `feat/winddown-approval-doc` @ c4c0c572.
+Scope: FIX-PLAN.md as amended by REVIEW.md (S1–S7). NO MERGE, NO PUSH.
+Subagent tooling: not available in this run → disciplined separate-pass self-reviews,
+flagged per work item.
+
+---
+
+## 2026-06-16 — Setup / recon
+
+- Worktree confirmed clean, branch `feat/winddown-approval-doc`, tip c4c0c572.
+  EnterWorktree refused (session cwd is repo root) → working via absolute paths +
+  `git -C`. Never touching main working dir or arete-reserv.
+- Read all specs: FIX-PLAN, REVIEW (binding S1–S6 + new ACs), DIAGNOSIS, ARCHITECTURE,
+  POSTMORTEM, benchmark-evidence (the 6/9 GT corpus for S3).
+- Mapped the load-bearing code against the diagnosis. Confirmed verbatim:
+  - **W1 inner swallow** `meeting-extraction.ts:2426-2444` (single_pass) + `:2482-2498`
+    (legacy mirror) — bare `try{callLLM+parse}catch{return EMPTY}`. Confirmed.
+  - `parseMeetingExtractionResponse:1769-1772` swallows `JSON.parse` failure → emptyResult;
+    legit trimmed-empty early-return at `:1748-1749`. Confirmed both.
+  - `services.ai.callWithModel` throws only on `stopReason==='error'` (`ai.ts:301-304`);
+    pi-ai `StopReason = "stop"|"length"|"toolUse"|"error"|"aborted"` — `length` (truncation)
+    falls through as success. `errorMessage?` carries transport detail on error.
+  - CLI extract call `meeting.ts:1387-1395` omits ownerSlug/ownerName (RC3). Confirmed.
+  - `--context` reader `meeting.ts:1096-1113` hand-copies 6 fields, drops areaContext/
+    existingTasks/topicWikiContext (RC2). Confirmed; reads via stdin(`-`)/file, NOT argv (S5 OK).
+  - Snapshot writer `meeting.ts:1414-1428` runs AFTER extract returns → S1 bypass real.
+    `RawExtractionSnapshot` (`reconcile-shadow.ts:36-56`) has no `failureReason`. Confirmed.
+  - `buildKnownItemsSection:1206-1218` IS "MARK, don't skip" → S6: W4 = auto-load+excludePath
+    only, no framing rewrite. Confirmed verbatim ("context, NOT an exclusion list").
+  - `loadRecentMeetingBatch` already imported + used in CLI at `:1459-1464` (reconcile path),
+    excludePath honored. W4 reuses it.
+  - Owner source: `entity.ts:1320-1331` reads `context/profile.md` frontmatter `name` →
+    `slugifyPersonName`. `meeting-context.ts` already imports `slugifyPersonName` + has
+    `paths.context`. W3 enriches the bundle there.
+  - Backend parity reference: `callLLMWithErrorCapture` + re-throw-on-empty `agent.ts:208-216,
+    252-253`; priorItems auto-load mapper `agent.ts:681-700`.
+- Test conventions: `node:test` + `node:assert/strict`, files under `packages/{core,cli}/test/`.
+  Runner: `ARETE_SEARCH_FALLBACK=1 tsx --test --test-concurrency=4 <files>`. ai.test uses
+  `AIServiceTestDeps` injection (mock `completeSimple`). Baseline run kicked off.
+
+---
+
+## 2026-06-16 — W1 (fail-loud + retry + failure snapshot) — committed f29543c2
+
+Built:
+- `ai.ts`: `TruncationError` (stopReason:length -> throw, non-retryable),
+  `isRetryableTransportError(err)` classifier (overload/429/5xx/network/timeout
+  retryable; auth/parse/truncation NOT), and a retry loop in `callWithModel`
+  (<=3 attempts, capped exp backoff 500ms->4s). In-band `stopReason:'error'`
+  with a retryable message (e.g. provider "Overloaded") IS retried via the
+  classifier; caller abort surfaces immediately; deliberate empty SUCCESS
+  returned not retried.
+- `meeting-extraction.ts`: `ParseError{code,preview}` + `PARSE_ERROR_PREVIEW_CHARS`.
+  Parser throws ParseError on JSON failure in single_pass; legacy returns empty
+  (bit-identical). Removed BOTH bare swallows (single_pass + legacy mirror).
+- `reconcile-shadow.ts`: `failureReason`/`failureMessage`/`failurePreview` added
+  to `RawExtractionSnapshot`; new `writeFailureSnapshot()` + `ExtractionFailureReason`.
+- `meeting.ts`: S1 — CLI extract catch classifies the error and writes a failure
+  snapshot before exit(1) (gated reconcile_shadow). S7 — single_pass maxTokens
+  16000; legacy unchanged.
+- Exports wired in `services/index.ts`.
+
+Decisions / surprises:
+- **Legacy error-path test had to change.** Existing "returns empty result on
+  LLM error" asserted legacy empty-on-error. W1 removes the legacy swallow too,
+  so I updated it to assert PROPAGATION and ADDED a byte-identity test proving
+  legacy success-path parse of malformed JSON still returns empty. **FOR JOHN'S
+  REVIEW:** this is the one place legacy *behavior* changes (error propagates vs
+  silent empty). Only the thrown-error path; both real callers surface it already.
+- **CLI subprocess tests need dist rebuilt** after any core export change — they
+  spawn `arete` which imports built `@arete/core` dist. First full-suite run
+  failed on `ParseError` not exported until dist rebuilt.
+- Retry tests incur real backoff (~1.5s each) — acceptable; no fake timers.
+
+Self-review (separate pass — no nested-agent tooling in this run): re-read the
+retry loop for the in-band-error case (real overload path) — confirmed it
+retries via the classifier on the thrown `AI call failed: ...overload...`
+message; TruncationError + abort + empty-success all bypass retry.
+
+Tests: meeting-extraction + reconcile-shadow 309/309; ai 35/35; CLI
+meeting-extract + snapshot 53/53. Typecheck core+cli clean. dist rebuilt.
+
+---
+
+## 2026-06-16 — W2 (deserialize whole bundle + S5 guards) — committed 9bee2869
+
+Built `deserializeContextBundle()` in `meeting-context.ts`; CLI reader replaced
+the two-branch 6-field hand-copy with one call. Strips success/error wrapper,
+validates `meeting`, carries everything else (incl. future fields). S5: shape-
+guards on every array the prompt builder INDEXES (verified each by reading
+`buildContextSection` 704-787 + `buildKnownItemsSection` + the truncation helper):
+relatedContext.{goals,projects,recentDecisions,recentLearnings}, agenda.unchecked,
+attendees[].{stances,openItems}, existingTasks, topicWikiContext.detectedTopics[]
+.l2Excerpts. Malformed optional block -> absent / bad entries dropped; only a
+missing/non-object `meeting` throws.
+
+Surprises / decisions:
+- **S5 argv check passed** — `daily-winddown/SKILL.md:295-296` already does
+  `arete meeting context <file> --json > /tmp/<slug>-context.json` then
+  `--context /tmp/...`; the reader also supports `-` (stdin). No argv-limit risk,
+  no change needed.
+- Wrote a round-trip prompt test (AC3): area/existingTasks/topicWikiContext all
+  render in the assembled single_pass prompt, and `Delta-only extraction`
+  activates ONLY when topicWikiContext is present. This is the unit-level proof
+  of context parity; W7 does it through the real CLI subprocess.
+
+Self-review (separate pass): re-read the destructure — `...rest` preserves
+optional bundle fields like `agendaMatch`; the `meeting` guard rejects arrays
+(typeof [] === 'object'). Confirmed degradation paths don't mutate caller data
+destructively beyond the new bundle object.
+
+Tests: meeting-context 74/74; meeting-extraction 299/299; CLI extract 51/51.
+Typecheck clean, dist rebuilt.
+
+---
+
+## 2026-06-16 — W3 (identity frame) — committed 6779d5ca
+
+`readWorkspaceOwner(storage,paths)` reads `context/profile.md` frontmatter `name`
+-> slugifyPersonName (canonical, matches entity.ts:1320-1331); `buildMeetingContext`
+adds `owner:{slug,name}` to the bundle (W2 carries it). CLI single_pass extract
+sets ownerSlug/ownerName from `contextBundle.owner`, git-config fallback when
+profile absent. Legacy passes no owner -> unchanged.
+
+**KEY DECISION FOR JOHN'S REVIEW — backend owner parity DELIBERATELY SKIPPED.**
+FIX-PLAN W3 says "fix backend owner omission for parity (agent.ts:242-248)". I
+traced it: the backend has NO single_pass path (grep: no singlePass/ownerSlug in
+agent.ts) and the LEGACY prompt (`buildMeetingExtractionPrompt:1487-1491`) renders
+an owner-direction block FROM ownerSlug. Passing owner to the backend's legacy
+call would therefore CHANGE legacy backend extraction output — a direct violation
+of the overarching "flags-off byte-identical" invariant, for zero single_pass
+benefit (backend never runs single_pass). I chose the hard invariant over the
+parity nicety (REVIEW lists agent.ts as "optionally"). If/when the backend gets a
+single_pass path, owner should be added there guarded by singlePass. Flagged in
+build-report.
+
+Self-review (separate pass): re-read `buildSinglePassExtractionPrompt:1265-1274` —
+identity frame uses `sections.identityFrame` first, else builds from ownerSlug. CLI
+sets ownerSlug, not identityFrame, so the default frame path fires. Confirmed git
+fallback only runs for single_pass + no bundle owner.
+
+Tests: meeting-context 80/80; CLI extract+snapshot 53/53. Typecheck clean.
+
+---
+
+## 2026-06-16 — W5 SPIKE (open-commitments multi-party coverage) — NO CODE
+
+Ran the spike against the real arete-reserv store (read-only). The 6/16
+multi-party item is: **"Set up meeting next week with Philip, Vita, Dave, and
+Lindsay to align on team structure and Jira workflow"**, stored in
+`.arete/commitments.json` under:
+- `philip-sheperd` — resolved 6/11 (c33ef13c), dropped 6/10 (09fade0f)
+- `john-koht` — **status OPEN**, 6/10 (2530e74b)  ← the live one
+
+Spike question (does `slugifyPersonName(attendee)` match stored `personSlug`?):
+- 6/16 meeting `2026-06-16-phil-john.md` attendees = **"Philip Sheperd"**, "John
+  Koht". `slugifyPersonName("Philip Sheperd")` = `philip-sheperd`;
+  `slugifyPersonName("John Koht")` = `john-koht`.
+- Canonical people files: `people/internal/philip-sheperd.md`,
+  `people/internal/john-koht.md`. Stored commitment personSlugs: `philip-sheperd`,
+  `john-koht`. **Three-way agreement (slugify ⇄ people dir ⇄ commitments store).**
+- `listOpen({personSlugs})` filters `status==='open' && personSlugs.includes(
+  personSlug)` (commitments.ts:744). So for `phil-john` it surfaces the OPEN
+  `john-koht` mirror (2530e74b). ✓
+
+**CONCLUSION: slug agreement HOLDS → W5 ships NO code.** The open-commitments
+block (the existing `meeting.ts:1370` `listOpen({personSlugs: attendeeSlugs})`)
+already surfaces this item; the model marks `continuation_of` instead of
+re-emitting. No slug-normalization layer is needed.
+
+**GOTCHA worth flagging to John:** there are TWO "Phil"s. The `phil-john`
+meeting is **Philip Sheperd** (`philip-sheperd`); other 6/16 meetings have
+**Phil Whisenhunt** (`phil-whisenhunt`) — a different person. Attendee-name
+fidelity in the meeting frontmatter is load-bearing for `listOpen` to scope
+correctly; a mislabeled "Phil" would silently scope to the wrong person. Not a
+bug in this fix, but a data-quality dependency.
+
+**Which mechanism catches the dupe (AC5 documentation):** the open-commitments
+block (W5 path) via the open `john-koht` mirror is the primary catch. W2-restored
+`existingTasks` (week.md/tasks) + W4 priorItems (7-day batch) are belt-and-
+suspenders. W7 will assert it empirically on the round-trip.
+
+---
+
+## 2026-06-16 — W4 (priorItems auto-load, S6) — committed d7239b34
+
+When single_pass + no --prior-items, CLI auto-loads the 7-day recent-meeting
+batch (current excluded) via `loadRecentMeetingBatch`, mapper mirrors backend
+agent.ts:688-692. S6: buildKnownItemsSection already MARK-don't-skip → ADD-only,
+no framing rewrite. SKILL.md doc note added.
+
+**BUG FOUND + flagged for John:** `paths.resources` is already absolute, so the
+backend-mirror `join(root, paths.resources, 'meetings')` DOUBLE-prefixes and
+`loadRecentMeetingBatch` silently returns [] (my first test failed for exactly
+this reason). I used the correct `join(paths.resources, 'meetings')` (matches the
+series block at meeting.ts:1340). **The pre-existing inline-reconcile blocks
+(~1552, ~1763) STILL carry the doubled join** — meaning the CLI `--reconcile`
+recent-batch has likely been silently EMPTY in production. I left them untouched
+(pre-existing; touching legacy risks bit-identity) but this is a real latent bug
+worth a follow-up — it means inline cross-meeting reconcile may have been a no-op
+on the recent batch. Flagged in build-report.
+
+Test gotcha: `loadRecentMeetingBatch`'s 7-day window is relative to the SYSTEM
+CLOCK, not the meeting date — fixtures must use dates relative to `now`. Also it
+reads items from `## Approved <Section>` BODY sections (Format B), not
+`approved_items` frontmatter.
+
+Self-review (separate pass): confirmed excludePath matches (storage.list returns
+absolute paths; CLI meetingPath is absolute via join(root,file)). Confirmed the
+auto-load is single_pass-gated and skipped when --prior-items was passed.
+
+Tests: 2 CLI subprocess tests (auto-load 3 items; excludes self).
+
+---
+
+## 2026-06-16 — W7 (production-path eval harness) — UNCOMMITTED (gitignored)
+
+Built `scripts/eval-extraction-prodpath-2026-06.ts` (matched by the existing
+`scripts/eval-*.ts` .gitignore rule — confirmed via `git check-ignore`). It runs
+the REAL CLI as subprocesses with ZERO agent-handoff:
+`arete meeting context --json` -> temp-file `--context` round-trip (S5: not argv)
+-> `arete meeting extract --context <tmp> --stage --json` in single_pass -> parse
+staged JSON + raw snapshot -> repeat in legacy and diff context-for-context.
+
+Per-meeting assertions: no-silent-empty (non-empty OR surfaced error + failure
+snapshot w/ failureReason), bundle populated (area/existingTasks/topicWiki/owner
+logged empirically), contextUsed:true (W2), recall/blocker-recall=100%/junk vs
+the 6/9 GT (S3 — deterministic substring probes, NO agent judge), direction-not-
+owed (W3/AC4), dedup continuation_of/suppressed (AC5), Anthony canary (AC1b).
+Three run modes: `--stub` (zero-spend mechanics, canned fetch via the existing
+mock-anthropic-fetch.mjs preload), `--smoke` (1 meeting real API), `--full` (the
+real gate, real spend — John's call). Backs up + restores arete.yaml +
+extraction_mode + the corpus meeting files.
+
+SMOKE RESULT (--stub, zero spend, 2 meetings, throwaway temp workspace):
+**2/2 PASS** — proves the full mechanics: context bundle assembled, temp-file
+round-trip, single_pass + legacy extract both parse, no-silent-empty detection,
+contextUsed:true, context parity, snapshot path lookup, clean restore. Recall/
+blocker/junk are correctly SKIPPED in stub mode (canned LLM makes them
+meaningless) — they only assert on `--full`. (In the bare temp workspace
+existingTasks populated from now/week.md; area/topicWiki/owner were false because
+that workspace has no areas/topics/profile — on arete-reserv they populate.)
+
+**Did NOT run --full / --smoke (real API).** Per the orchestrator's hard rule:
+full corpus = real spend on John's account, his call. The exact command is in the
+build-report. Recall-vs-legacy + blocker-recall=100% + junk-rate (S3) and the
+live Anthony canary (AC1b) AWAIT John's gated run.
+
+Decision: I did NOT add a committed prompt-dump surface for AC3's "assembled
+prompt contains the blocks" — the W2 unit round-trip already proves prompt
+assembly; the harness proves the production path via `contextUsed:true` + the
+logged bundle (area/existingTasks/topicWiki populated). Avoids new committed
+instrumentation.
+
+Self-review (separate pass): ran the harness twice (before/after the stub recall-
+guard) and read the restore path — confirmed arete.yaml + meeting files restored
+in a `finally`. The "No AI provider" first run correctly was NOT counted as a
+fail-loud extraction error (it's pre-extraction auth) once I configured ai.tiers.
