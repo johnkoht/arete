@@ -1045,10 +1045,27 @@ export class EntityService {
         }
         const meetingsDir = join(workspacePaths.resources, 'meetings');
         const meetingsExist = await this.storage.exists(meetingsDir);
-        const meetingFiles = meetingsExist
+        let meetingFiles = meetingsExist
             ? (await this.storage.list(meetingsDir, { extensions: ['.md'] }))
                 .filter((p) => (p.split(/[/\\]/).pop() ?? '') !== 'index.md')
             : [];
+        // Incremental-scope window (optional). When `sinceDays` is set, narrow the
+        // meeting set to files whose filename date is within the last N days; unset
+        // = scan all meetings (backward-compatible). Filename date is parsed the
+        // same way as elsewhere in this service (extractDateFromPath); a file with
+        // no parseable date in its name is kept (we can't window it out safely).
+        // The cutoff is a YYYY-MM-DD string so the comparison is timezone-safe
+        // (lexicographic order == chronological order for ISO dates).
+        if (typeof options.sinceDays === 'number' && options.sinceDays >= 0) {
+            const anchor = options.referenceDate ?? new Date();
+            const cutoff = new Date(anchor.getTime() - options.sinceDays * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .slice(0, 10);
+            meetingFiles = meetingFiles.filter((p) => {
+                const fileDate = extractDateFromPath(p);
+                return fileDate === undefined || fileDate >= cutoff;
+            });
+        }
         // Read workspace owner name from profile.md once for action item direction classification.
         let ownerName;
         let ownerSlug;
@@ -1091,6 +1108,14 @@ export class EntityService {
         // Pre-compute per-person meeting file candidates (SearchProvider pre-filter).
         // CRITICAL invariant: if SearchProvider returns 0 results for a person,
         // fall back to the full meetingFiles list — never skip scanning entirely.
+        //
+        // When a `sinceDays` window is active, `meetingFiles` is already narrowed to
+        // the window; restrict SearchProvider candidates to that same set so the
+        // window applies regardless of whether a provider is present. The set is
+        // keyed by normalized absolute path (search paths may be relative).
+        const windowedMeetingSet = typeof options.sinceDays === 'number'
+            ? new Set(meetingFiles.map((p) => resolve(workspacePaths.root, p)))
+            : null;
         const personCandidateMeetings = new Map();
         for (const person of refreshablePeople) {
             if (this.searchProvider) {
@@ -1101,7 +1126,8 @@ export class EntityService {
                 if (results.length > 0 && results.length < SEARCH_PROVIDER_CANDIDATE_LIMIT) {
                     // Normalize paths: SearchProvider may return relative paths (e.g. from qmd
                     // running with cwd: workspaceRoot). resolve() is a no-op for absolute paths.
-                    personCandidateMeetings.set(person.slug, results.map((r) => resolve(workspacePaths.root, r.path)));
+                    const resolved = results.map((r) => resolve(workspacePaths.root, r.path));
+                    personCandidateMeetings.set(person.slug, windowedMeetingSet ? resolved.filter((p) => windowedMeetingSet.has(p)) : resolved);
                 }
                 else {
                     // 0 results (person not indexed yet) OR limit hit (incomplete) → full scan

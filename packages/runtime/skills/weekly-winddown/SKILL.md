@@ -300,7 +300,7 @@ arete meeting approve <slug>  # for each
 # (draft) actions: confirm acknowledgment
 
 # Refresh stakeholder memory
-arete people memory refresh
+arete people memory refresh --days 7
 
 # Write next-week-prep stub to next week's week.md (or hand off to week-plan)
 # This skill produces inputs; week-plan owns the actual draft.
