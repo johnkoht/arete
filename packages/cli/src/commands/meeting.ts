@@ -28,6 +28,7 @@ import {
   parseGoals,
   extractAttendeeSlugs,
   buildMeetingContext,
+  deserializeContextBundle,
   applyMeetingIntelligence,
   generateMeetingManifest,
   getCompletedItems,
@@ -1094,30 +1095,14 @@ export function registerMeetingCommands(program: Command): void {
             contextJson = readFileSync(opts.context, 'utf8');
           }
           const parsed = JSON.parse(contextJson) as Record<string, unknown>;
-          // Handle wrapped format (success: true, ...) from `arete meeting context --json`
-          if (parsed.success === true && parsed.meeting) {
-            // Extract the bundle fields from the response
-            contextBundle = {
-              meeting: parsed.meeting as MeetingContextBundle['meeting'],
-              agenda: (parsed.agenda ?? null) as MeetingContextBundle['agenda'],
-              attendees: (parsed.attendees ?? []) as MeetingContextBundle['attendees'],
-              unknownAttendees: (parsed.unknownAttendees ?? []) as MeetingContextBundle['unknownAttendees'],
-              relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }) as MeetingContextBundle['relatedContext'],
-              warnings: (parsed.warnings ?? []) as MeetingContextBundle['warnings'],
-            };
-          } else if (parsed.meeting && typeof parsed.meeting === 'object') {
-            // Direct bundle format with required fields
-            contextBundle = {
-              meeting: parsed.meeting as MeetingContextBundle['meeting'],
-              agenda: (parsed.agenda ?? null) as MeetingContextBundle['agenda'],
-              attendees: (parsed.attendees ?? []) as MeetingContextBundle['attendees'],
-              unknownAttendees: (parsed.unknownAttendees ?? []) as MeetingContextBundle['unknownAttendees'],
-              relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }) as MeetingContextBundle['relatedContext'],
-              warnings: (parsed.warnings ?? []) as MeetingContextBundle['warnings'],
-            };
-          } else {
-            throw new Error('Invalid context format: missing required "meeting" field');
-          }
+          // W2/S5: deserialize the WHOLE bundle (not a 6-field hand-copy) so
+          // areaContext / existingTasks / topicWikiContext (+ future fields)
+          // survive the --context JSON boundary. Accepts wrapped
+          // ({success:true, ...}) and direct-bundle forms; validates the
+          // required `meeting` field; shape-guards / degrades malformed optional
+          // blocks the prompt builder indexes (rather than throwing inside
+          // now-fail-loud extraction).
+          contextBundle = deserializeContextBundle(parsed);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           if (opts.json) {

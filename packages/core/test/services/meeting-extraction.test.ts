@@ -23,7 +23,9 @@ import {
   MIRROR_PAIR_JACCARD_THRESHOLD,
   dedupMirrorPairs,
   ParseError,
+  buildSinglePassExtractionPrompt,
 } from '../../src/services/meeting-extraction.js';
+import { deserializeContextBundle } from '../../src/services/meeting-context.js';
 import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem, TopicWikiContext } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
 
@@ -5118,5 +5120,67 @@ describe('core/could_include + frontmatter sanitizer', () => {
     // `---` with trailing whitespace IS stripped
     const result5 = stripYamlDocSeparator('a\n---  \nb');
     assert.equal(result5.stripped, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W2 round-trip: deserialized bundle blocks reach the single_pass prompt (AC3)
+// ---------------------------------------------------------------------------
+
+describe('single_pass prompt carries deserialized bundle blocks (W2/AC3)', () => {
+  // Simulate the --context boundary: a `meeting context --json` payload that
+  // populated all three previously-dropped blocks, deserialized via W2, then
+  // assembled into the single_pass prompt. Pre-W2 this dropped area/
+  // existingTasks/topicWikiContext at the boundary.
+  const payload = {
+    success: true,
+    meeting: {
+      path: '/ws/resources/meetings/2026-06-16-x.md',
+      title: 'Glance sync',
+      date: '2026-06-16',
+      attendees: ['john@x.com'],
+      transcript: 'John: we shipped pricing.',
+    },
+    agenda: null,
+    attendees: [],
+    unknownAttendees: [],
+    relatedContext: { goals: [], projects: [], recentDecisions: [], recentLearnings: [] },
+    warnings: [],
+    areaContext: { name: 'Glance 2.0', sections: { focus: 'ship the recipient table' } },
+    existingTasks: ['Finish recipient-table TDD'],
+    topicWikiContext: {
+      detectedTopics: [
+        { slug: 'recipient-table', sections: '## Recipient table\nKafka event-driven.', l2Excerpts: ['prior decision'] },
+      ],
+    },
+  };
+
+  it('area / existingTasks / topicWikiContext all render in the prompt', () => {
+    const bundle = deserializeContextBundle(payload as unknown as Record<string, unknown>);
+    const prompt = buildSinglePassExtractionPrompt(bundle.meeting.transcript, {
+      context: bundle,
+      ownerSlug: 'john-koht',
+    });
+    // Area block
+    assert.ok(prompt.includes('Area Context (Glance 2.0)'), 'area block present');
+    assert.ok(prompt.includes('ship the recipient table'), 'area focus present');
+    // Existing tasks block (the week.md/tasks dedup input — fixes 10b)
+    assert.ok(prompt.includes('Existing Tasks'), 'existing-tasks block present');
+    assert.ok(prompt.includes('Finish recipient-table TDD'), 'existing task text present');
+    // Topic-wiki block + delta directive activation (hasWikiContext === true)
+    assert.ok(prompt.includes('recipient-table'), 'topic wiki slug present');
+    assert.ok(prompt.includes('Delta-only extraction'), 'delta directive activated by topicWikiContext');
+  });
+
+  it('without topicWikiContext, the delta directive does NOT activate', () => {
+    const noWiki = deserializeContextBundle({
+      ...payload,
+      topicWikiContext: undefined,
+    } as unknown as Record<string, unknown>);
+    const prompt = buildSinglePassExtractionPrompt(noWiki.meeting.transcript, {
+      context: noWiki,
+      ownerSlug: 'john-koht',
+    });
+    assert.ok(!prompt.includes('Delta-only extraction'), 'no delta directive without wiki');
   });
 });

@@ -124,6 +124,34 @@ export interface MeetingContextBundle {
     };
 }
 /**
+ * Deserialize a `MeetingContextBundle` from a parsed `--context` payload
+ * (single_pass W2 / S5).
+ *
+ * The previous CLI reader hand-copied only 6 fields, silently dropping
+ * `areaContext`, `existingTasks`, and `topicWikiContext` — the three
+ * highest-value blocks (delta/supersession, week.md dedup, area calibration).
+ * That re-enumeration is the bug and would rot again on the next bundle field.
+ * This carries the WHOLE object (minus the response wrapper) so every present
+ * field — including future ones — survives the JSON boundary the backend never
+ * crossed.
+ *
+ * S5 hardening: `--context` is an arbitrary file/stdin payload, and W1 made
+ * extraction fail-loud — an unchecked cast of a malformed nested block (e.g.
+ * `topicWikiContext.detectedTopics` not an array) would throw INSIDE
+ * extraction. So:
+ *   - the required `meeting` field is validated (throws a clear error if
+ *     missing/malformed — this is a genuine bad payload, not a degradable block);
+ *   - optional blocks the prompt builder INDEXES are shape-guarded and a
+ *     malformed one degrades to absent (drop the block) rather than throwing.
+ *
+ * Accepts both the wrapped form (`{success:true, ...bundle}` from
+ * `arete meeting context --json`) and a direct bundle object. Strips `success`
+ * and a top-level `error` wrapper key.
+ *
+ * @throws Error when `meeting` is missing or not an object (a bad payload).
+ */
+export declare function deserializeContextBundle(parsed: Record<string, unknown>): MeetingContextBundle;
+/**
  * Options for building meeting context.
  */
 export interface BuildMeetingContextOptions {

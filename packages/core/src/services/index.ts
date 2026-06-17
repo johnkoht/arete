@@ -630,7 +630,7 @@ export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from '.
 export type { DetectTopicsOptions, DetectedTopic } from './topic-detection.js';
 
 // Meeting context assembly
-export { buildMeetingContext } from './meeting-context.js';
+export { buildMeetingContext, deserializeContextBundle } from './meeting-context.js';
 export type {
   ResolvedAttendee,
   UnknownAttendee,

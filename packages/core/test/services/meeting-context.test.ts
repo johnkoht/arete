@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   buildMeetingContext,
+  deserializeContextBundle,
   findRecentMeetings,
   findRecentMeetingsForAttendees,
   calculateCutoffDateString,
@@ -1982,5 +1983,117 @@ describe('buildMeetingContext topicWikiContext', () => {
     const detected = bundle.topicWikiContext!.detectedTopics[0];
     assert.equal(detected.slug, 'pricing-tiers');
     assert.deepEqual(detected.l2Excerpts, [], 'l2Excerpts is empty when no items match topic');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deserializeContextBundle (single_pass W2 / S5)
+// ---------------------------------------------------------------------------
+
+describe('deserializeContextBundle (W2/S5)', () => {
+  const MEETING = {
+    path: '/ws/resources/meetings/2026-06-16-x.md',
+    title: 'X',
+    date: '2026-06-16',
+    attendees: ['john@x.com'],
+    transcript: 'hello',
+  };
+
+  it('carries the WHOLE bundle — areaContext/existingTasks/topicWikiContext survive', () => {
+    const payload = {
+      success: true,
+      meeting: MEETING,
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: { goals: [], projects: [], recentDecisions: [], recentLearnings: [] },
+      warnings: [],
+      areaContext: { name: 'Glance', sections: { focus: 'ship it' } },
+      existingTasks: ['already tracked task'],
+      topicWikiContext: {
+        detectedTopics: [{ slug: 'pricing', sections: '## Pricing', l2Excerpts: ['e1'] }],
+      },
+    };
+    const bundle = deserializeContextBundle(payload as unknown as Record<string, unknown>);
+    assert.equal((bundle.areaContext as { name: string }).name, 'Glance');
+    assert.deepEqual(bundle.existingTasks, ['already tracked task']);
+    assert.equal(bundle.topicWikiContext!.detectedTopics[0].slug, 'pricing');
+  });
+
+  it('strips the response wrapper (success/error) keys', () => {
+    const bundle = deserializeContextBundle({
+      success: true,
+      error: null,
+      meeting: MEETING,
+    } as unknown as Record<string, unknown>);
+    assert.ok(!('success' in (bundle as Record<string, unknown>)));
+    assert.ok(!('error' in (bundle as Record<string, unknown>)));
+  });
+
+  it('accepts a direct bundle (no wrapper)', () => {
+    const bundle = deserializeContextBundle({ meeting: MEETING } as unknown as Record<string, unknown>);
+    assert.equal(bundle.meeting.title, 'X');
+    assert.equal(bundle.agenda, null);
+    assert.deepEqual(bundle.attendees, []);
+  });
+
+  it('throws on a genuinely bad payload (missing meeting)', () => {
+    assert.throws(
+      () => deserializeContextBundle({ success: true } as Record<string, unknown>),
+      /missing required "meeting" field/,
+    );
+    assert.throws(
+      () => deserializeContextBundle({ meeting: [1, 2] } as unknown as Record<string, unknown>),
+      /missing required "meeting" field/,
+    );
+  });
+
+  it('DEGRADES a malformed topicWikiContext to absent (does NOT throw — S5)', () => {
+    const bundle = deserializeContextBundle({
+      meeting: MEETING,
+      topicWikiContext: { detectedTopics: 'not-an-array' },
+    } as unknown as Record<string, unknown>);
+    assert.equal(bundle.topicWikiContext, undefined);
+  });
+
+  it('drops malformed detectedTopics entries but keeps valid ones (S5)', () => {
+    const bundle = deserializeContextBundle({
+      meeting: MEETING,
+      topicWikiContext: {
+        detectedTopics: [
+          { slug: 'ok', sections: 's', l2Excerpts: [] },
+          { slug: 'bad-no-excerpts', sections: 's' }, // missing l2Excerpts
+          null,
+        ],
+      },
+    } as unknown as Record<string, unknown>);
+    assert.equal(bundle.topicWikiContext!.detectedTopics.length, 1);
+    assert.equal(bundle.topicWikiContext!.detectedTopics[0].slug, 'ok');
+  });
+
+  it('degrades a malformed existingTasks / agenda / attendees to safe shapes (S5)', () => {
+    const bundle = deserializeContextBundle({
+      meeting: MEETING,
+      existingTasks: 'not-an-array',
+      agenda: { path: 'p' }, // missing unchecked[]
+      attendees: [
+        { name: 'A', slug: 'a', stances: [], openItems: [] },
+        { name: 'B' }, // missing stances/openItems — dropped
+      ],
+    } as unknown as Record<string, unknown>);
+    assert.equal(bundle.existingTasks, undefined);
+    assert.equal(bundle.agenda, null);
+    assert.equal(bundle.attendees.length, 1);
+    assert.equal(bundle.attendees[0].name, 'A');
+  });
+
+  it('normalizes a malformed relatedContext arrays the prompt indexes (S5)', () => {
+    const bundle = deserializeContextBundle({
+      meeting: MEETING,
+      relatedContext: { goals: 'x', recentDecisions: null },
+    } as unknown as Record<string, unknown>);
+    assert.deepEqual(bundle.relatedContext.goals, []);
+    assert.deepEqual(bundle.relatedContext.recentDecisions, []);
+    assert.deepEqual(bundle.relatedContext.recentLearnings, []);
   });
 });

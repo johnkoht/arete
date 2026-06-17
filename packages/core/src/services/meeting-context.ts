@@ -138,6 +138,106 @@ export interface MeetingContextBundle {
 }
 
 /**
+ * Deserialize a `MeetingContextBundle` from a parsed `--context` payload
+ * (single_pass W2 / S5).
+ *
+ * The previous CLI reader hand-copied only 6 fields, silently dropping
+ * `areaContext`, `existingTasks`, and `topicWikiContext` — the three
+ * highest-value blocks (delta/supersession, week.md dedup, area calibration).
+ * That re-enumeration is the bug and would rot again on the next bundle field.
+ * This carries the WHOLE object (minus the response wrapper) so every present
+ * field — including future ones — survives the JSON boundary the backend never
+ * crossed.
+ *
+ * S5 hardening: `--context` is an arbitrary file/stdin payload, and W1 made
+ * extraction fail-loud — an unchecked cast of a malformed nested block (e.g.
+ * `topicWikiContext.detectedTopics` not an array) would throw INSIDE
+ * extraction. So:
+ *   - the required `meeting` field is validated (throws a clear error if
+ *     missing/malformed — this is a genuine bad payload, not a degradable block);
+ *   - optional blocks the prompt builder INDEXES are shape-guarded and a
+ *     malformed one degrades to absent (drop the block) rather than throwing.
+ *
+ * Accepts both the wrapped form (`{success:true, ...bundle}` from
+ * `arete meeting context --json`) and a direct bundle object. Strips `success`
+ * and a top-level `error` wrapper key.
+ *
+ * @throws Error when `meeting` is missing or not an object (a bad payload).
+ */
+export function deserializeContextBundle(
+  parsed: Record<string, unknown>,
+): MeetingContextBundle {
+  // Strip the response wrapper keys; everything else is bundle data.
+  const { success: _success, error: _error, ...rest } = parsed;
+  void _success;
+  void _error;
+
+  // Required: meeting must be a present object.
+  if (!rest.meeting || typeof rest.meeting !== 'object' || Array.isArray(rest.meeting)) {
+    throw new Error('Invalid context format: missing required "meeting" field');
+  }
+
+  // Start from the whole object (carry every field, incl. future ones).
+  const bundle = { ...rest } as unknown as MeetingContextBundle;
+
+  // Default the small required structural fields if absent (back-compat with
+  // the prior reader's defaults) — these are not "degraded malformed blocks",
+  // just normalization of optional-but-expected shape.
+  if (bundle.agenda === undefined) bundle.agenda = null;
+  if (!Array.isArray(bundle.attendees)) bundle.attendees = [];
+  if (!Array.isArray(bundle.unknownAttendees)) bundle.unknownAttendees = [];
+  if (!Array.isArray(bundle.warnings)) bundle.warnings = [];
+  if (!bundle.relatedContext || typeof bundle.relatedContext !== 'object') {
+    bundle.relatedContext = { goals: [], projects: [], recentDecisions: [], recentLearnings: [] };
+  } else {
+    // Guard the arrays buildContextSection / buildKnownItemsSection index.
+    const rc = bundle.relatedContext as RelatedContext;
+    if (!Array.isArray(rc.goals)) rc.goals = [];
+    if (!Array.isArray(rc.projects)) rc.projects = [];
+    if (!Array.isArray(rc.recentDecisions)) rc.recentDecisions = [];
+    if (!Array.isArray(rc.recentLearnings)) rc.recentLearnings = [];
+  }
+
+  // Optional blocks the prompt builder INDEXES — degrade malformed to absent.
+
+  // agenda.unchecked is indexed; if agenda is present-but-malformed, drop it.
+  if (bundle.agenda !== null) {
+    const a = bundle.agenda as MeetingContextBundle['agenda'];
+    if (!a || typeof a !== 'object' || !Array.isArray(a.unchecked)) {
+      bundle.agenda = null;
+    }
+  }
+
+  // attendees[].stances / .openItems are indexed — drop any malformed entry.
+  bundle.attendees = bundle.attendees.filter(
+    (at): at is ResolvedAttendee =>
+      !!at && typeof at === 'object' && Array.isArray((at as ResolvedAttendee).stances) &&
+      Array.isArray((at as ResolvedAttendee).openItems),
+  );
+
+  // existingTasks must be a string[] — drop the block if malformed.
+  if (bundle.existingTasks !== undefined && !Array.isArray(bundle.existingTasks)) {
+    delete bundle.existingTasks;
+  }
+
+  // topicWikiContext.detectedTopics[].l2Excerpts is indexed; the truncation
+  // helper relies on detectedTopics being an array. Degrade malformed to absent.
+  if (bundle.topicWikiContext !== undefined) {
+    const twc = bundle.topicWikiContext as MeetingContextBundle['topicWikiContext'];
+    if (!twc || !Array.isArray(twc.detectedTopics)) {
+      delete bundle.topicWikiContext;
+    } else {
+      twc.detectedTopics = twc.detectedTopics.filter(
+        (t) => !!t && typeof t === 'object' && typeof t.slug === 'string' &&
+          typeof t.sections === 'string' && Array.isArray(t.l2Excerpts),
+      );
+    }
+  }
+
+  return bundle;
+}
+
+/**
  * Options for building meeting context.
  */
 export interface BuildMeetingContextOptions {

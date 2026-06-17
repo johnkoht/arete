@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, SINGLE_PASS_STAGED_HEADERS, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, SINGLE_PASS_STAGED_HEADERS, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, deserializeContextBundle, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
 // Phase 13 AC2/AC3 — meeting area write surface
 listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, 
 // Phase 10b-min wiring — reactive cross-meeting dedup
@@ -852,32 +852,14 @@ export function registerMeetingCommands(program) {
                     contextJson = readFileSync(opts.context, 'utf8');
                 }
                 const parsed = JSON.parse(contextJson);
-                // Handle wrapped format (success: true, ...) from `arete meeting context --json`
-                if (parsed.success === true && parsed.meeting) {
-                    // Extract the bundle fields from the response
-                    contextBundle = {
-                        meeting: parsed.meeting,
-                        agenda: (parsed.agenda ?? null),
-                        attendees: (parsed.attendees ?? []),
-                        unknownAttendees: (parsed.unknownAttendees ?? []),
-                        relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }),
-                        warnings: (parsed.warnings ?? []),
-                    };
-                }
-                else if (parsed.meeting && typeof parsed.meeting === 'object') {
-                    // Direct bundle format with required fields
-                    contextBundle = {
-                        meeting: parsed.meeting,
-                        agenda: (parsed.agenda ?? null),
-                        attendees: (parsed.attendees ?? []),
-                        unknownAttendees: (parsed.unknownAttendees ?? []),
-                        relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }),
-                        warnings: (parsed.warnings ?? []),
-                    };
-                }
-                else {
-                    throw new Error('Invalid context format: missing required "meeting" field');
-                }
+                // W2/S5: deserialize the WHOLE bundle (not a 6-field hand-copy) so
+                // areaContext / existingTasks / topicWikiContext (+ future fields)
+                // survive the --context JSON boundary. Accepts wrapped
+                // ({success:true, ...}) and direct-bundle forms; validates the
+                // required `meeting` field; shape-guards / degrades malformed optional
+                // blocks the prompt builder indexes (rather than throwing inside
+                // now-fail-loud extraction).
+                contextBundle = deserializeContextBundle(parsed);
             }
             catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
