@@ -413,7 +413,7 @@ export function registerPeopleCommands(program) {
         'pass --no-llm to skip stance extraction.')
         .option('--person <slug>', 'Refresh only one person by slug')
         .option('--days <n>', 'Scope to meetings from the last N days (incremental; default scans the last 90 days)')
-        .option('--full', 'Full rebuild over the last 90 days (the default; explicit override for --days)')
+        .option('--full', 'Force the full 90-day rebuild (overrides --days)')
         .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
         .option('--if-stale-days <n>', 'Only refresh when Last refreshed is older than N days')
         .option('--dry-run', 'Preview what would be extracted without writing files')
@@ -497,8 +497,11 @@ export function registerPeopleCommands(program) {
                     for (const person of targetPeople) {
                         const nameLower = person.name.toLowerCase();
                         for (const meetingFile of meetingFiles) {
-                            const dateMatch = meetingFile.match(/^(\d{4}-\d{2}-\d{2})-/);
-                            if (!dateMatch || dateMatch[1] < cutoff)
+                            // Parity with core's extractDateFromPath (entity.ts): match a date
+                            // ANYWHERE in the name and KEEP undated files, so the estimate ⊇ the
+                            // scan and never under-counts (Phase-3 review Finding 1).
+                            const dateMatch = meetingFile.match(/(\d{4}-\d{2}-\d{2})/);
+                            if (dateMatch && dateMatch[1] < cutoff)
                                 continue;
                             // Cheap: filename contains person slug, OR file content includes person name.
                             if (meetingFile.toLowerCase().includes(person.slug.toLowerCase())) {
