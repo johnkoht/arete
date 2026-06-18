@@ -35,6 +35,10 @@ staged_item_status:
   ai_002: skipped
   de_001: approved
   le_001: pending
+staged_item_elevated:
+  # W4 B-1: ai_001 is the chef's confident keep — elevated so it pre-checks [x]
+  # (a pending+tier item alone now renders [ ] under the conservative default).
+  ai_001: true
 staged_item_importance:
   ai_001: blocker
   de_001: high

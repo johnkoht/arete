@@ -9,7 +9,7 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli, runCliRaw, createTmpDir, cleanupTmpDir } from '../helpers.js';
 
@@ -110,6 +110,85 @@ describe('reconcile nominate (CHR-W2)', () => {
 
     // Pure primitive: no writes.
     assert.equal(readFileSync(priorPath, 'utf8'), priorBefore, 'no file mutation');
+  });
+
+  it('AC-A4/N-4: a today-meeting whose on-disk file is also in the lookback window self-nominates ZERO duplicates', () => {
+    // Pin the source_ref path-format footgun (LEARNINGS 2026-04-29, ledger
+    // edition). The today meeting EXISTS on disk (so it's in the 7-day batch)
+    // AND its extraction rows are in the ledger with source_ref == the exact
+    // path storage.list emits. The set-membership guard (reconcile.ts:84-87)
+    // must filter the on-disk copy out → NO self-duplicate against itself.
+    const todayPath = join(meetingsDir, `${today}-selftest.md`);
+    const SELF_TEXT = 'Migrate the billing service to the new events gateway this sprint';
+    writeFileSync(
+      todayPath,
+      [
+        '---',
+        'title: "Self Test Weekly"',
+        `date: "${today}"`,
+        'status: processed',
+        '---',
+        '',
+        '## Staged Decisions',
+        `- de_050: ${SELF_TEXT}`,
+        '',
+      ].join('\n'),
+    );
+
+    // CRITICAL (the footgun this test pins): the ledger source_ref MUST be the
+    // path EXACTLY as storage.list emits it. The FileStorageAdapter emits the
+    // symlink-RESOLVED real path (on macOS /tmp → /private/tmp), so a raw
+    // join(tmpDir, ...) would miss the strict-=== set-membership guard and the
+    // on-disk copy WOULD self-nominate. realpathSync mirrors what the SKILL
+    // prose must do (emit absolute, resolved paths).
+    const listEmittedPath = realpathSync(todayPath);
+    const selfLedger = join(tmpDir, 'self-ledger.json');
+    writeFileSync(
+      selfLedger,
+      JSON.stringify({
+        horizon: 'day',
+        window: { target: today, lookback_days: 7 },
+        entries: [
+          {
+            // source_ref EXACTLY as storage.list emits it (absolute, resolved).
+            kind: 'extraction',
+            source: 'meeting',
+            source_ref: listEmittedPath,
+            item_id: 'de_050',
+            item_type: 'decision',
+            text: SELF_TEXT,
+            tier: 'normal',
+          },
+          {
+            // Evidence row — must pass through UN-nominated (R3 judgment input).
+            kind: 'commitment-outgoing',
+            source: 'commitments',
+            source_ref: 'commitment:abc123',
+            text: SELF_TEXT, // same text, but evidence rows are never nominated
+            evidence_pointer: 'Slack DM → Jamie, 2026-06-16',
+          },
+        ],
+      }),
+    );
+
+    const out = JSON.parse(
+      runCli(['reconcile', 'nominate', '--ledger', selfLedger, '--json'], { cwd: tmpDir }),
+    );
+    assert.equal(out.success, true);
+    // The on-disk today meeting was FILTERED from the batch (its path is a
+    // ledger extraction source_ref). batchEntries excludes it.
+    const dupSelf = out.candidates.filter(
+      (c: { kind: string; duplicate?: { item_id?: string } }) =>
+        c.kind === 'duplicate' && c.duplicate?.item_id === 'de_050',
+    );
+    assert.equal(dupSelf.length, 0, 'today-meeting must NOT self-nominate against its on-disk copy');
+    // No duplicate candidate at all between the extraction row and the evidence
+    // row (evidence rows are never nominated even on identical text).
+    assert.equal(
+      out.candidates.filter((c: { kind: string }) => c.kind === 'duplicate').length,
+      0,
+      'evidence rows are pass-through; identical-text evidence does not nominate a duplicate',
+    );
   });
 
   it('errors cleanly on a missing ledger file', () => {
