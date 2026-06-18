@@ -387,6 +387,38 @@ export async function writeItemElevatedToFile(storage, filePath, itemId) {
     data['staged_item_elevated'][itemId] = true;
     await storage.write(filePath, serializeFrontmatter(data, body));
 }
+/**
+ * Delete `staged_item_elevated[itemId]` from a meeting file's frontmatter
+ * (W4 B-2, the `--remove` un-elevate / correction path). Inverse of
+ * {@link writeItemElevatedToFile}.
+ *
+ * Like the setter, this NEVER touches `staged_item_status` — un-elevating
+ * only drops the render-only pre-check, it does not change commit-readiness.
+ *
+ * Removing an absent id is a no-op (not an error): the caller's contract is
+ * "ensure this id is not elevated", which already holds. When the map empties,
+ * the `staged_item_elevated` key is dropped entirely to preserve the
+ * legacy/clean post-edit frontmatter shape (matching the commit-filter
+ * cleanup convention).
+ *
+ * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
+ */
+export async function removeItemElevatedFromFile(storage, filePath, itemId) {
+    const raw = await storage.read(filePath);
+    if (raw === null)
+        throw new Error(`Meeting file not found: ${filePath}`);
+    const { data, body } = parseFrontmatter(raw);
+    const map = data['staged_item_elevated'];
+    if (!map || typeof map !== 'object' || Array.isArray(map))
+        return; // nothing to remove
+    if (!(itemId in map))
+        return; // absent id → no-op
+    delete map[itemId];
+    if (Object.keys(map).length === 0) {
+        delete data['staged_item_elevated'];
+    }
+    await storage.write(filePath, serializeFrontmatter(data, body));
+}
 // ---------------------------------------------------------------------------
 // Action item formatting
 // ---------------------------------------------------------------------------

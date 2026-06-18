@@ -49,6 +49,7 @@ import {
   parseStagedItemSkipReason,
   writeItemStatusToFile,
   writeItemElevatedToFile,
+  removeItemElevatedFromFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
@@ -1639,6 +1640,47 @@ describe('writeItemElevatedToFile (W4 B-2)', () => {
       () => writeItemElevatedToFile(storage, '/nonexistent.md', 'ai_001'),
       /not found/,
     );
+  });
+});
+
+describe('removeItemElevatedFromFile (W4 B-2 / FF-1 --remove)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('deletes only the named id; preserves siblings in the elevated map', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'de_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'ai_001');
+    assert.deepEqual(parseStagedItemElevated(storage.files.get(MEETING_FILE)!), { de_001: true });
+  });
+
+  it('drops the elevated key entirely when the map empties', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'ai_001');
+    const fm = parseYaml(storage.files.get(MEETING_FILE)!.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.equal('staged_item_elevated' in fm, false);
+  });
+
+  it('removing an absent id is a no-op (not an error)', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'de_999');
+    assert.deepEqual(parseStagedItemElevated(storage.files.get(MEETING_FILE)!), { ai_001: true });
+  });
+
+  it('does NOT touch staged_item_status', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'ai_001');
+    const status = parseStagedItemStatus(storage.files.get(MEETING_FILE)!);
+    assert.equal(status['ai_001'], 'pending');
+    assert.equal(status['de_001'], 'approved');
+    assert.equal(status['le_001'], 'skipped');
   });
 });
 

@@ -102,7 +102,10 @@ export {
   parseStagedItemImportance,
   parseStagedItemUncertain,
   parseStagedItemLinks,
+  parseStagedItemElevated,
   writeItemStatusToFile,
+  writeItemElevatedToFile,
+  removeItemElevatedFromFile,
   commitApprovedItems,
 } from './integrations/staged-items.js';
 export type {

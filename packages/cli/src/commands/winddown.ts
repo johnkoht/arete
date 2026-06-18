@@ -14,7 +14,7 @@
  * R7 guard).
  */
 
-import { join, basename } from 'node:path';
+import { join, basename, isAbsolute } from 'node:path';
 import {
   createServices,
   loadConfig,
@@ -23,6 +23,9 @@ import {
   renderApplySummary,
   executeWinddownApply,
   writeItemStatusToFile,
+  writeItemElevatedToFile,
+  removeItemElevatedFromFile,
+  parseStagedSections,
   commitApprovedItems,
   parseStagedItemStatus,
   buildChecklistMeeting,
@@ -366,6 +369,104 @@ export function registerWinddownCommand(program: Command): void {
       if (!opts.json && result.meetingsCommitted.length > 0) {
         info('Run `arete index` to re-index after applying.');
       }
+    });
+
+  // ── elevate <meeting> <itemId...> ──────────────────────────────────────────
+  // CHR-W4 FF-1: deterministic surface over `writeItemElevatedToFile` /
+  // `removeItemElevatedFromFile`. Replaces the chef's hand-edit of
+  // `staged_item_elevated` in SKILL Step 2d (typo/format footgun). Writes
+  // `staged_item_elevated[id] = true` per id (or deletes with --remove).
+  // CRITICALLY never touches `staged_item_status` (the B-2 invariant): elevation
+  // is a render-only pre-check, never commit-readiness.
+  winddownCmd
+    .command('elevate <meeting> <itemId...>')
+    .description(
+      'Mark staged items as confident-keep on a meeting (pre-checks `[x]` in the ' +
+        'render). <meeting> is a slug or path under resources/meetings/. Writes ' +
+        'staged_item_elevated[id]=true via the core helper; NEVER touches ' +
+        'staged_item_status. --remove un-elevates.',
+    )
+    .option('--remove', 'Delete the named ids from the elevated map (un-elevate / correct)')
+    .option('--json', 'Emit { success, meeting, elevated, removed } as JSON')
+    .action(async (meeting: string, itemIds: string[], opts: { remove?: boolean; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        else error('Not in an Areté workspace');
+        process.exit(1);
+      }
+
+      const paths = services.workspace.getPaths(root);
+      const meetingsDir = join(paths.resources, 'meetings');
+
+      // Resolve <meeting> as a slug OR a path, the way the meeting CLI commands
+      // do: a bare slug → resources/meetings/<slug>.md; an absolute path is used
+      // as-is; a relative path is resolved against the workspace root.
+      let filePath: string;
+      if (isAbsolute(meeting)) {
+        filePath = meeting;
+      } else if (meeting.includes('/') || meeting.endsWith('.md')) {
+        filePath = join(root, meeting);
+      } else {
+        filePath = join(meetingsDir, `${meeting}.md`);
+      }
+
+      const content = await services.storage.read(filePath);
+      if (content === null) {
+        const msg = `Meeting not found: ${meeting}`;
+        if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+        else error(msg);
+        process.exit(1);
+        return;
+      }
+
+      // Validate every id exists in the meeting's staged sections BEFORE any
+      // mutation — unknown id → error + non-zero exit + zero mutation (AC-FF1.5).
+      const sections = parseStagedSections(content);
+      const knownIds = new Set([
+        ...sections.actionItems.map((i) => i.id),
+        ...sections.decisions.map((i) => i.id),
+        ...sections.learnings.map((i) => i.id),
+      ]);
+      // --remove with an absent id is a no-op (AC-FF1.2), not an error: the
+      // caller's contract ("ensure not elevated") already holds. Only the
+      // SET path requires the id to exist as a staged item.
+      if (!opts.remove) {
+        const unknown = itemIds.filter((id) => !knownIds.has(id));
+        if (unknown.length > 0) {
+          const msg = `Unknown staged item id(s) on ${meeting}: ${unknown.join(', ')}`;
+          if (opts.json) console.log(JSON.stringify({ success: false, error: msg }));
+          else error(msg);
+          process.exit(1);
+          return;
+        }
+      }
+
+      if (opts.remove) {
+        for (const id of itemIds) {
+          await removeItemElevatedFromFile(services.storage, filePath, id);
+        }
+      } else {
+        for (const id of itemIds) {
+          await writeItemElevatedToFile(services.storage, filePath, id);
+        }
+      }
+
+      const slug = basename(filePath, '.md');
+      if (opts.json) {
+        console.log(
+          JSON.stringify({
+            success: true,
+            meeting: slug,
+            elevated: opts.remove ? [] : itemIds,
+            removed: opts.remove ? itemIds : [],
+          }),
+        );
+        return;
+      }
+      if (opts.remove) success(`Un-elevated ${itemIds.length} item(s) on ${slug}: ${itemIds.join(', ')}`);
+      else success(`Elevated ${itemIds.length} item(s) on ${slug}: ${itemIds.join(', ')}`);
     });
 }
 

@@ -920,8 +920,10 @@ confuse them:**
   field). This pre-checks the box `[x]` in the render WITHOUT making the
   item commit-able. The item stays `status: 'pending'` on disk — only
   `arete winddown apply` (the checkbox-diff) promotes a left-checked item
-  to `'approved'` just before commit. Write it via the elevation helper
-  (`writeItemElevatedToFile`), NEVER by writing `status: 'approved'`.
+  to `'approved'` just before commit. Write it via the elevation verb
+  `arete winddown elevate <meeting-slug> <id...>` (a deterministic guard over
+  the core helper — no hand-editing of frontmatter; `--remove` un-elevates).
+  NEVER write `status: 'approved'`.
   - **CRITICAL — do NOT write `status: 'approved'` at reconcile time.**
     `'approved'` is commit-ready and `arete meeting approve` would commit
     it with no checkbox gate (blanket-approval by another name). Elevation

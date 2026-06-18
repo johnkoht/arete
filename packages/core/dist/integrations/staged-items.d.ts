@@ -117,6 +117,23 @@ export declare function writeItemStatusToFile(storage: StorageAdapter, filePath:
  */
 export declare function writeItemElevatedToFile(storage: StorageAdapter, filePath: string, itemId: string): Promise<void>;
 /**
+ * Delete `staged_item_elevated[itemId]` from a meeting file's frontmatter
+ * (W4 B-2, the `--remove` un-elevate / correction path). Inverse of
+ * {@link writeItemElevatedToFile}.
+ *
+ * Like the setter, this NEVER touches `staged_item_status` — un-elevating
+ * only drops the render-only pre-check, it does not change commit-readiness.
+ *
+ * Removing an absent id is a no-op (not an error): the caller's contract is
+ * "ensure this id is not elevated", which already holds. When the map empties,
+ * the `staged_item_elevated` key is dropped entirely to preserve the
+ * legacy/clean post-edit frontmatter shape (matching the commit-filter
+ * cleanup convention).
+ *
+ * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
+ */
+export declare function removeItemElevatedFromFile(storage: StorageAdapter, filePath: string, itemId: string): Promise<void>;
+/**
  * Metadata extracted from meeting frontmatter for memory file entries.
  */
 export type MeetingMetadata = {
