@@ -43,10 +43,12 @@ import {
   generateItemId,
   parseStagedSections,
   parseStagedItemStatus,
+  parseStagedItemElevated,
   parseStagedItemEdits,
   parseStagedItemOwner,
   parseStagedItemSkipReason,
   writeItemStatusToFile,
+  writeItemElevatedToFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
@@ -1562,5 +1564,139 @@ staged_item_status:
     assert.ok(updated);
     assert.match(updated!, /Skipped on Apply/);
     assert.match(updated!, /extract-time, no reason recorded/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 B-2: staged_item_elevated — structural elevation marker
+// ---------------------------------------------------------------------------
+
+describe('parseStagedItemElevated (W4 B-2)', () => {
+  it('returns {} when the field is absent (pre-W4 meeting)', () => {
+    assert.deepEqual(parseStagedItemElevated(FRONTMATTER_WITH_STATUS), {});
+  });
+
+  it('returns {} when there is no frontmatter', () => {
+    assert.deepEqual(parseStagedItemElevated('# heading\nno frontmatter'), {});
+  });
+
+  it('reads true entries and drops non-true values', () => {
+    const content = `---
+title: M
+staged_item_elevated:
+  ai_001: true
+  ai_002: false
+  ai_003: "true"
+  ai_004: 1
+---
+
+## Staged Action Items
+- ai_001: keep me
+`;
+    const result = parseStagedItemElevated(content);
+    // Only the strict-true entry survives — false/string/number all drop.
+    assert.deepEqual(result, { ai_001: true });
+  });
+});
+
+describe('writeItemElevatedToFile (W4 B-2)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('round-trips: written elevation is readable via parseStagedItemElevated', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.deepEqual(parseStagedItemElevated(updated), { ai_001: true });
+  });
+
+  it('does NOT touch staged_item_status (elevation ≠ commit-readiness)', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    const updated = storage.files.get(MEETING_FILE)!;
+    // ai_001 stays 'pending' — elevation only adds to the elevated map.
+    const status = parseStagedItemStatus(updated);
+    assert.equal(status['ai_001'], 'pending');
+    assert.equal(status['de_001'], 'approved');
+    assert.equal(status['le_001'], 'skipped');
+  });
+
+  it('preserves other frontmatter fields', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    const updated = storage.files.get(MEETING_FILE)!;
+    const fm = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.equal(fm['title'], 'Test Meeting');
+    assert.equal(fm['date'], '2026-03-01');
+    assert.equal(fm['status'], 'synced');
+  });
+
+  it('throws when the file is not found', async () => {
+    await assert.rejects(
+      () => writeItemElevatedToFile(storage, '/nonexistent.md', 'ai_001'),
+      /not found/,
+    );
+  });
+});
+
+describe('AC-B2: commitment-rot invariant — elevation never commits (W4 B-2, BLOCKING)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  // A meeting whose decision is ELEVATED (chef confident keep) but NOT
+  // approved — the exact reconcile-time on-disk shape.
+  const ELEVATED_ONLY = `---
+title: "Elevation Test"
+date: "2026-06-17"
+status: processed
+staged_item_status:
+  de_001: pending
+staged_item_elevated:
+  de_001: true
+---
+
+## Staged Decisions
+- de_001: A confidently-kept decision
+
+## Transcript
+t.
+`;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    storage.files.set(MEETING_FILE, ELEVATED_ONLY);
+  });
+
+  it('meeting approve (commitApprovedItems) alone commits NOTHING for an elevated-only item', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    // No memory file gets the elevated decision — elevation is not commit-readiness.
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.equal(decisions, undefined, 'elevated-only item must NOT reach decisions.md via meeting approve');
+  });
+
+  it('the apply checkbox-diff promotion (status→approved, then commit) IS the sole commit path', async () => {
+    // Starting from the elevated-only on-disk shape, simulate the winddown
+    // apply checkbox-diff: a left-checked `[x]` item is promoted to status
+    // 'approved' (winddown-apply.ts:505-506 via setItemStatus →
+    // writeItemStatusToFile) BEFORE commitMeeting. (No prior meeting approve —
+    // in checklist mode apply is the sole commit path; B-5 forbids the SKILL
+    // from calling meeting approve.)
+    await writeItemStatusToFile(storage, MEETING_FILE, 'de_001', { status: 'approved' });
+
+    // commit — NOW it lands in memory.
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.ok(decisions, 'after apply promotes status→approved, the item commits');
+    assert.ok(decisions!.includes('A confidently-kept decision'));
+  });
+
+  it('cleanup filter strips staged_item_elevated on commit (no orphan elevated:true)', async () => {
+    // Promote + commit, then assert the elevated map is gone from frontmatter.
+    await writeItemStatusToFile(storage, MEETING_FILE, 'de_001', { status: 'approved' });
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.deepEqual(parseStagedItemElevated(updated), {}, 'committed item must not keep an orphan elevated:true');
   });
 });

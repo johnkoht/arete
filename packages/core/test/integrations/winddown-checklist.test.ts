@@ -85,8 +85,10 @@ describe('winddown-checklist renderer (W1)', () => {
         learnings: [],
       },
       meta: {
-        ai_001: { status: 'pending', tier: 'blocker' },
-        de_001: { status: 'pending', tier: 'high' },
+        // W4 B-1: elevated so they stay [x] (the test asserts marker rendering,
+        // not the pre-fill default — pending alone now renders [ ]).
+        ai_001: { status: 'pending', elevated: true, tier: 'blocker' },
+        de_001: { status: 'pending', elevated: true, tier: 'high' },
       },
     };
     const out = renderStagedItemsAsChecklist(meeting);
@@ -259,8 +261,10 @@ describe('owner/direction tag + FYI routing (finding #8)', () => {
         learnings: [],
       },
       meta: {
-        ai_001: { status: 'pending', direction: 'i_owe_them', ownerSlug: 'john-koht', counterpartySlug: 'anthony' },
-        ai_002: { status: 'pending', direction: 'they_owe_me', ownerSlug: 'anthony', counterpartySlug: 'john-koht' },
+        // W4 B-1: elevated so they stay [x] (this test asserts owner-tag
+        // rendering + actionable-section routing, not the pre-fill default).
+        ai_001: { status: 'pending', elevated: true, direction: 'i_owe_them', ownerSlug: 'john-koht', counterpartySlug: 'anthony' },
+        ai_002: { status: 'pending', elevated: true, direction: 'they_owe_me', ownerSlug: 'anthony', counterpartySlug: 'john-koht' },
       },
     };
     const out = renderStagedItemsAsChecklist(meeting);
@@ -285,7 +289,9 @@ describe('owner/direction tag + FYI routing (finding #8)', () => {
         learnings: [],
       },
       meta: {
-        ai_001: { status: 'pending', direction: 'i_owe_them', ownerSlug: 'john-koht', counterpartySlug: 'team' },
+        // W4 B-1: ai_001 elevated so it stays [x]; the none-items are
+        // force-unchecked FYI regardless of elevation.
+        ai_001: { status: 'pending', elevated: true, direction: 'i_owe_them', ownerSlug: 'john-koht', counterpartySlug: 'team' },
         ai_002: { status: 'pending', direction: 'none', ownerSlug: 'philip' },
         ai_003: { status: 'pending', direction: 'none', ownerSlug: 'rachael' },
       },
@@ -348,6 +354,10 @@ describe('owner/direction tag + FYI routing (finding #8)', () => {
     const content = [
       '---',
       'title: Claim Portal Comms',
+      // W4 B-1: ai_001 elevated so it stays [x] (this test asserts owner/
+      // direction parsing + FYI routing, not the pre-fill default).
+      'staged_item_elevated:',
+      '  ai_001: true',
       'staged_item_owner:',
       '  ai_001:',
       '    ownerSlug: john-koht',
@@ -392,12 +402,52 @@ describe('owner/direction tag + FYI routing (finding #8)', () => {
   });
 });
 
-describe('prefill semantics', () => {
-  it('[x] keep, [ ] skip, pending+tier → [x]', () => {
-    assert.equal(prefillChecked({ status: 'approved' }), true);
+describe('prefill semantics (W4 B-1 — conservative-but-confident)', () => {
+  it('prefillChecked truth table: only elevated or approved → [x]', () => {
+    // The W4 flip: pre-check ONLY what the chef vouched for.
+    assert.equal(prefillChecked({ elevated: true }), true); // chef confident keep
+    assert.equal(prefillChecked({ status: 'approved' }), true); // post-apply
+    assert.equal(prefillChecked({ status: 'pending', tier: 'normal' }), false); // was true pre-W4
+    assert.equal(prefillChecked({ status: 'pending' }), false); // bare pending
     assert.equal(prefillChecked({ status: 'skipped' }), false);
-    assert.equal(prefillChecked({ status: 'pending', tier: 'normal' }), true);
-    assert.equal(prefillChecked(undefined), true);
+    assert.equal(prefillChecked(undefined), false); // no meta — was true pre-W4
+    assert.equal(prefillChecked({}), false); // empty meta — nothing vouches
+    // elevated wins even when status is pending (the reconcile-time shape).
+    assert.equal(prefillChecked({ status: 'pending', elevated: true }), true);
+  });
+
+  it('a pending item with no reason renders [ ] with no suffix (N-3: pending ≈ reasonless-skip, intended)', () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'm',
+      title: 'M',
+      sections: { actionItems: [ai('ai_001', 'A bare pending action')], decisions: [], learnings: [] },
+      meta: { ai_001: { status: 'pending' } },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    // unchecked, with NO skip suffix (no reason) — visually like a reasonless
+    // skip, which is the intended N-3 behavior (pending should be rare).
+    assert.match(out, /- \[ \] A bare pending action  <!-- ai_001@m -->/);
+    assert.doesNotMatch(out, /skip:/);
+  });
+
+  it('buildChecklistMeeting reads staged_item_elevated → [x] (B-2 render side)', () => {
+    const content = [
+      '---',
+      'title: M',
+      'staged_item_status:',
+      '  ai_001: pending',
+      'staged_item_elevated:',
+      '  ai_001: true',
+      '---',
+      '',
+      '## Staged Action Items',
+      '- ai_001: Chef confidently keeps this',
+    ].join('\n');
+    const meeting = buildChecklistMeeting(content, { slug: 'm', title: 'M' });
+    assert.equal(meeting.meta.ai_001.elevated, true);
+    assert.equal(meeting.meta.ai_001.status, 'pending');
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /- \[x\] Chef confidently keeps this  <!-- ai_001@m -->/);
   });
 
   it('tierMarker maps tiers', () => {

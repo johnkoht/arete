@@ -144,6 +144,7 @@ export type {
 export type {
   StagedItemDirection,
   StagedItemStatus,
+  StagedItemElevated,
   StagedItemSkipReasonMeta,
   StagedItemSkipReason,
   StagedItemEdits,

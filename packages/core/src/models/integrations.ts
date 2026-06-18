@@ -33,6 +33,28 @@ import type { ItemSource } from './common.js';
 export type StagedItemStatus = Record<string, 'approved' | 'skipped' | 'pending'>;
 
 /**
+ * Structural elevation marker for staged items (W4 / chef-holistic-reconcile B-2).
+ *
+ * Map of item ID → `true` for items the chef CONFIDENTLY keeps during the
+ * winddown reconcile pass. Parallel to `StagedItemStatus`, but DELIBERATELY
+ * distinct: elevation means "pre-check the box `[x]` in the render", NOT
+ * "commit to memory".
+ *
+ * Why a separate field (not reuse `status: 'approved'`): `commitApprovedItems`
+ * commits anything `'approved'` with no checkbox gate, and `arete meeting
+ * approve` can be invoked outside the winddown apply path. If the chef wrote
+ * `'approved'` at reconcile time, a stray `meeting approve` would silently
+ * commit it — blanket-approval by another name. Elevation is therefore NEVER
+ * read by the commit filter; only the renderer reads it (→ `[x]`), and only the
+ * winddown apply checkbox-diff promotes a left-checked item to `'approved'`
+ * (just before commit). So `'approved'` never exists on disk until apply.
+ *
+ * Invariant: no path commits a `staged_item_elevated` item to memory except the
+ * apply checkbox-diff.
+ */
+export type StagedItemElevated = Record<string, true>;
+
+/**
  * Reason metadata for a chef-skipped or chef-proposed staged item.
  *
  * Sibling-field shape mirrors `StagedItemEdits` / `StagedItemOwner` / etc.
