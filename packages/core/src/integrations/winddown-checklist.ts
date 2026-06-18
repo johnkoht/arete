@@ -273,6 +273,14 @@ export function skipSuffix(meta: ChecklistItemMeta | undefined): string {
 export function linkSuffix(links: ChecklistItemMeta['links']): string {
   if (!links) return '';
   const parts: string[] = [];
+  // Half C (W4 / de_001 fix) render backstop: an item can't both continue AND
+  // supersede the SAME ref. If both markers point at the same value, emit only
+  // the supersedes marker (the stronger, change-implying claim). The parse-time
+  // normalization in meeting-extraction already drops the redundant
+  // continuationOf, but this guards hand-written / legacy frontmatter too.
+  if (links.continuationOf && links.continuationOf === links.supersedes) {
+    return `  ⤴ supersedes ${links.supersedes}`;
+  }
   if (links.continuationOf) parts.push(`↩ continues ${links.continuationOf}`);
   if (links.supersedes) parts.push(`⤴ supersedes ${links.supersedes}`);
   return parts.length > 0 ? `  ${parts.join(' · ')}` : '';

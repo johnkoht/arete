@@ -624,6 +624,73 @@ describe('parseMeetingExtractionResponse - rawItems', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Half C (W4 / de_001 fix): continuation_of / supersedes mutual exclusion
+// ---------------------------------------------------------------------------
+
+describe('Half C — continuation_of vs supersedes normalization (single_pass)', () => {
+  it('AC-C1: same-ref continuation_of + supersedes → parses to supersedes only', () => {
+    const response = JSON.stringify({
+      summary: 'Test',
+      action_items: [
+        {
+          owner: 'John',
+          description: 'Ship the consolidated rules',
+          direction: 'i_owe_them',
+          continuation_of: 'Consolidation rules',
+          supersedes: 'Consolidation rules',
+        },
+      ],
+      decisions: [],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, undefined, { singlePass: true });
+    const item = result.intelligence.actionItems[0];
+    assert.ok(item);
+    // continuationOf dropped (redundant with the stronger supersedes claim).
+    assert.equal(item.continuationOf, undefined);
+    assert.equal(item.supersedes, 'Consolidation rules');
+  });
+
+  it('same ref differing only by surrounding whitespace → still collapses to supersedes', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'A',
+          direction: 'i_owe_them',
+          continuation_of: '  de_004  ',
+          supersedes: 'de_004',
+        },
+      ],
+    });
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, undefined, { singlePass: true });
+    const item = result.intelligence.actionItems[0];
+    assert.ok(item);
+    assert.equal(item.continuationOf, undefined);
+    assert.equal(item.supersedes, 'de_004');
+  });
+
+  it('different refs → BOTH retained (continues A, replaces B is legitimate)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'A',
+          direction: 'i_owe_them',
+          continuation_of: 'Workstream A',
+          supersedes: 'Item B',
+        },
+      ],
+    });
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, undefined, { singlePass: true });
+    const item = result.intelligence.actionItems[0];
+    assert.ok(item);
+    assert.equal(item.continuationOf, 'Workstream A');
+    assert.equal(item.supersedes, 'Item B');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildMeetingExtractionPrompt - selectivity & confidence (INT-1)
 // ---------------------------------------------------------------------------
 

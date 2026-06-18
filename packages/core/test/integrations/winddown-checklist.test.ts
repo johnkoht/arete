@@ -119,6 +119,32 @@ describe('winddown-checklist renderer (W1)', () => {
     assert.match(out, /⤴ supersedes de_004/);
   });
 
+  it('Half C render guard: equal continuation+supersedes refs → only the supersedes marker', () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'anthony',
+      title: 'Anthony',
+      sections: { actionItems: [], decisions: [de('de_002', 'V1 default one letter')], learnings: [] },
+      // Defensive: hand-written/legacy frontmatter could still carry both at the
+      // same ref. The render guard emits ONLY supersedes (no contradictory pair).
+      meta: { de_002: { status: 'approved', links: { continuationOf: 'de_004', supersedes: 'de_004' } } },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /⤴ supersedes de_004/);
+    assert.doesNotMatch(out, /↩ continues/);
+  });
+
+  it('Half C render guard: DIFFERENT refs → both markers render', () => {
+    const meeting: ChecklistMeeting = {
+      slug: 'anthony',
+      title: 'Anthony',
+      sections: { actionItems: [], decisions: [de('de_002', 'V1 default')], learnings: [] },
+      meta: { de_002: { status: 'approved', links: { continuationOf: 'de_003', supersedes: 'de_004' } } },
+    };
+    const out = renderStagedItemsAsChecklist(meeting);
+    assert.match(out, /↩ continues de_003/);
+    assert.match(out, /⤴ supersedes de_004/);
+  });
+
   it('routes uncertain items OUT of their section (into Your-call only)', () => {
     const meeting: ChecklistMeeting = {
       slug: 'cust',
