@@ -12,13 +12,21 @@
  * (see `winddown-apply.ts`) keys on these anchors, never on text, so editing an
  * item's text round-trips as an amendment rather than breaking the mapping.
  *
- * Pre-fill semantics (mockup §"Checkbox semantics summary"):
- *   - status 'approved'           → `[x]`
+ * Pre-fill semantics (W4 B-1 — conservative-but-confident default):
+ *   - elevated === true           → `[x]` (chef confidently keeps — the new
+ *                                    structural signal, see staged-items B-2)
+ *   - status 'approved'           → `[x]` (post-apply only; never set pre-apply)
  *   - status 'skipped'            → `[ ]` + skip reason
- *   - status 'pending' + tier     → `[x]` (agent recommends keep), unless
- *                                    uncertain (⚠) → routed to "Your call",
- *                                    not pre-filled
+ *   - status 'pending'            → `[ ]` (NOT pre-checked — the W4 flip;
+ *                                    pending should be rare, the chef elevates
+ *                                    confident keeps and skips the rest)
+ *   - no meta                     → `[ ]` (was `[x]`; nothing to vouch for it)
  *   - uncertain (⚠ channel)       → "Your call" question block, never pre-filled
+ *
+ * The flip from "pre-check by default" to "pre-check only what's vouched for"
+ * is the anti-blanket-approval guarantee: the doc never silently pre-commits an
+ * item the chef didn't explicitly elevate. Combined with B-2 (elevation ≠
+ * commit-ready), the user can't accidentally over-commit.
  *
  * Anchors:
  *   - item:   `<!-- <id>@<slug> -->`            e.g. `<!-- ai_001@anthony -->`
@@ -32,6 +40,13 @@ export type ChecklistTier = 'blocker' | 'high' | 'normal';
 export interface ChecklistItemMeta {
     /** `staged_item_status[id]` — the agent's recommendation. */
     status?: 'approved' | 'skipped' | 'pending';
+    /**
+     * `staged_item_elevated[id]` (W4 B-2) — `true` when the chef confidently
+     * keeps this item during the reconcile pass. Pre-checks the box (`[x]`) in
+     * the render WITHOUT being commit-able: only the apply checkbox-diff promotes
+     * a left-checked item to `'approved'`. NEVER read by the commit filter.
+     */
+    elevated?: boolean;
     /** `staged_item_importance[id]`. */
     tier?: ChecklistTier;
     /**
@@ -142,9 +157,17 @@ export declare const ACTION_ANCHOR_RE: RegExp;
 /** True when the ⚠ channel fired for this item (routes to "Your call"). */
 export declare function isUncertain(meta: ChecklistItemMeta | undefined): boolean;
 /**
- * Decide the pre-fill checkbox state for a per-meeting item.
- * `[x]` (keep/approve) vs `[ ]` (skip). Uncertain items are handled out of
- * band (Your-call block) and should not be passed here.
+ * Decide the pre-fill checkbox state for a per-meeting item (W4 B-1 —
+ * conservative-but-confident). `[x]` (keep/approve) vs `[ ]` (skip). Uncertain
+ * items are handled out of band (Your-call block) and should not be passed here.
+ *
+ * Pre-check (`[x]`) ONLY when the item is explicitly vouched for:
+ *   - `elevated === true` — the chef confidently keeps it (the B-2 signal), OR
+ *   - `status === 'approved'` — post-apply state (never set pre-apply).
+ * Everything else — `'pending'`, `'skipped'`, or no meta — pre-fills `[ ]`.
+ * This is the W4 flip: pre-W4 the default (pending / no-meta) was `[x]`, which
+ * silently pre-committed un-vouched items (blanket approval). Now nothing is
+ * pre-checked unless the chef elevated it or it was already approved.
  */
 export declare function prefillChecked(meta: ChecklistItemMeta | undefined): boolean;
 /** Tier-prefix marker, e.g. "[BLOCKER] " / "[high] " / "" for normal. */
@@ -213,6 +236,7 @@ export declare function renderWinddownDoc(view: ChecklistView): string;
  * reads the file; this assembles the staged sections + the overlay maps the
  * renderer consumes. Mirrors the single_pass writer keys:
  *   - `staged_item_status`     → ChecklistItemMeta.status
+ *   - `staged_item_elevated`   → .elevated (W4 B-2 — chef confident keep ⇒ [x])
  *   - `staged_item_importance` → .tier
  *   - `staged_item_uncertain`  → .uncertainReason (presence ⇒ ⚠ channel)
  *   - `staged_item_skip_reason`→ .skipReason (the `.reason` field)

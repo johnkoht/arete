@@ -12,20 +12,28 @@
  * (see `winddown-apply.ts`) keys on these anchors, never on text, so editing an
  * item's text round-trips as an amendment rather than breaking the mapping.
  *
- * Pre-fill semantics (mockup §"Checkbox semantics summary"):
- *   - status 'approved'           → `[x]`
+ * Pre-fill semantics (W4 B-1 — conservative-but-confident default):
+ *   - elevated === true           → `[x]` (chef confidently keeps — the new
+ *                                    structural signal, see staged-items B-2)
+ *   - status 'approved'           → `[x]` (post-apply only; never set pre-apply)
  *   - status 'skipped'            → `[ ]` + skip reason
- *   - status 'pending' + tier     → `[x]` (agent recommends keep), unless
- *                                    uncertain (⚠) → routed to "Your call",
- *                                    not pre-filled
+ *   - status 'pending'            → `[ ]` (NOT pre-checked — the W4 flip;
+ *                                    pending should be rare, the chef elevates
+ *                                    confident keeps and skips the rest)
+ *   - no meta                     → `[ ]` (was `[x]`; nothing to vouch for it)
  *   - uncertain (⚠ channel)       → "Your call" question block, never pre-filled
+ *
+ * The flip from "pre-check by default" to "pre-check only what's vouched for"
+ * is the anti-blanket-approval guarantee: the doc never silently pre-commits an
+ * item the chef didn't explicitly elevate. Combined with B-2 (elevation ≠
+ * commit-ready), the user can't accidentally over-commit.
  *
  * Anchors:
  *   - item:   `<!-- <id>@<slug> -->`            e.g. `<!-- ai_001@anthony -->`
  *   - choice: `<!-- choice:<key> -->`           e.g. `<!-- choice:ai_007>acc2a220 -->`
  *   - action: `<!-- act:<verb>:<id> -->`        e.g. `<!-- act:resolve:d9bee08c -->`
  */
-import { parseStagedSections, parseStagedItemStatus, parseStagedItemImportance, parseStagedItemUncertain, parseStagedItemLinks, parseStagedItemSkipReason, parseStagedItemOwner, } from './staged-items.js';
+import { parseStagedSections, parseStagedItemStatus, parseStagedItemElevated, parseStagedItemImportance, parseStagedItemUncertain, parseStagedItemLinks, parseStagedItemSkipReason, parseStagedItemOwner, } from './staged-items.js';
 // ---------------------------------------------------------------------------
 // Anchor helpers (single source of truth — apply mapper imports these)
 // ---------------------------------------------------------------------------
@@ -50,19 +58,27 @@ export function isUncertain(meta) {
     return meta !== undefined && meta.uncertainReason !== undefined;
 }
 /**
- * Decide the pre-fill checkbox state for a per-meeting item.
- * `[x]` (keep/approve) vs `[ ]` (skip). Uncertain items are handled out of
- * band (Your-call block) and should not be passed here.
+ * Decide the pre-fill checkbox state for a per-meeting item (W4 B-1 —
+ * conservative-but-confident). `[x]` (keep/approve) vs `[ ]` (skip). Uncertain
+ * items are handled out of band (Your-call block) and should not be passed here.
+ *
+ * Pre-check (`[x]`) ONLY when the item is explicitly vouched for:
+ *   - `elevated === true` — the chef confidently keeps it (the B-2 signal), OR
+ *   - `status === 'approved'` — post-apply state (never set pre-apply).
+ * Everything else — `'pending'`, `'skipped'`, or no meta — pre-fills `[ ]`.
+ * This is the W4 flip: pre-W4 the default (pending / no-meta) was `[x]`, which
+ * silently pre-committed un-vouched items (blanket approval). Now nothing is
+ * pre-checked unless the chef elevated it or it was already approved.
  */
 export function prefillChecked(meta) {
     if (!meta)
-        return true; // no overlay → agent keeps by default (legacy-ish)
-    if (meta.status === 'skipped')
-        return false;
+        return false; // no overlay → nothing vouches for it → unchecked
+    if (meta.elevated === true)
+        return true; // chef confidently keeps (B-2)
     if (meta.status === 'approved')
-        return true;
-    // pending + a tier → agent recommends keep (mockup: blocker/high/normal pre-checked)
-    return true;
+        return true; // post-apply only
+    // pending / skipped / no status → not vouched for → unchecked (the flip)
+    return false;
 }
 /** Tier-prefix marker, e.g. "[BLOCKER] " / "[high] " / "" for normal. */
 export function tierMarker(tier) {
@@ -125,6 +141,14 @@ export function linkSuffix(links) {
     if (!links)
         return '';
     const parts = [];
+    // Half C (W4 / de_001 fix) render backstop: an item can't both continue AND
+    // supersede the SAME ref. If both markers point at the same value, emit only
+    // the supersedes marker (the stronger, change-implying claim). The parse-time
+    // normalization in meeting-extraction already drops the redundant
+    // continuationOf, but this guards hand-written / legacy frontmatter too.
+    if (links.continuationOf && links.continuationOf === links.supersedes) {
+        return `  ⤴ supersedes ${links.supersedes}`;
+    }
     if (links.continuationOf)
         parts.push(`↩ continues ${links.continuationOf}`);
     if (links.supersedes)
@@ -341,6 +365,7 @@ export function renderWinddownDoc(view) {
  * reads the file; this assembles the staged sections + the overlay maps the
  * renderer consumes. Mirrors the single_pass writer keys:
  *   - `staged_item_status`     → ChecklistItemMeta.status
+ *   - `staged_item_elevated`   → .elevated (W4 B-2 — chef confident keep ⇒ [x])
  *   - `staged_item_importance` → .tier
  *   - `staged_item_uncertain`  → .uncertainReason (presence ⇒ ⚠ channel)
  *   - `staged_item_skip_reason`→ .skipReason (the `.reason` field)
@@ -355,6 +380,7 @@ export function buildChecklistMeeting(content, meta) {
     const body = fmMatch ? fmMatch[1] : content;
     const sections = parseStagedSections(body);
     const status = parseStagedItemStatus(content);
+    const elevated = parseStagedItemElevated(content);
     const importance = parseStagedItemImportance(content);
     const uncertain = parseStagedItemUncertain(content);
     const links = parseStagedItemLinks(content);
@@ -375,6 +401,8 @@ export function buildChecklistMeeting(content, meta) {
         const m = {};
         if (status[id])
             m.status = status[id];
+        if (elevated[id])
+            m.elevated = true;
         if (importance[id])
             m.tier = importance[id];
         // PRESENCE in the uncertain map (even empty string) ⇒ ⚠ channel fired.

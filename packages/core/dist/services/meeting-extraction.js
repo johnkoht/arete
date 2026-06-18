@@ -169,6 +169,20 @@ function parseJudgmentFields(raw) {
     if (typeof raw.supersedes === 'string' && raw.supersedes.trim()) {
         out.supersedes = raw.supersedes.trim();
     }
+    // Half C (W4 / de_001 fix): an item cannot both restate AND replace the same
+    // prior item. When `continuationOf` and `supersedes` point at the EXACT same
+    // (trimmed) ref, drop `continuationOf` and keep `supersedes` — supersession ⊃
+    // continuation, so the continuation marker is redundant noise (and would
+    // render the contradictory "↩ continues X · ⤴ supersedes X"). Refs are raw
+    // free-text with no canonical normalization, so exact trimmed-string equality
+    // is the safe compare (the render guard in winddown-checklist is the
+    // backstop). Different refs are legitimate (continues workstream A, replaces
+    // item B) → both kept.
+    if (out.continuationOf !== undefined &&
+        out.supersedes !== undefined &&
+        out.continuationOf === out.supersedes) {
+        delete out.continuationOf;
+    }
     return Object.keys(out).length > 0 ? out : undefined;
 }
 const TOPIC_SLUG_REGEX = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
@@ -947,6 +961,7 @@ ${sections.join('\n\n')}
 Rules for items that overlap with the list above:
 - Same item, no new information → re-emit it WITH \`"continuation_of": "<known item text or id>"\`. Do NOT silently omit it.
 - This meeting CHANGES, reverses, narrows, or replaces a known item → emit the NEW version WITH \`"supersedes": "<known item text or id>"\`. **Never omit a superseding item** — a dropped supersession silently leaves the stale version in force.
+- These two markers are MUTUALLY EXCLUSIVE for a given reference — emit at most ONE of \`continuation_of\`/\`supersedes\` per prior item. If the item both restates AND changes the same prior item, it CHANGES it → use \`supersedes\` (never both pointing at the same ref).
 - Genuinely new item → emit normally, no marker.`;
 }
 /**
@@ -1055,8 +1070,8 @@ JSON schema:
       "importance": "blocker | high | normal",
       "uncertain": "boolean — true if you are unsure this should be recorded (the ⚠ flag)",
       "uncertainty_reason": "string (only when uncertain) — one short clause why",
-      "continuation_of": "string (optional) — known item/commitment this continues",
-      "supersedes": "string (optional) — known item this replaces or reverses"
+      "continuation_of": "string (optional) — known item/commitment this continues (mutually exclusive with supersedes for the same ref)",
+      "supersedes": "string (optional) — known item this replaces or reverses (use this, NOT continuation_of, when it both restates and changes the same item)"
     }
   ],
   "next_steps": ["string — each agreed-upon next step"],

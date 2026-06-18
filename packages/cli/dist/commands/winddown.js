@@ -14,7 +14,7 @@
  * R7 guard).
  */
 import { join, basename } from 'node:path';
-import { createServices, loadConfig, buildApplyPlan, renderApplySummary, executeWinddownApply, writeItemStatusToFile, commitApprovedItems, parseStagedItemStatus, buildChecklistMeeting, renderStagedBlock, renderWinddownDoc, } from '@arete/core';
+import { createServices, loadConfig, buildApplyPlan, parseWinddownDoc, renderApplySummary, executeWinddownApply, writeItemStatusToFile, commitApprovedItems, parseStagedItemStatus, buildChecklistMeeting, renderStagedBlock, renderWinddownDoc, } from '@arete/core';
 import { error, info, success } from '../formatters.js';
 function archiveDir(now) {
     return join(now, 'archive', 'daily-winddown');
@@ -202,6 +202,29 @@ export function registerWinddownCommand(program) {
             process.exit(1);
         }
         const plan = buildApplyPlan(date, baseline, edited);
+        // W4 B-3: anti-hand-author guard. If the EDITED doc resolves zero anchors
+        // (the plan carries no items/choices/actions) BUT the baseline had ≥1
+        // anchor, the doc was hand-authored or had its anchors stripped — apply
+        // can't safely map it. Hard-refuse rather than silently no-op (which would
+        // read as "applied, nothing to do"). The discriminator is computed
+        // explicitly from the baseline because the plan object can't carry it.
+        // False-positive-safe: unchecking everything keeps the `[ ]` anchor lines,
+        // so the plan stays non-empty on normal edits. Both-empty (legitimate
+        // empty day) falls through to a clean no-op.
+        const editedAnchorCount = plan.items.length + plan.choices.length + plan.actions.length;
+        const baselineAnchorCount = parseWinddownDoc(baseline).byAnchor.size;
+        if (editedAnchorCount === 0 && baselineAnchorCount > 0) {
+            const msg = `Edited winddown doc for ${date} resolves zero anchors, but the baseline ` +
+                `has ${baselineAnchorCount}. The doc looks hand-authored or had its hidden ` +
+                `anchors stripped — apply can't map it safely. Re-run \`arete winddown render\` ` +
+                `and curate via frontmatter (staged_item_elevated / skip status), then re-apply. ` +
+                `Nothing was changed.`;
+            if (opts.json)
+                console.log(JSON.stringify({ success: false, error: msg }));
+            else
+                error(msg);
+            process.exit(1);
+        }
         const summary = renderApplySummary(plan);
         if (opts.dryRun) {
             if (opts.json)

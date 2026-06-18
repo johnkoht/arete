@@ -154,6 +154,30 @@ export function parseStagedItemStatus(content) {
     return raw;
 }
 /**
+ * Parse the `staged_item_elevated` frontmatter field (W4 / chef-holistic-reconcile
+ * B-2). Map of item id → `true` for items the chef confidently keeps. Only
+ * truthy entries are returned; any non-`true` value (including `false`, strings,
+ * numbers) drops silently — presence-with-`true` is the only valid signal.
+ *
+ * Backward compat: returns `{}` for meeting files with no `staged_item_elevated`
+ * field (every pre-W4 meeting has none).
+ *
+ * The renderer reads this → `[x]` pre-fill (B-1). The commit filter
+ * (`commitApprovedItems`) NEVER reads it — elevation is not commit-readiness.
+ */
+export function parseStagedItemElevated(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_elevated'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, v] of Object.entries(raw)) {
+        if (v === true)
+            result[id] = true;
+    }
+    return result;
+}
+/**
  * Parse the `staged_item_edits` frontmatter field from raw markdown content.
  * Returns a map of item IDs to edited text strings.
  */
@@ -333,6 +357,34 @@ export async function writeItemStatusToFile(storage, filePath, itemId, options) 
         }
         data['staged_item_edits'][itemId] = options.editedText;
     }
+    await storage.write(filePath, serializeFrontmatter(data, body));
+}
+// ---------------------------------------------------------------------------
+// writeItemElevatedToFile (W4 B-2)
+// ---------------------------------------------------------------------------
+/**
+ * Set `staged_item_elevated[itemId] = true` in a meeting file's frontmatter
+ * (W4 / chef-holistic-reconcile B-2). The chef calls this for confident keeps
+ * during the winddown reconcile pass.
+ *
+ * CRITICALLY does NOT touch `staged_item_status` — elevation is a render-only
+ * pre-check signal, never commit-readiness. The item stays `'pending'` (or
+ * unstatused) on disk; only the winddown apply checkbox-diff promotes a
+ * left-checked item to `'approved'` (just before commit). This is what keeps a
+ * stray `arete meeting approve` from silently committing an un-applied
+ * elevation.
+ *
+ * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
+ */
+export async function writeItemElevatedToFile(storage, filePath, itemId) {
+    const raw = await storage.read(filePath);
+    if (raw === null)
+        throw new Error(`Meeting file not found: ${filePath}`);
+    const { data, body } = parseFrontmatter(raw);
+    if (!data['staged_item_elevated'] || typeof data['staged_item_elevated'] !== 'object') {
+        data['staged_item_elevated'] = {};
+    }
+    data['staged_item_elevated'][itemId] = true;
     await storage.write(filePath, serializeFrontmatter(data, body));
 }
 // ---------------------------------------------------------------------------
@@ -597,6 +649,11 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
     // staged sibling maps are now filtered the same way, so a committed item
     // loses ALL its bookkeeping and the surviving (pending/skipped) items keep
     // every map consistently.
+    // W4 B-2 / BLOCKER-2: `staged_item_elevated` is included in THIS cleanup
+    // filter (so a committed item never keeps an orphan `elevated:true` — the
+    // finding-#12 bookkeeping asymmetry) but is DELIBERATELY ABSENT from the
+    // commit filter at the top of this function (`approvedIds` reads only
+    // `'approved'` status). Elevation is render-only; it can never commit.
     for (const key of [
         'staged_item_status',
         'staged_item_edits',
@@ -607,6 +664,7 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
         'staged_item_importance',
         'staged_item_uncertain',
         'staged_item_links',
+        'staged_item_elevated',
     ]) {
         const map = data[key];
         if (map === undefined)

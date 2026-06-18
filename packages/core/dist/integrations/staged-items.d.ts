@@ -5,8 +5,8 @@
  * in meeting markdown files. All file I/O uses StorageAdapter.
  */
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemSkipReason, StagedItemSkipReasonMeta, StagedItemStatus, StagedSections } from '../models/index.js';
-export type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemSkipReason, StagedItemSkipReasonMeta, StagedItemStatus, StagedSections, };
+import type { StagedItem, StagedItemEdits, StagedItemElevated, StagedItemOwner, StagedItemOwnerMeta, StagedItemSkipReason, StagedItemSkipReasonMeta, StagedItemStatus, StagedSections } from '../models/index.js';
+export type { StagedItem, StagedItemEdits, StagedItemElevated, StagedItemOwner, StagedItemOwnerMeta, StagedItemSkipReason, StagedItemSkipReasonMeta, StagedItemStatus, StagedSections, };
 /**
  * Generate a staged item ID.
  *
@@ -28,6 +28,19 @@ export declare function parseStagedSections(body: string): StagedSections;
  * Returns an empty object if the file has no frontmatter or the field is absent.
  */
 export declare function parseStagedItemStatus(content: string): StagedItemStatus;
+/**
+ * Parse the `staged_item_elevated` frontmatter field (W4 / chef-holistic-reconcile
+ * B-2). Map of item id → `true` for items the chef confidently keeps. Only
+ * truthy entries are returned; any non-`true` value (including `false`, strings,
+ * numbers) drops silently — presence-with-`true` is the only valid signal.
+ *
+ * Backward compat: returns `{}` for meeting files with no `staged_item_elevated`
+ * field (every pre-W4 meeting has none).
+ *
+ * The renderer reads this → `[x]` pre-fill (B-1). The commit filter
+ * (`commitApprovedItems`) NEVER reads it — elevation is not commit-readiness.
+ */
+export declare function parseStagedItemElevated(content: string): StagedItemElevated;
 /**
  * Parse the `staged_item_edits` frontmatter field from raw markdown content.
  * Returns a map of item IDs to edited text strings.
@@ -88,6 +101,21 @@ export type WriteItemStatusOptions = {
  * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
  */
 export declare function writeItemStatusToFile(storage: StorageAdapter, filePath: string, itemId: string, options: WriteItemStatusOptions): Promise<void>;
+/**
+ * Set `staged_item_elevated[itemId] = true` in a meeting file's frontmatter
+ * (W4 / chef-holistic-reconcile B-2). The chef calls this for confident keeps
+ * during the winddown reconcile pass.
+ *
+ * CRITICALLY does NOT touch `staged_item_status` — elevation is a render-only
+ * pre-check signal, never commit-readiness. The item stays `'pending'` (or
+ * unstatused) on disk; only the winddown apply checkbox-diff promotes a
+ * left-checked item to `'approved'` (just before commit). This is what keeps a
+ * stray `arete meeting approve` from silently committing an un-applied
+ * elevation.
+ *
+ * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
+ */
+export declare function writeItemElevatedToFile(storage: StorageAdapter, filePath: string, itemId: string): Promise<void>;
 /**
  * Metadata extracted from meeting frontmatter for memory file entries.
  */
