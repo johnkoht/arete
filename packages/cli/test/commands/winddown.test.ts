@@ -222,4 +222,38 @@ describe('arete winddown apply', () => {
     assert.match(stdout, /Warnings/);
     assert.match(stdout, /ai_999@anthony/);
   });
+
+  it('AC-B3 anti-hand-author: zero-anchor edited doc vs anchored baseline → exit≠0, no mutation', () => {
+    // Hand-author a doc with NO hidden anchors (anchors stripped). The baseline
+    // (renderedDoc) has ≥1 anchor → the B-3 guard must refuse.
+    const handAuthored = [
+      `# Daily Winddown — ${DATE} (Tue)   ·   review & apply`,
+      '',
+      '## Anthony / John Weekly',
+      '',
+      '### Action items',
+      '- [x] Set up tech spike with Nick + James',
+      '- [x] PRDs get a UX section going forward',
+    ].join('\n');
+    writeDocs(tmpDir, resolveId, handAuthored);
+    const { stdout, stderr, code } = runCliRaw(['winddown', 'apply', DATE, '--yes'], { cwd: tmpDir });
+    assert.notEqual(code, 0, 'must exit non-zero');
+    assert.match(stdout + stderr, /resolves zero anchors|hand-authored|anchors stripped/);
+    // Nothing mutated: meeting still `processed`.
+    const meeting = readFileSync(join(tmpDir, 'resources', 'meetings', 'anthony.md'), 'utf8');
+    assert.match(meeting, /status:\s*processed/);
+  });
+
+  it('AC-B3 both-empty (legitimate empty day) → clean no-op exit 0', () => {
+    // Baseline AND edited both have zero anchors — the guard must NOT fire.
+    const emptyDoc = `# Daily Winddown — ${DATE} (Tue)   ·   review & apply\n\n_Nothing staged today._\n`;
+    const archive = join(tmpDir, 'now', 'archive', 'daily-winddown');
+    mkdirSync(archive, { recursive: true });
+    writeFileSync(join(archive, `winddown-${DATE}.baseline.md`), emptyDoc, 'utf8');
+    writeFileSync(join(archive, `winddown-${DATE}.md`), emptyDoc, 'utf8');
+    const { stdout, code } = runCliRaw(['winddown', 'apply', DATE, '--yes'], { cwd: tmpDir });
+    assert.equal(code, 0, stdout);
+    // No refusal text.
+    assert.doesNotMatch(stdout, /resolves zero anchors/);
+  });
 });
