@@ -1297,8 +1297,9 @@ cross-path hazard is present TODAY, not hypothetical):**
    `## Stage for approval` block, you strip the hidden anchors; apply
    then refuses with a hard error ("edited doc resolves zero anchors but
    the baseline has N" — the CHR-W4 B-3 guard, exit≠0, nothing mutated).
-   To change what's checked, edit the FRONTMATTER and re-render — do not
-   edit the checkbox lines by hand.
+   To change what's checked, use `arete winddown elevate <meeting> <id...>`
+   (or `--remove`) and re-render — do not edit the checkbox lines or the
+   frontmatter by hand.
 2. **In checklist mode, `arete winddown apply` is the SOLE commit path.
    Do NOT call `arete meeting approve`.** Apply is the only promoter:
    for each item the user leaves `[x]` it writes `status: 'approved'`
