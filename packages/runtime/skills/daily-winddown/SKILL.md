@@ -886,7 +886,7 @@ SKIP / PROPOSE / UNSKIP / CONFIRM / ABSTAIN / APPLY-SKIP. Gitignored;
 local-only soak observability.
 
 **Apply path interaction (AC3 / F5)**: `commitApprovedItems` filter at
-`staged-items.ts:487` accepts only `status === 'approved'`. Skipped
+`staged-items.ts:711` accepts only `status === 'approved'`. Skipped
 items drop. Cleanup at the same file (Step 4a, v3) filters sibling
 fields by `approvedIds` — pending + skipped + chef-proposed entries
 SURVIVE for next round if not committed. The body emits a `## Skipped
@@ -1641,17 +1641,27 @@ below.}
 
 After user approval (and only after):
 
+**PROSE MODE only (CHR-W4 B-5):** commit approved staged items per meeting
+via `arete meeting approve`.
+**CHECKLIST MODE:** skip this `meeting approve` loop entirely — `winddown
+apply` already committed via the checkbox-diff (it is the SOLE commit path;
+in checklist mode the chef wrote `staged_item_elevated`, not
+`status:approved`, so a stray `meeting approve` would commit NOTHING).
+Go directly to the people-memory / week.md / index steps below.
+
 ```bash
-# Commit approved staged items per meeting
+# Commit approved staged items per meeting (PROSE MODE only)
 for meeting in <approved-meetings>; do
   arete meeting approve <meeting-slug>
 done
+```
 
+```bash
 # Run approved MCP / CLI actions per user response
 # (slack.send_dm, calendar.create_event, arete.commitments_resolve, etc.)
 # (draft) actions: confirm acknowledgment but do not execute
 
-# Refresh stakeholder memory for processed meetings
+# Refresh stakeholder memory for processed meetings  (BOTH modes)
 arete people memory refresh --days 1
 
 # Update week.md (Tasks + Daily Progress)
