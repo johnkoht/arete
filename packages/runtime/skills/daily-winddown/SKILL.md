@@ -612,6 +612,7 @@ today — skipped from re-proposal").
 
 #### Rule 3 — Action moot, event passed (cheapest; runs first)
 
+**Rule 3a — prep action, named event passed.**
 For each prep action ("prepare X for meeting Y", "review X before
 call Z", "find suitable staging claim for live walkthrough"): if the
 named meeting/event has already passed (event timestamp < now), mark
@@ -626,6 +627,57 @@ as **moot** and propose collapse.
 This rule catches spec anchor `ai_003` ("Find a suitable staging
 claim for live walkthrough" — Runyon walkthrough event already
 passed).
+
+**Rule 3b — scheduling/holding intent fulfilled by a same-day
+meeting (finding #21).**
+An action item whose intent is to **schedule, hold, set up, or attend
+a meeting / call / session / sync / working session** with named
+people is **moot/fulfilled** when a meeting in **TODAY's own extracted
+set** already satisfies it. Mark it skipped — do NOT stage it (even as
+a blocker). This closes the gap where Rule 3a only checks the calendar
+pull, never "a LATER meeting today already fulfilled this earlier
+scheduling/holding intent."
+
+Fire ONLY when ALL THREE hold against one today meeting (the meeting
+the intent describes):
+1. **Named attendees ⊇ the intent's named people** — the meeting's
+   attendees include every person the action named (e.g. intent names
+   "Jamie and Anthony" → the today meeting's attendees include Jamie
+   AND Anthony, plus you).
+2. **Topic / title aligns** — the action's subject overlaps the
+   meeting's title/topic (e.g. "finalize the revised status-letter
+   spec" ↔ `status-letter-spec-sync`). Word overlap on the core
+   subject, not just a generic verb.
+3. **It already happened today** — the meeting's frontmatter `date:`
+   (full ISO datetime, e.g. `2026-06-18T15:00:00-05:00`) is **earlier
+   than now**. Use that frontmatter `date:` field for the
+   already-happened check; it is present and reliable.
+
+Mark it skipped with a reason that cites the fulfilling meeting:
+`— skip: fulfilled by [[<today-meeting-slug>]] (held <time>)`.
+
+- **Evidence**: TODAY's extracted meeting set (the meetings being
+  processed this run) — NOT the calendar pull. Match attendees +
+  title from each today meeting's frontmatter.
+- **CONSERVATIVE — do not over-fire.** Fire only on a CLEAR match
+  (named attendees ⊇ + topic overlap + meeting already occurred today).
+  Anything ambiguous (partial attendee match, vague topic overlap, or
+  you can't confirm a today meeting actually held it) → route to
+  `## Uncertain — your call` with the candidate meeting noted. Do NOT
+  auto-skip on a guess.
+- **NEVER moot a future-dated intent.** "Schedule a call NEXT WEEK
+  with X" / "set up a sync tomorrow" describes a meeting that has NOT
+  happened — keep/stage it; it is out of scope for Rule 3b. The intent
+  must point at a meeting in TODAY's extracted set that already
+  occurred, not a future one to be created.
+
+This rule catches `ai_003@john-jamie-status-letter` ("schedule and
+hold a working session THIS AFTERNOON with Jamie and Anthony to
+finalize the revised spec") → moot, fulfilled by the afternoon
+`status-letter-spec-sync` meeting (attendees Jamie + Anthony + you,
+`date:` ~15:00 < now). It must NOT fire on
+`ai_003@status-letter-spec-sync` ("schedule a call with James and
+Greg next week") — that meeting does not exist yet.
 
 #### Rule 4 — Intent → already-tracked open commitment
 
