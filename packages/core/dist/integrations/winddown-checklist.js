@@ -194,9 +194,6 @@ export function sortByTier(items, meta) {
     })
         .map((x) => x.item);
 }
-// ---------------------------------------------------------------------------
-// Line rendering
-// ---------------------------------------------------------------------------
 /**
  * Render a single per-meeting item line (checkbox + markers + reason + anchor).
  *
@@ -204,16 +201,35 @@ export function sortByTier(items, meta) {
  * learnings have no direction). `forceUnchecked` renders `[ ]` regardless of
  * the agent's recommendation — used for the "Others' actions (FYI)" group,
  * which is visibility-only and must never read as John's pre-filled to-do (D7).
+ *
+ * `theme` (theme-render W3): optional MIDDLE-of-line decoration. It changes only
+ * the visible text body (source tag + strikethrough + arc note); the checkbox
+ * and the trailing anchor are produced by the identical code path as checklist
+ * mode, guaranteeing AC6 byte-identity. EXPORTED so the theme renderer reuses
+ * THIS function rather than re-implementing line emission.
  */
-function renderItemLine(item, slug, meta, opts = {}) {
+export function renderItemLine(item, slug, meta, opts = {}) {
     const checked = opts.forceUnchecked ? false : prefillChecked(meta);
     const box = checked ? '[x]' : '[ ]';
     const marker = tierMarker(meta?.tier);
     let text = item.text;
+    // Theme superseded: strike the text body through (D6). The anchor + checkbox
+    // are unaffected (still emitted below), preserving AC6 byte-identity.
+    if (opts.theme?.superseded) {
+        text = `~~${text}~~`;
+    }
+    // Source-context tag (theme mode, e.g. `*(15:00 spec-sync)*`) — purely visible
+    // text, sits before the owner/link/anchor tail.
+    if (opts.theme?.sourceTag && opts.theme.sourceTag.trim() !== '') {
+        text = `${text} ${opts.theme.sourceTag.trim()}`;
+    }
     // Skip reason inline (only on unchecked lines — the agent-recommended skip).
     // FYI (none) items are force-unchecked for visibility, NOT skipped, so we
     // don't decorate them with a skip reason. Issue C: a dedup/already-captured
     // skip renders `— skip: already captured as [[<match>]]` (verifiable link).
+    // Theme mode appends the SAME skipSuffix — for a superseded item it surfaces
+    // the verbatim `⤴`-style arc reason (skipKind discriminator), for a moot item
+    // the plain `— skip: …`, so the arc is visible inline (D6) with no new seam.
     if (!checked && !opts.forceUnchecked) {
         text = `${text}${skipSuffix(meta)}`;
     }

@@ -222,6 +222,54 @@ export declare function linkSuffix(links: ChecklistItemMeta['links']): string;
  * Items with no tier sort as 'normal'.
  */
 export declare function sortByTier(items: StagedItem[], meta: Record<string, ChecklistItemMeta>): StagedItem[];
+/**
+ * Optional theme-render decoration for a per-item line (theme-render W3, D6).
+ *
+ * THE BYTE-IDENTITY CONTRACT (plan AC6): theme mode renders each item through
+ * the SAME `renderItemLine` as checklist mode, so the checkbox (`- [ ]`/`- [x]`),
+ * tier marker, owner tag, link suffix, and the trailing
+ * `<!-- <id>@<slug> -->` ANCHOR are emitted by one code path and are therefore
+ * byte-for-byte identical between modes. This struct only adds MIDDLE-of-line
+ * decoration (a source-context tag like `*(09:30 Jamie 1:1)*` and, for a
+ * superseded item, strikethrough + the arc note) — it NEVER touches the checkbox
+ * or the anchor. When absent (checklist mode), the line is bit-identical to the
+ * pre-theme renderer.
+ */
+export interface ThemeLineDecoration {
+    /**
+     * Short human source tag appended after the text, e.g. `*(15:00 Anthony
+     * spec-sync)*` (MOCK). Rendered verbatim. Omitted when blank.
+     */
+    sourceTag?: string;
+    /**
+     * SUPERSEDED treatment (plan D6/AC1): strike the text through (`~~…~~`) and,
+     * when the item carries a `skipKind: 'superseded'` skip-reason, replace the
+     * terse `skipSuffix` with the richer inline arc note (`⤴ superseded …`). The
+     * checkbox stays `[ ]` (the chef never elevates a superseded item) and the
+     * anchor is RETAINED (re-elevatable rescue — AC5). Set by the theme renderer
+     * only for items whose meta marks them superseded.
+     */
+    superseded?: boolean;
+}
+/**
+ * Render a single per-meeting item line (checkbox + markers + reason + anchor).
+ *
+ * `isAction` adds the owner/direction tag (action items only — decisions and
+ * learnings have no direction). `forceUnchecked` renders `[ ]` regardless of
+ * the agent's recommendation — used for the "Others' actions (FYI)" group,
+ * which is visibility-only and must never read as John's pre-filled to-do (D7).
+ *
+ * `theme` (theme-render W3): optional MIDDLE-of-line decoration. It changes only
+ * the visible text body (source tag + strikethrough + arc note); the checkbox
+ * and the trailing anchor are produced by the identical code path as checklist
+ * mode, guaranteeing AC6 byte-identity. EXPORTED so the theme renderer reuses
+ * THIS function rather than re-implementing line emission.
+ */
+export declare function renderItemLine(item: StagedItem, slug: string, meta: ChecklistItemMeta | undefined, opts?: {
+    isAction?: boolean;
+    forceUnchecked?: boolean;
+    theme?: ThemeLineDecoration;
+}): string;
 /** Render one meeting's sections under its `## <title>` header. */
 export declare function renderMeeting(meeting: ChecklistMeeting): string;
 /**

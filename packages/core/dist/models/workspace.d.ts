@@ -65,7 +65,7 @@ export type ReconcileMode = 'inline' | 'day-level';
  *   apply` round-trip.
  * Absent or 'prose' ⇒ the checklist renderer is never invoked.
  */
-export type WinddownRenderMode = 'prose' | 'checklist';
+export type WinddownRenderMode = 'prose' | 'checklist' | 'theme';
 /** Shape of the resolved config object */
 export type AreteConfig = {
     schema: number;

@@ -14,7 +14,7 @@
  * R7 guard).
  */
 import { join, basename, isAbsolute } from 'node:path';
-import { createServices, loadConfig, buildApplyPlan, parseWinddownDoc, renderApplySummary, executeWinddownApply, writeItemStatusToFile, writeItemElevatedToFile, removeItemElevatedFromFile, parseStagedSections, commitApprovedItems, parseStagedItemStatus, buildChecklistMeeting, renderStagedBlock, renderWinddownDoc, } from '@arete/core';
+import { createServices, loadConfig, buildApplyPlan, parseWinddownDoc, renderApplySummary, executeWinddownApply, writeItemStatusToFile, writeItemElevatedToFile, removeItemElevatedFromFile, parseStagedSections, commitApprovedItems, parseStagedItemStatus, buildChecklistMeeting, renderStagedBlock, renderWinddownDoc, buildThemeView, renderThemeView, pickDominantTheme, } from '@arete/core';
 import { error, info, success } from '../formatters.js';
 function archiveDir(now) {
     return join(now, 'archive', 'daily-winddown');
@@ -53,6 +53,83 @@ function statusFromContent(content) {
         return null;
     const s = fm[1].match(/^status:\s*(\S+)/m);
     return s ? s[1] : null;
+}
+/**
+ * `date:` value from a meeting file's frontmatter, or undefined (theme-render
+ * W3). Carried into the clusterer as `timeIso` so it orders the theme cluster
+ * oldest→newest; full ISO datetime on the live MCP path, date-only on some
+ * importers (the clusterer falls back to staging order when unparseable).
+ */
+function dateFromContent(content) {
+    const fm = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fm)
+        return undefined;
+    const d = fm[1].match(/^date:\s*(.+)$/m);
+    if (!d)
+        return undefined;
+    const v = d[1].trim().replace(/^["']|["']$/g, '');
+    return v === '' ? undefined : v;
+}
+/**
+ * `topics:` slugs from a meeting file's frontmatter (theme-render W3). Handles
+ * both block list (`topics:\n  - a\n  - b`) and inline flow (`topics: [a, b]`).
+ * Returns [] when absent. The dominant entry is resolved by `pickDominantTheme`
+ * against the active project/area slugs.
+ */
+function topicsFromContent(content) {
+    const fm = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fm)
+        return [];
+    const body = fm[1];
+    // Inline flow form: `topics: [a, b, c]`
+    const inline = body.match(/^topics:\s*\[([^\]]*)\]\s*$/m);
+    if (inline) {
+        return inline[1]
+            .split(',')
+            .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+            .filter((s) => s !== '');
+    }
+    // Block list form: `topics:` followed by `  - slug` lines.
+    const blockHeader = body.match(/^topics:\s*$/m);
+    if (!blockHeader)
+        return [];
+    const lines = body.split('\n');
+    const startIdx = lines.findIndex((l) => /^topics:\s*$/.test(l));
+    const out = [];
+    for (let i = startIdx + 1; i < lines.length; i++) {
+        const m = lines[i].match(/^\s*-\s*(.+)$/);
+        if (!m)
+            break; // first non-list line ends the block
+        out.push(m[1].trim().replace(/^["']|["']$/g, ''));
+    }
+    return out;
+}
+/**
+ * List active project slugs (`projects/active/<slug>/`) and area slugs
+ * (`areas/<slug>.md`, excluding templates/index) — the spine `pickDominantTheme`
+ * resolves a meeting's coarse theme against (plan D2: project-primary,
+ * area-fallback). Failures degrade to empty (every meeting → its first topic or
+ * Uncategorized), never crash the render.
+ */
+async function listActiveSpine(storage, root) {
+    let projects = [];
+    let areas = [];
+    try {
+        projects = await storage.listSubdirectories(join(root, 'projects', 'active'));
+    }
+    catch {
+        projects = [];
+    }
+    try {
+        const areaFiles = await storage.list(join(root, 'areas'), { extensions: ['.md'] });
+        areas = areaFiles
+            .map((p) => basename(p, '.md'))
+            .filter((b) => b !== 'index' && b !== '_template' && b !== 'memory');
+    }
+    catch {
+        areas = [];
+    }
+    return { projects, areas };
 }
 export function registerWinddownCommand(program) {
     const winddownCmd = program
@@ -112,7 +189,16 @@ export function registerWinddownCommand(program) {
                 return b.startsWith(`${date}-`) && b !== 'index.md';
             })
                 .sort((a, b) => a.localeCompare(b));
+            // Determine render mode (theme-render W3). Default stays the existing
+            // staged-block render; only `winddown_render: theme` switches to the
+            // theme-grouped doc — checklist/prose are byte-for-byte unchanged (AC7).
+            const config = await loadConfig(services.storage, root);
+            const themeMode = config.winddown_render === 'theme';
+            const spine = themeMode
+                ? await listActiveSpine(services.storage, root)
+                : { projects: [], areas: [] };
             const meetings = [];
+            const themeInputs = [];
             for (const filePath of dayFiles) {
                 const content = await services.storage.read(filePath);
                 if (content === null)
@@ -128,8 +214,13 @@ export function registerWinddownCommand(program) {
                     cm.sections.decisions.length +
                     cm.sections.learnings.length >
                     0;
-                if (hasItems)
-                    meetings.push(cm);
+                if (!hasItems)
+                    continue;
+                meetings.push(cm);
+                if (themeMode) {
+                    const theme = pickDominantTheme(topicsFromContent(content), spine.projects, spine.areas);
+                    themeInputs.push({ meeting: cm, theme, timeIso: dateFromContent(content) });
+                }
             }
             view = {
                 date,
@@ -138,7 +229,16 @@ export function registerWinddownCommand(program) {
                 choices: [],
                 actions: [],
             };
-            markdown = renderStagedBlock(meetings);
+            if (themeMode) {
+                const themeView = buildThemeView(themeInputs, {
+                    date,
+                    weekday: weekdayLabel(date),
+                });
+                markdown = renderThemeView(themeView);
+            }
+            else {
+                markdown = renderStagedBlock(meetings);
+            }
         }
         if (opts.write) {
             const blPath = baselinePath(paths.now, date);

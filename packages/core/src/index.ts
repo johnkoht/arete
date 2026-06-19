@@ -127,6 +127,7 @@ export {
   renderMeeting,
   renderChoices,
   renderActions,
+  renderItemLine,
   uncertainItemToChoice,
   itemAnchor,
   choiceAnchor,
@@ -147,6 +148,7 @@ export type {
   ChecklistChoice,
   ChecklistAction,
   ChecklistView,
+  ThemeLineDecoration,
 } from './integrations/winddown-checklist.js';
 export {
   clusterMeetingsByTheme,
@@ -159,6 +161,16 @@ export type {
   ThemeCluster,
   ThemeClusterResult,
 } from './integrations/winddown-theme-cluster.js';
+export {
+  renderThemeView,
+  buildThemeView,
+  pickDominantTheme,
+} from './integrations/winddown-theme-render.js';
+export type {
+  ThemeView,
+  ThemeRenderGroup,
+  BuildThemeViewOptions,
+} from './integrations/winddown-theme-render.js';
 export {
   parseWinddownDoc,
   buildApplyPlan,

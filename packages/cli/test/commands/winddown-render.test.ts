@@ -14,7 +14,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, appendFileSync } from 'node:fs';
 import { runCliRaw, createTmpDir, cleanupTmpDir } from '../helpers.js';
 
 const DATE = '2026-06-15';
@@ -147,5 +147,123 @@ describe('arete winddown render', () => {
     const parsed = JSON.parse(stdout);
     assert.equal(parsed.view.meetings.length, 0);
     assert.equal(parsed.markdown, '');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Theme-render W3 — flag-gated theme grouping
+// ---------------------------------------------------------------------------
+
+const THEME_DATE = '2026-06-18';
+
+/** A meeting whose dominant `topics:` entry is an active project slug. */
+const STATUS_LETTER = `---
+title: Anthony spec-sync
+date: ${THEME_DATE}T15:00:00.000Z
+status: processed
+topics:
+  - status-letter-automation
+staged_item_elevated:
+  de_004: true
+  ai_005: true
+---
+
+## Staged Action Items
+- ai_005: Draft the join-table migration
+
+## Staged Decisions
+- de_004: Status letters use a join table for recipients
+`;
+
+/** A meeting with NO matching topic → routes to Uncategorized. */
+const ORPHAN = `---
+title: Random tangent
+date: ${THEME_DATE}T16:00:00.000Z
+status: processed
+staged_item_elevated:
+  ai_009: true
+---
+
+## Staged Action Items
+- ai_009: Explore a shared comms calendar
+`;
+
+function setThemeMode(dir: string): void {
+  // Flip the workspace flag + materialize the active project the topic resolves to.
+  appendFileSync(join(dir, 'arete.yaml'), '\nwinddown_render: theme\n', 'utf8');
+  mkdirSync(join(dir, 'projects', 'active', 'status-letter-automation'), { recursive: true });
+}
+
+describe('arete winddown render — theme mode (W3)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-winddown-theme');
+    runCliRaw(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor'], { cwd: process.cwd() });
+  });
+
+  afterEach(() => cleanupTmpDir(tmpDir));
+
+  it('AC7 — checklist/default mode is byte-for-byte the staged block (theme NOT triggered)', () => {
+    writeMeeting(tmpDir, `${THEME_DATE}-status`, STATUS_LETTER);
+    // No flag flip → default. Render must be the per-meeting staged block, NOT theme.
+    const { stdout, code } = runCliRaw(['winddown', 'render', THEME_DATE], { cwd: tmpDir });
+    assert.equal(code, 0, stdout);
+    assert.match(stdout, /## Anthony spec-sync/); // meeting heading (checklist grouping)
+    assert.doesNotMatch(stdout, /theme view/);
+    assert.doesNotMatch(stdout, /## ⚠ Uncategorized/);
+    assert.doesNotMatch(stdout, /## 📋|## status-letter-automation/);
+  });
+
+  it('theme mode groups under the project heading, NOT the meeting title', () => {
+    writeMeeting(tmpDir, `${THEME_DATE}-status`, STATUS_LETTER);
+    setThemeMode(tmpDir);
+    const { stdout, code } = runCliRaw(['winddown', 'render', THEME_DATE], { cwd: tmpDir });
+    assert.equal(code, 0, stdout);
+    assert.match(stdout, /theme view/);
+    assert.match(stdout, /## .*status-letter-automation/);
+    assert.doesNotMatch(stdout, /## Anthony spec-sync/);
+    // anchors byte-identical → recoverable + apply-compatible
+    assert.match(stdout, /<!-- de_004@2026-06-18-status -->/);
+    assert.match(stdout, /<!-- ai_005@2026-06-18-status -->/);
+    // always-present Uncategorized affordance
+    assert.match(stdout, /## ⚠ Uncategorized/);
+  });
+
+  it('theme mode routes an unassigned meeting into Uncategorized (count-conserved)', () => {
+    writeMeeting(tmpDir, `${THEME_DATE}-status`, STATUS_LETTER);
+    writeMeeting(tmpDir, `${THEME_DATE}-orphan`, ORPHAN);
+    setThemeMode(tmpDir);
+    const { stdout, code } = runCliRaw(['winddown', 'render', THEME_DATE], { cwd: tmpDir });
+    assert.equal(code, 0, stdout);
+    // all three items present exactly once
+    const anchors = [...stdout.matchAll(/<!--\s*((?:ai|de|le)_\d+)@([a-z0-9][a-z0-9._-]*)\s*-->/g)].map(
+      (m) => `${m[1]}@${m[2]}`,
+    );
+    assert.deepEqual(
+      [...anchors].sort(),
+      ['ai_005@2026-06-18-status', 'ai_009@2026-06-18-orphan', 'de_004@2026-06-18-status'].sort(),
+    );
+    // orphan lands under Uncategorized
+    const uncatIdx = stdout.indexOf('## ⚠ Uncategorized');
+    assert.ok(stdout.indexOf('<!-- ai_009@2026-06-18-orphan -->') > uncatIdx);
+  });
+
+  it('theme doc round-trips through apply with no anchor warnings (AC6)', () => {
+    writeMeeting(tmpDir, `${THEME_DATE}-status`, STATUS_LETTER);
+    setThemeMode(tmpDir);
+    const { stdout: doc, code } = runCliRaw(['winddown', 'render', THEME_DATE], { cwd: tmpDir });
+    assert.equal(code, 0, doc);
+
+    const archive = join(tmpDir, 'now', 'archive', 'daily-winddown');
+    mkdirSync(archive, { recursive: true });
+    // baseline == edited == the theme doc (D4: same grouping both sides)
+    writeFileSync(join(archive, `winddown-${THEME_DATE}.baseline.md`), doc, 'utf8');
+    writeFileSync(join(archive, `winddown-${THEME_DATE}.md`), doc, 'utf8');
+    const applied = runCliRaw(['winddown', 'apply', THEME_DATE, '--dry-run'], { cwd: tmpDir });
+    assert.equal(applied.code, 0, applied.stdout);
+    assert.match(applied.stdout, /Apply winddown/);
+    assert.doesNotMatch(applied.stdout, /malformed line/);
+    assert.doesNotMatch(applied.stdout, /unknown anchor/);
   });
 });

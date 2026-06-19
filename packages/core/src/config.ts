@@ -126,7 +126,11 @@ function normalizeConfig(config: AreteConfig): AreteConfig {
   if (config.reconcile_mode !== 'inline' && config.reconcile_mode !== 'day-level') {
     config.reconcile_mode = 'inline';
   }
-  if (config.winddown_render !== 'prose' && config.winddown_render !== 'checklist') {
+  if (
+    config.winddown_render !== 'prose' &&
+    config.winddown_render !== 'checklist' &&
+    config.winddown_render !== 'theme'
+  ) {
     config.winddown_render = 'prose';
   }
 
