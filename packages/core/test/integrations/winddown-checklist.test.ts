@@ -22,6 +22,7 @@ import {
   renderWinddownDoc,
   renderChoices,
   renderActions,
+  renderItemLine,
   buildChecklistMeeting,
   ownerTag,
   skipSuffix,
@@ -632,5 +633,43 @@ describe('full doc render', () => {
     const out = renderWinddownDoc(view);
     assert.doesNotMatch(out, /Your call first/);
     assert.doesNotMatch(out, /Proposed actions/);
+  });
+});
+
+// FIX 1 — structural enforcement of the #22 invariant: a superseded item must
+// render `[ ]`, NEVER `[x]`, even when its meta would prefill-check it
+// (elevated:true) — WITHOUT losing the arc-reason skip suffix. The gate lives on
+// `theme.superseded`, SEPARATE from `forceUnchecked`, so the arc survives.
+describe('FIX 1 — superseded item is structurally unchecked, arc suffix preserved (#22)', () => {
+  it('an elevated+superseded item renders [ ] (NOT [x]) and keeps its arc reason + link', () => {
+    const out = renderItemLine(
+      de('de_001', 'Send a single recipient model'),
+      'anthony',
+      {
+        status: 'pending',
+        elevated: true, // would prefill-check in any non-superseded path
+        skipKind: 'superseded',
+        skipReason: 'superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple',
+        skipMatchedRef: 'de_004@2026-06-18-anthony-spec-sync',
+      },
+      { theme: { superseded: true } },
+    );
+    // Structural guard: never [x], even though elevated:true.
+    assert.ok(out.startsWith('- [ ] '), `expected unchecked box, got: ${out}`);
+    assert.ok(!out.includes('[x]'), 'superseded must never render [x]');
+    // Arc reason survives (skip suffix NOT suppressed — theme.superseded does not
+    // set forceUnchecked).
+    assert.ok(
+      out.includes('— superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]'),
+      `arc reason missing from: ${out}`,
+    );
+    // Body struck through; anchor retained (re-elevatable rescue).
+    assert.ok(out.includes('~~Send a single recipient model~~'), 'body should be struck through');
+    assert.ok(out.includes('<!-- de_001@anthony -->'), 'anchor must be retained');
+    // Full rendered line, for the lead:
+    assert.equal(
+      out,
+      '- [ ] ~~Send a single recipient model~~ — superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]  <!-- de_001@anthony -->',
+    );
   });
 });

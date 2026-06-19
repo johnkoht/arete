@@ -227,7 +227,13 @@ function renderThemeGroup(group: ThemeRenderGroup): string {
       for (const item of sortByTier(all, m.meta)) {
         const im = m.meta[item.id];
         const isAction = m.sections.actionItems.some((a) => a.id === item.id);
-        lines.push(renderItemLine(item, m.slug, im, { isAction, theme: lineDecoration(m, im) }));
+        // Parity (FIX 2): a `direction: none` FYI action must be force-unchecked
+        // here too — same as the normal theme path (renderThemeSection) and
+        // checklist mode — so it never reads as John's pre-filled to-do (D7).
+        const forceUnchecked = isAction && isOthersAction(im);
+        lines.push(
+          renderItemLine(item, m.slug, im, { isAction, forceUnchecked, theme: lineDecoration(m, im) }),
+        );
       }
     }
     if (lines.length > 0) blocks.push(lines.join('\n'));
@@ -422,10 +428,30 @@ export function pickDominantTheme(
   if (!Array.isArray(topics)) return undefined;
   const clean = topics.map((t) => (typeof t === 'string' ? t.trim() : '')).filter((t) => t !== '');
   if (clean.length === 0) return undefined;
-  const projectSet = new Set(activeProjects.map((s) => s.trim()).filter((s) => s !== ''));
-  const areaSet = new Set(activeAreas.map((s) => s.trim()).filter((s) => s !== ''));
+  // FIX 3: normalize slug FORMS on both sides before matching. `listActiveSpine`
+  // returns bare basenames (`engineering-management`), but a `topics:` entry may
+  // be written path-qualified (`areas/engineering-management`,
+  // `projects/active/foo`, or `projects/foo`). Compare bare basenames so a
+  // path-qualified topic still matches its project/area instead of silently
+  // falling through to branch 3 and losing the classification.
+  const projectSet = new Set(activeProjects.map((s) => bareSlug(s)).filter((s) => s !== ''));
+  const areaSet = new Set(activeAreas.map((s) => bareSlug(s)).filter((s) => s !== ''));
 
-  for (const t of clean) if (projectSet.has(t)) return t; // 1. project-primary
-  for (const t of clean) if (areaSet.has(t)) return t; //    2. area-fallback
-  return clean[0]; //                                        3. first topic
+  for (const t of clean) if (projectSet.has(bareSlug(t))) return bareSlug(t); // 1. project-primary
+  for (const t of clean) if (areaSet.has(bareSlug(t))) return bareSlug(t); //    2. area-fallback
+  return clean[0]; //                                                            3. first topic
+}
+
+/**
+ * Strip a leading `areas/`, `projects/active/`, or `projects/` path prefix and
+ * trim, yielding a bare slug for comparison (FIX 3). Order matters:
+ * `projects/active/` must be tried before the shorter `projects/` so the more
+ * specific prefix wins.
+ */
+function bareSlug(s: string): string {
+  let v = s.trim();
+  if (v.startsWith('areas/')) v = v.slice('areas/'.length);
+  else if (v.startsWith('projects/active/')) v = v.slice('projects/active/'.length);
+  else if (v.startsWith('projects/')) v = v.slice('projects/'.length);
+  return v.trim();
 }

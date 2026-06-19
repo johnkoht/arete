@@ -389,7 +389,12 @@ export function renderItemLine(
   meta: ChecklistItemMeta | undefined,
   opts: { isAction?: boolean; forceUnchecked?: boolean; theme?: ThemeLineDecoration } = {},
 ): string {
-  const checked = opts.forceUnchecked ? false : prefillChecked(meta);
+  // #22 invariant (structural): a superseded item NEVER renders `[x]`, regardless
+  // of meta (even elevated:true). Gated via a SEPARATE condition from
+  // `forceUnchecked` so the arc-reason skip suffix below (keyed on
+  // `!forceUnchecked`) is still appended — `theme.superseded` does not set
+  // `forceUnchecked`, so `!checked && !forceUnchecked` holds and the arc survives.
+  const checked = (opts.forceUnchecked || opts.theme?.superseded) ? false : prefillChecked(meta);
   const box = checked ? '[x]' : '[ ]';
   const marker = tierMarker(meta?.tier);
   let text = item.text;

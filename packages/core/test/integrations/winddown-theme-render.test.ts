@@ -164,6 +164,27 @@ describe('theme-render W3 — renderThemeView grouping', () => {
     assert.ok(out.indexOf('<!-- ai_009@2026-06-18-orphan -->') > uncatIdx);
   });
 
+  it('FIX2 — an Uncategorized FYI (direction:none) action is force-unchecked even if elevated', () => {
+    // Parity with the normal theme path + checklist mode: a third-party action
+    // must never read as John's pre-filled to-do, even in the Uncategorized
+    // bucket and even if (mis)elevated (D7 inertness).
+    const meeting = mtg({
+      slug: '2026-06-18-orphan',
+      sections: {
+        actionItems: [ai('ai_009', 'Anthony to confirm retention window')],
+        decisions: [],
+        learnings: [],
+      },
+      meta: { ai_009: { direction: 'none', elevated: true } },
+    });
+    const view = buildThemeView([{ meeting, theme: '' }], { date: '2026-06-18' });
+    const out = renderThemeView(view);
+    // routed to Uncategorized, rendered [ ] despite elevated:true
+    assert.match(out, /## ⚠ Uncategorized/);
+    assert.match(out, /- \[ \] .*Anthony to confirm retention window/);
+    assert.doesNotMatch(out, /- \[x\] .*Anthony to confirm retention window/);
+  });
+
   it('D6 — superseded item renders [ ], struck-through, with arc suffix + anchor; never [x]', () => {
     const slug = '2026-06-18-jamie';
     const meeting = mtg({
@@ -297,6 +318,36 @@ describe('theme-render W3 — pickDominantTheme', () => {
   it('project beats area even when the area appears earlier in topics', () => {
     assert.equal(
       pickDominantTheme(['engineering-management', 'genesys-migration'], projects, areas),
+      'genesys-migration',
+    );
+  });
+
+  it('FIX3 — a path-qualified `areas/<slug>` topic matches the bare area spine slug', () => {
+    // listActiveSpine returns bare basenames (`engineering-management`); a
+    // `topics:` entry may be written path-qualified. Normalize both sides so the
+    // area classification isn't silently lost (would otherwise fall through to
+    // the raw "first topic" branch and misroute AC4 accuracy).
+    assert.equal(
+      pickDominantTheme(['areas/engineering-management'], projects, areas),
+      'engineering-management',
+    );
+  });
+
+  it('FIX3 — a `projects/active/<slug>` topic matches the bare project spine slug', () => {
+    assert.equal(
+      pickDominantTheme(['projects/active/status-letter-automation'], projects, areas),
+      'status-letter-automation',
+    );
+    // bare `projects/` prefix too
+    assert.equal(
+      pickDominantTheme(['projects/genesys-migration'], projects, areas),
+      'genesys-migration',
+    );
+  });
+
+  it('FIX3 — project precedence still holds across path-qualified forms', () => {
+    assert.equal(
+      pickDominantTheme(['areas/engineering-management', 'projects/active/genesys-migration'], projects, areas),
       'genesys-migration',
     );
   });
