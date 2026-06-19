@@ -133,6 +133,44 @@ export declare function writeItemElevatedToFile(storage: StorageAdapter, filePat
  * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
  */
 export declare function removeItemElevatedFromFile(storage: StorageAdapter, filePath: string, itemId: string): Promise<void>;
+export type WriteMeetingTopicsMode = 'set' | 'add' | 'remove';
+export interface WriteMeetingTopicsResult {
+    /** The `topics:` array after the merge (canonical post-write state). */
+    topics: string[];
+    /** True when the on-disk `topics:` value actually changed. */
+    changed: boolean;
+}
+/**
+ * Partial-merge a meeting file's `topics:` frontmatter field (CHR-W4 Piece 2).
+ *
+ * The chef's topic-review step calls this to CORRECT lexically-suggested
+ * topics — add the obviously-right ones (e.g. `status-letter-automation`),
+ * drop the wrong ones — via a deterministic surface instead of hand-editing
+ * frontmatter (the elevate-verb lesson / eng-lead N-2).
+ *
+ * Modes:
+ *  - `'set'`    → replace the whole `topics:` list with `slugs` (deduped,
+ *                 order-preserving).
+ *  - `'add'`    → union the existing list with `slugs` (existing order kept,
+ *                 new slugs appended in input order, deduped).
+ *  - `'remove'` → drop every slug in `slugs` from the existing list.
+ *
+ * Invariants:
+ *  - Read-parse-update-write: every OTHER frontmatter field is preserved
+ *    byte-for-faithful (same serializer the staged-item writers use). In
+ *    particular this NEVER touches `staged_item_status`, `staged_item_elevated`,
+ *    or any sibling staged-item map — topic assignment is orthogonal to
+ *    item commit-readiness (AC: never touches status/elevated).
+ *  - Slugs are trimmed; empty/blank slugs are ignored.
+ *  - When the resulting list is EMPTY, the `topics:` key is dropped entirely
+ *    (preserves the clean "no topics" frontmatter shape rather than leaving
+ *    `topics: []`).
+ *  - Idempotent: a `set`/`add`/`remove` that produces the same list as on
+ *    disk writes nothing and returns `changed: false`.
+ *
+ * Throws when the file does not exist (caller resolves + validates first).
+ */
+export declare function writeMeetingTopicsToFile(storage: StorageAdapter, filePath: string, mode: WriteMeetingTopicsMode, slugs: string[]): Promise<WriteMeetingTopicsResult>;
 /**
  * Metadata extracted from meeting frontmatter for memory file entries.
  */

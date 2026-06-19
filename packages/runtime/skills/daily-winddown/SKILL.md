@@ -547,6 +547,60 @@ intents). Order by timestamp. Each loop carries `{source, source_ref,
 counterparty, timestamp, text, evidence_pointer, kind}` per PATTERNS.md
 § "gather-only composition" → "JSON output shape conventions".
 
+#### Step 2.0 — Topic review (CHR-W4 Piece 2, runs BEFORE nomination)
+
+**The semantic layer the lexical detector can't supply.** The `topics:`
+frontmatter on each meeting from Step 1h was assigned by the lexical
+detector (`detectTopicsLexical`) — title-aware now, but still closed-vocab
+and lexical, so it can over- or under-tag. Before any reconcile/nomination
+runs, the chef reviews each of today's freshly-extracted meetings and
+CORRECTS its topics, so knowledge accrual (decisions/learnings roll-up) and
+the future theme-render land on the right project/area.
+
+For EACH meeting processed in Step 1h:
+
+1. **Read the meeting's current `topics:`** (from the Step 1h extract JSON or
+   the meeting frontmatter) and its content signal — the **title** plus the
+   staged items (action items / decisions / learnings).
+2. **Pull the active-topics list** — the canonical area + project slugs:
+   ```bash
+   arete topic list --active --slugs --json > /tmp/winddown-active-topics.json
+   ```
+   These are the only slugs you may ADD (never invent a new slug here — topic
+   creation is the alias/merge path's job, not topic review).
+3. **Adjudicate** against title + items + active-topics:
+   - **ADD** an obviously-right active slug the detector missed (the
+     `status-letter-automation` case: a meeting titled "Status Letter" whose
+     items are about the status-letter flow but that the lexical pass dropped).
+   - **DROP** a clearly-wrong slug (a generic lexical coincidence that the
+     content does not support).
+   - Leave correct slugs alone. Be CONSERVATIVE — only touch a slug you can
+     justify from the title or a staged item; when unsure, leave it.
+4. **Write via the deterministic verb** (NOT a frontmatter hand-edit — the
+   elevate-verb lesson, eng-lead N-2). The verb partial-merges ONLY the
+   `topics:` field and never touches `staged_item_status` / `staged_item_elevated`
+   / any staged-item bookkeeping:
+   ```bash
+   # add the missed project + drop the wrong one (two thin calls):
+   arete meeting topics <meeting-file> --add status-letter-automation --json
+   arete meeting topics <meeting-file> --remove multi-agent-strategy --json
+   # or replace the whole list at once:
+   arete meeting topics <meeting-file> --set status-letter-automation glance-2-mvp --json
+   ```
+   Exactly one of `--set` / `--add` / `--remove` per call; each emits
+   `{ success, meeting, mode, topics, changed }`.
+5. **NOTE every adjustment in the winddown doc** (transparency, so John can
+   spot-check / override before the theme-render relies on the assignment),
+   e.g. under `## Notes`:
+   ```
+   retagged *Status Letter*: +status-letter-automation, −multi-agent-strategy
+   ```
+   Only log meetings you actually changed (`changed: true`); a no-op review
+   needs no line.
+
+This step is orthogonal to staging/approval — it never approves, elevates, or
+skips an item; it only corrects topic assignment. Then proceed to Step 2a.
+
 #### Step 2a — Systematic candidate nomination (CHR-W4, runs FIRST)
 
 **The reconcile is now ENGINE-GROUNDED, not eyeballed.** Before applying

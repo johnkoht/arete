@@ -106,10 +106,13 @@ export {
   writeItemStatusToFile,
   writeItemElevatedToFile,
   removeItemElevatedFromFile,
+  writeMeetingTopicsToFile,
   commitApprovedItems,
 } from './integrations/staged-items.js';
 export type {
   WriteItemStatusOptions,
+  WriteMeetingTopicsMode,
+  WriteMeetingTopicsResult,
   ApprovedItemRecord,
   ApprovedItemObserver,
   CommitApprovedItemsOptions,

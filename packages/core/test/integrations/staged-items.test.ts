@@ -50,6 +50,7 @@ import {
   writeItemStatusToFile,
   writeItemElevatedToFile,
   removeItemElevatedFromFile,
+  writeMeetingTopicsToFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
@@ -1740,5 +1741,145 @@ t.
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
     const updated = storage.files.get(MEETING_FILE)!;
     assert.deepEqual(parseStagedItemElevated(updated), {}, 'committed item must not keep an orphan elevated:true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// writeMeetingTopicsToFile (CHR-W4 Piece 2 — chef topic-review write surface)
+// ---------------------------------------------------------------------------
+
+describe('writeMeetingTopicsToFile', () => {
+  const FILE = '/workspace/meetings/status-letter.md';
+
+  const meetingWithTopics = (topics: string): string => `---
+title: "John / Jamie — Status Letter"
+date: "2026-06-18"
+status: synced
+attendees:
+  - name: John Koht
+    email: john@example.com
+${topics}staged_item_status:
+  ai_001: pending
+  de_001: approved
+staged_item_elevated:
+  de_001: true
+---
+
+## Staged Action Items
+- ai_001: Draft the status letter
+
+## Transcript
+Body text.
+`;
+
+  let storage: ReturnType<typeof createMockStorage>;
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('set: replaces the whole topics list', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n  - multi-agent-strategy\n'));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'set', [
+      'status-letter-automation',
+    ]);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['status-letter-automation']);
+    const data = parseYaml(storage.files.get(FILE)!.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.deepEqual(data['topics'], ['status-letter-automation']);
+  });
+
+  it('add: unions new slugs onto the existing list (existing order kept)', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'add', [
+      'status-letter-automation',
+      'glance-2-mvp', // already present — must not duplicate
+    ]);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['glance-2-mvp', 'status-letter-automation']);
+  });
+
+  it('remove: drops the named slugs', async () => {
+    storage.files.set(
+      FILE,
+      meetingWithTopics('topics:\n  - glance-2-mvp\n  - multi-agent-strategy\n  - status-letter-automation\n'),
+    );
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'remove', [
+      'multi-agent-strategy',
+    ]);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['glance-2-mvp', 'status-letter-automation']);
+  });
+
+  it('the retag example: +status-letter-automation, -multi-agent-strategy via add+remove', async () => {
+    storage.files.set(
+      FILE,
+      meetingWithTopics('topics:\n  - glance-2-mvp\n  - multi-agent-strategy\n'),
+    );
+    await writeMeetingTopicsToFile(storage, FILE, 'add', ['status-letter-automation']);
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'remove', ['multi-agent-strategy']);
+    assert.deepEqual(res.topics, ['glance-2-mvp', 'status-letter-automation']);
+  });
+
+  it('PRESERVES sibling frontmatter — NEVER touches staged_item_status / staged_item_elevated', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    await writeMeetingTopicsToFile(storage, FILE, 'set', ['status-letter-automation']);
+    const updated = storage.files.get(FILE)!;
+    // Staged-item maps untouched (the orthogonality AC).
+    assert.deepEqual(parseStagedItemStatus(updated), {
+      ai_001: 'pending',
+      de_001: 'approved',
+    });
+    assert.deepEqual(parseStagedItemElevated(updated), { de_001: true });
+    // Other scalar frontmatter preserved.
+    const data = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.equal(data['title'], 'John / Jamie — Status Letter');
+    assert.equal(data['date'], '2026-06-18');
+    assert.equal(data['status'], 'synced');
+    assert.ok(Array.isArray(data['attendees']));
+    // Body preserved.
+    assert.ok(updated.includes('## Transcript'));
+    assert.ok(updated.includes('- ai_001: Draft the status letter'));
+  });
+
+  it('add onto a meeting with NO topics field initializes it', async () => {
+    storage.files.set(FILE, meetingWithTopics(''));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'add', ['status-letter-automation']);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['status-letter-automation']);
+  });
+
+  it('remove that empties the list drops the topics key entirely', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'remove', ['glance-2-mvp']);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, []);
+    const data = parseYaml(storage.files.get(FILE)!.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.ok(!('topics' in data), 'empty topics key should be dropped');
+  });
+
+  it('idempotent: a no-op set returns changed:false and does not rewrite', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    const before = storage.files.get(FILE)!;
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'set', ['glance-2-mvp']);
+    assert.equal(res.changed, false);
+    assert.equal(storage.files.get(FILE)!, before, 'no-op must not rewrite the file');
+  });
+
+  it('trims and dedups input slugs; ignores blanks', async () => {
+    storage.files.set(FILE, meetingWithTopics(''));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'set', [
+      '  status-letter-automation  ',
+      'status-letter-automation',
+      '',
+      '   ',
+    ]);
+    assert.deepEqual(res.topics, ['status-letter-automation']);
+  });
+
+  it('throws when the meeting file does not exist', async () => {
+    await assert.rejects(
+      () => writeMeetingTopicsToFile(storage, '/workspace/meetings/missing.md', 'add', ['x']),
+      /Meeting file not found/,
+    );
   });
 });

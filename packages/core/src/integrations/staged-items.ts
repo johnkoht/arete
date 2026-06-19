@@ -518,6 +518,126 @@ export async function removeItemElevatedFromFile(
 }
 
 // ---------------------------------------------------------------------------
+// writeMeetingTopicsToFile (CHR-W4 Piece 2 — chef topic-review write surface)
+// ---------------------------------------------------------------------------
+
+export type WriteMeetingTopicsMode = 'set' | 'add' | 'remove';
+
+export interface WriteMeetingTopicsResult {
+  /** The `topics:` array after the merge (canonical post-write state). */
+  topics: string[];
+  /** True when the on-disk `topics:` value actually changed. */
+  changed: boolean;
+}
+
+/**
+ * Partial-merge a meeting file's `topics:` frontmatter field (CHR-W4 Piece 2).
+ *
+ * The chef's topic-review step calls this to CORRECT lexically-suggested
+ * topics — add the obviously-right ones (e.g. `status-letter-automation`),
+ * drop the wrong ones — via a deterministic surface instead of hand-editing
+ * frontmatter (the elevate-verb lesson / eng-lead N-2).
+ *
+ * Modes:
+ *  - `'set'`    → replace the whole `topics:` list with `slugs` (deduped,
+ *                 order-preserving).
+ *  - `'add'`    → union the existing list with `slugs` (existing order kept,
+ *                 new slugs appended in input order, deduped).
+ *  - `'remove'` → drop every slug in `slugs` from the existing list.
+ *
+ * Invariants:
+ *  - Read-parse-update-write: every OTHER frontmatter field is preserved
+ *    byte-for-faithful (same serializer the staged-item writers use). In
+ *    particular this NEVER touches `staged_item_status`, `staged_item_elevated`,
+ *    or any sibling staged-item map — topic assignment is orthogonal to
+ *    item commit-readiness (AC: never touches status/elevated).
+ *  - Slugs are trimmed; empty/blank slugs are ignored.
+ *  - When the resulting list is EMPTY, the `topics:` key is dropped entirely
+ *    (preserves the clean "no topics" frontmatter shape rather than leaving
+ *    `topics: []`).
+ *  - Idempotent: a `set`/`add`/`remove` that produces the same list as on
+ *    disk writes nothing and returns `changed: false`.
+ *
+ * Throws when the file does not exist (caller resolves + validates first).
+ */
+export async function writeMeetingTopicsToFile(
+  storage: StorageAdapter,
+  filePath: string,
+  mode: WriteMeetingTopicsMode,
+  slugs: string[],
+): Promise<WriteMeetingTopicsResult> {
+  const raw = await storage.read(filePath);
+  if (raw === null) throw new Error(`Meeting file not found: ${filePath}`);
+
+  const { data, body } = parseFrontmatter(raw);
+
+  // Read the current topics list (tolerant: missing/malformed → []).
+  const current: string[] = [];
+  const rawTopics = data['topics'];
+  if (Array.isArray(rawTopics)) {
+    for (const t of rawTopics) {
+      if (typeof t === 'string' && t.trim() !== '') current.push(t.trim());
+    }
+  }
+
+  // Normalize the input slugs (trim, drop blanks, preserve order, dedup).
+  const cleanInput: string[] = [];
+  const inputSeen = new Set<string>();
+  for (const s of slugs) {
+    const slug = typeof s === 'string' ? s.trim() : '';
+    if (slug === '' || inputSeen.has(slug)) continue;
+    inputSeen.add(slug);
+    cleanInput.push(slug);
+  }
+
+  let next: string[];
+  if (mode === 'set') {
+    next = cleanInput;
+  } else if (mode === 'add') {
+    const seen = new Set<string>(current);
+    next = [...current];
+    for (const slug of cleanInput) {
+      if (!seen.has(slug)) {
+        seen.add(slug);
+        next.push(slug);
+      }
+    }
+  } else {
+    // remove
+    const toRemove = new Set<string>(cleanInput);
+    next = current.filter((t) => !toRemove.has(t));
+  }
+
+  // Dedup the final list (set could carry dupes already removed above; add/
+  // remove are dedup-safe). Order-preserving.
+  const finalSeen = new Set<string>();
+  const finalTopics: string[] = [];
+  for (const t of next) {
+    if (!finalSeen.has(t)) {
+      finalSeen.add(t);
+      finalTopics.push(t);
+    }
+  }
+
+  // Idempotency check — same list as on disk → no write.
+  const sameAsCurrent =
+    finalTopics.length === current.length &&
+    finalTopics.every((t, i) => t === current[i]);
+  if (sameAsCurrent) {
+    return { topics: finalTopics, changed: false };
+  }
+
+  if (finalTopics.length === 0) {
+    delete data['topics'];
+  } else {
+    data['topics'] = finalTopics;
+  }
+
+  await storage.write(filePath, serializeFrontmatter(data, body));
+  return { topics: finalTopics, changed: true };
+}
+
+// ---------------------------------------------------------------------------
 // Action item formatting
 // ---------------------------------------------------------------------------
 

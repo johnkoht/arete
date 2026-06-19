@@ -22,6 +22,7 @@ import {
   parseStagedItemEdits,
   parseStagedItemOwner,
   writeItemStatusToFile,
+  writeMeetingTopicsToFile,
   commitApprovedItems,
   clearApprovedSections,
   formatFilteredStagedSections,
@@ -892,6 +893,94 @@ export function registerMeetingCommands(program: Command): void {
           info(`Meeting already carries area: ${canonicalSlug} (${setBy}) — nothing to write.`);
         } else {
           success(`Set area: ${canonicalSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
+        }
+      },
+    );
+
+  // topics subcommand (CHR-W4 Piece 2) — chef topic-review write surface.
+  // Deterministic partial-merge of a meeting's `topics:` frontmatter; never
+  // touches staged-item status/elevated. Mirrors `set-area`'s shape.
+  meetingCmd
+    .command('topics <file>')
+    .description(
+      "Adjust a meeting's `topics:` frontmatter (partial-merge; body + staged-item fields preserved). Exactly one of --set/--add/--remove.",
+    )
+    .option('--set <slugs...>', 'Replace the whole topics list with these slugs')
+    .option('--add <slugs...>', 'Add these slugs to the topics list (dedup)')
+    .option('--remove <slugs...>', 'Remove these slugs from the topics list')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        file: string,
+        opts: { set?: string[]; add?: string[]; remove?: string[]; json?: boolean },
+      ) => {
+        const fail = (msg: string): never => {
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: msg }));
+          } else {
+            error(msg);
+          }
+          process.exit(1);
+        };
+
+        // Exactly one mode (mutual exclusion).
+        const modes: Array<['set' | 'add' | 'remove', string[] | undefined]> = [
+          ['set', opts.set],
+          ['add', opts.add],
+          ['remove', opts.remove],
+        ];
+        const chosen = modes.filter(([, v]) => v !== undefined);
+        if (chosen.length !== 1) {
+          fail('Specify exactly one of --set / --add / --remove');
+        }
+        const [mode, slugs] = chosen[0];
+        if (slugs === undefined || slugs.length === 0) {
+          fail(`--${mode} requires at least one slug`);
+        }
+
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+          fail('Not in an Areté workspace');
+        }
+
+        // Resolve the meeting file: absolute → as-is; has a slash →
+        // workspace-relative; bare name → resources/meetings/. (Same
+        // resolution rule as `set-area`.)
+        const meetingPath = file.startsWith('/')
+          ? file
+          : file.includes('/')
+            ? join(root as string, file)
+            : join(root as string, 'resources', 'meetings', file);
+        if (!(await services.storage.exists(meetingPath))) {
+          fail(`Meeting not found: ${meetingPath}`);
+        }
+
+        const result = await writeMeetingTopicsToFile(
+          services.storage,
+          meetingPath,
+          mode,
+          slugs as string[],
+        );
+
+        if (opts.json) {
+          console.log(
+            JSON.stringify({
+              success: true,
+              meeting: meetingPath,
+              mode,
+              topics: result.topics,
+              changed: result.changed,
+            }),
+          );
+          return;
+        }
+        if (!result.changed) {
+          info(`No change — topics already: ${result.topics.join(', ') || '(none)'}`);
+        } else {
+          success(
+            `Updated topics (${mode}): ${result.topics.join(', ') || '(none)'} on ${meetingPath}`,
+          );
         }
       },
     );

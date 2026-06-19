@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, SINGLE_PASS_STAGED_HEADERS, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, deserializeContextBundle, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, SINGLE_PASS_STAGED_HEADERS, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, writeMeetingTopicsToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, deserializeContextBundle, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
 // Phase 13 AC2/AC3 — meeting area write surface
 listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, 
 // Phase 10b-min wiring — reactive cross-meeting dedup
@@ -673,6 +673,74 @@ export function registerMeetingCommands(program) {
             success(`Set area: ${canonicalSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
         }
     });
+    // topics subcommand (CHR-W4 Piece 2) — chef topic-review write surface.
+    // Deterministic partial-merge of a meeting's `topics:` frontmatter; never
+    // touches staged-item status/elevated. Mirrors `set-area`'s shape.
+    meetingCmd
+        .command('topics <file>')
+        .description("Adjust a meeting's `topics:` frontmatter (partial-merge; body + staged-item fields preserved). Exactly one of --set/--add/--remove.")
+        .option('--set <slugs...>', 'Replace the whole topics list with these slugs')
+        .option('--add <slugs...>', 'Add these slugs to the topics list (dedup)')
+        .option('--remove <slugs...>', 'Remove these slugs from the topics list')
+        .option('--json', 'Output as JSON')
+        .action(async (file, opts) => {
+        const fail = (msg) => {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        };
+        // Exactly one mode (mutual exclusion).
+        const modes = [
+            ['set', opts.set],
+            ['add', opts.add],
+            ['remove', opts.remove],
+        ];
+        const chosen = modes.filter(([, v]) => v !== undefined);
+        if (chosen.length !== 1) {
+            fail('Specify exactly one of --set / --add / --remove');
+        }
+        const [mode, slugs] = chosen[0];
+        if (slugs === undefined || slugs.length === 0) {
+            fail(`--${mode} requires at least one slug`);
+        }
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            fail('Not in an Areté workspace');
+        }
+        // Resolve the meeting file: absolute → as-is; has a slash →
+        // workspace-relative; bare name → resources/meetings/. (Same
+        // resolution rule as `set-area`.)
+        const meetingPath = file.startsWith('/')
+            ? file
+            : file.includes('/')
+                ? join(root, file)
+                : join(root, 'resources', 'meetings', file);
+        if (!(await services.storage.exists(meetingPath))) {
+            fail(`Meeting not found: ${meetingPath}`);
+        }
+        const result = await writeMeetingTopicsToFile(services.storage, meetingPath, mode, slugs);
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                meeting: meetingPath,
+                mode,
+                topics: result.topics,
+                changed: result.changed,
+            }));
+            return;
+        }
+        if (!result.changed) {
+            info(`No change — topics already: ${result.topics.join(', ') || '(none)'}`);
+        }
+        else {
+            success(`Updated topics (${mode}): ${result.topics.join(', ') || '(none)'} on ${meetingPath}`);
+        }
+    });
     // Extract subcommand - uses AIService for LLM-based extraction
     meetingCmd
         .command('extract <file>')
@@ -796,7 +864,12 @@ export function registerMeetingCommands(program) {
             const { detectTopicsLexicalDetailed, TopicMemoryService } = await import('@arete/core');
             const { topics } = await services.topicMemory.listAll(paths);
             const identities = TopicMemoryService.toIdentities(topics);
-            const detected = detectTopicsLexicalDetailed(transcript, identities);
+            // Title-aware detection (W4 topic-assignment fix) — mirror the
+            // production extraction path so the tuning view matches reality.
+            const titleForTopics = typeof frontmatter.title === 'string' ? frontmatter.title : undefined;
+            const detected = detectTopicsLexicalDetailed(transcript, identities, {
+                title: titleForTopics,
+            });
             if (opts.json) {
                 console.log(JSON.stringify({
                     detectedTopics: detected.map((d) => ({
