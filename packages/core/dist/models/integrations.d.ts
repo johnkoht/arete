@@ -100,6 +100,22 @@ export type StagedItemSkipReasonMeta = {
      * `reason`). Backward-compatible: pre-Issue-C entries have no matchedRef.
      */
     matchedRef?: string;
+    /**
+     * Discriminator distinguishing a SUPERSEDED skip from a plain DEDUP skip
+     * (theme-render W2). Both reuse this same skip-reason entry + carry a
+     * `matchedRef`, so without this field the render seam cannot tell them apart
+     * and renders a supersession as dedup ("already captured as …") — wrong.
+     *
+     * - `'dedup'` / ABSENT → the item duplicates an already-captured one; the
+     *   render shows `— skip: already captured as [[matchedRef]]`. ABSENCE MUST
+     *   mean dedup so pre-existing entries render byte-identically (AC7).
+     * - `'superseded'` → an arc outcome: a LATER item replaced this one. The
+     *   render surfaces the supersession verbatim (`— <reason>`) and links the
+     *   superseding target (`matchedRef`); it must NOT say "already captured as".
+     *   W3's richer arc treatment (strikethrough + `⤴ superseded by`) keys off
+     *   this same discriminator.
+     */
+    kind?: 'dedup' | 'superseded';
 };
 /** Map of itemId → skip reason metadata (set by chef OR user). */
 export type StagedItemSkipReason = Record<string, StagedItemSkipReasonMeta>;

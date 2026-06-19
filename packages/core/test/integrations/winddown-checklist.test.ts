@@ -187,6 +187,49 @@ describe('skip/dedup reason on unchecked items (Issue C)', () => {
     assert.equal(skipSuffix(undefined), '');
   });
 
+  // theme-render W2 — eng-lead finding #2: the discriminator must tell a
+  // superseded skip apart from a dedup skip (both carry a matchedRef).
+  it('skipSuffix: superseded kind surfaces the reason verbatim + superseding link, NOT "already captured as"', () => {
+    const out = skipSuffix({
+      status: 'skipped',
+      skipKind: 'superseded',
+      skipReason: 'superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple',
+      skipMatchedRef: 'de_004@2026-06-18-anthony-spec-sync',
+    });
+    // Verbatim reason + linked superseding target.
+    assert.equal(
+      out,
+      ' — superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]',
+    );
+    // Must NOT borrow the dedup framing.
+    assert.ok(!out.includes('already captured as'), 'superseded must not read as dedup');
+    assert.ok(out.includes('superseded'), 'must surface that it was superseded');
+    assert.ok(out.includes('[[de_004@2026-06-18-anthony-spec-sync]]'), 'must link the superseding ref');
+  });
+
+  it('skipSuffix: superseded kind with no matchedRef still renders the verbatim reason (no link)', () => {
+    assert.equal(
+      skipSuffix({ status: 'skipped', skipKind: 'superseded', skipReason: 'superseded by 15:00 spec-sync' }),
+      ' — superseded by 15:00 spec-sync',
+    );
+  });
+
+  // AC7 BYTE-IDENTITY REGRESSION GUARD: a dedup skip — kind absent OR explicit
+  // 'dedup' — must render EXACTLY as before the discriminator existed.
+  it('skipSuffix: dedup renders byte-identically whether kind is absent or explicit "dedup"', () => {
+    const expected = ' — skip: already captured as [[Map the Notion roadmap with Dave]]';
+    // Pre-W2 entry (no kind field at all):
+    assert.equal(
+      skipSuffix({ status: 'skipped', skipReason: 'dupe_of_ai_003', skipMatchedRef: 'Map the Notion roadmap with Dave' }),
+      expected,
+    );
+    // Explicit dedup kind: identical output.
+    assert.equal(
+      skipSuffix({ status: 'skipped', skipKind: 'dedup', skipReason: 'dupe_of_ai_003', skipMatchedRef: 'Map the Notion roadmap with Dave' }),
+      expected,
+    );
+  });
+
   it('renders the dupe [[link]] suffix on a `[ ]` line', () => {
     const meeting: ChecklistMeeting = {
       slug: 'phil-john',

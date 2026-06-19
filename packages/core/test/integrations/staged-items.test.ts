@@ -419,6 +419,57 @@ Body.`;
     assert.equal(result['ai_0001']?.setBy, 'user');
   });
 
+  it('parses the optional kind discriminator (theme-render W2)', () => {
+    const content = `---
+staged_item_skip_reason:
+  de_0001:
+    reason: superseded by 15:00 spec-sync
+    evidence: "[[de_0004@later]]"
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    matchedRef: de_0004@later
+    kind: superseded
+  ai_0009:
+    reason: dupe_of_ai_003
+    evidence: "Slack DM"
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    matchedRef: Map the roadmap
+    kind: dedup
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.equal(result['de_0001']?.kind, 'superseded');
+    assert.equal(result['ai_0009']?.kind, 'dedup');
+  });
+
+  it('omits kind when absent or an unknown value (defaults to dedup semantics)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: dupe_of_ai_003
+    evidence: ok
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    matchedRef: Map the roadmap
+  ai_0002:
+    reason: ok
+    evidence: ok
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    kind: bogus-value
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    // Absent: no kind key at all (so render falls through to dedup framing).
+    assert.ok(!('kind' in (result['ai_0001'] ?? {})));
+    // Unknown value drops, rest of the entry survives.
+    assert.ok(!('kind' in (result['ai_0002'] ?? {})));
+    assert.equal(result['ai_0002']?.reason, 'ok');
+  });
+
   it('drops entries with invalid setBy value', () => {
     const content = `---
 staged_item_skip_reason:

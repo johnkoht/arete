@@ -119,15 +119,34 @@ export function ownerTag(meta) {
  * Terse skip-reason suffix for an UNCHECKED (`[ ]`) line (Issue C). Records WHY
  * the agent pre-filled skip — one clause, only ever on `[ ]` items.
  *
- * Highest-value case: a dedup / already-captured skip carrying a `matchedRef`
- * renders `— skip: already captured as [[<matchedRef>]]`, the matched target
- * linked so the user can verify Areté has it stored (reusing the `[[…]]` link
- * form). Otherwise falls back to the raw reason (`— skip: <reason>`). Returns ''
+ * SUPERSEDED case (theme-render W2; `skipKind === 'superseded'`): an arc
+ * outcome where a LATER item replaced this one. Renders the chef's reason
+ * VERBATIM (already phrased "superseded by <later> — <why>") and links the
+ * superseding target so it's verifiable: `— <reason> → [[<matchedRef>]]`. It
+ * MUST NOT say "already captured as" (that's dedup framing) — the discriminator
+ * is the ONLY thing that tells the two apart, since both carry a `matchedRef`.
+ * (W3 adds the richer strikethrough + `⤴ superseded by` arc treatment, keying
+ * off the same `skipKind`; this suffix is the v1 textual seam.)
+ *
+ * Highest-value DEDUP case (no kind / `skipKind === 'dedup'`): a dedup /
+ * already-captured skip carrying a `matchedRef` renders
+ * `— skip: already captured as [[<matchedRef>]]`, the matched target linked so
+ * the user can verify Areté has it stored (reusing the `[[…]]` link form).
+ * Otherwise falls back to the raw reason (`— skip: <reason>`). Returns ''
  * when there is no reason. Kept short to avoid clutter (John's worry).
  */
 export function skipSuffix(meta) {
     if (!meta)
         return '';
+    // Supersession: surface the reason verbatim + link the superseding target.
+    // Checked FIRST and gated on the discriminator so a dedup skip (kind absent)
+    // is wholly unaffected — its rendering below is byte-identical to pre-W2.
+    if (meta.skipKind === 'superseded' && meta.skipReason && meta.skipReason.trim() !== '') {
+        const ref = meta.skipMatchedRef && meta.skipMatchedRef.trim() !== ''
+            ? ` → [[${meta.skipMatchedRef.trim()}]]`
+            : '';
+        return ` — ${meta.skipReason.trim()}${ref}`;
+    }
     if (meta.skipMatchedRef && meta.skipMatchedRef.trim() !== '') {
         return ` — skip: already captured as [[${meta.skipMatchedRef.trim()}]]`;
     }
@@ -412,6 +431,8 @@ export function buildChecklistMeeting(content, meta) {
             m.skipReason = skipReason[id].reason;
             if (skipReason[id].matchedRef)
                 m.skipMatchedRef = skipReason[id].matchedRef;
+            if (skipReason[id].kind)
+                m.skipKind = skipReason[id].kind;
         }
         if (links[id])
             m.links = links[id];

@@ -38,7 +38,17 @@ export const UNCATEGORIZED_THEME = '__uncategorized__';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-/** Total staged items in a meeting (action items + decisions + learnings). */
+/**
+ * Total staged items in a meeting.
+ *
+ * THREE-KIND ASSUMPTION (nit #4): `ChecklistMeeting.sections` is assumed to
+ * carry exactly the three staged-item kinds — actionItems, decisions,
+ * learnings. The count-conservation audit (AC3) sums only these; if a 4th kind
+ * is ever added to `sections`, this MUST be extended in lockstep or the audit
+ * would silently undercount `itemsIn`/`itemsOut` for that kind. No code guard
+ * here (the section shape is statically typed, so a 4th field surfaces at
+ * compile time the moment a caller populates it).
+ */
 function itemCount(m) {
     return (m.sections.actionItems.length +
         m.sections.decisions.length +
@@ -199,6 +209,12 @@ export function supersededSkipReason(supersededByRef, humanReason, laterContext,
         // matchedRef carries the winning item's ref — the same field the dedup
         // skip uses, so the render's existing `[[matchedRef]]` link works unchanged.
         matchedRef: supersededByRef,
+        // DISCRIMINATOR (eng-lead finding #2): both dedup and supersession carry a
+        // matchedRef, so the render seam cannot distinguish them by presence alone.
+        // `kind: 'superseded'` flips skipSuffix from the dedup "already captured as"
+        // framing to the verbatim-reason + superseding-link framing, and is the key
+        // W3 uses for the strikethrough/arc treatment.
+        kind: 'superseded',
     };
 }
 //# sourceMappingURL=winddown-theme-cluster.js.map

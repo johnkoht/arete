@@ -63,6 +63,14 @@ export interface ChecklistItemMeta {
      * instead of the raw reason. Only meaningful on unchecked lines.
      */
     skipMatchedRef?: string;
+    /**
+     * `staged_item_skip_reason[id].kind` (theme-render W2) — discriminates a
+     * SUPERSEDED skip from a plain DEDUP skip. Absent/`'dedup'` ⇒ the skip line
+     * renders `— skip: already captured as [[matchedRef]]` (legacy, byte-
+     * identical). `'superseded'` ⇒ the line surfaces the supersession verbatim +
+     * links the superseding target, never "already captured as".
+     */
+    skipKind?: 'dedup' | 'superseded';
     /** `staged_item_links[id]`. */
     links?: {
         continuationOf?: string;
@@ -190,10 +198,20 @@ export declare function ownerTag(meta: ChecklistItemMeta | undefined): string;
  * Terse skip-reason suffix for an UNCHECKED (`[ ]`) line (Issue C). Records WHY
  * the agent pre-filled skip — one clause, only ever on `[ ]` items.
  *
- * Highest-value case: a dedup / already-captured skip carrying a `matchedRef`
- * renders `— skip: already captured as [[<matchedRef>]]`, the matched target
- * linked so the user can verify Areté has it stored (reusing the `[[…]]` link
- * form). Otherwise falls back to the raw reason (`— skip: <reason>`). Returns ''
+ * SUPERSEDED case (theme-render W2; `skipKind === 'superseded'`): an arc
+ * outcome where a LATER item replaced this one. Renders the chef's reason
+ * VERBATIM (already phrased "superseded by <later> — <why>") and links the
+ * superseding target so it's verifiable: `— <reason> → [[<matchedRef>]]`. It
+ * MUST NOT say "already captured as" (that's dedup framing) — the discriminator
+ * is the ONLY thing that tells the two apart, since both carry a `matchedRef`.
+ * (W3 adds the richer strikethrough + `⤴ superseded by` arc treatment, keying
+ * off the same `skipKind`; this suffix is the v1 textual seam.)
+ *
+ * Highest-value DEDUP case (no kind / `skipKind === 'dedup'`): a dedup /
+ * already-captured skip carrying a `matchedRef` renders
+ * `— skip: already captured as [[<matchedRef>]]`, the matched target linked so
+ * the user can verify Areté has it stored (reusing the `[[…]]` link form).
+ * Otherwise falls back to the raw reason (`— skip: <reason>`). Returns ''
  * when there is no reason. Kept short to avoid clutter (John's worry).
  */
 export declare function skipSuffix(meta: ChecklistItemMeta | undefined): string;

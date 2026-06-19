@@ -268,6 +268,12 @@ export function parseStagedItemSkipReason(content) {
             ...(typeof m['matchedRef'] === 'string' && m['matchedRef'].trim() !== ''
                 ? { matchedRef: m['matchedRef'] }
                 : {}),
+            // theme-render W2: optional dedup/superseded discriminator. Only the two
+            // known values survive; any other value (or absence) drops, leaving the
+            // entry to default to dedup semantics (byte-identical legacy behavior).
+            ...(m['kind'] === 'dedup' || m['kind'] === 'superseded'
+                ? { kind: m['kind'] }
+                : {}),
         };
     }
     return result;

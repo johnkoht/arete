@@ -22,6 +22,7 @@ import {
   UNCATEGORIZED_THEME,
   type ThemeMeetingInput,
 } from '../../src/integrations/winddown-theme-cluster.js';
+import { skipSuffix } from '../../src/integrations/winddown-checklist.js';
 import type { ChecklistMeeting } from '../../src/integrations/winddown-checklist.js';
 import type { StagedItem } from '../../src/models/index.js';
 
@@ -243,6 +244,27 @@ describe('supersededSkipReason (W2 arc metadata — reuses skip-reason machinery
     assert.equal(entry.matchedRef, 'de_004@2026-06-18-anthony-spec-sync');
     assert.match(entry.reason, /^superseded by 15:00 Anthony spec-sync — recipient model changed/);
     assert.match(entry.evidence, /\[\[de_004@2026-06-18-anthony-spec-sync\]\]/);
+    // eng-lead finding #2 — the discriminator distinguishing it from a dedup.
+    assert.equal(entry.kind, 'superseded');
+  });
+
+  it('the superseded entry RENDERS through skipSuffix as supersession, not dedup', () => {
+    // End-to-end seam: a superseded entry must NOT collapse to the dedup
+    // "already captured as" framing once it reaches the render (finding #2).
+    const entry = supersededSkipReason(
+      'de_004@2026-06-18-anthony-spec-sync',
+      'recipient model changed single → multiple',
+      '15:00 Anthony spec-sync',
+    );
+    const out = skipSuffix({
+      status: 'skipped',
+      skipKind: entry.kind,
+      skipReason: entry.reason,
+      skipMatchedRef: entry.matchedRef,
+    });
+    assert.ok(!out.includes('already captured as'), 'must not render as dedup');
+    assert.ok(out.includes('superseded by 15:00 Anthony spec-sync'), 'reason verbatim');
+    assert.ok(out.includes('[[de_004@2026-06-18-anthony-spec-sync]]'), 'links superseding ref');
   });
 
   it('omits the trailing reason clause when humanReason is blank', () => {
