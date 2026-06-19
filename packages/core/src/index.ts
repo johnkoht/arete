@@ -149,6 +149,17 @@ export type {
   ChecklistView,
 } from './integrations/winddown-checklist.js';
 export {
+  clusterMeetingsByTheme,
+  orderChronologically,
+  supersededSkipReason,
+  UNCATEGORIZED_THEME,
+} from './integrations/winddown-theme-cluster.js';
+export type {
+  ThemeMeetingInput,
+  ThemeCluster,
+  ThemeClusterResult,
+} from './integrations/winddown-theme-cluster.js';
+export {
   parseWinddownDoc,
   buildApplyPlan,
   renderApplySummary,

@@ -599,7 +599,61 @@ For EACH meeting processed in Step 1h:
    needs no line.
 
 This step is orthogonal to staging/approval — it never approves, elevates, or
-skips an item; it only corrects topic assignment. Then proceed to Step 2a.
+skips an item; it only corrects topic assignment. Then proceed to Step 2.0b
+(theme mode) or Step 2a.
+
+#### Step 2.0b — Cluster by theme + within-theme chronological walk (theme-render v1 COARSE)
+
+**Only when `arete.yaml` sets `winddown_render: theme`** (default `checklist`
+skips this sub-step — behavior is unchanged). This is where the #22 supersession
+prize lands: the chef reads each theme's meetings IN TIME ORDER, so a later
+decision that reverses an earlier one is seen as an arc, not lost across two
+per-meeting blocks.
+
+The deterministic legs are a pure core helper (`clusterMeetingsByTheme` /
+`orderChronologically` in `@arete/core`) — the chef does NOT hand-cluster or
+hand-sort. The chef supplies (a) each meeting's COARSE theme (its dominant
+`topics:` entry from Step 2.0 — project-primary, area-fallback, else
+Uncategorized) and (b) each meeting's frontmatter `date:` (full ISO datetime on
+the live path); the helper returns theme-grouped clusters, each ordered
+oldest→newest. A meeting with no/blank theme routes to `## Uncategorized`
+structurally (never dropped — count conservation, AC3). A meeting with no
+parseable time falls back to staging order (never assume/crash).
+
+**Walk each cluster oldest→newest and apply judgment (semantic, not Jaccard):**
+
+1. **Supersession (the #22 fix — theme-scoped).** When a LATER item in the
+   cluster revises an EARLIER one (e.g. the afternoon spec-sync changes the
+   morning's recipient model single→multiple), mark the EARLIER item superseded:
+   - write a `staged_item_skip_reason` entry via the chef-skip path — the helper
+     `supersededSkipReason(laterRef, humanReason, laterContext)` standardizes the
+     entry (`reason: "superseded by 15:00 Anthony spec-sync — recipient model
+     changed single → multiple"`, `matchedRef: <laterRef>`, `setBy: 'chef'`);
+   - **NEVER elevate a superseded item** (no `staged_item_elevated`) — it renders
+     `[ ]` unchecked by construction, never pre-committed;
+   - the item RETAINS its meeting-scoped anchor (`id@meeting-slug`), so if the
+     chef got the direction wrong John re-checks the box and the apply rescue
+     path re-elevates it (AC5 false-supersession safety);
+   - elevate the LATER (winning) version instead.
+   - **False-supersession guard (AC5):** when a later item refines a DIFFERENT
+     FACET of the same theme (not a reversal), BOTH survive — do NOT mark either
+     superseded. When unsure, leave both and route to `## Uncertain — your call`.
+2. **Moot (#21 — theme-scoped):** the same Rule 3b moot-check (below) runs per
+   cluster — a "hold/schedule a session" action fulfilled by a later same-day
+   meeting in the cluster is skipped, not staged.
+3. **Arc reasoning is CHEF JUDGMENT, not code.** The helper only ORDERS and
+   RECORDS; the chef decides what supersedes what. Never fabricate a similarity
+   number for an arc call (Step 2a's no-fabrication rule applies here too).
+
+**Rule-4 open-commitment dedup stays GLOBAL — NOT theme-scoped.** Only
+supersession + moot are theme-scoped. Rule 4 (Step 2 / below) reconciles fresh
+captures against ALL open commitments per the CHR contract — if it were
+theme-scoped, a cross-theme duplicate commitment would escape. Run Rule 4 over
+the whole day's ledger exactly as documented, independent of the theme walk.
+
+Then proceed to Step 2a (the mechanical nomination still runs over the full
+ledger — clustering is a VIEW/ordering layer on top, it does not replace the
+nominate primitive).
 
 #### Step 2a — Systematic candidate nomination (CHR-W4, runs FIRST)
 

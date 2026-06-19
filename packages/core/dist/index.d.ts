@@ -22,6 +22,8 @@ export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStaged
 export type { WriteItemStatusOptions, WriteMeetingTopicsMode, WriteMeetingTopicsResult, ApprovedItemRecord, ApprovedItemObserver, CommitApprovedItemsOptions, SkippedItemRecord, SkippedItemObserver, } from './integrations/staged-items.js';
 export { renderStagedItemsAsChecklist, renderWinddownDoc, renderStagedBlock, buildChecklistMeeting, renderMeeting, renderChoices, renderActions, uncertainItemToChoice, itemAnchor, choiceAnchor, actionAnchor, isUncertain, prefillChecked, tierMarker, linkSuffix, sortByTier, ITEM_ANCHOR_RE, CHOICE_ANCHOR_RE, ACTION_ANCHOR_RE, } from './integrations/winddown-checklist.js';
 export type { ChecklistTier, ChecklistItemMeta, ChecklistMeeting, ChecklistChoice, ChecklistAction, ChecklistView, } from './integrations/winddown-checklist.js';
+export { clusterMeetingsByTheme, orderChronologically, supersededSkipReason, UNCATEGORIZED_THEME, } from './integrations/winddown-theme-cluster.js';
+export type { ThemeMeetingInput, ThemeCluster, ThemeClusterResult, } from './integrations/winddown-theme-cluster.js';
 export { parseWinddownDoc, buildApplyPlan, renderApplySummary, executeWinddownApply, } from './integrations/winddown-apply.js';
 export type { ParsedLine, ParsedWinddownDoc, ItemDecision, ItemClassification, ChoiceClassification, ActionClassification, WinddownApplyPlan, WinddownApplyDeps, WinddownApplyResult, } from './integrations/winddown-apply.js';
 export { saveConversationFile, conversationFilename, updateConversationFrontmatter, parseConversation, extractInsights, } from './integrations/conversations/index.js';
