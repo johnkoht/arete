@@ -1041,7 +1041,13 @@ export function registerMeetingCommands(program: Command): void {
         const { detectTopicsLexicalDetailed, TopicMemoryService } = await import('@arete/core');
         const { topics } = await services.topicMemory.listAll(paths);
         const identities = TopicMemoryService.toIdentities(topics);
-        const detected = detectTopicsLexicalDetailed(transcript, identities);
+        // Title-aware detection (W4 topic-assignment fix) — mirror the
+        // production extraction path so the tuning view matches reality.
+        const titleForTopics =
+          typeof frontmatter.title === 'string' ? frontmatter.title : undefined;
+        const detected = detectTopicsLexicalDetailed(transcript, identities, {
+          title: titleForTopics,
+        });
 
         if (opts.json) {
           console.log(JSON.stringify({

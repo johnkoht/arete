@@ -773,8 +773,11 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         ...(existingTasks.length > 0 && { existingTasks }),
         ...(owner && { owner }),
     };
-    // 7. Topic-wiki context (delta-only extraction support)
-    const wiki = await buildTopicWikiContext(deps, paths, transcript, options.referenceDate);
+    // 7. Topic-wiki context (delta-only extraction support). The meeting title
+    // is passed so lexical detection is title-aware (W4 topic-assignment fix) —
+    // a meeting titled with a topic's distinctive words matches that topic even
+    // when the transcript is sparse on them.
+    const wiki = await buildTopicWikiContext(deps, paths, transcript, options.referenceDate, frontmatter.title);
     if (wiki.context)
         bundle.topicWikiContext = wiki.context;
     if (wiki.warning)
@@ -819,13 +822,13 @@ export async function readWorkspaceOwner(storage, paths) {
  * `context` field conditionally so the absent-key semantic is preserved
  * (no `bundle.topicWikiContext = undefined` write).
  */
-async function buildTopicWikiContext(deps, paths, transcript, referenceDate) {
+async function buildTopicWikiContext(deps, paths, transcript, referenceDate, title) {
     try {
         const { topics: allTopicPages } = await deps.topicMemory.listAll(paths);
         if (allTopicPages.length === 0)
             return {};
         const identities = TopicMemoryService.toIdentities(allTopicPages);
-        const detectedSlugs = detectTopicsLexical(transcript, identities);
+        const detectedSlugs = detectTopicsLexical(transcript, identities, { title });
         if (detectedSlugs.length === 0)
             return {};
         const pageBySlug = new Map();

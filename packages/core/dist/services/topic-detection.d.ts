@@ -41,6 +41,18 @@ export declare const STOP_TOKENS: Set<string>;
 export interface DetectTopicsOptions {
     /** Cap on number of returned slugs. Default 3 (rollout cap, Decision #6). */
     maxResults?: number;
+    /**
+     * Meeting title (W4 topic-assignment fix, 2026-06-18). When provided, the
+     * title's tokens are scored ALONGSIDE the transcript tokens — a meeting
+     * *titled* with a topic's distinctive words then matches that topic even
+     * when the transcript is sparse on those words. The title is deliberate,
+     * high-signal authoring (the user named the meeting), so this is low
+     * false-match risk; the ≥2-non-stop / ≥0.5-coverage thresholds are
+     * unchanged and still gate weak matches. Title tokens are singularized
+     * symmetrically with the transcript + slug sides (see the LEARNINGS
+     * invariant on `tokenizeSlug` ↔ `detectTopicsLexical` token spaces).
+     */
+    title?: string;
 }
 /**
  * Detailed detection result. Used by the `--dry-run-topics` debug path
