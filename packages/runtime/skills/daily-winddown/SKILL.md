@@ -604,8 +604,9 @@ skips an item; it only corrects topic assignment. Then proceed to Step 2.0b
 
 #### Step 2.0b — Cluster by theme + within-theme chronological walk (theme-render v1 COARSE)
 
-**Only when `arete.yaml` sets `winddown_render: theme`** (default `checklist`
-skips this sub-step — behavior is unchanged). This is where the #22 supersession
+**Only when `arete.yaml` sets `winddown_render: theme`** (default `prose`,
+and `checklist`, both skip this sub-step — behavior is unchanged). This is
+where the #22 supersession
 prize lands: the chef reads each theme's meetings IN TIME ORDER, so a later
 decision that reverses an earlier one is seen as an arc, not lost across two
 per-meeting blocks.
@@ -1398,9 +1399,13 @@ single_pass`; legacy meetings render exactly as before):
    a short bullet list at the END of this section under a "Open
    questions raised today" subheading — informational, no checkbox.}
 
-{CHECKLIST RENDER MODE (winddown-approval-doc plan, W1/W2) — ADDITIVE,
-flag-gated. ONLY when `winddown_render: checklist` in arete.yaml (default
-`prose` renders EXACTLY as below — byte-identical, AC6). When `checklist`:
+{STRUCTURED RENDER MODE (winddown-approval-doc plan, W1/W2; theme-render
+v1, W3) — ADDITIVE, flag-gated. Applies when `winddown_render: checklist`
+OR `winddown_render: theme` in arete.yaml (default `prose` renders EXACTLY
+as below — byte-identical, AC6 — and stays the hand-written prose branch).
+`theme` is the same structured-doc + apply flow as `checklist`; it just
+emits the theme-grouped doc instead of the per-meeting staged block (the
+CLI auto-selects by config — see below). When `checklist` OR `theme`:
 do NOT hand-write the `## Stage for approval` staged-items prose. Instead
 RUN A CLI COMMAND that emits the deterministic checkbox block from today's
 meeting frontmatter:
@@ -1412,13 +1417,16 @@ arete winddown render YYYY-MM-DD --stdout
 This reads today's staged meetings (`resources/meetings/YYYY-MM-DD-*.md`
 with status processed/approved) + their frontmatter maps
 (`staged_item_status` / `_importance` / `_uncertain` / `_links` /
-`_skip_reason`) and PRINTS the per-meeting
-`### Action items / Decisions / Learnings` checkbox block to stdout —
-pre-filled from tier+status (`[x]` keep / `[ ]` skip+reason),
-`[BLOCKER]`/`[high]`/⚠ markers, a leading `## ⛔ Blockers & ⚠ Your call
-first` block for uncertain items (option-checkboxes, NOT pre-filled), and
-a HIDDEN anchor on every line (`<!-- ai_001@slug -->` /
-`<!-- choice:... -->`).
+`_skip_reason`) and PRINTS the checkbox block to stdout — pre-filled from
+tier+status (`[x]` keep / `[ ]` skip+reason), `[BLOCKER]`/`[high]`/⚠
+markers, a leading `## ⛔ Blockers & ⚠ Your call first` block for uncertain
+items (option-checkboxes, NOT pre-filled), and a HIDDEN anchor on every
+line (`<!-- ai_001@slug -->` / `<!-- choice:... -->`). The CLI selects the
+grouping by config: `checklist` prints the per-meeting
+`### Action items / Decisions / Learnings` block; `theme` prints the same
+items grouped by project/area theme (oldest→newest within each), with
+superseded items rendered `[ ]` — anchors are identical and meeting-scoped
+either way, so the splice + baseline + apply flow is unchanged (D4).
 
 Use `--stdout` (NOT `--write`) here: `render` only knows the
 frontmatter-derived staged block, but the apply baseline must capture the
@@ -1460,17 +1468,18 @@ cross-path hazard is present TODAY, not hypothetical):**
    To change what's checked, use `arete winddown elevate <meeting> <id...>`
    (or `--remove`) and re-render — do not edit the checkbox lines or the
    frontmatter by hand.
-2. **In checklist mode, `arete winddown apply` is the SOLE commit path.
-   Do NOT call `arete meeting approve`.** Apply is the only promoter:
-   for each item the user leaves `[x]` it writes `status: 'approved'`
-   just before commit; for each `[ ]` it writes `'skipped'`. A stray
-   `arete meeting approve` would commit anything already `'approved'`
-   with no checkbox gate — but the chef NEVER writes `'approved'` at
-   reconcile time (it writes `staged_item_elevated` instead, see Step
-   2d), so there is nothing for `meeting approve` to wrongly commit AS
-   LONG AS the SKILL does not invoke it in checklist mode. The
-   `arete meeting approve` references elsewhere in this SKILL are
-   PROSE-MODE / manual flows only; they are FORBIDDEN in checklist mode.}
+2. **In checklist OR theme mode, `arete winddown apply` is the SOLE
+   commit path. Do NOT call `arete meeting approve`.** Apply is the only
+   promoter: for each item the user leaves `[x]` it writes
+   `status: 'approved'` just before commit; for each `[ ]` it writes
+   `'skipped'`. A stray `arete meeting approve` would commit anything
+   already `'approved'` with no checkbox gate — but the chef NEVER writes
+   `'approved'` at reconcile time (it writes `staged_item_elevated`
+   instead, see Step 2d), so there is nothing for `meeting approve` to
+   wrongly commit AS LONG AS the SKILL does not invoke it in these
+   structured modes. The `arete meeting approve` references elsewhere in
+   this SKILL are PROSE-MODE / manual flows only; they are FORBIDDEN in
+   checklist and theme modes.}
 
 - [ ] [BLOCKER] Glance can't roll out without license-profile assignment — compliance workshop
 - [ ] Send API spec to Anthony — open commitment to Anthony, 9d old (high)
@@ -1665,8 +1674,10 @@ If the file already exists for today (re-run), append a `## Re-run at
 HH:MM` divider and re-write the latest curated view below it; do not
 silently overwrite earlier history.
 
-{CHECKLIST MODE baseline (winddown-approval-doc plan, W3) — ONLY when
-`winddown_render: checklist`. The apply BASELINE
+{STRUCTURED MODE baseline (winddown-approval-doc plan, W3; theme-render
+v1, W3) — when `winddown_render: checklist` OR `theme` (the baseline +
+apply flow is render-mode-agnostic; theme follows it identically). The
+apply BASELINE
 (`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`) is the
 agent's recommendation snapshot; `arete winddown apply` diffs the user's
 edited `winddown-YYYY-MM-DD.md` against it to classify each toggle/edit.
@@ -1688,9 +1699,9 @@ surface never executes). That was the regression SOAK finding #6 caught.
 Always `cp` the complete doc instead.
 
 ```bash
-# checklist mode only — persist the COMPLETE finalized doc as the apply
-# baseline (LAST step, after the doc above is fully composed, BEFORE the
-# user edits). This `cp` happens EXACTLY ONCE per winddown, at render time.
+# checklist/theme mode only — persist the COMPLETE finalized doc as the
+# apply baseline (LAST step, after the doc above is fully composed, BEFORE
+# the user edits). This `cp` happens EXACTLY ONCE per winddown, at render time.
 DATE="$(date +%Y-%m-%d)"
 cp "now/archive/daily-winddown/winddown-$DATE.md" \
    "now/archive/daily-winddown/winddown-$DATE.baseline.md"
@@ -1725,7 +1736,7 @@ mid-review input that is NOT approval:
 - A **PARTIAL EDIT** instruction (e.g. "keep CT1 open", "reframe ai_007
   as a google survey", "drop the Doris line") → ABSORB the edit into the
   persisted doc (`winddown-<date>.md`) — rewrite the affected line(s) and
-  re-`cp` the baseline if checklist mode — or note it for apply. Then
+  re-`cp` the baseline if checklist or theme mode — or note it for apply. Then
   RE-WAIT. A partial edit is steering the doc, NOT a go signal.
 - Mixed input (a question + an edit) → handle both as above, still WAIT.
 
@@ -1757,17 +1768,19 @@ Acceptable user responses (each is an EXPLICIT proceed — see gate above):
 - `skip 2` → drop action 2
 - `approve all staged` → commit all `## Stage for approval` items.
   **PROSE MODE:** via `arete meeting approve` per source meeting.
-  **CHECKLIST MODE (CHR-W4 B-5):** route through `arete winddown apply`
-  — it is the SOLE commit path; do NOT call `arete meeting approve`.
+  **CHECKLIST/THEME MODE (CHR-W4 B-5):** route through `arete winddown
+  apply` — it is the SOLE commit path; do NOT call `arete meeting approve`.
 - Free-form pushback / questions / partial edits → these are NOT
   approval (see WAIT-GATE above): answer / absorb the edit into the doc,
   then RE-WAIT for an explicit proceed
 
 ### Step 6 — Execute approved actions + commit approved items
 
-{CHECKLIST MODE apply (winddown-approval-doc plan, W3) — ONLY when
-`winddown_render: checklist`. When the user says they've toggled the doc
-and run `/winddown apply` (or asks you to apply it), invoke:
+{STRUCTURED MODE apply (winddown-approval-doc plan, W3; theme-render v1,
+W3) — when `winddown_render: checklist` OR `theme` (apply is render-mode-
+agnostic — it diffs by anchor, and anchors are meeting-scoped in both). When
+the user says they've toggled the doc and run `/winddown apply` (or asks
+you to apply it), invoke:
 
 ```bash
 arete winddown apply <YYYY-MM-DD>          # interactive confirm
@@ -1806,9 +1819,9 @@ After user approval (and only after):
 
 **PROSE MODE only (CHR-W4 B-5):** commit approved staged items per meeting
 via `arete meeting approve`.
-**CHECKLIST MODE:** skip this `meeting approve` loop entirely — `winddown
-apply` already committed via the checkbox-diff (it is the SOLE commit path;
-in checklist mode the chef wrote `staged_item_elevated`, not
+**CHECKLIST/THEME MODE:** skip this `meeting approve` loop entirely —
+`winddown apply` already committed via the checkbox-diff (it is the SOLE
+commit path; in these modes the chef wrote `staged_item_elevated`, not
 `status:approved`, so a stray `meeting approve` would commit NOTHING).
 Go directly to the people-memory / week.md / index steps below.
 

@@ -169,6 +169,10 @@ export declare function isUncertain(meta: ChecklistItemMeta | undefined): boolea
  * conservative-but-confident). `[x]` (keep/approve) vs `[ ]` (skip). Uncertain
  * items are handled out of band (Your-call block) and should not be passed here.
  *
+ * A `skipKind === 'superseded'` item ALWAYS pre-fills `[ ]` (checked first,
+ * before the elevated/approved vouches) — the #22 invariant anchored to the
+ * stored signal so it holds in checklist mode and not just the theme path.
+ *
  * Pre-check (`[x]`) ONLY when the item is explicitly vouched for:
  *   - `elevated === true` — the chef confidently keeps it (the B-2 signal), OR
  *   - `status === 'approved'` — post-apply state (never set pre-apply).
@@ -199,13 +203,14 @@ export declare function ownerTag(meta: ChecklistItemMeta | undefined): string;
  * the agent pre-filled skip — one clause, only ever on `[ ]` items.
  *
  * SUPERSEDED case (theme-render W2; `skipKind === 'superseded'`): an arc
- * outcome where a LATER item replaced this one. Renders the chef's reason
- * VERBATIM (already phrased "superseded by <later> — <why>") and links the
- * superseding target so it's verifiable: `— <reason> → [[<matchedRef>]]`. It
- * MUST NOT say "already captured as" (that's dedup framing) — the discriminator
- * is the ONLY thing that tells the two apart, since both carry a `matchedRef`.
- * (W3 adds the richer strikethrough + `⤴ superseded by` arc treatment, keying
- * off the same `skipKind`; this suffix is the v1 textual seam.)
+ * outcome where a LATER item replaced this one. Prepends the `⤴` arc glyph,
+ * then renders the chef's reason VERBATIM (already phrased "superseded by
+ * <later> — <why>") and links the superseding target so it's verifiable:
+ * `— ⤴ <reason> → [[<matchedRef>]]`. It MUST NOT say "already captured as"
+ * (that's dedup framing) — the discriminator is the ONLY thing that tells the
+ * two apart, since both carry a `matchedRef`. (W3 adds the richer
+ * strikethrough on the text body, keying off the same `skipKind`; this suffix
+ * is the textual seam.)
  *
  * Highest-value DEDUP case (no kind / `skipKind === 'dedup'`): a dedup /
  * already-captured skip carrying a `matchedRef` renders

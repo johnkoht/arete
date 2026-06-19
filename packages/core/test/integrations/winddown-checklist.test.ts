@@ -197,10 +197,10 @@ describe('skip/dedup reason on unchecked items (Issue C)', () => {
       skipReason: 'superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple',
       skipMatchedRef: 'de_004@2026-06-18-anthony-spec-sync',
     });
-    // Verbatim reason + linked superseding target.
+    // Verbatim reason + linked superseding target, prefixed with the ⤴ arc glyph (FIX3).
     assert.equal(
       out,
-      ' — superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]',
+      ' — ⤴ superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]',
     );
     // Must NOT borrow the dedup framing.
     assert.ok(!out.includes('already captured as'), 'superseded must not read as dedup');
@@ -211,7 +211,7 @@ describe('skip/dedup reason on unchecked items (Issue C)', () => {
   it('skipSuffix: superseded kind with no matchedRef still renders the verbatim reason (no link)', () => {
     assert.equal(
       skipSuffix({ status: 'skipped', skipKind: 'superseded', skipReason: 'superseded by 15:00 spec-sync' }),
-      ' — superseded by 15:00 spec-sync',
+      ' — ⤴ superseded by 15:00 spec-sync',
     );
   });
 
@@ -484,6 +484,25 @@ describe('prefill semantics (W4 B-1 — conservative-but-confident)', () => {
     assert.equal(prefillChecked({}), false); // empty meta — nothing vouches
     // elevated wins even when status is pending (the reconcile-time shape).
     assert.equal(prefillChecked({ status: 'pending', elevated: true }), true);
+    // FIX2 (#22 invariant, defense-in-depth): a persisted superseded item
+    // NEVER pre-checks — even if it (wrongly) carries elevated:true. The guard
+    // is keyed on the STORED skipKind, not on the caller passing theme decoration.
+    assert.equal(prefillChecked({ skipKind: 'superseded', elevated: true }), false);
+    assert.equal(prefillChecked({ skipKind: 'superseded' }), false);
+  });
+
+  it('FIX2: an elevated+superseded item renders [ ] in CHECKLIST mode (no theme decoration)', () => {
+    // CHECKLIST mode passes NO theme.superseded to renderItemLine — the [ ]
+    // force must come from prefillChecked keying on the persisted skipKind.
+    const line = renderItemLine(
+      ai('ai_001', 'Use single recipient'),
+      'anthony-am',
+      { elevated: true, skipKind: 'superseded', skipReason: 'superseded by 15:00 spec-sync — single → multiple' },
+      { isAction: true },
+    );
+    assert.match(line, /^- \[ \] /); // unchecked, NOT [x], despite elevated:true
+    assert.doesNotMatch(line, /\[x\]/);
+    assert.match(line, /<!-- ai_001@anthony-am -->/); // anchor retained (re-elevatable)
   });
 
   it('a pending item with no reason renders [ ] with no suffix (N-3: pending ≈ reasonless-skip, intended)', () => {
@@ -660,7 +679,7 @@ describe('FIX 1 — superseded item is structurally unchecked, arc suffix preser
     // Arc reason survives (skip suffix NOT suppressed — theme.superseded does not
     // set forceUnchecked).
     assert.ok(
-      out.includes('— superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]'),
+      out.includes('— ⤴ superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]'),
       `arc reason missing from: ${out}`,
     );
     // Body struck through; anchor retained (re-elevatable rescue).
@@ -669,7 +688,7 @@ describe('FIX 1 — superseded item is structurally unchecked, arc suffix preser
     // Full rendered line, for the lead:
     assert.equal(
       out,
-      '- [ ] ~~Send a single recipient model~~ — superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]  <!-- de_001@anthony -->',
+      '- [ ] ~~Send a single recipient model~~ — ⤴ superseded by 15:00 Anthony spec-sync — recipient model changed single → multiple → [[de_004@2026-06-18-anthony-spec-sync]]  <!-- de_001@anthony -->',
     );
   });
 });
