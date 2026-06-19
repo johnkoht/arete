@@ -50,7 +50,7 @@ recipient model — latest wins; the morning decisions are shown superseded, not
 
 **Learnings**
 - [x] The recipient model was contested all day; the spec-sync is the source of truth, not the
-  morning 1:1. *(arc)* <!-- ln_002@2026-06-18-anthony-spec-sync -->
+  morning 1:1. *(arc)* <!-- le_002@2026-06-18-anthony-spec-sync -->
 
 ---
 

@@ -188,6 +188,35 @@ staged_item_elevated:
 - ai_009: Explore a shared comms calendar
 `;
 
+/**
+ * PRODUCTION ROUND-TRIP fixture (Gate 4). The morning Jamie 1:1 carries a
+ * SUPERSEDED decision in REAL frontmatter — a full `staged_item_skip_reason`
+ * entry with `kind: superseded` + `matchedRef` (the afternoon decision it lost
+ * to). The whole 1:1 is assigned to `status-letter-automation` via `topics:`.
+ * This proves the LIVE parse path (`buildChecklistMeeting` → `skipKind`) +
+ * CLI dispatch + spine resolution + theme render emit the arc — the seam the
+ * golden test (which feeds metas directly) cannot cover.
+ */
+const JAMIE_MORNING = `---
+title: Jamie 1:1
+date: ${THEME_DATE}T09:30:00.000Z
+status: processed
+topics:
+  - status-letter-automation
+staged_item_skip_reason:
+  de_001:
+    reason: superseded by the 15:00 Anthony spec-sync (join table, multiple recipients)
+    evidence: afternoon spec-sync reversed the single-recipient model
+    setBy: chef
+    setAt: ${THEME_DATE}T15:30:00.000Z
+    kind: superseded
+    matchedRef: de_004@2026-06-18-status
+---
+
+## Staged Decisions
+- de_001: Single recipient per status letter (recipient FK on the letter row)
+`;
+
 function setThemeMode(dir: string): void {
   // Flip the workspace flag + materialize the active project the topic resolves to.
   appendFileSync(join(dir, 'arete.yaml'), '\nwinddown_render: theme\n', 'utf8');
@@ -247,6 +276,62 @@ describe('arete winddown render — theme mode (W3)', () => {
     // orphan lands under Uncategorized
     const uncatIdx = stdout.indexOf('## ⚠ Uncategorized');
     assert.ok(stdout.indexOf('<!-- ai_009@2026-06-18-orphan -->') > uncatIdx);
+  });
+
+  it('PRODUCTION round-trip: a real-file superseded skip-reason renders the arc under the project heading', () => {
+    // Morning decision superseded by afternoon, both real files assigned to the
+    // same project via topics:. The morning meeting carries a full
+    // staged_item_skip_reason{kind:superseded,matchedRef} in REAL frontmatter.
+    writeMeeting(tmpDir, `${THEME_DATE}-jamie`, JAMIE_MORNING);
+    writeMeeting(tmpDir, `${THEME_DATE}-status`, STATUS_LETTER);
+    setThemeMode(tmpDir);
+
+    const { stdout, code } = runCliRaw(['winddown', 'render', THEME_DATE], { cwd: tmpDir });
+    assert.equal(code, 0, stdout);
+
+    // Grouped under the project heading (theme mode), not the meeting title.
+    assert.match(stdout, /## .*status-letter-automation/);
+    assert.doesNotMatch(stdout, /## Jamie 1:1/);
+    assert.doesNotMatch(stdout, /## Anthony spec-sync/);
+
+    // THE ARC: the morning decision must render superseded — struck through,
+    // [ ] (never elevated), with the verbatim arc reason + the linked
+    // superseding target, and its anchor retained for re-elevation rescue (AC5).
+    // This entire line is produced from the REAL parsed file (skipKind populated
+    // by buildChecklistMeeting → parseStagedItemSkipReason), proving the live
+    // seam, not a stubbed meta.
+    const supersededLine = stdout
+      .split('\n')
+      .find((l) => l.includes('de_001@2026-06-18-jamie'));
+    assert.ok(supersededLine, 'superseded morning decision line present');
+    assert.match(supersededLine!, /^- \[ \]/, 'superseded item is [ ] (never elevated)');
+    assert.match(supersededLine!, /~~Single recipient per status letter[^~]*~~/, 'text struck through');
+    assert.match(
+      supersededLine!,
+      /superseded by the 15:00 Anthony spec-sync/,
+      'verbatim arc reason inline',
+    );
+    assert.match(
+      supersededLine!,
+      /\[\[de_004@2026-06-18-status\]\]/,
+      'superseding target linked (matchedRef from real file)',
+    );
+
+    // The afternoon (latest) decision is the elevated one. Match the line
+    // carrying its ANCHOR (not the morning line, which references de_004 in its
+    // [[matchedRef]] link).
+    const afternoonLine = stdout
+      .split('\n')
+      .find((l) => l.includes('<!-- de_004@2026-06-18-status -->'));
+    assert.ok(afternoonLine, 'afternoon decision present');
+    assert.match(afternoonLine!, /^- \[x\]/, 'afternoon decision elevated [x]');
+
+    // Count conservation: both decisions present exactly once.
+    assert.equal(
+      [...stdout.matchAll(/<!-- de_001@2026-06-18-jamie -->/g)].length,
+      1,
+      'morning decision rendered exactly once',
+    );
   });
 
   it('theme doc round-trips through apply with no anchor warnings (AC6)', () => {
