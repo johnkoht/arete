@@ -44,8 +44,11 @@ export {
   readResumeSidecar,
   writeResumeSidecar,
   dirtyByMtime,
+  statuslineSegment,
+  handleSessionStart,
+  GREETING_RECENCY_DAYS,
 } from './project-session.js';
-export type { ActiveProjectMarker } from './project-session.js';
+export type { ActiveProjectMarker, SessionStartResult } from './project-session.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
 // WS-1 (plan-context-injection) — deterministic project-doc selection engine
 export { selectProjectDocs } from './brief-assemblers.js';

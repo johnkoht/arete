@@ -19,8 +19,13 @@
  * StorageAdapter — no direct `fs` (services invariant; see project-area.ts).
  */
 
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import type { StorageAdapter } from '../storage/adapter.js';
+
+/** H1: only projects whose README was touched within this window seed a greeting. */
+export const GREETING_RECENCY_DAYS = 14;
+/** Top-N most-recent sidecars offered in a greeting. */
+const GREETING_MAX_CANDIDATES = 3;
 
 /** The active-project marker persisted at `.claude/active-project.json`. */
 export interface ActiveProjectMarker {
@@ -179,4 +184,130 @@ export async function dirtyByMtime(
     if (modified && modified.getTime() > openedAt) return true;
   }
   return false;
+}
+
+/** `<root>/.arete/sessions/.last-greeting` — once/day greeting throttle stamp. */
+function lastGreetingPath(root: string): string {
+  return join(root, '.arete', 'sessions', '.last-greeting');
+}
+
+/** `<root>/.arete/sessions/` — the resume-sidecar directory. */
+function sessionsDir(root: string): string {
+  return join(root, '.arete', 'sessions');
+}
+
+/** YYYY-MM-DD for a date (UTC) — the once/day greeting key. */
+function isoDay(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/**
+ * Statusline segment for the active project, or '' when none.
+ *
+ *   - no marker             -> ''
+ *   - clean                 -> `▸ <slug>`
+ *   - dirty (bit OR mtime)  -> `▸ <slug> · unsaved`
+ *
+ * C1 backstop: the `· unsaved` suffix shows when the LLM `dirty` bit is set OR
+ * `dirtyByMtime(...)` detects a real edit — a stale-clean bit can never suppress
+ * the marker that work is in flight.
+ */
+export async function statuslineSegment(storage: StorageAdapter, root: string): Promise<string> {
+  const marker = await readActiveProjectMarker(storage, root);
+  if (!marker) return '';
+  const dirty = marker.dirty || (await dirtyByMtime(storage, root, marker.slug, marker.openedAt));
+  return dirty ? `▸ ${marker.slug} · unsaved` : `▸ ${marker.slug}`;
+}
+
+export interface SessionStartResult {
+  /** True when a stale active-project marker was wiped this run. */
+  wipedMarker: boolean;
+  /** Stale-marker advisory (null when nothing was wiped or the wipe was clean). */
+  notice: string | null;
+  /** Once/day "welcome back" greeting (null when not a startup or already greeted). */
+  greeting: string | null;
+}
+
+/**
+ * SessionStart handler. `now` is injected for testability.
+ *
+ * Two independent concerns:
+ *   - Stale-marker wipe (startup|clear only): a marker left behind by a prior
+ *     session is cleared; if it was dirty (bit OR mtime) we advise the resume
+ *     note may be stale.
+ *   - Greeting (startup only): once/day, offer to resume recently-touched
+ *     projects that have a resume sidecar.
+ */
+export async function handleSessionStart(
+  storage: StorageAdapter,
+  root: string,
+  opts: { source: string; now: Date },
+): Promise<SessionStartResult> {
+  const { source, now } = opts;
+
+  let wipedMarker = false;
+  let notice: string | null = null;
+
+  // Stale-marker wipe — only on a fresh start or an explicit clear.
+  if (source === 'startup' || source === 'clear') {
+    const marker = await readActiveProjectMarker(storage, root);
+    if (marker) {
+      const dirty =
+        marker.dirty || (await dirtyByMtime(storage, root, marker.slug, marker.openedAt));
+      if (dirty) {
+        notice = `You left \`${marker.slug}\` with unsaved work — its resume note may be stale. Re-open with \`/project ${marker.slug}\` to pick it back up.`;
+      }
+      await clearActiveProjectMarker(storage, root);
+      wipedMarker = true;
+    }
+  }
+
+  // Greeting — startup only.
+  const greeting = source === 'startup' ? await buildStartupGreeting(storage, root, now) : null;
+
+  return { wipedMarker, notice, greeting };
+}
+
+/**
+ * Build the once/day "welcome back" greeting, or null. Stamps `.last-greeting`
+ * ONLY when it actually emits a greeting (so a no-candidate run can still greet
+ * later the same day once a recent project appears).
+ *
+ * H1 recency filter: a sidecar only seeds a greeting when its project README
+ * was modified within `GREETING_RECENCY_DAYS` of `now`.
+ */
+async function buildStartupGreeting(
+  storage: StorageAdapter,
+  root: string,
+  now: Date,
+): Promise<string | null> {
+  // Once/day throttle: already greeted today → nothing.
+  const stamp = await storage.read(lastGreetingPath(root));
+  if (stamp !== null && stamp.trim() === isoDay(now)) return null;
+
+  const recencyFloor = now.getTime() - GREETING_RECENCY_DAYS * 24 * 60 * 60 * 1000;
+
+  const files = await storage.list(sessionsDir(root));
+  const candidates: Array<{ slug: string; sidecarMtime: number }> = [];
+  for (const file of files) {
+    if (!file.endsWith('.md') || file.endsWith('.md.prev')) continue;
+    const slug = basename(file, '.md');
+    const readmeMtime = await storage.getModified(join(root, 'projects', 'active', slug, 'README.md'));
+    if (!readmeMtime || readmeMtime.getTime() < recencyFloor) continue;
+    const sidecarMtime = await storage.getModified(file);
+    candidates.push({ slug, sidecarMtime: sidecarMtime ? sidecarMtime.getTime() : 0 });
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => b.sidecarMtime - a.sidecarMtime);
+  const slugs = candidates.slice(0, GREETING_MAX_CANDIDATES).map((c) => c.slug);
+
+  // Only stamp now that we're committed to emitting a greeting.
+  await storage.write(lastGreetingPath(root), isoDay(now) + '\n');
+
+  return (
+    'Welcome back. Pick up where you left off? ' +
+    slugs.map((s) => `\`/project ${s}\``).join(' or ')
+  );
 }

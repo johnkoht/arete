@@ -20,6 +20,9 @@ import {
   readResumeSidecar,
   writeResumeSidecar,
   dirtyByMtime,
+  statuslineSegment,
+  handleSessionStart,
+  GREETING_RECENCY_DAYS,
   type ActiveProjectMarker,
 } from '../../src/services/project-session.js';
 
@@ -144,5 +147,165 @@ describe('project-session marker + resume sidecar', () => {
 
   it('dirtyByMtime: false on a bad openedAt timestamp', async () => {
     assert.equal(await dirtyByMtime(storage, root, 'slug', 'not-a-date'), false);
+  });
+});
+
+describe('statuslineSegment (project-exit Increment B)', () => {
+  let root: string;
+  const storage = new FileStorageAdapter();
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), `project-session-sl-${process.pid}-`));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('no marker → empty string', async () => {
+    assert.equal(await statuslineSegment(storage, root), '');
+  });
+
+  it('clean marker → ▸ slug', async () => {
+    await writeActiveProjectMarker(storage, root, {
+      slug: 'glance-2-mvp',
+      name: 'Glance 2 MVP',
+      openedAt: '2026-06-19T10:00:00.000Z',
+      dirty: false,
+    });
+    assert.equal(await statuslineSegment(storage, root), '▸ glance-2-mvp');
+  });
+
+  it('dirty-bit marker → ▸ slug · unsaved', async () => {
+    await writeActiveProjectMarker(storage, root, {
+      slug: 'glance-2-mvp',
+      name: 'Glance 2 MVP',
+      openedAt: '2026-06-19T10:00:00.000Z',
+      dirty: true,
+    });
+    assert.equal(await statuslineSegment(storage, root), '▸ glance-2-mvp · unsaved');
+  });
+
+  it('C1: clean bit but a project file newer than openedAt → ▸ slug · unsaved', async () => {
+    const openedAt = '2026-06-19T10:00:00.000Z';
+    await writeActiveProjectMarker(storage, root, {
+      slug: 'glance-2-mvp',
+      name: 'Glance 2 MVP',
+      openedAt,
+      dirty: false,
+    });
+    const projectDir = join(root, 'projects', 'active', 'glance-2-mvp');
+    mkdirSync(projectDir, { recursive: true });
+    const file = join(projectDir, 'README.md');
+    writeFileSync(file, '# Glance 2 MVP\n', 'utf8');
+    const newer = new Date('2026-06-19T11:00:00.000Z');
+    utimesSync(file, newer, newer);
+    assert.equal(await statuslineSegment(storage, root), '▸ glance-2-mvp · unsaved');
+  });
+});
+
+describe('handleSessionStart (project-exit Increment B)', () => {
+  let root: string;
+  const storage = new FileStorageAdapter();
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), `project-session-ss-${process.pid}-`));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const sessionsDir = (): string => join(root, '.arete', 'sessions');
+  const lastGreetingPath = (): string => join(sessionsDir(), '.last-greeting');
+  const isoDay = (d: Date): string => d.toISOString().slice(0, 10);
+
+  // Seed a project README + resume sidecar; pin the README mtime.
+  function seedProjectWithSidecar(slug: string, readmeMtime: Date): void {
+    const projectDir = join(root, 'projects', 'active', slug);
+    mkdirSync(projectDir, { recursive: true });
+    const readme = join(projectDir, 'README.md');
+    writeFileSync(readme, `# ${slug}\n`, 'utf8');
+    utimesSync(readme, readmeMtime, readmeMtime);
+    mkdirSync(sessionsDir(), { recursive: true });
+    writeFileSync(resumeSidecarPath(root, slug), '- left off\n', 'utf8');
+  }
+
+  it('startup + stale marker whose project file is newer than openedAt → wiped + notice', async () => {
+    const openedAt = '2026-06-19T10:00:00.000Z';
+    await writeActiveProjectMarker(storage, root, {
+      slug: 'glance-2-mvp',
+      name: 'Glance 2 MVP',
+      openedAt,
+      dirty: false,
+    });
+    const projectDir = join(root, 'projects', 'active', 'glance-2-mvp');
+    mkdirSync(projectDir, { recursive: true });
+    const file = join(projectDir, 'README.md');
+    writeFileSync(file, '# Glance 2 MVP\n', 'utf8');
+    const newer = new Date('2026-06-19T11:00:00.000Z');
+    utimesSync(file, newer, newer);
+
+    const result = await handleSessionStart(storage, root, {
+      source: 'startup',
+      now: new Date('2026-06-19T12:00:00.000Z'),
+    });
+    assert.equal(result.wipedMarker, true);
+    assert.ok(result.notice);
+    assert.ok(/glance-2-mvp/.test(result.notice!));
+    assert.equal(await readActiveProjectMarker(storage, root), undefined);
+  });
+
+  it('resume + marker present → no wipe, no notice', async () => {
+    await writeActiveProjectMarker(storage, root, {
+      slug: 'glance-2-mvp',
+      name: 'Glance 2 MVP',
+      openedAt: '2026-06-19T10:00:00.000Z',
+      dirty: true,
+    });
+    const result = await handleSessionStart(storage, root, {
+      source: 'resume',
+      now: new Date('2026-06-19T12:00:00.000Z'),
+    });
+    assert.equal(result.wipedMarker, false);
+    assert.equal(result.notice, null);
+    // Marker untouched.
+    assert.ok(await readActiveProjectMarker(storage, root));
+  });
+
+  it('greeting once/day: already-stamped .last-greeting → greeting null', async () => {
+    const now = new Date('2026-06-19T12:00:00.000Z');
+    seedProjectWithSidecar('glance-2-mvp', now);
+    mkdirSync(sessionsDir(), { recursive: true });
+    writeFileSync(lastGreetingPath(), isoDay(now), 'utf8');
+
+    const result = await handleSessionStart(storage, root, { source: 'startup', now });
+    assert.equal(result.greeting, null);
+  });
+
+  it('greeting: recent sidecar + no stamp → greeting emitted AND .last-greeting stamped', async () => {
+    const now = new Date('2026-06-19T12:00:00.000Z');
+    seedProjectWithSidecar('glance-2-mvp', now);
+
+    const result = await handleSessionStart(storage, root, { source: 'startup', now });
+    assert.ok(result.greeting);
+    assert.ok(/\/project glance-2-mvp/.test(result.greeting!));
+    assert.equal(readFileSync(lastGreetingPath(), 'utf8').trim(), isoDay(now));
+  });
+
+  it('H1: sidecar present but README backdated > 14 days → greeting null (no stamp)', async () => {
+    const now = new Date('2026-06-19T12:00:00.000Z');
+    const stale = new Date(now.getTime() - (GREETING_RECENCY_DAYS + 1) * 24 * 60 * 60 * 1000);
+    seedProjectWithSidecar('glance-2-mvp', stale);
+
+    const result = await handleSessionStart(storage, root, { source: 'startup', now });
+    assert.equal(result.greeting, null);
+    assert.equal(existsSync(lastGreetingPath()), false, 'no stamp when no candidate');
+  });
+
+  it('clear + recent sidecar → greeting null (gating: greeting is startup-only)', async () => {
+    const now = new Date('2026-06-19T12:00:00.000Z');
+    seedProjectWithSidecar('glance-2-mvp', now);
+
+    const result = await handleSessionStart(storage, root, { source: 'clear', now });
+    assert.equal(result.greeting, null);
   });
 });

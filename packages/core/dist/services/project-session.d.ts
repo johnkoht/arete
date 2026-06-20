@@ -19,6 +19,8 @@
  * StorageAdapter — no direct `fs` (services invariant; see project-area.ts).
  */
 import type { StorageAdapter } from '../storage/adapter.js';
+/** H1: only projects whose README was touched within this window seed a greeting. */
+export declare const GREETING_RECENCY_DAYS = 14;
 /** The active-project marker persisted at `.claude/active-project.json`. */
 export interface ActiveProjectMarker {
     slug: string;
@@ -69,4 +71,38 @@ export declare function writeResumeSidecar(storage: StorageAdapter, root: string
  * — the LLM `dirty` bit can only UPGRADE clean→dirty, never the reverse.
  */
 export declare function dirtyByMtime(storage: StorageAdapter, root: string, slug: string, openedAtIso: string): Promise<boolean>;
+/**
+ * Statusline segment for the active project, or '' when none.
+ *
+ *   - no marker             -> ''
+ *   - clean                 -> `▸ <slug>`
+ *   - dirty (bit OR mtime)  -> `▸ <slug> · unsaved`
+ *
+ * C1 backstop: the `· unsaved` suffix shows when the LLM `dirty` bit is set OR
+ * `dirtyByMtime(...)` detects a real edit — a stale-clean bit can never suppress
+ * the marker that work is in flight.
+ */
+export declare function statuslineSegment(storage: StorageAdapter, root: string): Promise<string>;
+export interface SessionStartResult {
+    /** True when a stale active-project marker was wiped this run. */
+    wipedMarker: boolean;
+    /** Stale-marker advisory (null when nothing was wiped or the wipe was clean). */
+    notice: string | null;
+    /** Once/day "welcome back" greeting (null when not a startup or already greeted). */
+    greeting: string | null;
+}
+/**
+ * SessionStart handler. `now` is injected for testability.
+ *
+ * Two independent concerns:
+ *   - Stale-marker wipe (startup|clear only): a marker left behind by a prior
+ *     session is cleared; if it was dirty (bit OR mtime) we advise the resume
+ *     note may be stale.
+ *   - Greeting (startup only): once/day, offer to resume recently-touched
+ *     projects that have a resume sidecar.
+ */
+export declare function handleSessionStart(storage: StorageAdapter, root: string, opts: {
+    source: string;
+    now: Date;
+}): Promise<SessionStartResult>;
 //# sourceMappingURL=project-session.d.ts.map

@@ -583,3 +583,68 @@ status: paused
     }
   });
 });
+
+describe('arete project statusline / session-start (project-exit Increment B)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-project-session-b');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  const markerPath = (root: string): string => join(root, '.claude', 'active-project.json');
+
+  it('statusline prints the segment for a marked-open project', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    runCli(['project', 'mark-open', 'glance-2-mvp', '--json'], { cwd: tmpDir });
+    const out = runCli(['project', 'statusline'], { cwd: tmpDir });
+    assert.equal(out, '▸ glance-2-mvp');
+  });
+
+  it('statusline prints nothing when no marker', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    const out = runCli(['project', 'statusline'], { cwd: tmpDir });
+    assert.equal(out, '');
+  });
+
+  it('statusline prints nothing when not in a workspace', () => {
+    const bare = createTmpDir('arete-test-statusline-noworkspace');
+    try {
+      const { stdout, code } = runCliRaw(['project', 'statusline'], { cwd: bare });
+      assert.equal(code, 0);
+      assert.equal(stdout, '');
+    } finally {
+      cleanupTmpDir(bare);
+    }
+  });
+
+  it('session-start --source clear --json wipes an existing marker and emits a parseable envelope', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    runCli(['project', 'mark-open', 'glance-2-mvp', '--json'], { cwd: tmpDir });
+    assert.ok(existsSync(markerPath(tmpDir)));
+
+    const out = runCli(['project', 'session-start', '--source', 'clear', '--json'], { cwd: tmpDir });
+    // Must always be a parseable JSON envelope (object or '{}').
+    const parsed = JSON.parse(out);
+    assert.equal(typeof parsed, 'object');
+    // Marker wiped.
+    assert.ok(!existsSync(markerPath(tmpDir)));
+  });
+
+  it('session-start --source startup --json with a recent sidecar emits additionalContext naming /project <slug>', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    const sessionsDir = join(tmpDir, '.arete', 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(sessionsDir, 'glance-2-mvp.md'), '- left off here\n', 'utf8');
+
+    const out = runCli(['project', 'session-start', '--source', 'startup', '--json'], { cwd: tmpDir });
+    const parsed = JSON.parse(out);
+    assert.ok(parsed.hookSpecificOutput, 'envelope present');
+    assert.equal(parsed.hookSpecificOutput.hookEventName, 'SessionStart');
+    assert.ok(/\/project glance-2-mvp/.test(parsed.hookSpecificOutput.additionalContext));
+  });
+});
