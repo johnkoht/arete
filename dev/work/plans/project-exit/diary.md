@@ -68,8 +68,10 @@ John created `dev/work/plans/build-mode-claude-port/` this session — porting B
 **What's NOT done (by design / honesty):**
 - **Increment B** (statusline script + SessionStart greeting hook) — needs `.claude/settings.json` decisions + manual verification in your real env. Deferred to you.
 - **Skill behavior is prose-pinned, NOT soak-verified** — the capture-sweep recall, friction budget, and `dirty`-flip judgment only get proven once you run real `/project-exit` sessions. That's the soak.
-- **Full test suite not run** (it stalls / ~50min). Typecheck compiles all of core+cli (no type regressions) and changes are additive + locally tested, but **run `npm test` before merging** to be safe.
+- ~~**Full test suite not run**~~ **RESOLVED 2026-06-20:** full suite run via subagent — **4815 pass / 0 fail / 2 skip** in ~6.6 min (no stall this time). The 2 skips are pre-existing unconditional `it.skip` golden tests (`brief.test.ts:43`, `context.test.ts:42`) untouched by this branch. This branch's own tests: core 9/9, CLI mark-* 6/6, list 3/3. **Regression gate clean — no PR/Actions run needed.**
 - One minor: `project list` reads `status` via a `^status:` regex on the README (the agent's noted deviation) — fine for frontmatter; a body-prose `status:` line could mis-read. One-line swap to `parseProjectReadme` if you care.
+
+**Merge-readiness:** branch was cut from `main@29fc7553`; `main` has since advanced to `80349f65` (your two plan-only commits: `build-mode-claude-port`, `web-commitment-resolve-parity`). Neither touches any file this branch changes — `git merge-tree` shows **no conflicts**, clean merge expected. Rebase optional.
 
 **Recommended morning sequence:**
 1. `cd .claude/worktrees/project-exit && git log --oneline main..HEAD` to see the two commits.
