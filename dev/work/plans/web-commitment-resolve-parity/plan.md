@@ -1,18 +1,18 @@
 ---
 title: "Web commitment resolve → parity with CLI resolve"
 slug: web-commitment-resolve-parity
-status: approved
+status: complete
 size: small
 tags: [web, commitments, backend, parity]
 created: "2026-06-19T00:00:00.000Z"
-updated: "2026-06-19T00:00:00.000Z"
-completed: null
-execution: null
+updated: "2026-06-20T00:00:00.000Z"
+completed: "2026-06-20T00:00:00.000Z"
+execution: "merged in PR #17 (cb301355)"
 has_review: true
 reviewed: "2026-06-19"
-review_verdict: "REVISE → revised; re-approved after pre-mortem (0 CRITICAL, 3 HIGH mitigations folded in)"
+review_verdict: "REVISE → revised; re-approved after pre-mortem (0 CRITICAL, 3 HIGH mitigations folded in); post-build + pre-PR reviews SHIP"
 has_pre_mortem: true
-has_prd: false
+has_prd: true
 steps: 3
 ---
 
