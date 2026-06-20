@@ -900,6 +900,76 @@ describe('PATCH /api/commitments/:id — concurrent resolves do not lose writes'
   });
 });
 
+// ── PATCH — a rejected resolve in a burst must not break siblings (HIGH-1) ────
+
+describe('PATCH /api/commitments/:id — a failing resolve in a burst does not break siblings', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-mixed-burst-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify({
+        commitments: [openCommitment('good0001', 'a'), openCommitment('good0002', 'b')],
+      }),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('a 404 (unknown id) between two valid resolves does not poison the queue', async () => {
+    const router = createCommitmentsRouter(tmpDir, { refreshQmd: async () => {} });
+    const [a, bad, b] = await Promise.all([
+      patchCommitment(router, 'good0001', { status: 'resolved' }),
+      patchCommitment(router, 'zzz-nope', { status: 'resolved' }),
+      patchCommitment(router, 'good0002', { status: 'resolved' }),
+    ]);
+    assert.equal(a.status, 200, 'first valid resolve should succeed');
+    assert.equal(bad.status, 404, 'unknown id should 404');
+    assert.equal(b.status, 200, 'sibling resolve after a rejection should still succeed');
+
+    const { readFile } = await import('node:fs/promises');
+    const data = JSON.parse(
+      await readFile(join(tmpDir, '.arete', 'commitments.json'), 'utf8'),
+    ) as { commitments: Array<{ id: string; status: string }> };
+    assert.equal(data.commitments.find((c) => c.id === 'good0001')?.status, 'resolved');
+    assert.equal(data.commitments.find((c) => c.id === 'good0002')?.status, 'resolved');
+  });
+});
+
+// ── PATCH — ambiguous prefix → 409 (resolve() prefix-match parity) ────────────
+
+describe('PATCH /api/commitments/:id — ambiguous prefix returns 409', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-ambig-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    // Two ids that both start with "ambig01" → a 7-char prefix matches both.
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify({
+        commitments: [openCommitment('ambig01a', 'x'), openCommitment('ambig01b', 'y')],
+      }),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('a prefix matching multiple commitments → 409', async () => {
+    const router = createCommitmentsRouter(tmpDir, { refreshQmd: async () => {} });
+    const { status } = await patchCommitment(router, 'ambig01', { status: 'resolved' });
+    assert.equal(status, 409);
+  });
+});
+
 // ── commitments pagination tests ──────────────────────────────────────────────
 
 describe('GET /api/commitments — pagination', () => {
