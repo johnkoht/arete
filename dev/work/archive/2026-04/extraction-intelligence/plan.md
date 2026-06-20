@@ -1,12 +1,12 @@
 ---
 title: "Extraction Intelligence Improvements"
 slug: extraction-intelligence
-status: complete
+status: approved
 size: large
 tags: [meetings, extraction, dedup, quality, llm-review]
 created: "2026-04-08T00:00:00.000Z"
 updated: "2026-04-08T00:00:00.000Z"
-completed: "2026-04-09T00:00:00.000Z"
+completed: null
 execution: null
 has_review: true
 has_pre_mortem: true
