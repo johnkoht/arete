@@ -48,8 +48,16 @@ John created `dev/work/plans/build-mode-claude-port/` this session — porting B
 | Core `project-session.ts` + tests | ✅ built, 9/9 pass (I re-ran, not just the agent) |
 | CLI verbs + `open` surfacing + tests | ✅ built, 20/20 pass (re-ran independently) |
 | Typecheck + targeted tests green | ✅ `tsc -b core cli` exit 0; both test files green |
-| Skill prose-pin tests (test D) | ⬜ follow-up (not tonight) |
-| Increment B (statusline, SessionStart hook) | ⬜ deferred to John (manual env) |
+| Skill prose-pin tests (test D) | ⬜ follow-up |
+| Increment B — statusline + session-start verbs + tests | ✅ built `bf3a6b45`, verified (core 19/19, CLI 25/25, tsc clean) |
+| Increment B — settings.json wire-up + live render/greeting check | ⬜ **John (manual, irreducible)** — paste block + eyeball; see `increment-b-settings.md` |
+
+## Increment B — built 2026-06-20
+
+- `arete project statusline` — `▸ slug` / `▸ slug · unsaved` / nothing; total error-guard (never pollutes the prompt line); C1 backstop wired (shows unsaved on a real file edit even if the LLM didn't flip `dirty`).
+- `arete project session-start` — reads `source` from hook stdin JSON (or `--source`); startup|clear wipe a stale marker (+ notice if unsaved); startup emits a once/day resume greeting with the H1 14-day recency filter; `--json` emits the `hookSpecificOutput` envelope.
+- Did NOT touch live `.claude/settings.json` (gitignored, John's machine). Paste block + latency caveat + manual steps in `increment-b-settings.md`.
+- Verified independently: typecheck exit 0; core 19/19; CLI 25/25. Read the core gating + both verbs by hand.
 
 ## Running log (cont.)
 
