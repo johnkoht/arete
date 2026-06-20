@@ -1,0 +1,57 @@
+{
+  "name": "web-commitment-resolve-parity",
+  "branchName": "feature/web-commitment-resolve-parity",
+  "goal": "Route the web PATCH /api/commitments/:id through CommitmentsService.resolve() (back-prop + lock + prune-safety) with a debounced QMD reindex, without reopening the concurrency lost-write window.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Route PATCH through a promise-memoized, serialized factory-wired service",
+      "description": "Replace the raw fs read/write in PATCH /:id with services.commitments.resolve(id, status). Build AreteServices once per router via a synchronously memoized construction promise; serialize resolves through a settled-promise queue mutex; map errors to 404/400.",
+      "acceptanceCriteria": [
+        "Resolving sets status + resolvedAt in commitments.json AND checks off the linked @from(commitment:<prefix>) task to [x]",
+        "status dropped leaves the linked task untouched",
+        "Services obtained via servicesPromise ??= createServices(workspaceRoot) assigned before any await; reset on rejection (HIGH-2)",
+        "Resolves serialized through a closure-scoped promise-queue mutex advancing on a settled promise; each caller gets its own result/error (HIGH-1)",
+        "Unknown id -> 404 (tested); invalid status -> 400; message-substring mapping has a code comment referencing commitments.ts throw sites",
+        "Response body remains { commitment }; no frontend change"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Debounced, coalesced, self-guarded QMD reindex",
+      "description": "Closure-scoped debounced refreshQmdIndex so a burst triggers one reindex ~5s after the last resolve; self-guarded detached callback.",
+      "acceptanceCriteria": [
+        "Each successful resolve re-arms a ~5s timer (clearTimeout before setTimeout), timer is .unref()'d",
+        "On fire calls refreshQmdIndex(workspaceRoot, config.qmd_collection) with config loaded once per router",
+        "Detached callback wrapped in try/catch AND async refresh .catch()-guarded; logs QmdRefreshResult.warning/embedWarning",
+        "PATCH responses are not blocked on the reindex"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Tests + build",
+      "description": "Backend route tests incl. high-contention no-lost-writes, plus rebuild committed dist.",
+      "acceptanceCriteria": [
+        "Tests: resolved -> file + task [x]; dropped -> task untouched; unknown id -> 404; debounce fires once per burst (spy the callback, not real refreshQmdIndex which is skipped under ARETE_SEARCH_FALLBACK=1)",
+        "High-contention test: >=50 parallel PATCHes to distinct ids on ONE shared router; all end resolved, zero lost writes; proven RED with the mutex removed (HIGH-3)",
+        "pnpm build succeeds; dist/ rebuilt and committed",
+        "typecheck + affected tests green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-06-19T00:00:00.000Z",
+    "totalTasks": 3,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

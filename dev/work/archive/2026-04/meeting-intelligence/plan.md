@@ -1,12 +1,12 @@
 ---
 title: "Meeting Intelligence: Enriched Frontmatter, Manifest & Area Topics"
 slug: meeting-intelligence
-status: complete
+status: approved
 size: medium
 tags: [meetings, intelligence, area-memory, manifest]
 created: "2026-04-05T00:00:00.000Z"
 updated: "2026-04-05T00:00:00.000Z"
-completed: "2026-04-09T00:00:00.000Z"
+completed: null
 execution: null
 has_review: true
 has_pre_mortem: true

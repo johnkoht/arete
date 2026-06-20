@@ -6,6 +6,22 @@ Component-local gotchas, invariants, and pre-edit checklists for `packages/apps/
 
 ## Gotchas
 
+### CommitmentsService.resolve() load()s OUTSIDE the lock — serialize concurrent resolves (2026-06-19)
+
+`CommitmentsService.resolve()` does `load()` *before* `save()`, and only `save()` holds the
+`proper-lockfile` lock (re-entrancy gated by an instance-local `holdsLock` boolean). So the
+cross-process lock does **not** prevent in-process lost updates: two concurrent resolves on the
+**same** service instance both read the full snapshot, each writes back only their own change →
+last-writer-wins clobbers the others.
+
+This bites any backend route that resolves commitments under concurrency. The web `PATCH
+/api/commitments/:id` is exactly this case — the UI fires ~50 independent PATCHes for a bulk
+resolve. Fix pattern (see `createCommitmentsRouter`): **memoize one shared wired service
+(promise-memoized, not value-memoized, to avoid an async double-construct race) AND serialize
+resolves through a closure-scoped settled-promise queue mutex** so only one load-modify-save runs
+at a time. Guard it with a high-contention test (≥50 parallel resolves on ONE router) proven to
+go RED without the mutex — a per-request fresh router passes vacuously.
+
 ### npm run typecheck Does NOT Check Backend (2026-03-08)
 
 `npm run typecheck` in the repo root only checks `packages/core` and `packages/cli`. The backend

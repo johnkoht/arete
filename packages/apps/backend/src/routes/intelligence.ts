@@ -11,8 +11,17 @@ import {
   detectCrossPersonPatterns,
   computeCommitmentPriority,
   CommitmentsService,
+  createServices,
+  loadConfig,
+  refreshQmdIndex,
 } from '@arete/core';
-import type { PriorityLevel, HealthIndicator, Commitment } from '@arete/core';
+import type {
+  PriorityLevel,
+  HealthIndicator,
+  Commitment,
+  AreteServices,
+  QmdRefreshResult,
+} from '@arete/core';
 import { parse as parseYaml } from 'yaml';
 
 type CommitmentEntry = {
@@ -284,8 +293,103 @@ async function loadPersonHealthMap(workspaceRoot: string): Promise<Map<string, H
  * - ?direction=mine (i_owe_them) | theirs (they_owe_me) — filters by direction
  * - ?person=<slug> — filters by person slug
  */
-export function createCommitmentsRouter(workspaceRoot: string): Hono {
+/**
+ * Optional dependency injection for the commitments router. Production code
+ * calls `createCommitmentsRouter(workspaceRoot)` with no deps; tests inject a
+ * deterministic `refreshQmd` seam and a short `debounceMs` so the coalesced
+ * reindex is observable without shelling out to `qmd` or waiting 5s.
+ */
+type CommitmentsRouterDeps = {
+  refreshQmd?: (
+    workspaceRoot: string,
+    collection: string | undefined,
+  ) => Promise<unknown>;
+  debounceMs?: number;
+};
+
+export function createCommitmentsRouter(
+  workspaceRoot: string,
+  deps?: CommitmentsRouterDeps,
+): Hono {
   const app = new Hono();
+
+  // ── Concurrency-safe resolve path (see dev/work/plans/web-commitment-resolve-parity) ──
+  //
+  // HIGH-2: memoize the CONSTRUCTION PROMISE (not the resolved value).
+  // `createServices` is async and this factory is sync; a value-memo would let
+  // a concurrent first burst of requests each kick off their own
+  // `createServices`, yielding N separate CommitmentsService instances — which
+  // reopens the `holdsLock` re-entrancy lost-write window. Assigning the
+  // promise synchronously before any await guarantees a single shared instance.
+  let servicesPromise: Promise<AreteServices> | undefined;
+  const getServices = (): Promise<AreteServices> => {
+    if (servicesPromise) return servicesPromise;
+    const p: Promise<AreteServices> = createServices(workspaceRoot).catch(
+      (err: unknown) => {
+        // Allow retry after a transient construction failure.
+        if (servicesPromise === p) servicesPromise = undefined;
+        throw err;
+      },
+    );
+    servicesPromise = p;
+    return p;
+  };
+
+  // HIGH-1: serialize resolves through a settled-promise queue mutex so only
+  // one resolve runs at a time on the shared instance (no other request ever
+  // observes `holdsLock` mid-flight). The queue advances on a SETTLED promise
+  // (`run.then(noop, noop)`) so a rejected resolve can neither poison nor stall
+  // the chain; each caller awaits its OWN `run` and so gets its own
+  // result/error with no cross-request leakage.
+  let tail: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = tail.then(fn);
+    tail = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  };
+
+  // task-2: debounced, coalesced QMD reindex. A burst of resolves collapses to
+  // one reindex ~debounceMs after the last one. Fire-and-forget; never awaited
+  // in the request path.
+  const refreshFn = deps?.refreshQmd ?? refreshQmdIndex;
+  const debounceMs = deps?.debounceMs ?? 5000;
+  let reindexTimer: NodeJS.Timeout | undefined;
+  let cachedCollection: string | undefined;
+  let collectionLoaded = false;
+  const scheduleReindex = (): void => {
+    if (reindexTimer) clearTimeout(reindexTimer);
+    reindexTimer = setTimeout(() => {
+      // Detached callback: the backend registers no `unhandledRejection`
+      // handler, so guard the whole body AND `.catch()` the async work.
+      void (async () => {
+        try {
+          if (!collectionLoaded) {
+            const config = await loadConfig(new FileStorageAdapter(), workspaceRoot);
+            // singular `qmd_collection` is the "qmd configured?" gate
+            cachedCollection = config.qmd_collection;
+            collectionLoaded = true;
+          }
+          const result = (await refreshFn(workspaceRoot, cachedCollection)) as
+            | QmdRefreshResult
+            | undefined;
+          if (result?.warning) {
+            console.warn('[commitments] qmd refresh warning:', result.warning);
+          }
+          if (result?.embedWarning) {
+            console.warn('[commitments] qmd embed warning:', result.embedWarning);
+          }
+        } catch (err) {
+          console.error('[commitments] qmd reindex failed:', err);
+        }
+      })().catch((err) =>
+        console.error('[commitments] qmd reindex (outer):', err),
+      );
+    }, debounceMs);
+    reindexTimer.unref();
+  };
 
   app.get('/', async (c) => {
     try {
@@ -458,45 +562,47 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
     }
   });
 
-  // PATCH /api/commitments/:id — mark done or drop
+  // PATCH /api/commitments/:id — mark done or drop.
+  //
+  // Routes through the factory-wired CommitmentsService.resolve() so the web
+  // path reaches parity with the CLI: task back-propagation to week.md/tasks.md
+  // (resolved only — dropped does NOT check off tasks), proper-lockfile locking,
+  // and prune-safety. Resolves are serialized (see closure above) and a single
+  // QMD reindex is debounced after the burst.
   app.patch('/:id', async (c) => {
+    const id = c.req.param('id');
+
+    let body: { status?: string };
     try {
-      const id = c.req.param('id');
-      const filePath = join(workspaceRoot, '.arete', 'commitments.json');
+      body = (await c.req.json()) as { status?: string };
+    } catch {
+      return c.json({ error: 'status must be "resolved" or "dropped"' }, 400);
+    }
+    const status = body.status;
+    if (status !== 'resolved' && status !== 'dropped') {
+      return c.json({ error: 'status must be "resolved" or "dropped"' }, 400);
+    }
 
-      let fileData: CommitmentsFile = { commitments: [] };
-      try {
-        const raw = await fs.readFile(filePath, 'utf8');
-        fileData = JSON.parse(raw) as CommitmentsFile;
-        if (!Array.isArray(fileData.commitments)) fileData.commitments = [];
-      } catch {
-        // File doesn't exist — nothing to update
-        return c.json({ error: 'Commitment not found' }, 404);
-      }
-
-      const idx = fileData.commitments.findIndex((c) => c.id === id);
-      if (idx === -1) {
-        return c.json({ error: 'Commitment not found' }, 404);
-      }
-
-      const body = (await c.req.json()) as { status?: string };
-      const newStatus = body.status;
-
-      if (newStatus !== 'resolved' && newStatus !== 'dropped') {
-        return c.json({ error: 'status must be "resolved" or "dropped"' }, 400);
-      }
-
-      const updated: CommitmentEntry = {
-        ...fileData.commitments[idx]!,
-        status: newStatus,
-        resolvedAt: new Date().toISOString(),
-      };
-
-      fileData.commitments[idx] = updated;
-      await fs.writeFile(filePath, JSON.stringify(fileData, null, 2), 'utf8');
-
+    try {
+      const services = await getServices();
+      const updated = await serialize(() =>
+        services.commitments.resolve(id, status),
+      );
+      // Both resolved and dropped change state → coalesced reindex.
+      scheduleReindex();
       return c.json({ commitment: updated });
     } catch (err) {
+      // Error-message → HTTP status mapping. The thrown strings live at
+      // packages/core/src/services/commitments.ts:795 ("No commitment found
+      // matching id prefix") and :799 ("Ambiguous prefix ... matches"). A
+      // reword there must update this mapping — guarded by the 404 route test.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('No commitment found')) {
+        return c.json({ error: 'Commitment not found' }, 404);
+      }
+      if (msg.includes('Ambiguous prefix')) {
+        return c.json({ error: msg }, 409);
+      }
       console.error('[commitments] PATCH error:', err);
       return c.json({ error: 'Failed to update commitment' }, 500);
     }

@@ -18,6 +18,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createIntelligenceRouter, createCommitmentsRouter } from '../../src/routes/intelligence.js';
 
+// Backend tests do NOT inherit ARETE_SEARCH_FALLBACK from the root test script
+// (that script only sets it for the core/cli globs). Set it here so the
+// debounced refreshQmdIndex no-ops instead of shelling out to `qmd`.
+process.env.ARETE_SEARCH_FALLBACK = '1';
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 async function req(
@@ -28,6 +33,35 @@ async function req(
   const res = await app.request(path, { method });
   const json = await res.json() as unknown;
   return { status: res.status, json };
+}
+
+// Shared PATCH helper for the commitments router.
+async function patchCommitment(
+  app: ReturnType<typeof createCommitmentsRouter>,
+  id: string,
+  body: unknown,
+): Promise<{ status: number; json: unknown }> {
+  const res = await app.request(`/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json()) as unknown;
+  return { status: res.status, json };
+}
+
+function openCommitment(id: string, text: string) {
+  return {
+    id,
+    text,
+    direction: 'i_owe_them',
+    personSlug: 'jane-doe',
+    personName: 'Jane Doe',
+    source: 'meeting-2026-01-01',
+    date: new Date().toISOString().slice(0, 10),
+    status: 'open',
+    resolvedAt: null,
+  };
 }
 
 // ── patterns route — empty workspace ─────────────────────────────────────────
@@ -707,6 +741,232 @@ describe('PATCH /api/commitments/:id — mark done or drop', () => {
     assert.ok(c1, 'c-patch-1 should exist in file');
     assert.equal(c1.status, 'resolved');
     assert.ok(c1.resolvedAt !== null);
+  });
+});
+
+// ── PATCH — task back-propagation parity (resolved checks off linked task) ────
+
+describe('PATCH /api/commitments/:id — back-propagates to linked week.md task', () => {
+  let tmpDir: string;
+
+  // Back-prop links on the commitment id's first 8 chars
+  // (CommitmentsService.resolve → completeTaskFromCommitmentFn(id.slice(0,8))),
+  // so use 8-char ids and matching @from(commitment:<id>) in week.md.
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-backprop-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await mkdir(join(tmpDir, 'now'), { recursive: true });
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify({
+        commitments: [
+          openCommitment('bp000001', 'Send the proposal'),
+          openCommitment('bp000002', 'Share the roadmap'),
+        ],
+      }),
+      'utf8',
+    );
+    await writeFile(
+      join(tmpDir, 'now', 'week.md'),
+      [
+        '## Inbox',
+        '',
+        '- [ ] Send the proposal @from(commitment:bp000001)',
+        '- [ ] Share the roadmap @from(commitment:bp000002)',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      join(tmpDir, 'now', 'tasks.md'),
+      ['## Anytime', '', '## Someday', ''].join('\n'),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function lineFor(substr: string): Promise<string> {
+    const { readFile } = await import('node:fs/promises');
+    const week = await readFile(join(tmpDir, 'now', 'week.md'), 'utf8');
+    const line = week.split('\n').find((l) => l.includes(substr));
+    assert.ok(line, `expected a week.md line containing "${substr}"`);
+    return line;
+  }
+
+  it('resolved → linked task flips to [x]', async () => {
+    const router = createCommitmentsRouter(tmpDir, { refreshQmd: async () => {} });
+    const { status } = await patchCommitment(router, 'bp000001', { status: 'resolved' });
+    assert.equal(status, 200);
+    assert.match(await lineFor('bp000001'), /^- \[x\]/, 'bp000001 task should be checked off');
+    // The other task is untouched.
+    assert.match(await lineFor('bp000002'), /^- \[ \]/, 'bp000002 task should remain open');
+  });
+
+  it('dropped → linked task is NOT checked off (dropped ≠ done)', async () => {
+    const router = createCommitmentsRouter(tmpDir, { refreshQmd: async () => {} });
+    const { status, json } = await patchCommitment(router, 'bp000002', { status: 'dropped' });
+    assert.equal(status, 200);
+    assert.equal((json as { commitment: { status: string } }).commitment.status, 'dropped');
+    assert.match(await lineFor('bp000002'), /^- \[ \]/, 'dropped must not check off the task');
+  });
+});
+
+// ── PATCH — debounced QMD reindex coalesces a burst into one refresh ──────────
+
+describe('PATCH /api/commitments/:id — debounced reindex coalesces a burst', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-debounce-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify({
+        commitments: [
+          openCommitment('db000001', 'one'),
+          openCommitment('db000002', 'two'),
+          openCommitment('db000003', 'three'),
+        ],
+      }),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('fires the reindex exactly once for a burst of resolves', async () => {
+    let calls = 0;
+    const router = createCommitmentsRouter(tmpDir, {
+      refreshQmd: async () => {
+        calls += 1;
+      },
+      debounceMs: 20,
+    });
+    await Promise.all([
+      patchCommitment(router, 'db000001', { status: 'resolved' }),
+      patchCommitment(router, 'db000002', { status: 'resolved' }),
+      patchCommitment(router, 'db000003', { status: 'resolved' }),
+    ]);
+    // No reindex yet (debounce window still open right after the burst).
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(calls, 1, 'a burst should coalesce to a single reindex');
+  });
+});
+
+// ── PATCH — high-contention concurrency: no lost writes (pre-mortem HIGH-3) ────
+
+describe('PATCH /api/commitments/:id — concurrent resolves do not lose writes', () => {
+  let tmpDir: string;
+  const N = 60;
+  const ids = Array.from({ length: N }, (_, i) => `hc0000${String(i + 1).padStart(2, '0')}`);
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-contention-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify({ commitments: ids.map((id) => openCommitment(id, `task ${id}`)) }),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it(`resolves ${N} commitments fired in parallel against ONE router with zero lost writes`, async () => {
+    // ONE shared router instance → all requests share the memoized service and
+    // the serialization mutex. Without the mutex, the load-modify-save race
+    // clobbers writes (this test goes RED). With it, every write survives.
+    const router = createCommitmentsRouter(tmpDir, { refreshQmd: async () => {}, debounceMs: 50 });
+    const results = await Promise.all(
+      ids.map((id) => patchCommitment(router, id, { status: 'resolved' })),
+    );
+    assert.ok(results.every((r) => r.status === 200), 'every PATCH should return 200');
+
+    const { readFile } = await import('node:fs/promises');
+    const data = JSON.parse(
+      await readFile(join(tmpDir, '.arete', 'commitments.json'), 'utf8'),
+    ) as { commitments: Array<{ id: string; status: string }> };
+    const resolved = data.commitments.filter((c) => c.status === 'resolved');
+    assert.equal(resolved.length, N, `all ${N} should be resolved, found ${resolved.length}`);
+    const stillOpen = data.commitments.filter((c) => c.status === 'open').map((c) => c.id);
+    assert.deepEqual(stillOpen, [], `no commitment should remain open; lost: ${stillOpen.join(',')}`);
+  });
+});
+
+// ── PATCH — a rejected resolve in a burst must not break siblings (HIGH-1) ────
+
+describe('PATCH /api/commitments/:id — a failing resolve in a burst does not break siblings', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-mixed-burst-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify({
+        commitments: [openCommitment('good0001', 'a'), openCommitment('good0002', 'b')],
+      }),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('a 404 (unknown id) between two valid resolves does not poison the queue', async () => {
+    const router = createCommitmentsRouter(tmpDir, { refreshQmd: async () => {} });
+    const [a, bad, b] = await Promise.all([
+      patchCommitment(router, 'good0001', { status: 'resolved' }),
+      patchCommitment(router, 'zzz-nope', { status: 'resolved' }),
+      patchCommitment(router, 'good0002', { status: 'resolved' }),
+    ]);
+    assert.equal(a.status, 200, 'first valid resolve should succeed');
+    assert.equal(bad.status, 404, 'unknown id should 404');
+    assert.equal(b.status, 200, 'sibling resolve after a rejection should still succeed');
+
+    const { readFile } = await import('node:fs/promises');
+    const data = JSON.parse(
+      await readFile(join(tmpDir, '.arete', 'commitments.json'), 'utf8'),
+    ) as { commitments: Array<{ id: string; status: string }> };
+    assert.equal(data.commitments.find((c) => c.id === 'good0001')?.status, 'resolved');
+    assert.equal(data.commitments.find((c) => c.id === 'good0002')?.status, 'resolved');
+  });
+});
+
+// ── PATCH — ambiguous prefix → 409 (resolve() prefix-match parity) ────────────
+
+describe('PATCH /api/commitments/:id — ambiguous prefix returns 409', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-ambig-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    // Two ids that both start with "ambig01" → a 7-char prefix matches both.
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify({
+        commitments: [openCommitment('ambig01a', 'x'), openCommitment('ambig01b', 'y')],
+      }),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('a prefix matching multiple commitments → 409', async () => {
+    const router = createCommitmentsRouter(tmpDir, { refreshQmd: async () => {} });
+    const { status } = await patchCommitment(router, 'ambig01', { status: 'resolved' });
+    assert.equal(status, 409);
   });
 });
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] — Web commitment resolve reaches CLI parity
+
+Resolving a commitment in the web UI now does everything `arete commitments resolve` does. Previously `PATCH /api/commitments/:id` did a raw write of `commitments.json` (status + resolvedAt only), so the linked task in `week.md`/`tasks.md` stayed unchecked forever and the write bypassed the cross-process lock — exactly the bulk-resolve flow used in the UI. It now routes through the wired `CommitmentsService.resolve()`.
+
+### Fixed
+- **Web commitment resolve now back-propagates + locks.** `PATCH /api/commitments/:id` routes through `CommitmentsService.resolve()`: linked tasks are checked off (resolved only — dropped does NOT check off tasks), the write takes the `proper-lockfile` lock, and prune-safety applies. A single QMD reindex is debounced (~5s) after a burst instead of per-item.
+- **Concurrent bulk resolves no longer lose writes.** `resolve()` `load()`s outside the lock, so concurrent web resolves on a shared service could clobber each other (last-writer-wins). The router now memoizes one wired service (promise-memoized) and serializes resolves through a settled-promise queue mutex. Guarded by a 60-way contention test proven RED without the mutex, GREEN with it.
+
+### Changed
+- The single-item PATCH now resolves by id **prefix** (CLI parity) and can return **409** for an ambiguous prefix; benign in practice since the UI sends full ids. Response is now a core `Commitment` (superset of the old shape; consumers read id/status/resolvedAt).
+
 ## [0.18.1] — 2026-06-17 — People-memory refresh scoped to recent meetings (incremental)
 
 `arete people memory refresh` re-swept every refreshable person across **all meetings in the last 90 days** on every run — expensive enough to trip the interactive cost-confirmation gate, which the non-interactive daily/weekly winddown can't answer, so the refresh silently aborted (no person-memory update on real meeting days). It now scopes to the meetings in a recent window, making the winddown's refresh cheap, incremental, and gate-free; the full 90-day rebuild stays available on demand. The *unit* (people **named** in a meeting — attendees + mentions) is unchanged; only the time window narrows.

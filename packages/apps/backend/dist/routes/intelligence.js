@@ -5,7 +5,7 @@
 import { join, basename } from 'node:path';
 import fs from 'node:fs/promises';
 import { Hono } from 'hono';
-import { FileStorageAdapter, detectCrossPersonPatterns, computeCommitmentPriority, CommitmentsService, } from '@arete/core';
+import { FileStorageAdapter, detectCrossPersonPatterns, computeCommitmentPriority, CommitmentsService, createServices, loadConfig, refreshQmdIndex, } from '@arete/core';
 import { parse as parseYaml } from 'yaml';
 // ---------------------------------------------------------------------------
 // Helpers for meeting text extraction (used by reconcile endpoint)
@@ -220,16 +220,78 @@ async function loadPersonHealthMap(workspaceRoot) {
     }
     return healthMap;
 }
-/**
- * Create the /api/commitments router.
- *
- * Supports query params:
- * - ?filter=overdue (daysOpen > 14) | thisweek (daysOpen <= 7) | open | all
- * - ?direction=mine (i_owe_them) | theirs (they_owe_me) — filters by direction
- * - ?person=<slug> — filters by person slug
- */
-export function createCommitmentsRouter(workspaceRoot) {
+export function createCommitmentsRouter(workspaceRoot, deps) {
     const app = new Hono();
+    // ── Concurrency-safe resolve path (see dev/work/plans/web-commitment-resolve-parity) ──
+    //
+    // HIGH-2: memoize the CONSTRUCTION PROMISE (not the resolved value).
+    // `createServices` is async and this factory is sync; a value-memo would let
+    // a concurrent first burst of requests each kick off their own
+    // `createServices`, yielding N separate CommitmentsService instances — which
+    // reopens the `holdsLock` re-entrancy lost-write window. Assigning the
+    // promise synchronously before any await guarantees a single shared instance.
+    let servicesPromise;
+    const getServices = () => {
+        if (servicesPromise)
+            return servicesPromise;
+        const p = createServices(workspaceRoot).catch((err) => {
+            // Allow retry after a transient construction failure.
+            if (servicesPromise === p)
+                servicesPromise = undefined;
+            throw err;
+        });
+        servicesPromise = p;
+        return p;
+    };
+    // HIGH-1: serialize resolves through a settled-promise queue mutex so only
+    // one resolve runs at a time on the shared instance (no other request ever
+    // observes `holdsLock` mid-flight). The queue advances on a SETTLED promise
+    // (`run.then(noop, noop)`) so a rejected resolve can neither poison nor stall
+    // the chain; each caller awaits its OWN `run` and so gets its own
+    // result/error with no cross-request leakage.
+    let tail = Promise.resolve();
+    const serialize = (fn) => {
+        const run = tail.then(fn);
+        tail = run.then(() => { }, () => { });
+        return run;
+    };
+    // task-2: debounced, coalesced QMD reindex. A burst of resolves collapses to
+    // one reindex ~debounceMs after the last one. Fire-and-forget; never awaited
+    // in the request path.
+    const refreshFn = deps?.refreshQmd ?? refreshQmdIndex;
+    const debounceMs = deps?.debounceMs ?? 5000;
+    let reindexTimer;
+    let cachedCollection;
+    let collectionLoaded = false;
+    const scheduleReindex = () => {
+        if (reindexTimer)
+            clearTimeout(reindexTimer);
+        reindexTimer = setTimeout(() => {
+            // Detached callback: the backend registers no `unhandledRejection`
+            // handler, so guard the whole body AND `.catch()` the async work.
+            void (async () => {
+                try {
+                    if (!collectionLoaded) {
+                        const config = await loadConfig(new FileStorageAdapter(), workspaceRoot);
+                        // singular `qmd_collection` is the "qmd configured?" gate
+                        cachedCollection = config.qmd_collection;
+                        collectionLoaded = true;
+                    }
+                    const result = (await refreshFn(workspaceRoot, cachedCollection));
+                    if (result?.warning) {
+                        console.warn('[commitments] qmd refresh warning:', result.warning);
+                    }
+                    if (result?.embedWarning) {
+                        console.warn('[commitments] qmd embed warning:', result.embedWarning);
+                    }
+                }
+                catch (err) {
+                    console.error('[commitments] qmd reindex failed:', err);
+                }
+            })().catch((err) => console.error('[commitments] qmd reindex (outer):', err));
+        }, debounceMs);
+        reindexTimer.unref();
+    };
     app.get('/', async (c) => {
         try {
             const filePath = join(workspaceRoot, '.arete', 'commitments.json');
@@ -382,41 +444,45 @@ export function createCommitmentsRouter(workspaceRoot) {
             return c.json({ error: 'Failed to reconcile commitments' }, 500);
         }
     });
-    // PATCH /api/commitments/:id — mark done or drop
+    // PATCH /api/commitments/:id — mark done or drop.
+    //
+    // Routes through the factory-wired CommitmentsService.resolve() so the web
+    // path reaches parity with the CLI: task back-propagation to week.md/tasks.md
+    // (resolved only — dropped does NOT check off tasks), proper-lockfile locking,
+    // and prune-safety. Resolves are serialized (see closure above) and a single
+    // QMD reindex is debounced after the burst.
     app.patch('/:id', async (c) => {
+        const id = c.req.param('id');
+        let body;
         try {
-            const id = c.req.param('id');
-            const filePath = join(workspaceRoot, '.arete', 'commitments.json');
-            let fileData = { commitments: [] };
-            try {
-                const raw = await fs.readFile(filePath, 'utf8');
-                fileData = JSON.parse(raw);
-                if (!Array.isArray(fileData.commitments))
-                    fileData.commitments = [];
-            }
-            catch {
-                // File doesn't exist — nothing to update
-                return c.json({ error: 'Commitment not found' }, 404);
-            }
-            const idx = fileData.commitments.findIndex((c) => c.id === id);
-            if (idx === -1) {
-                return c.json({ error: 'Commitment not found' }, 404);
-            }
-            const body = (await c.req.json());
-            const newStatus = body.status;
-            if (newStatus !== 'resolved' && newStatus !== 'dropped') {
-                return c.json({ error: 'status must be "resolved" or "dropped"' }, 400);
-            }
-            const updated = {
-                ...fileData.commitments[idx],
-                status: newStatus,
-                resolvedAt: new Date().toISOString(),
-            };
-            fileData.commitments[idx] = updated;
-            await fs.writeFile(filePath, JSON.stringify(fileData, null, 2), 'utf8');
+            body = (await c.req.json());
+        }
+        catch {
+            return c.json({ error: 'status must be "resolved" or "dropped"' }, 400);
+        }
+        const status = body.status;
+        if (status !== 'resolved' && status !== 'dropped') {
+            return c.json({ error: 'status must be "resolved" or "dropped"' }, 400);
+        }
+        try {
+            const services = await getServices();
+            const updated = await serialize(() => services.commitments.resolve(id, status));
+            // Both resolved and dropped change state → coalesced reindex.
+            scheduleReindex();
             return c.json({ commitment: updated });
         }
         catch (err) {
+            // Error-message → HTTP status mapping. The thrown strings live at
+            // packages/core/src/services/commitments.ts:795 ("No commitment found
+            // matching id prefix") and :799 ("Ambiguous prefix ... matches"). A
+            // reword there must update this mapping — guarded by the 404 route test.
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes('No commitment found')) {
+                return c.json({ error: 'Commitment not found' }, 404);
+            }
+            if (msg.includes('Ambiguous prefix')) {
+                return c.json({ error: msg }, 409);
+            }
             console.error('[commitments] PATCH error:', err);
             return c.json({ error: 'Failed to update commitment' }, 500);
         }
