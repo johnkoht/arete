@@ -12,6 +12,8 @@ export { resolveProjectArea } from './brief-assemblers.js';
 export type { ProjectAreaResolution } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
+export { activeProjectMarkerPath, resumeSidecarPath, readActiveProjectMarker, writeActiveProjectMarker, setActiveProjectMarkerDirty, clearActiveProjectMarker, readResumeSidecar, writeResumeSidecar, dirtyByMtime, } from './project-session.js';
+export type { ActiveProjectMarker } from './project-session.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
 export { selectProjectDocs } from './brief-assemblers.js';
 export { listActiveProjects, PROJECT_DOC_BUDGET_DEFAULT, } from './brief-assemblers.js';

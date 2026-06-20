@@ -22,17 +22,58 @@ John created `dev/work/plans/build-mode-claude-port/` this session — porting B
 
 - [x] **Pre-Flight** — plan `status: planned`, `has_pre_mortem` was false → ran it; `has_review: true` → Phase 1.3 review SKIPPED (eng-lead review already done).
 - [x] **Phase 1.2 Pre-Mortem** — `pre-mortem.md` written; 3 CRITICAL / 8 HIGH / 4 MED. Gate PAUSED, reported to John, mitigations folded into `plan.md` (Increment A/B split, C1 mtime backstop, C2 friction budget, C3 main-root pin, H3 `.prev`, H4 no-hollow-line, H6 honest teardown, H7 env-translation, H8 port coord, M-series). `updated` bumped.
-- [ ] **Phase 2** — Memory review → build spec (PRD-equivalent) → commit artifacts. (in progress)
-- [ ] **Phase 3** — Worktree setup. (worktree created)
-- [ ] **Phase 4** — Build Increment A + verify.
-- [ ] **Phase 5** — Wrap: diary, ship report. STOP at merge gate.
+- [x] **Phase 2/3** — Worktree `feature/project-exit` created; artifacts committed. (Skipped the heavy pi PRD/memory machinery — env-translated per H7; the plan's `## Plan` already serves as the build spec.)
+- [x] **Phase 4** — Built Increment A (core + CLI + skill prose); independently verified (typecheck clean, core 9/9, CLI 20/20). Increment B deferred to John.
+- [x] **Phase 5** — Diary + ship report written. Implementation committed (`18b4b770`). **STOPPED at the merge gate — no merge to main** (John's call in the morning).
+- [ ] **Phase 6** — Cleanup (remove worktree) — only after John merges.
 
 ## Running log
 
 - `00:00` Worktree `feature/project-exit` created off `main@29fc7553`. Fresh checkout, no `node_modules`.
 - `00:01` Kicked off `npm install` in the worktree (background, log at `/tmp/project-exit-npm-install.log`) — needed for typecheck/test.
-- `00:02` Committing planning artifacts (plan + pre-mortem + this diary) to the feature branch (H7: artifacts to feature branch, not main).
+- `00:02` Committed planning artifacts to `feature/project-exit` (`c7e87360`). H7: feature branch, not main. ✅ progress saved.
+- `00:05` `npm install` in worktree succeeded (exit 0) — typecheck/test possible.
+- `00:08` Read `project.ts` patterns (verb registration, `open` JSON envelope, findRoot/getPaths). **C3 refinement:** marker root = arete workspace root via `services.workspace.findRoot()` (in production = the vault, which has no worktrees). The pre-mortem's "main checkout vs worktree" framing was a code-repo artifact; using `findRoot()` (not git toplevel) is the correct existing mechanism. Baked into the build spec.
+- `00:10` **Dispatched build agent (background)** for the core + CLI layer: `project-session.ts` (marker read/write/clear/setDirty + main-root resolution, resume sidecar read/write +`.prev`, `dirtyByMtime` C1 backstop), CLI verbs (`mark-open`/`mark-dirty`/`mark-clear`/`list`), `open` resume-block surfacing, scoped `snapshotTree` prune, + core & CLI tests. Instructed: typecheck + per-file tests only (full suite stalls), report raw results.
+- `00:12` **Authored skill prose myself** (non-overlapping with the agent): `packages/runtime/skills/project-exit/SKILL.md` (new — encodes C2 friction budget 0/1–2/3+, H2 confirm-before-irreversible, H4 no-hollow-status-line, capture=work-product-not-transcript, not-finalize/not-update boundaries, verification-honesty + rollback). Edited `packages/runtime/skills/project/SKILL.md` — added the no-arg → `project list` numbered-pick path + resume-block surfacing on open.
+- `00:13` Holding commits until the build agent finishes + I verify (avoid git index contention).
 
-## For John (morning) — filled at end of session
+## Pieces status (running)
 
-_TBD — ship report, what's green, what's inspected-only, what's pending, recommended next step._
+| Piece | State |
+|---|---|
+| Planning artifacts (plan, pre-mortem, diary) | ✅ committed `c7e87360` |
+| `/project-exit` SKILL.md | ✅ written (prose; soak-verified later, not CI) |
+| `/project` no-arg + resume surfacing prose | ✅ written |
+| Core `project-session.ts` + tests | ✅ built, 9/9 pass (I re-ran, not just the agent) |
+| CLI verbs + `open` surfacing + tests | ✅ built, 20/20 pass (re-ran independently) |
+| Typecheck + targeted tests green | ✅ `tsc -b core cli` exit 0; both test files green |
+| Skill prose-pin tests (test D) | ⬜ follow-up (not tonight) |
+| Increment B (statusline, SessionStart hook) | ⬜ deferred to John (manual env) |
+
+## Running log (cont.)
+
+- `00:15` Build agent reported green. **Verified independently** (PoC-vs-fair-test rule): read `project-session.ts` + the full `project.ts` diff, re-ran typecheck (exit 0) and both test files (core 9/9, CLI 20/20). Confirmed: C1 `dirtyByMtime` treats the filesystem as source of truth (bit only upgrades clean→dirty); `open` stays strictly read-only (sidecar READ only, adds `resume` to JSON + a markdown block); verbs use the exact findRoot/`--json` skeleton; `snapshotTree` prune scoped to `active-project.json`+`.last-greeting` (not a blanket `.claude/` skip).
+- `00:17` Committed implementation + dist (commit-dist rule) on `feature/project-exit`. STOPPED at merge gate — no merge to main.
+
+## 🚢 Ship report — Increment A built, NOT merged
+
+**Branch:** `feature/project-exit` (worktree `.claude/worktrees/project-exit`). `main` untouched.
+
+**What's done + verified (CI-grade):**
+- Core `project-session.ts`: marker read/write/clear/setDirty, resume sidecar read/write (+`.prev` + thinness flag), `dirtyByMtime` (C1 backstop). 9/9 unit tests.
+- CLI: `arete project mark-open <slug>` / `mark-dirty` / `mark-clear` / `list`, and `open` resume-block surfacing (read-only). 20/20 tests. Typecheck clean across core+cli.
+- Skill prose: `/project-exit/SKILL.md` (friction budget, confirm-before-irreversible, no-hollow-line, work-product-not-transcript) + `/project` no-arg picker & resume surfacing.
+
+**What's NOT done (by design / honesty):**
+- **Increment B** (statusline script + SessionStart greeting hook) — needs `.claude/settings.json` decisions + manual verification in your real env. Deferred to you.
+- **Skill behavior is prose-pinned, NOT soak-verified** — the capture-sweep recall, friction budget, and `dirty`-flip judgment only get proven once you run real `/project-exit` sessions. That's the soak.
+- **Full test suite not run** (it stalls / ~50min). Typecheck compiles all of core+cli (no type regressions) and changes are additive + locally tested, but **run `npm test` before merging** to be safe.
+- One minor: `project list` reads `status` via a `^status:` regex on the README (the agent's noted deviation) — fine for frontmatter; a body-prose `status:` line could mis-read. One-line swap to `parseProjectReadme` if you care.
+
+**Recommended morning sequence:**
+1. `cd .claude/worktrees/project-exit && git log --oneline main..HEAD` to see the two commits.
+2. Skim the diff; try the verbs live (`arete project list`, `mark-open`, `open`).
+3. `npm test` (full suite) for the regression gate.
+4. If happy: merge `feature/project-exit` → main (your call — I did not merge).
+5. Then build **Increment B** (statusline + hook) with manual verification, and register project-exit's interfaces in the `build-mode-claude-port` plan (H8).

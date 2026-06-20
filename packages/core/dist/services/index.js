@@ -13,6 +13,8 @@ export { extractDiscussionTopics, extractNextFocus, } from './brief-assemblers.j
 // Phase 12 AC1/AC2 — project area resolution + backfill helpers
 export { resolveProjectArea } from './brief-assemblers.js';
 export { listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, parseProjectReadme, } from './project-area.js';
+// project-exit (Increment A) — active-project marker + resume sidecar
+export { activeProjectMarkerPath, resumeSidecarPath, readActiveProjectMarker, writeActiveProjectMarker, setActiveProjectMarkerDirty, clearActiveProjectMarker, readResumeSidecar, writeResumeSidecar, dirtyByMtime, } from './project-session.js';
 // WS-1 (plan-context-injection) — deterministic project-doc selection engine
 export { selectProjectDocs } from './brief-assemblers.js';
 export { listActiveProjects, PROJECT_DOC_BUDGET_DEFAULT, } from './brief-assemblers.js';

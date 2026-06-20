@@ -40,6 +40,16 @@ Open a project with its full surrounding context in one move: `/project <name>` 
 
 ## Workflow
 
+### 0. No slug given → list and let the user pick (don't make them remember the slug)
+
+If the user invoked `/project` with **no name** ("/project", "open a project", "which projects do I have"), run:
+
+```
+arete project list --json
+```
+
+Present a **numbered** list (slug — name — area — status, most-recently-touched first) and ask which one. **Never auto-open** — this mirrors the disambiguation rule. Once the user picks, re-run step 1 with the exact slug. Empty workspace → say "No active projects" and stop.
+
 ### 1. Resolve and Open (CLI is the data path)
 
 Run:
@@ -48,7 +58,7 @@ Run:
 arete project open "<name>" --json
 ```
 
-**No LLM in the data path** — the CLI performs deterministic resolution and assembly. Your judgment applies only ON TOP of the returned context (summarizing, suggesting next steps), never inside retrieval.
+**No LLM in the data path** — the CLI performs deterministic resolution and assembly. Your judgment applies only ON TOP of the returned context (summarizing, suggesting next steps), never inside retrieval. If the returned envelope has a `resume` block (the "where you left off" note from a prior `/project-exit`), surface it FIRST — it's the catch-up signal.
 
 ### 2. Handle the Three Response Shapes
 
