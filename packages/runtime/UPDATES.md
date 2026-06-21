@@ -4,6 +4,12 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Resolving commitments in the web UI now actually finishes the job
+
+Marking a commitment done (or dropped) in the web UI used to only flip its status in the background file — the linked task on your week/tasks list stayed unchecked, and it could still surface in search. Now the web UI does the same thing as `arete commitments resolve`: it checks off the linked task (only when you resolve — dropping a commitment leaves the task alone, since dropped ≠ done) and refreshes search shortly after. Resolving a big batch at once is safe too — concurrent resolves no longer overwrite each other.
+
+---
+
 ## `wrap` and `finalize-project` stop stepping on each other
 
 The two close-out skills now route cleanly. `finalize-project` (the full project ceremony — context reconciliation, dated archive, closed-project retro) now routes on its own trigger phrases like "finalize project", "complete this project", and "archive this project". Previously `wrap` quietly claimed those project-archival phrases, so asking to "archive this project" landed you in the lightweight retro instead.
