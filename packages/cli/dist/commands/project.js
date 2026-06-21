@@ -14,7 +14,8 @@
  * refreshQmdIndex after workspace writes (+ `--skip-qmd`).
  */
 import chalk from 'chalk';
-import { createServices, loadConfig, refreshQmdIndex, listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, formatProjectBriefMarkdown, computeProjectTopicsRefresh, applyProjectTopics, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_DOC_BUDGET_DEFAULT, } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, listProjectsForBackfill, applyAreaToProjectReadme, resetBackfilledProjectAreas, formatProjectBriefMarkdown, computeProjectTopicsRefresh, applyProjectTopics, PROJECT_TOPICS_SCORE_FLOOR, PROJECT_DOC_BUDGET_DEFAULT, readActiveProjectMarker, writeActiveProjectMarker, setActiveProjectMarkerDirty, clearActiveProjectMarker, readResumeSidecar, statuslineSegment, handleSessionStart, } from '@arete/core';
+import { join } from 'node:path';
 import { error, info, success, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 /** Confidence floor for area inference (pre-mortem R3 — non-negotiable). */
@@ -25,6 +26,49 @@ const BACKFILL_CONFIDENCE_FLOOR = 0.7;
  * top-N candidates instead of auto-loading. Never auto-load a tie.
  */
 const DISAMBIGUATION_SCORE_RATIO = 0.8;
+/**
+ * Read a single JSON object from stdin, or null. Claude Code passes the hook
+ * payload (`{source, ...}`) on stdin to SessionStart hooks. Returns null when
+ * stdin is a TTY (interactive), empty, or unparseable. A 200ms safety timeout
+ * resolves null so the verb never hangs waiting on a stdin that won't close.
+ */
+function readStdinJson() {
+    return new Promise((resolve) => {
+        if (process.stdin.isTTY) {
+            resolve(null);
+            return;
+        }
+        let settled = false;
+        const finish = (value) => {
+            if (settled)
+                return;
+            settled = true;
+            resolve(value);
+        };
+        const timer = setTimeout(() => finish(null), 200);
+        timer.unref?.();
+        let data = '';
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data', (chunk) => {
+            data += chunk;
+        });
+        process.stdin.on('end', () => {
+            const trimmed = data.trim();
+            if (!trimmed) {
+                finish(null);
+                return;
+            }
+            try {
+                const parsed = JSON.parse(trimmed);
+                finish(parsed && typeof parsed === 'object' ? parsed : null);
+            }
+            catch {
+                finish(null);
+            }
+        });
+        process.stdin.on('error', () => finish(null));
+    });
+}
 export function registerProjectCommand(program) {
     const projectCmd = program
         .command('project')
@@ -244,6 +288,182 @@ export function registerProjectCommand(program) {
         }
     });
     // ---------------------------------------------------------------------
+    // arete project mark-open <slug>  (project-exit Increment A)
+    // ---------------------------------------------------------------------
+    projectCmd
+        .command('mark-open <slug>')
+        .description('Write the active-project marker (.claude/active-project.json) for <slug>. Harness state only — does not reindex.')
+        .option('--json', 'Output as JSON')
+        .action(async (slug, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const paths = services.workspace.getPaths(root);
+        const readmePath = join(paths.projects, 'active', slug, 'README.md');
+        const content = await services.storage.read(readmePath);
+        if (!content) {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `No active project '${slug}' (projects/active/${slug}/README.md not found)`,
+                }));
+            }
+            else {
+                error(`No active project '${slug}' (projects/active/${slug}/README.md not found)`);
+            }
+            process.exit(1);
+        }
+        const h1 = content.match(/^#\s+(.+?)\s*$/m);
+        const name = h1 ? h1[1].trim() : slug;
+        const marker = {
+            slug,
+            name,
+            openedAt: new Date().toISOString(),
+            dirty: false,
+        };
+        await writeActiveProjectMarker(services.storage, root, marker);
+        if (opts.json) {
+            console.log(JSON.stringify({ success: true, marker }, null, 2));
+            return;
+        }
+        success(`Marked '${slug}' open (${name}).`);
+    });
+    // ---------------------------------------------------------------------
+    // arete project mark-dirty  (project-exit Increment A)
+    // ---------------------------------------------------------------------
+    projectCmd
+        .command('mark-dirty')
+        .description('Set the active-project marker dirty bit. No-op when no project is open. Harness state only.')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const existing = await readActiveProjectMarker(services.storage, root);
+        await setActiveProjectMarkerDirty(services.storage, root);
+        if (opts.json) {
+            console.log(JSON.stringify({ success: true, hadMarker: existing !== undefined, dirty: true }));
+            return;
+        }
+        if (existing) {
+            success(`Marked '${existing.slug}' dirty.`);
+        }
+        else {
+            info('No active project marker — nothing to mark dirty.');
+        }
+    });
+    // ---------------------------------------------------------------------
+    // arete project mark-clear  (project-exit Increment A)
+    // ---------------------------------------------------------------------
+    projectCmd
+        .command('mark-clear')
+        .description('Delete the active-project marker. No-op when absent. Harness state only.')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const existing = await readActiveProjectMarker(services.storage, root);
+        await clearActiveProjectMarker(services.storage, root);
+        if (opts.json) {
+            console.log(JSON.stringify({ success: true, cleared: existing !== undefined }));
+            return;
+        }
+        if (existing) {
+            success(`Cleared active-project marker (was '${existing.slug}').`);
+        }
+        else {
+            info('No active project marker — nothing to clear.');
+        }
+    });
+    // ---------------------------------------------------------------------
+    // arete project list  (project-exit Increment A — READ-ONLY)
+    // ---------------------------------------------------------------------
+    projectCmd
+        .command('list')
+        .description('List active projects (slug, name, area, status, lastTouched) sorted by README mtime descending. Read-only.')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const paths = services.workspace.getPaths(root);
+        // listProjectsForBackfill gives slug/name(title)/area; add README mtime
+        // (lastTouched) + status from the same README the helper already validated.
+        const candidates = await listProjectsForBackfill(services.storage, paths);
+        const projects = [];
+        for (const c of candidates) {
+            const modified = await services.storage.getModified(c.readmePath);
+            const content = await services.storage.read(c.readmePath);
+            const statusMatch = content?.match(/^status:\s*(.+?)\s*$/m);
+            projects.push({
+                slug: c.slug,
+                name: c.title,
+                area: c.area ?? null,
+                status: statusMatch ? statusMatch[1].trim() : null,
+                lastTouched: modified ? modified.toISOString() : null,
+            });
+        }
+        // Sort by lastTouched desc (nulls last).
+        projects.sort((a, b) => {
+            if (a.lastTouched === b.lastTouched)
+                return 0;
+            if (a.lastTouched === null)
+                return 1;
+            if (b.lastTouched === null)
+                return -1;
+            return a.lastTouched < b.lastTouched ? 1 : -1;
+        });
+        if (opts.json) {
+            console.log(JSON.stringify({ success: true, projects }, null, 2));
+            return;
+        }
+        if (projects.length === 0) {
+            info('No active projects.');
+            return;
+        }
+        console.log(chalk.bold('Active projects (most recently touched first):'));
+        for (const p of projects) {
+            const meta = [p.area ? `area: ${p.area}` : null, p.status ? `status: ${p.status}` : null]
+                .filter(Boolean)
+                .join(', ');
+            const touched = p.lastTouched ? p.lastTouched : 'mtime unavailable';
+            console.log(`  ${chalk.cyan(p.slug.padEnd(36))} ${chalk.dim(touched)}${meta ? chalk.dim(`  (${meta})`) : ''}`);
+        }
+    });
+    // ---------------------------------------------------------------------
     // arete project open <name>  (Phase 12 AC3 — READ-ONLY)
     // ---------------------------------------------------------------------
     projectCmd
@@ -318,6 +538,9 @@ export function registerProjectCommand(program) {
             projectDocBudgetChars: PROJECT_DOC_BUDGET_DEFAULT,
         });
         const whatsNew = await services.intelligence.assembleProjectWhatsNew(topSlug, paths);
+        // project-exit: surface the resume sidecar if the prior session left one.
+        // READ-ONLY addition — open writes nothing.
+        const resume = (await readResumeSidecar(services.storage, root, topSlug)) ?? null;
         if (opts.json) {
             const { metadata, sections, sources, subject, subjectSlug, mode, truncated } = brief;
             console.log(JSON.stringify({
@@ -329,9 +552,16 @@ export function registerProjectCommand(program) {
                 sections,
                 sources,
                 truncated,
+                resume,
                 whatsNew,
             }, null, 2));
             return;
+        }
+        if (resume) {
+            console.log('## Resume — where you left off');
+            console.log('');
+            console.log(resume);
+            console.log('');
         }
         console.log(formatProjectBriefMarkdown(brief));
         console.log("## What's new since last touched");
@@ -362,6 +592,71 @@ export function registerProjectCommand(program) {
             console.log(chalk.bold(`Newly-opened commitments (${whatsNew.commitments.length}):`));
             for (const c of whatsNew.commitments)
                 console.log(`  - ${c.text} (${c.date})`);
+        }
+    });
+    // ---------------------------------------------------------------------
+    // arete project statusline  (project-exit Increment B)
+    // ---------------------------------------------------------------------
+    projectCmd
+        .command('statusline')
+        .description('Print the active-project statusline segment (`▸ <slug>` / `▸ <slug> · unsaved`), or nothing. Plain text only — wrapped in a total error guard so it can never pollute the statusline.')
+        .action(async () => {
+        // ANY failure here must print nothing — the statusline runs this on every
+        // render and a stray error/byte would corrupt the user's prompt line.
+        try {
+            const services = await createServices(process.cwd());
+            const root = await services.workspace.findRoot();
+            if (!root)
+                return;
+            const seg = await statuslineSegment(services.storage, root);
+            if (seg)
+                process.stdout.write(seg);
+        }
+        catch {
+            // swallow — print nothing
+        }
+    });
+    // ---------------------------------------------------------------------
+    // arete project session-start  (project-exit Increment B)
+    // ---------------------------------------------------------------------
+    projectCmd
+        .command('session-start')
+        .description('SessionStart hook handler: wipe a stale active-project marker (startup|clear) and emit a once/day resume greeting (startup). Reads `source` from the hook stdin JSON when present, else --source.')
+        .option('--source <source>', 'Session source (startup|resume|clear); overridden by stdin JSON', 'startup')
+        .option('--json', 'Emit Claude Code hookSpecificOutput envelope')
+        .action(async (opts) => {
+        try {
+            const stdinJson = await readStdinJson();
+            const source = stdinJson && typeof stdinJson.source === 'string' ? stdinJson.source : opts.source;
+            const services = await createServices(process.cwd());
+            const root = await services.workspace.findRoot();
+            if (!root) {
+                if (opts.json)
+                    console.log('{}');
+                return;
+            }
+            const result = await handleSessionStart(services.storage, root, {
+                source,
+                now: new Date(),
+            });
+            const additionalContext = [result.notice, result.greeting].filter(Boolean).join('\n\n');
+            if (opts.json) {
+                if (additionalContext) {
+                    console.log(JSON.stringify({
+                        hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext },
+                    }));
+                }
+                else {
+                    console.log('{}');
+                }
+                return;
+            }
+            if (additionalContext)
+                process.stdout.write(additionalContext + '\n');
+        }
+        catch {
+            if (opts.json)
+                console.log('{}');
         }
     });
 }

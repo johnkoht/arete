@@ -9,7 +9,15 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  existsSync,
+  utimesSync,
+} from 'node:fs';
 import { runCli, runCliRaw, createTmpDir, cleanupTmpDir } from '../helpers.js';
 
 function seedArea(root: string, slug: string, name: string): void {
@@ -228,10 +236,17 @@ describe('arete project open (Phase 12 AC3 — read-only)', () => {
     cleanupTmpDir(tmpDir);
   });
 
+  // `open` itself stays zero-write; this guard only ignores unrelated harness
+  // state files (`.claude/active-project.json`, `.last-greeting`) so a marker
+  // left by a sibling flow can't trip the byte-identical assertion. Scoped to
+  // exactly those two names — NOT a blanket `.claude/` skip.
+  const SNAPSHOT_IGNORE = new Set(['active-project.json', '.last-greeting']);
+
   function snapshotTree(root: string): Map<string, string> {
     const out = new Map<string, string>();
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
+        if (SNAPSHOT_IGNORE.has(entry)) continue;
         const full = join(dir, entry);
         const st = statSync(full);
         if (st.isDirectory()) walk(full);
@@ -333,5 +348,303 @@ status: archived
     assert.equal(code, 1);
     const parsed = JSON.parse(stdout);
     assert.equal(parsed.success, false);
+  });
+
+  it('open surfaces the Resume block when a sidecar exists; resume:null when absent', () => {
+    seedProject(
+      tmpDir,
+      'glance-2-mvp',
+      `---
+title: Glance 2 MVP
+area: glance-2-mvp
+status: active
+---
+
+# Glance 2 MVP
+
+## Background
+POP migration.
+`,
+    );
+
+    // No sidecar yet → resume:null, no Resume block.
+    const noSidecar = JSON.parse(
+      runCli(['project', 'open', 'glance-2-mvp', '--json'], { cwd: tmpDir }),
+    );
+    assert.equal(noSidecar.resume, null);
+
+    const md1 = runCli(['project', 'open', 'glance-2-mvp'], { cwd: tmpDir });
+    assert.ok(!/## Resume/.test(md1), 'no Resume block without a sidecar');
+
+    // Seed a resume sidecar.
+    const sessionsDir = join(tmpDir, '.arete', 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(sessionsDir, 'glance-2-mvp.md'), '- picked up at POP cutover\n', 'utf8');
+
+    const withSidecar = JSON.parse(
+      runCli(['project', 'open', 'glance-2-mvp', '--json'], { cwd: tmpDir }),
+    );
+    assert.equal(withSidecar.resume, '- picked up at POP cutover\n');
+
+    const md2 = runCli(['project', 'open', 'glance-2-mvp'], { cwd: tmpDir });
+    assert.ok(/## Resume — where you left off/.test(md2));
+    assert.ok(/picked up at POP cutover/.test(md2));
+  });
+
+  it('open stays zero-write even with a sidecar present (snapshot byte-identical minus ignores)', () => {
+    seedProject(
+      tmpDir,
+      'glance-2-mvp',
+      `---
+title: Glance 2 MVP
+area: glance-2-mvp
+status: active
+---
+
+# Glance 2 MVP
+`,
+    );
+    const sessionsDir = join(tmpDir, '.arete', 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(sessionsDir, 'glance-2-mvp.md'), '- note\n', 'utf8');
+
+    const before = snapshotTree(tmpDir);
+    runCli(['project', 'open', 'glance-2-mvp', '--json'], { cwd: tmpDir });
+    const after = snapshotTree(tmpDir);
+    assert.equal(after.size, before.size, 'no files created or deleted');
+    for (const [path, content] of before) {
+      assert.equal(after.get(path), content, `file changed: ${path}`);
+    }
+  });
+});
+
+describe('arete project mark-* (project-exit Increment A)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-project-mark');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  const markerPath = (root: string): string => join(root, '.claude', 'active-project.json');
+
+  it('mark-open writes the marker with H1-derived name + dirty:false', () => {
+    seedProject(
+      tmpDir,
+      'glance-2-mvp',
+      `---
+title: ignored frontmatter
+status: active
+---
+
+# Glance 2 MVP
+
+## Background
+x
+`,
+    );
+    const out = JSON.parse(runCli(['project', 'mark-open', 'glance-2-mvp', '--json'], { cwd: tmpDir }));
+    assert.equal(out.success, true);
+    assert.equal(out.marker.slug, 'glance-2-mvp');
+    assert.equal(out.marker.name, 'Glance 2 MVP');
+    assert.equal(out.marker.dirty, false);
+    assert.ok(typeof out.marker.openedAt === 'string');
+
+    const onDisk = JSON.parse(readFileSync(markerPath(tmpDir), 'utf8'));
+    assert.equal(onDisk.slug, 'glance-2-mvp');
+    assert.equal(onDisk.name, 'Glance 2 MVP');
+    assert.equal(onDisk.dirty, false);
+  });
+
+  it('mark-open errors (exit 1, json) when the project README is missing', () => {
+    const { stdout, code } = runCliRaw(['project', 'mark-open', 'nope', '--json'], { cwd: tmpDir });
+    assert.equal(code, 1);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.success, false);
+    assert.ok(/nope/.test(parsed.error));
+    assert.ok(!existsSync(markerPath(tmpDir)));
+  });
+
+  it('mark-dirty flips the bit and reports hadMarker', () => {
+    seedProject(tmpDir, 'p', `# P\n`);
+    runCli(['project', 'mark-open', 'p', '--json'], { cwd: tmpDir });
+    const out = JSON.parse(runCli(['project', 'mark-dirty', '--json'], { cwd: tmpDir }));
+    assert.equal(out.success, true);
+    assert.equal(out.hadMarker, true);
+    assert.equal(out.dirty, true);
+    assert.equal(JSON.parse(readFileSync(markerPath(tmpDir), 'utf8')).dirty, true);
+  });
+
+  it('mark-dirty is a no-op (hadMarker:false) when nothing is open', () => {
+    const out = JSON.parse(runCli(['project', 'mark-dirty', '--json'], { cwd: tmpDir }));
+    assert.equal(out.success, true);
+    assert.equal(out.hadMarker, false);
+    assert.ok(!existsSync(markerPath(tmpDir)));
+  });
+
+  it('mark-clear removes the marker and reports cleared', () => {
+    seedProject(tmpDir, 'p', `# P\n`);
+    runCli(['project', 'mark-open', 'p', '--json'], { cwd: tmpDir });
+    assert.ok(existsSync(markerPath(tmpDir)));
+
+    const out = JSON.parse(runCli(['project', 'mark-clear', '--json'], { cwd: tmpDir }));
+    assert.equal(out.success, true);
+    assert.equal(out.cleared, true);
+    assert.ok(!existsSync(markerPath(tmpDir)));
+
+    const noop = JSON.parse(runCli(['project', 'mark-clear', '--json'], { cwd: tmpDir }));
+    assert.equal(noop.cleared, false);
+  });
+
+  it('mark-open --json error path outside a workspace', () => {
+    const bare = createTmpDir('arete-test-mark-noworkspace');
+    try {
+      const { stdout, code } = runCliRaw(['project', 'mark-open', 'p', '--json'], { cwd: bare });
+      assert.equal(code, 1);
+      assert.equal(JSON.parse(stdout).success, false);
+    } finally {
+      cleanupTmpDir(bare);
+    }
+  });
+});
+
+describe('arete project list (project-exit Increment A)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-project-list');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('empty workspace → friendly message + {projects:[]}', () => {
+    const out = JSON.parse(runCli(['project', 'list', '--json'], { cwd: tmpDir }));
+    assert.equal(out.success, true);
+    assert.deepEqual(out.projects, []);
+
+    const md = runCli(['project', 'list'], { cwd: tmpDir });
+    assert.ok(/No active projects/.test(md));
+  });
+
+  it('lists slug/name/area/status/lastTouched sorted by mtime desc', () => {
+    const olderPath = seedProject(
+      tmpDir,
+      'older',
+      `---
+title: Older Project
+area: glance-2-mvp
+status: active
+---
+
+# Older Project
+`,
+    );
+    const newerPath = seedProject(
+      tmpDir,
+      'newer',
+      `---
+title: Newer Project
+status: paused
+---
+
+# Newer Project
+`,
+    );
+    // Pin mtimes so order is deterministic: older < newer.
+    utimesSync(olderPath, new Date('2026-06-18T00:00:00.000Z'), new Date('2026-06-18T00:00:00.000Z'));
+    utimesSync(newerPath, new Date('2026-06-19T00:00:00.000Z'), new Date('2026-06-19T00:00:00.000Z'));
+
+    const out = JSON.parse(runCli(['project', 'list', '--json'], { cwd: tmpDir }));
+    assert.equal(out.projects.length, 2);
+    assert.equal(out.projects[0].slug, 'newer', 'most recently touched first');
+    assert.equal(out.projects[1].slug, 'older');
+    assert.equal(out.projects[0].name, 'Newer Project');
+    assert.equal(out.projects[0].status, 'paused');
+    assert.equal(out.projects[1].area, 'glance-2-mvp');
+    assert.equal(out.projects[1].status, 'active');
+    assert.ok(out.projects[0].lastTouched > out.projects[1].lastTouched);
+  });
+
+  it('--json error path outside a workspace', () => {
+    const bare = createTmpDir('arete-test-list-noworkspace');
+    try {
+      const { stdout, code } = runCliRaw(['project', 'list', '--json'], { cwd: bare });
+      assert.equal(code, 1);
+      assert.equal(JSON.parse(stdout).success, false);
+    } finally {
+      cleanupTmpDir(bare);
+    }
+  });
+});
+
+describe('arete project statusline / session-start (project-exit Increment B)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-project-session-b');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  const markerPath = (root: string): string => join(root, '.claude', 'active-project.json');
+
+  it('statusline prints the segment for a marked-open project', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    runCli(['project', 'mark-open', 'glance-2-mvp', '--json'], { cwd: tmpDir });
+    const out = runCli(['project', 'statusline'], { cwd: tmpDir });
+    assert.equal(out, '▸ glance-2-mvp');
+  });
+
+  it('statusline prints nothing when no marker', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    const out = runCli(['project', 'statusline'], { cwd: tmpDir });
+    assert.equal(out, '');
+  });
+
+  it('statusline prints nothing when not in a workspace', () => {
+    const bare = createTmpDir('arete-test-statusline-noworkspace');
+    try {
+      const { stdout, code } = runCliRaw(['project', 'statusline'], { cwd: bare });
+      assert.equal(code, 0);
+      assert.equal(stdout, '');
+    } finally {
+      cleanupTmpDir(bare);
+    }
+  });
+
+  it('session-start --source clear --json wipes an existing marker and emits a parseable envelope', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    runCli(['project', 'mark-open', 'glance-2-mvp', '--json'], { cwd: tmpDir });
+    assert.ok(existsSync(markerPath(tmpDir)));
+
+    const out = runCli(['project', 'session-start', '--source', 'clear', '--json'], { cwd: tmpDir });
+    // Must always be a parseable JSON envelope (object or '{}').
+    const parsed = JSON.parse(out);
+    assert.equal(typeof parsed, 'object');
+    // Marker wiped.
+    assert.ok(!existsSync(markerPath(tmpDir)));
+  });
+
+  it('session-start --source startup --json with a recent sidecar emits additionalContext naming /project <slug>', () => {
+    seedProject(tmpDir, 'glance-2-mvp', `# Glance 2 MVP\n`);
+    const sessionsDir = join(tmpDir, '.arete', 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(sessionsDir, 'glance-2-mvp.md'), '- left off here\n', 'utf8');
+
+    const out = runCli(['project', 'session-start', '--source', 'startup', '--json'], { cwd: tmpDir });
+    const parsed = JSON.parse(out);
+    assert.ok(parsed.hookSpecificOutput, 'envelope present');
+    assert.equal(parsed.hookSpecificOutput.hookEventName, 'SessionStart');
+    assert.ok(/\/project glance-2-mvp/.test(parsed.hookSpecificOutput.additionalContext));
   });
 });

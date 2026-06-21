@@ -33,6 +33,22 @@ export {
   parseProjectReadme,
 } from './project-area.js';
 export type { ProjectBackfillCandidate } from './project-area.js';
+// project-exit (Increment A) — active-project marker + resume sidecar
+export {
+  activeProjectMarkerPath,
+  resumeSidecarPath,
+  readActiveProjectMarker,
+  writeActiveProjectMarker,
+  setActiveProjectMarkerDirty,
+  clearActiveProjectMarker,
+  readResumeSidecar,
+  writeResumeSidecar,
+  dirtyByMtime,
+  statuslineSegment,
+  handleSessionStart,
+  GREETING_RECENCY_DAYS,
+} from './project-session.js';
+export type { ActiveProjectMarker, SessionStartResult } from './project-session.js';
 export type { ProjectWhatsNew } from './brief-assemblers.js';
 // WS-1 (plan-context-injection) — deterministic project-doc selection engine
 export { selectProjectDocs } from './brief-assemblers.js';
