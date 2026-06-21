@@ -82,17 +82,23 @@ export { wireExtractDedup, loadSameDayStagedItems, resolveMeetingSlugToPath, ada
 export { migrateCommitmentsToV2, formatMigrationDiff, } from './migrations/migrate-to-v2.js';
 // Phase 10a v2 — feature flag for v2 read path (Step 5)
 export { isCommitmentsV2Active, isCommitmentsV2ActiveFromConfig, } from './commitments-v2-flag.js';
-export { AIService, parseModelSpec } from './ai.js';
+export { AIService, parseModelSpec, TruncationError, isRetryableTransportError } from './ai.js';
 // Similarity utilities (shared Jaccard computation)
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 // Meeting extraction
-export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, LIGHT_LIMITS, THOROUGH_LIMITS, TOPIC_BIAS_BLOCK_PROMPT, } from './meeting-extraction.js';
+export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, buildSinglePassExtractionPrompt, buildKnownItemsSection, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, SINGLE_PASS_STAGED_HEADERS, LIGHT_LIMITS, THOROUGH_LIMITS, TOPIC_BIAS_BLOCK_PROMPT, ParseError, PARSE_ERROR_PREVIEW_CHARS, EmptyExtractionError, EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS, isEmptyIntelligence, } from './meeting-extraction.js';
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
+// Meeting series resolution (single-pass W1.5)
+export { resolveMeetingSeries, renderSeriesContext, normalizeTitleTokens, titleSimilarity, attendeeOverlap, matchesRecurringTitle, parseOpenQuestionsSection, SERIES_WINDOW_DAYS, SERIES_TITLE_JACCARD, SERIES_ATTENDEE_OVERLAP, SERIES_MAX_PRIOR, } from './meeting-series.js';
 // Meeting processing
 export { processMeetingExtraction, applyReconciliationDecision, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, buildSkippedItemFateEvents, buildDismissedItemFateEvents, } from './meeting-processing.js';
 // Meeting reconciliation
 export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview, parseApprovedSection } from './meeting-reconciliation.js';
+// Reconcile-engine R2 nomination primitive (CHR W2)
+export { nominateCandidates, ledgerEntriesFromBatch, NOMINATION_JACCARD_THRESHOLD, UNCERTAIN_BAND_FLOOR, } from './reconcile-nominate.js';
+// Reconcile-engine W7 shadow-soak infra (raw snapshots + shadow log)
+export { writeRawExtractionSnapshot, writeFailureSnapshot, appendReconcileShadowLog, parseMeetingFilename, RAW_EXTRACTIONS_DIR, RECONCILE_SHADOW_LOG, } from './reconcile-shadow.js';
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 // Momentum analysis
@@ -106,7 +112,7 @@ export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goa
 // Topic detection (lexical pre-pass before extraction)
 export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './topic-detection.js';
 // Meeting context assembly
-export { buildMeetingContext } from './meeting-context.js';
+export { buildMeetingContext, deserializeContextBundle } from './meeting-context.js';
 // Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here
 // Meeting apply service
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
