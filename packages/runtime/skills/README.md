@@ -8,7 +8,7 @@ Skills are reusable workflows that help you (and your AI) get things done in Are
 
 ## Default skills
 
-Areté ships with default skills for core PM workflows. They live in `.agents/skills/` after install. You can use them as-is or add your own.
+Areté ships with default skills for core PM workflows. They install as **managed skills** in `.arete/skills/` (refreshed on every `arete update`). You can use them as-is, customize them (fork into `.agents/skills/` — see below), or add your own.
 
 | Area | Examples |
 |------|----------|
@@ -37,23 +37,15 @@ Phase 4 demoted thin integration wrappers (krisp, fathom, notion, calendar, driv
 
 ## Customizing a skill
 
-To change how a default skill works:
+Default skills live in `.arete/skills/` and are **overwritten on every `arete update`** — never edit them in place, your changes will be lost. Instead, **fork** the skill into `.agents/skills/`, which `arete update` never touches:
 
-1. **Edit the skill** directly in `.agents/skills/<name>/`
-2. **Protect your changes** by adding the skill to `arete.yaml`:
-   ```yaml
-   skills:
-     overrides:
-       - week-plan
-   ```
-3. Your version will be preserved during `arete update`
+1. **Fork it**: `arete skill fork <name>` copies the managed skill into `.agents/skills/<name>/` and records a `.fork-base` snapshot for later diffing.
+2. **Edit** `.agents/skills/<name>/SKILL.md`. The forked copy wins over the managed one at load time (two-tier resolution), so the agent runs your version.
+3. **Pull upstream changes** after a future `arete update`: `arete skill diff <name>` shows what changed in the shipped version since you forked, and `arete skill merge <name>` integrates it without clobbering your edits.
 
-To **restore the default**:
-1. Remove the skill from the `overrides` list in `arete.yaml`
-2. Delete the skill folder: `rm -rf .agents/skills/<name>`
-3. Run `arete update` to restore the default version
-
-**Tip**: Keep a backup in `.agents/skills/<name>.backup/` before making changes, or version control your workspace.
+To **restore the default** (drop your customization):
+1. Delete the fork: `rm -rf .agents/skills/<name>`
+2. The managed copy in `.arete/skills/` takes over immediately — no `arete update` needed.
 
 ## Adding third-party skills
 
@@ -90,10 +82,7 @@ Shows which roles have a custom skill and which use the Areté default.
 
 ## Resetting to default
 
-- **Restore default skill** (remove your customization):  
-  1. Remove the skill from `skills.overrides` in `arete.yaml`
-  2. Delete the skill folder: `rm -rf .agents/skills/<name>`
-  3. Run `arete update` to restore the default
+- **Restore default skill** (drop a fork): delete it with `rm -rf .agents/skills/<name>`. The managed copy in `.arete/skills/` takes over immediately.
 - **Restore Areté default for a role** (when using `set-default`):  
   `arete skill unset-default <role>`
 
