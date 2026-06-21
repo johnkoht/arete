@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — Web commitment resolve reaches CLI parity
+## [0.19.0] — 2026-06-20 — Web commitment resolve reaches CLI parity
 
 Resolving a commitment in the web UI now does everything `arete commitments resolve` does. Previously `PATCH /api/commitments/:id` did a raw write of `commitments.json` (status + resolvedAt only), so the linked task in `week.md`/`tasks.md` stayed unchecked forever and the write bypassed the cross-process lock — exactly the bulk-resolve flow used in the UI. It now routes through the wired `CommitmentsService.resolve()`.
 
