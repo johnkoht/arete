@@ -666,31 +666,17 @@ For complex features, use the PRD execution system:
 5. **Test**: Add tests in `packages/core/test/integrations/{name}.test.ts`
 6. **Document**: Add section in GUIDE.md § Integrations
 
-### New Skill
+### New GUIDE-mode skill
 
-1. **Create SKILL.md** in `packages/runtime/skills/{name}/SKILL.md`
-2. **Follow format**:
-   ```markdown
-   # Skill: {Name}
-   
-   ## Purpose
-   What this skill does and when to use it.
-   
-   ## Inputs
-   What the skill needs to start.
-   
-   ## Workflow
-   Step-by-step procedure.
-   
-   ## Outputs
-   What the skill produces.
-   
-   ## Intelligence Services
-   Which services to use (QMD, memory, etc.).
-   ```
-3. **Add to router** in `packages/core/src/services/intelligence.ts` (category + keywords)
-4. **Test routing**: `arete skill route "test query"` returns your skill
-5. **Document**: Add row to skills table in GUIDE.md and pm-workspace.mdc
+This ships a product skill from this repo into every user workspace. (For a *user* adding a skill to their own installed workspace, see `packages/runtime/skills/README.md` § "Creating your own skill" — that's a different flow.)
+
+Shipped skills live in source at `packages/runtime/skills/<name>/` and install into the user's `.arete/skills/` (managed, refreshed on `arete update`). Both `arete install` and `arete update` copy any new subdirectory automatically, so there is **no install/update asymmetry** to work around — and **no per-skill router registration**. Routing scores skills purely from their frontmatter (`triggers`, `description`, `work_type`, `category`) over a directory scan; you do *not* edit `intelligence.ts`.
+
+1. **Create the skill folder** `packages/runtime/skills/<name>/SKILL.md` (add `templates/` and/or `.arete-meta.yaml` as needed). Frontmatter drives routing — see [`packages/runtime/skills/_authoring-guide.md`](packages/runtime/skills/_authoring-guide.md) § "Frontmatter Reference" for the required fields and [`_integration-guide.md`](packages/runtime/skills/_integration-guide.md) for output/indexing config.
+2. **Register it in the GUIDE awareness index**: add a row to `.agents/sources/guide/skills-index.md` with clear triggers. Without this, once the skill propagates to a workspace it is routable there (`arete skill route` scans `.arete/skills/` + `.agents/skills/`) but agents won't *passively* know it exists, because their system context comes from the generated `dist/AGENTS.md`.
+3. **Rebuild generated assets**: `npm run build` regenerates `dist/AGENTS.md` from the sources above. Commit `dist/` — users install from GitHub directly.
+4. **Document the user-facing change**: add a row to the skills table in `packages/runtime/GUIDE.md` and `packages/runtime/rules/cursor/pm-workspace.mdc`, and a note in `packages/runtime/UPDATES.md`.
+5. **Verify**: `arete skill route "<test query>"` returns your skill, and the new row appears in `dist/AGENTS.md`.
 
 ### New CLI Command
 
