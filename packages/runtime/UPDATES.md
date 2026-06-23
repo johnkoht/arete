@@ -4,6 +4,18 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## The daily winddown can reconcile your day by topic, not meeting-by-meeting (opt-in)
+
+The daily winddown has a new opt-in pipeline that changes how it pulls decisions and actions out of your meetings and how you review them:
+
+- **Faithful capture.** Each meeting's decisions, action items, and learnings are extracted in one pass — no arbitrary caps, tagged by importance (blocker / high / normal), with who-owes-whom and any open questions. If a real meeting somehow yields nothing, it now says so loudly instead of silently dropping it.
+- **Review by checkbox, commit in one step.** Instead of a prose summary, the winddown can hand you a checklist — every staged decision/action/learning as a checkbox, pre-checked when it's a confident keep and left unchecked (with a reason) when it's not. You tweak the boxes and run `arete winddown apply <date>`; everything approved lands in one commit.
+- **See the whole day by project, with the arc.** In `theme` mode the doc groups everything by project/area instead of by meeting — so all of "status letters" today sits in one place — and reads each topic's meetings in time order. If an afternoon meeting reversed a morning decision, the morning one shows struck-through and uncommitted (you can still rescue it by re-checking the box), so the change is visible instead of two contradictory items in separate blocks.
+
+It's **off by default** — your winddown is unchanged unless you opt in via `arete.yaml` (`extraction_mode: single_pass`, and `winddown_render: checklist` or `theme`).
+
+---
+
 ## Weekly working memory — stop re-explaining the same things every day
 
 Areté now keeps a small, per-week note of the *corrections* you make during week planning, so the daily flow stops re-surfacing things you've already reframed. If you tell the agent "that's not blocked, it's waiting on legal" or "the migration is parked until Q3, stop nudging me" while planning your week, it remembers — and `daily-plan` and the winddown skills quietly honor it (and tell you when they do).

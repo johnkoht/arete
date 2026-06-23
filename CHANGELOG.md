@@ -1,16 +1,32 @@
 # Changelog
 
-## [0.20.0] — 2026-06-22 — Weekly working memory: per-week interpretive overrides
+## [0.20.0] — 2026-06-22 — Winddown approval pipeline + weekly working memory
+
+Two additive features. The **winddown approval pipeline** is fully flag-gated — at default config (`extraction_mode: legacy`, `reconcile_mode: inline`, `winddown_render: prose`) behavior is byte-for-byte identical to 0.19.0, and the new behavior is opt-in per flag. **Weekly working memory** is additive and inert until you populate it.
+
+### Winddown approval pipeline — single-pass extraction → chef reconcile → theme-render
+
+An opt-in rework of how the daily winddown captures and reconciles meeting output: faithful single-pass extraction, one holistic chef reconcile over the whole day, and a review doc you approve via checkboxes (grouped by meeting or by project/area) that commits through a single anchor-keyed diff. Soaked as a daily driver before merge.
+
+**Added (opt-in via `arete.yaml`):**
+- **`extraction_mode: single_pass`** — uncapped single-pass meeting extraction with importance tiers (blocker/high/normal), ⚠ uncertain marking, owner/direction, open-questions, and `continuation_of`/`supersedes` markers (mark-don't-skip). `EmptyExtractionError` flags a non-trivial transcript that extracts 0 items instead of failing silently.
+- **`winddown_render: checklist | theme`** — `arete winddown render <date>` emits a grouped checkbox doc with hidden per-item anchors; edit it, then `arete winddown apply <date>` commits via one anchor-keyed diff. `theme` groups by project/area and walks each topic's sessions chronologically, so a later decision that reverses an earlier one renders as a visible arc — superseded items struck-through `[ ]`, never auto-committed, re-elevatable via the apply rescue path. New `arete winddown elevate` and `arete meeting topics` verbs.
+- **`reconcile_mode: day-level`** + **`arete reconcile nominate`** — a day-level reconcile primitive feeding the chef's single holistic reconcile pass (supersession / moot / dedup) in the winddown.
+
+**Changed:**
+- The daily-winddown skill gained a chef topic-review step and (theme mode) a chronological per-theme reconcile walk. All gated — `prose` / `legacy` / `inline` reproduce 0.19.0 behavior exactly.
+
+### Weekly working memory — per-week interpretive overrides
 
 A small per-week store of *corrections* the system would otherwise re-derive wrong. When you reframe something during week planning ("that's not blocked, it's waiting on legal"; "the migration is parked until Q3"), Areté captures it once and the daily flow stops re-surfacing it. It's a handful of interpretive overrides — not a log of everything — and it resets each week. Backed by `now/week-memory.md` (agent-managed) and surfaced into the planning skills via `arete plan-context`.
 
-### Added
+**Added:**
 - **`arete week-memory` CLI** — `add --type <framing-override|deprioritization|week-constraint> --statement <s> --why <w> [--suppresses <id-or-text>]`, `list [--active]`, `resolve <id>` (retires without deleting; 8-char prefix or full id), and `archive` (week-stamped, idempotent: same-week = no-op, prior-week = move to `now/archive/week-plan/week-memory-YYYY-Www.md` + reset). `add` dedups identical active entries; all subcommands accept `--json`. Mirrors the `commitments` CLI structure. New core store at `packages/core/src/services/week-memory.ts`.
 - **`now/week-memory.md`** — agent-managed backing file (use the CLI, don't hand-edit), seeded into new workspaces.
 - **`weekMemory: WeekMemoryEntry[]` in the `arete plan-context` bundle** — all active entries, surfaced alongside `selectedDocs`/`whatsNew`/topics/goals.
 - **Shared capture-rule spec** at `packages/runtime/skills/_shared/week-memory-capture.md`.
 
-### Changed
+**Changed:**
 - **`week-plan` / `daily-plan` / `daily-winddown` / `weekly-winddown` now capture, consume, retire, and archive week-memory entries** — week-plan captures corrections, daily-plan and the winddown skills suppress overdue/stale framings (with an observable note when they do), and the weekly cycle archives + resets the prior week's entries.
 
 ## [0.19.0] — 2026-06-20 — Web commitment resolve reaches CLI parity
