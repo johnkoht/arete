@@ -55,6 +55,36 @@ Update meeting processing prompts to mention project context:
 
 ---
 
+## Winddown review UI (`/review` for the daily winddown)
+
+**Priority:** Medium (post markdown-approval-surface)
+**Effort:** Large
+
+A visual review/approve surface for the daily winddown — like the meeting review
+UI — showing each meeting's recommended / skipped / uncertain items with the
+agent's reasoning, tier badges (blocker/high/normal), and approve/skip controls.
+The eventual nicer skin on the CLI checkbox approval flow.
+
+**Key constraints (decided 2026-06-12):**
+- Build the **markdown checkbox approval doc FIRST**
+  (`dev/work/plans/winddown-approval-doc/`). It defines the approve-state data
+  model (item ID → recommendation → decision → reason). This UI is a *renderer
+  over that same model*, not a fresh approval implementation.
+- As a pure **review/approve** surface it is UNBLOCKED — the `review.ts` routes
+  already read `stagedSections` + `stagedItemStatus` and write approved/skipped
+  without re-processing.
+- It is blocked ONLY if it ever **re-processes/re-extracts** a meeting: that path
+  (`runProcessingSession` → backend `agent.ts`) is still legacy-only until the
+  backend extraction migration (chef-holistic-reconcile W4–W6). Keep this UI
+  review-only, or do the backend migration first.
+
+**Files (likely):** `packages/apps/web/` (new winddown review view),
+`packages/apps/backend/src/routes/review.ts` (extend), reads same frontmatter
+the CLI `/winddown apply` writes.
+
+---
+
 ## Created
 
 2026-03-09 — Extracted from Web Fast Follow plan
+2026-06-12 — Added winddown review UI (idea 2 from extraction-simplification thread)

@@ -1,7 +1,16 @@
 # Chef holistic reconcile — one reconciliation brain for the winddown
 
-Status: DRAFT (2026-06-10, overnight investigation)
+Status: W1/W2/W0 BUILT; W4 spec READY FOR REVIEW (see `W4-build-spec.md`, 2026-06-17).
 Depends on: `dev/work/plans/single-pass-extraction/plan.md` (W1–W5 must ship + stabilize first)
+
+> **2026-06-17 — W4 scoping + the 95% goal.** W1 (engine spec), W2 (`reconcile nominate`
+> primitive), W0 (`reconcile-day`) are built; the primitive is ORPHANED (SKILL never calls it →
+> finding #16). W4 (the bridge) is scoped in `W4-build-spec.md`: HALF A wires the engine into SKILL
+> Step 2 (ledger → nominate → chef adjudicates → R4 provenance); HALF B fixes the render so
+> curation flows frontmatter→render (anchors+baseline survive) with a CONFIDENT-accurate pre-check
+> default (chef approves every genuine keep, skips junk with reasons, leaves almost nothing
+> pending — John: "I don't want to check anything extra; agent gets 95% there, I tweak a few").
+> Non-destructive (old inline path stays; W5/W6/W7 later). Decisions resolved in the spec §Resolved.
 Investigation inputs: winddown architecture map + reconcile consumer audit (2 agents, 2026-06-10; key findings inlined below)
 
 ## Why now

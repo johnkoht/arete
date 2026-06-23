@@ -52,6 +52,17 @@ John created `dev/work/plans/build-mode-claude-port/` this session — porting B
 | Increment B — statusline + session-start verbs + tests | ✅ built `bf3a6b45`, verified (core 19/19, CLI 25/25, tsc clean) |
 | Increment B — settings.json wire-up + live render/greeting check | ⬜ **John (manual, irreducible)** — paste block + eyeball; see `increment-b-settings.md` |
 
+## MERGED to local main 2026-06-20 — `817d3bac`
+
+Gitboss merge gate: review clean (22 files), full suite **4830/4832 pass, 0 fail** (2 pre-existing skips), typecheck clean, dist faithful. Merged `--no-ff` onto current main (which had advanced to v0.19.0). **NOT pushed** — `origin/main` at `c9ca8f55`, local `main` at `817d3bac`; John pushes/releases when ready. **Worktree + `feature/project-exit` branch left intact** for the ongoing soak (no Phase 6 cleanup). Untracked main-working-dir plan-file copies were byte-identical to the branch versions → safely removed before merge.
+
+**Still open (non-blocking):**
+- Skill prose-pin tests (test D) — `/project-exit` behavior is prose-pinned, soak-verified next.
+- John's soak (capture recall, friction budget, dirty-flip, greeting relevance; exit-vs-/clear ratio + kill threshold).
+- Increment B settings wire-up + live render/greeting check (`increment-b-settings.md`).
+- H8 coordination note added to `build-mode-claude-port/plan.md` (uncommitted on main).
+- `git push origin main` when ready to ship.
+
 ## Increment B — built 2026-06-20
 
 - `arete project statusline` — `▸ slug` / `▸ slug · unsaved` / nothing; total error-guard (never pollutes the prompt line); C1 backstop wired (shows unsaved on a real file edit even if the LLM didn't flip `dirty`).

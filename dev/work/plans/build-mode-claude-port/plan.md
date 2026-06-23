@@ -136,6 +136,19 @@ Each: copy SKILL.md → `.claude/skills/<id>/SKILL.md`, trim frontmatter to `nam
 
 All Phase-0 unknowns resolved (0.1 AGENTS.md hand-written; 0.3 model aliases OK; 0.4 no BUILD `.cursor/`). Remaining standing task: 0.2 cross-ref inventory (run at execution start; it scopes the Phase-6 deletion sweep).
 
+## Coordination — `/project-exit` interfaces (consume, do NOT regenerate)
+
+The `project-exit` feature (`dev/work/plans/project-exit/`, on `feature/project-exit`) ships native Claude Code surfaces that overlap this port's blast radius. When this port regenerates skills/hooks/settings from `.pi/` sources, it MUST consume the interfaces below as-is rather than re-derive them — otherwise it orphans the `mark-*` CLI verbs, double-owns the SessionStart hook, or clobbers the hand-built `/project-exit` skill (project-exit pre-mortem finding H8).
+
+Canonical interfaces to treat as fixed contract:
+- **Marker file:** `<workspace-root>/.claude/active-project.json` = `{ slug, name, openedAt, dirty }`. Root resolved via `services.workspace.findRoot()` (NOT git toplevel). Harness state — never indexed.
+- **CLI verbs (own the marker/sidecar/list logic):** `arete project mark-open <slug>` / `mark-dirty` / `mark-clear` / `list` / `statusline` / `session-start`, plus the resume-block read added to `arete project open`. Live in `packages/cli/src/commands/project.ts` + `packages/core/src/services/project-session.ts`.
+- **Resume sidecar:** `<root>/.arete/sessions/<slug>.md` (+ single-deep `.prev` backup); `.last-greeting` throttle stamp in the same dir.
+- **SessionStart hook:** exactly ONE owner. project-exit's handler is `arete project session-start --json` (wipes stale marker on startup|clear, once/day resume greeting on startup). If this port introduces its own SessionStart hook, it must call/compose this verb, not add a second hook entry.
+- **Statusline:** `arete project statusline` (command-type `statusLine`). Settings block + manual wire-up in `dev/work/plans/project-exit/increment-b-settings.md`.
+
+Action at execution start: fold these into the Phase-3 settings work and Phase-4 skill port (don't regenerate `/project-exit` from a `.pi/` source — there isn't one; it's native already). Add a Phase-6 sweep check that exactly one SessionStart hook owner exists after cutover.
+
 ## References
 
 - `research/01-skills-and-system.md` — per-skill port detail, system-prompt mapping.
