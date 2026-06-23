@@ -119,7 +119,7 @@ describe('IntelligenceService.assemblePlanContext', () => {
     assert.equal(bundle.mode, 'week');
     assert.deepEqual(
       Object.keys(bundle).filter((k) => k !== 'reason').sort(),
-      ['generatedAt', 'goals', 'lastWeek', 'mode', 'projects', 'topics'].sort(),
+      ['generatedAt', 'goals', 'lastWeek', 'mode', 'projects', 'topics', 'weekMemory'].sort(),
     );
     assert.equal(bundle.generatedAt, REF.toISOString());
     const alpha = bundle.projects.find((p) => p.slug === 'alpha');
@@ -128,6 +128,29 @@ describe('IntelligenceService.assemblePlanContext', () => {
     assert.equal(alpha.status, 'active');
     assert.ok(alpha.selectedDocs.some((d) => !d.listed), '≥1 expanded doc');
     assert.ok(alpha.openQuestions.some((q) => /ship first/i.test(q)));
+    // Additive, non-breaking: with no now/week-memory.md the field is [].
+    assert.deepEqual(bundle.weekMemory, []);
+  });
+
+  it('weekMemory: active entries surface in the bundle, resolved entries are excluded', async () => {
+    writeFile(tmpDir, 'projects/active/alpha/README.md', `---\nname: Alpha\nstatus: active\n---\n# Alpha\n`);
+    // Seed the live store via the real frontmatter shape the core read parses.
+    writeFile(
+      tmpDir,
+      'now/week-memory.md',
+      `---\nweek: 2026-W25\nentries:\n` +
+        `  - id: aaaa1111\n    type: framing-override\n    statement: Ship gate moved to Friday\n    why: John said the demo slipped\n    status: active\n    created: '2026-06-15T09:00:00.000Z'\n    week: 2026-W25\n` +
+        `  - id: bbbb2222\n    type: deprioritization\n    statement: Pause the billing refactor\n    why: Resolved on Monday\n    status: resolved\n    created: '2026-06-15T10:00:00.000Z'\n    week: 2026-W25\n` +
+        `---\n\n# Week Memory\n`,
+    );
+    const bundle = await intel.assemblePlanContext('week', paths, { referenceDate: REF });
+    assert.deepEqual(bundle.weekMemory.map((e) => e.id), ['aaaa1111']);
+    assert.equal(bundle.weekMemory[0].type, 'framing-override');
+    assert.ok(bundle.weekMemory.every((e) => e.status === 'active'));
+
+    // --day surfaces the same active set (no area-filter).
+    const dayBundle = await intel.assemblePlanContext('day', paths, { referenceDate: REF });
+    assert.deepEqual(dayBundle.weekMemory.map((e) => e.id), ['aaaa1111']);
   });
 
   it('AC3.1: --day scopes projects to today\'s areas via the meeting index', async () => {

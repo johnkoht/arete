@@ -508,6 +508,24 @@ pre-snapshot count as violations. Detection is advisory, not a hard
 gate — the soak window is where recurring violations get flagged for
 sub-skill tightening.
 
+#### 1r — Week-memory active entries (interpretive overrides)
+
+This skill does NOT consume `arete plan-context`, so it reads week
+memory with an explicit, named gather call — a single CLI read, not
+"open a file and hope":
+
+```bash
+# Active interpretive overrides for the week (framing-override /
+# deprioritization / week-constraint). Empty/absent file → `[]`.
+arete week-memory list --active --json > /tmp/winddown-week-memory.json
+```
+
+These entries are the corrections John made at week-plan (and any
+captured mid-week). Carry them into Step 2/3 reconciliation: an
+override whose underlying condition is now met (e.g. the Lindsay email
+was actually sent today) is a candidate to RETIRE; an inference John
+corrects DURING this winddown is a candidate to CAPTURE. See Step 3.
+
 ### Step 2 — Reconcile (before staging, judgment in-context)
 
 **CHR-W0 (only when arete.yaml sets `reconcile_mode: day-level`;
@@ -1137,6 +1155,40 @@ to check.
 **Conflict-with-priorities** — items contradicting week.md priorities
 (or APPEND active initiatives) get a flag in their reason label.
 
+**Week-memory reconcile (retire spent overrides + capture corrections).**
+Using the active entries from 1r and today's reconciled ledger, for each
+week-memory entry:
+
+- **Retire when its condition is met.** If the day's evidence shows the
+  underlying condition resolved — e.g. a `framing-override` "Lindsay
+  email is NOT overdue — proactive Wed update" and the Lindsay email was
+  actually SENT today (slack/email/commitment-resolved evidence) — the
+  override has served its purpose. Retire it:
+
+  ```bash
+  arete week-memory resolve <id>
+  ```
+
+  `resolve` retires (does not erase) the entry, so it drops out of the
+  next day's `arete week-memory list --active` (and thus next-day
+  daily-plan). Only retire on concrete evidence the condition is met —
+  never on a fuzzy guess.
+
+- **Capture a correction John makes during winddown.** If John corrects
+  an inference mid-winddown that passes the **Capture Rule** (the
+  "re-derivable wrong tomorrow?" test; see `## Capture Rule`), record it
+  — same three types, same de-dup-against-`list --json` discipline as
+  week-plan:
+
+  ```bash
+  arete week-memory list --json
+  arete week-memory add --type framing-override --statement "<...>" --why "<John's correction>" [--suppresses "<target>"] --json
+  ```
+
+Surface every retirement (and any mid-winddown capture) in the curated
+view under the `## Week memory updates` line (Step 4), WITH the
+retirement reason — never a silent mutation.
+
 ### Step 3.5 — Surface today's dedup decisions (phase-10b-aux, AC8a / AC4a)
 
 The reactive dedup pipeline (Phase 10b) writes one line per decision to
@@ -1284,6 +1336,19 @@ Build the single message to the user. **No engagement before this.**
 
 {Brief 1-2 sentence summary: meetings processed, recordings pulled,
 inbox count, headline themes if any.}
+
+## Week memory updates
+
+{From Step 3's week-memory reconcile. Omit entirely if nothing
+retired/captured today. One line per change, WITH the reason — never a
+silent mutation. Retirements are `arete week-memory resolve` calls;
+captures are `arete week-memory add` calls.}
+
+- Retired: "Lindsay email is NOT overdue — proactive Wed update" — the
+  email was sent today (Slack DM → @lindsay-gray, 11:42a). No longer
+  needs suppressing in tomorrow's daily-plan.
+- Captured: [deprioritization] "Snapsheet integration parked until Q4" —
+  John: deprioritized in standup, owner is Platform.
 
 ## Closed today (proposed)
 
@@ -1946,6 +2011,10 @@ item recently with same source/topic):
   without approval.
 - **`arete index` fails** — note but don't block the curated view.
 
+## Capture Rule
+
+Week-memory retire/capture (Steps 1r + 3) follows the shared spec at [`../_shared/week-memory-capture.md`](../_shared/week-memory-capture.md): capture a correction ONLY when a fresh daily-plan agent reading only the vault would re-derive it wrong tomorrow; the only qualifying types are `framing-override`, `deprioritization`, and `week-constraint`; plain plan-text edits and vocabulary/terminology preferences do NOT qualify. Retire (`resolve`) an active entry only on concrete evidence its condition is met.
+
 ## References
 
 - **PATTERNS.md** — `do-all-work-then-engage`,
@@ -1958,6 +2027,10 @@ item recently with same source/topic):
   - `arete meeting context <file> --json` — context bundle.
   - `arete meeting extract <file> --context - --stage --reconcile`
     — extract + stage + dedup.
+  - `arete week-memory list --active --json` — read active interpretive
+    overrides (Step 1r); `arete week-memory resolve <id>` to retire a
+    spent entry; `arete week-memory add ...` to capture a mid-winddown
+    correction (Step 3).
   - `arete commitments list --json` — open commitments.
   - `arete meeting approve <slug>` — commit staged → approved.
   - `arete people memory refresh` — refresh person highlights.

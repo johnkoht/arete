@@ -63,6 +63,30 @@ export function parseDate(dateStr) {
     return null;
 }
 /**
+ * ISO-8601 week-numbering stamp for a date, as `YYYY-Www` (e.g. `2026-W26`).
+ *
+ * Uses the canonical ISO rule (the week's Thursday determines the
+ * week-numbering year), computed in UTC to avoid local-timezone drift — the
+ * same class of bug prior Areté date code has hit. Reused by the week-memory
+ * store for week-aware archiving (see services/week-memory.ts).
+ *
+ * @param date - The date to stamp (defaults to now).
+ * @returns Week stamp in `YYYY-Www` format with a zero-padded week number.
+ */
+export function isoWeekStamp(date = new Date()) {
+    // Work on a UTC copy normalized to midnight.
+    const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    // ISO weekday: Mon=1 .. Sun=7.
+    const isoDay = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+    // Shift to the Thursday of this week — its year is the ISO week-year.
+    d.setUTCDate(d.getUTCDate() + 4 - isoDay);
+    const isoYear = d.getUTCFullYear();
+    // Week 1 contains Jan 4th; count weeks from Jan 1st of the ISO year.
+    const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+    const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${isoYear}-W${String(week).padStart(2, '0')}`;
+}
+/**
  * Format duration in minutes to human-readable string.
  *
  * @param minutes - Duration in minutes

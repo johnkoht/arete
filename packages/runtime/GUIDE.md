@@ -369,6 +369,16 @@ User: "Plan my week"
 - Identify high-prep meetings
 - Output to `now/week.md`
 
+**Weekly Working Memory** - captured automatically during `week-plan`
+
+A small per-week store of interpretive *corrections* — a handful of things you've already reframed, so the agent doesn't keep re-surfacing them the way it would otherwise re-derive them. Three kinds:
+
+- **framing-override** — "this isn't blocked, it's waiting on legal review"
+- **deprioritization** — "the migration is parked until Q3, stop nudging me about it"
+- **week-constraint** — "I'm out Thursday/Friday, don't pack those days"
+
+You don't maintain it by hand. When you correct the agent during `week-plan` ("no, that's not a blocker"), it captures the correction here — it is *not* a log of everything that happened. `daily-plan` and the winddown skills read it and quietly stop surfacing what you've already reframed (noting when they do). It **resets each week**: last week's overrides are archived when you plan the new week, so corrections don't pile up forever. Backed by `now/week-memory.md` (agent-managed — use the CLI, don't hand-edit). See [CLI Reference > Weekly Working Memory](#weekly-working-memory) if you want to inspect or adjust it directly.
+
 **Quarter Planning** - `quarter-plan` skill
 ```
 User: "Set my quarter goals"
@@ -1034,6 +1044,21 @@ arete commitments backfill-area               # Infer area for commitments (prev
 arete commitments restore --from <path>       # Roll back from a snapshot
 arete dedup --scope commitments [--explain <id>]  # Background near-duplicate hygiene (--dry-run default; --apply)
 ```
+
+### Weekly Working Memory
+
+A per-week store of interpretive overrides. Usually captured for you during `week-plan`; these commands let you inspect or adjust it directly (`now/week-memory.md` is agent-managed — use the CLI, don't hand-edit).
+
+```bash
+arete week-memory add --type framing-override --statement "X is waiting on legal, not blocked" --why "clarified in standup"
+arete week-memory add --type deprioritization --statement "Migration parked until Q3" --why "leadership call"
+arete week-memory add --type week-constraint --statement "Out Thu/Fri" --why "PTO" --suppresses "deep-work blocks"
+arete week-memory list [--active]            # List entries (--active hides resolved)
+arete week-memory resolve <id>               # Retire an entry (keeps it, marks resolved; 8-char prefix or full id)
+arete week-memory archive                    # Archive prior-week entries (week-stamped, idempotent; no-op for the current week)
+```
+
+`--type` is one of `framing-override`, `deprioritization`, `week-constraint`. All commands accept `--json`. Active entries flow into `arete plan-context` (as `weekMemory[]`) and are consumed by `daily-plan` / winddown to suppress what you've already reframed. The store resets each week — `archive` moves the prior week's entries to `now/archive/week-plan/`.
 
 ### AI Configuration
 

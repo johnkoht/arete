@@ -49,6 +49,7 @@ interface PlanContextResult {
   topics: Array<{ slug: string; area?: string; status: string; summary: string; source: string }>;
   goals: Array<{ rel: string; title: string; source: string }>;
   lastWeek: string | null;
+  weekMemory: Array<{ id: string; type: string; statement: string; status: string }>;
   generatedAt: string;
   reason?: string;
 }
@@ -103,8 +104,10 @@ describe('integration: arete plan-context (WS-2/WS-3)', () => {
     // Frozen top-level shape (skill-consumer contract).
     assert.deepEqual(
       Object.keys(result).sort(),
-      ['generatedAt', 'goals', 'lastWeek', 'mode', 'projects', 'success', 'topics'].sort(),
+      ['generatedAt', 'goals', 'lastWeek', 'mode', 'projects', 'success', 'topics', 'weekMemory'].sort(),
     );
+    // Additive, non-breaking: absent now/week-memory.md → [] flows through CLI.
+    assert.deepEqual(result.weekMemory, []);
     // Frozen per-project entry shape.
     assert.ok(result.projects.length >= 2);
     for (const p of result.projects) {

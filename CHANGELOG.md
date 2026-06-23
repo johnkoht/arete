@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.20.0] — 2026-06-22 — Weekly working memory: per-week interpretive overrides
+
+A small per-week store of *corrections* the system would otherwise re-derive wrong. When you reframe something during week planning ("that's not blocked, it's waiting on legal"; "the migration is parked until Q3"), Areté captures it once and the daily flow stops re-surfacing it. It's a handful of interpretive overrides — not a log of everything — and it resets each week. Backed by `now/week-memory.md` (agent-managed) and surfaced into the planning skills via `arete plan-context`.
+
+### Added
+- **`arete week-memory` CLI** — `add --type <framing-override|deprioritization|week-constraint> --statement <s> --why <w> [--suppresses <id-or-text>]`, `list [--active]`, `resolve <id>` (retires without deleting; 8-char prefix or full id), and `archive` (week-stamped, idempotent: same-week = no-op, prior-week = move to `now/archive/week-plan/week-memory-YYYY-Www.md` + reset). `add` dedups identical active entries; all subcommands accept `--json`. Mirrors the `commitments` CLI structure. New core store at `packages/core/src/services/week-memory.ts`.
+- **`now/week-memory.md`** — agent-managed backing file (use the CLI, don't hand-edit), seeded into new workspaces.
+- **`weekMemory: WeekMemoryEntry[]` in the `arete plan-context` bundle** — all active entries, surfaced alongside `selectedDocs`/`whatsNew`/topics/goals.
+- **Shared capture-rule spec** at `packages/runtime/skills/_shared/week-memory-capture.md`.
+
+### Changed
+- **`week-plan` / `daily-plan` / `daily-winddown` / `weekly-winddown` now capture, consume, retire, and archive week-memory entries** — week-plan captures corrections, daily-plan and the winddown skills suppress overdue/stale framings (with an observable note when they do), and the weekly cycle archives + resets the prior week's entries.
+
 ## [0.19.0] — 2026-06-20 — Web commitment resolve reaches CLI parity
 
 Resolving a commitment in the web UI now does everything `arete commitments resolve` does. Previously `PATCH /api/commitments/:id` did a raw write of `commitments.json` (status + resolvedAt only), so the linked task in `week.md`/`tasks.md` stayed unchecked forever and the write bypassed the cross-process lock — exactly the bulk-resolve flow used in the UI. It now routes through the wired `CommitmentsService.resolve()`.

@@ -74,6 +74,7 @@ export function registerPlanContextCommand(program) {
         }
         listItem('Topics', String(bundle.topics.length));
         listItem('Goals', String(bundle.goals.length));
+        listItem('Week memory', String(bundle.weekMemory.length));
         listItem('Last week', bundle.lastWeek ? 'present' : 'none');
         listItem('Generated', bundle.generatedAt);
     });
