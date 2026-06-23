@@ -589,10 +589,13 @@ describe('AreaMemoryService', () => {
       const areaParser = createStubAreaParser([area]);
       const commitments = createStubCommitments();
       const memoryService = createStubMemory();
+      // Use a dynamic date (matches sibling tests) — a hardcoded date ages out
+      // of AreaMemoryService's recency window and the topic stops surfacing.
+      const today = new Date().toISOString().slice(0, 10);
 
       storage.store.set(
-        join(WORKSPACE_ROOT, 'resources/meetings', `2026-04-22-m.md`),
-        `---\ntitle: "M"\ndate: "2026-04-22"\narea: glance-comms\ntopics:\n  - cover-whale-templates\nopen_action_items: 0\nattendees: []\n---\n\nBody.`,
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-m.md`),
+        `---\ntitle: "M"\ndate: "${today}"\narea: glance-comms\ntopics:\n  - cover-whale-templates\nopen_action_items: 0\nattendees: []\n---\n\nBody.`,
       );
 
       const throwingTopicMemory = {
