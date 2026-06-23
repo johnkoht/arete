@@ -53,9 +53,10 @@ const ITEM_PATTERN = /^-\s+((?:ai|de|le)_\d+):\s+(.+)$/;
  * Pattern to extract owner/direction/counterparty from action item text.
  * Matches: [@owner-slug → @counterparty-slug] description
  * Or: [@owner-slug →] description (no counterparty)
- * Direction: → means i_owe_them, ← means they_owe_me
+ * Direction: → means i_owe_them, ← means they_owe_me,
+ * · means none (team-internal, single-pass D3 — never a commitment, D7)
  */
-const OWNER_PATTERN = /^\[@([a-z0-9-]+)\s*([→←])\s*(?:@([a-z0-9-]+))?\]\s*(.+)$/i;
+const OWNER_PATTERN = /^\[@([a-z0-9-]+)\s*([→←·])\s*(?:@([a-z0-9-]+))?\]\s*(.+)$/i;
 /**
  * Parse owner/direction/counterparty from action item text.
  * Returns the extracted fields and the cleaned description.
@@ -66,7 +67,7 @@ function parseOwnerFromText(text) {
         return { description: text };
     }
     const [, ownerSlug, arrow, counterpartySlug, description] = match;
-    const direction = arrow === '→' ? 'i_owe_them' : 'they_owe_me';
+    const direction = arrow === '→' ? 'i_owe_them' : arrow === '·' ? 'none' : 'they_owe_me';
     return {
         ownerSlug,
         direction,
@@ -153,6 +154,30 @@ export function parseStagedItemStatus(content) {
     return raw;
 }
 /**
+ * Parse the `staged_item_elevated` frontmatter field (W4 / chef-holistic-reconcile
+ * B-2). Map of item id → `true` for items the chef confidently keeps. Only
+ * truthy entries are returned; any non-`true` value (including `false`, strings,
+ * numbers) drops silently — presence-with-`true` is the only valid signal.
+ *
+ * Backward compat: returns `{}` for meeting files with no `staged_item_elevated`
+ * field (every pre-W4 meeting has none).
+ *
+ * The renderer reads this → `[x]` pre-fill (B-1). The commit filter
+ * (`commitApprovedItems`) NEVER reads it — elevation is not commit-readiness.
+ */
+export function parseStagedItemElevated(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_elevated'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, v] of Object.entries(raw)) {
+        if (v === true)
+            result[id] = true;
+    }
+    return result;
+}
+/**
  * Parse the `staged_item_edits` frontmatter field from raw markdown content.
  * Returns a map of item IDs to edited text strings.
  */
@@ -182,7 +207,7 @@ export function parseStagedItemOwner(content) {
         if (typeof m['ownerSlug'] === 'string') {
             ownerMeta.ownerSlug = m['ownerSlug'];
         }
-        if (m['direction'] === 'i_owe_them' || m['direction'] === 'they_owe_me') {
+        if (m['direction'] === 'i_owe_them' || m['direction'] === 'they_owe_me' || m['direction'] === 'none') {
             ownerMeta.direction = m['direction'];
         }
         if (typeof m['counterpartySlug'] === 'string') {
@@ -238,7 +263,76 @@ export function parseStagedItemSkipReason(content) {
             evidence: m['evidence'],
             setBy: m['setBy'],
             setAt: m['setAt'],
+            // Issue C: optional linkable dedup target. Non-string entries drop
+            // (the rest of the entry is still valid).
+            ...(typeof m['matchedRef'] === 'string' && m['matchedRef'].trim() !== ''
+                ? { matchedRef: m['matchedRef'] }
+                : {}),
+            // theme-render W2: optional dedup/superseded discriminator. Only the two
+            // known values survive; any other value (or absence) drops, leaving the
+            // entry to default to dedup semantics (byte-identical legacy behavior).
+            ...(m['kind'] === 'dedup' || m['kind'] === 'superseded'
+                ? { kind: m['kind'] }
+                : {}),
         };
+    }
+    return result;
+}
+/**
+ * Parse the `staged_item_importance` frontmatter field (single_pass D3).
+ * Map of item id → importance tier. Entries with an unrecognized value drop.
+ */
+export function parseStagedItemImportance(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_importance'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, v] of Object.entries(raw)) {
+        if (v === 'blocker' || v === 'high' || v === 'normal')
+            result[id] = v;
+    }
+    return result;
+}
+/**
+ * Parse the `staged_item_uncertain` frontmatter field (single_pass D3, the ⚠
+ * channel). Map of item id → uncertainty reason string. PRESENCE of an entry
+ * (even an empty string) means the item is uncertain. Non-string entries drop.
+ */
+export function parseStagedItemUncertain(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_uncertain'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, v] of Object.entries(raw)) {
+        if (typeof v === 'string')
+            result[id] = v;
+    }
+    return result;
+}
+/**
+ * Parse the `staged_item_links` frontmatter field (single_pass D3).
+ * Map of item id → `{ continuationOf?, supersedes? }`. Entries with no valid
+ * string field drop.
+ */
+export function parseStagedItemLinks(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_links'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    const result = {};
+    for (const [id, meta] of Object.entries(raw)) {
+        if (!meta || typeof meta !== 'object' || Array.isArray(meta))
+            continue;
+        const m = meta;
+        const link = {};
+        if (typeof m['continuationOf'] === 'string')
+            link.continuationOf = m['continuationOf'];
+        if (typeof m['supersedes'] === 'string')
+            link.supersedes = m['supersedes'];
+        if (link.continuationOf || link.supersedes)
+            result[id] = link;
     }
     return result;
 }
@@ -253,18 +347,181 @@ export async function writeItemStatusToFile(storage, filePath, itemId, options) 
     if (raw === null)
         throw new Error(`Meeting file not found: ${filePath}`);
     const { data, body } = parseFrontmatter(raw);
-    // Initialize maps if absent
+    // Initialize the status map if absent.
     if (!data['staged_item_status'] || typeof data['staged_item_status'] !== 'object') {
         data['staged_item_status'] = {};
     }
-    if (!data['staged_item_edits'] || typeof data['staged_item_edits'] !== 'object') {
-        data['staged_item_edits'] = {};
-    }
     data['staged_item_status'][itemId] = options.status;
+    // N2: only touch `staged_item_edits` when there is edited text to record —
+    // a status-only write (e.g. a skip with no amendment) must not leave an
+    // empty `staged_item_edits: {}` map in the frontmatter. The reader
+    // (`parseStagedItemEdits`) already treats an absent map as `{}`, so this is
+    // safe and keeps the serialized frontmatter clean.
     if (options.editedText !== undefined) {
+        if (!data['staged_item_edits'] || typeof data['staged_item_edits'] !== 'object') {
+            data['staged_item_edits'] = {};
+        }
         data['staged_item_edits'][itemId] = options.editedText;
     }
     await storage.write(filePath, serializeFrontmatter(data, body));
+}
+// ---------------------------------------------------------------------------
+// writeItemElevatedToFile (W4 B-2)
+// ---------------------------------------------------------------------------
+/**
+ * Set `staged_item_elevated[itemId] = true` in a meeting file's frontmatter
+ * (W4 / chef-holistic-reconcile B-2). The chef calls this for confident keeps
+ * during the winddown reconcile pass.
+ *
+ * CRITICALLY does NOT touch `staged_item_status` — elevation is a render-only
+ * pre-check signal, never commit-readiness. The item stays `'pending'` (or
+ * unstatused) on disk; only the winddown apply checkbox-diff promotes a
+ * left-checked item to `'approved'` (just before commit). This is what keeps a
+ * stray `arete meeting approve` from silently committing an un-applied
+ * elevation.
+ *
+ * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
+ */
+export async function writeItemElevatedToFile(storage, filePath, itemId) {
+    const raw = await storage.read(filePath);
+    if (raw === null)
+        throw new Error(`Meeting file not found: ${filePath}`);
+    const { data, body } = parseFrontmatter(raw);
+    if (!data['staged_item_elevated'] || typeof data['staged_item_elevated'] !== 'object') {
+        data['staged_item_elevated'] = {};
+    }
+    data['staged_item_elevated'][itemId] = true;
+    await storage.write(filePath, serializeFrontmatter(data, body));
+}
+/**
+ * Delete `staged_item_elevated[itemId]` from a meeting file's frontmatter
+ * (W4 B-2, the `--remove` un-elevate / correction path). Inverse of
+ * {@link writeItemElevatedToFile}.
+ *
+ * Like the setter, this NEVER touches `staged_item_status` — un-elevating
+ * only drops the render-only pre-check, it does not change commit-readiness.
+ *
+ * Removing an absent id is a no-op (not an error): the caller's contract is
+ * "ensure this id is not elevated", which already holds. When the map empties,
+ * the `staged_item_elevated` key is dropped entirely to preserve the
+ * legacy/clean post-edit frontmatter shape (matching the commit-filter
+ * cleanup convention).
+ *
+ * Uses read-parse-update-write to avoid corrupting other frontmatter fields.
+ */
+export async function removeItemElevatedFromFile(storage, filePath, itemId) {
+    const raw = await storage.read(filePath);
+    if (raw === null)
+        throw new Error(`Meeting file not found: ${filePath}`);
+    const { data, body } = parseFrontmatter(raw);
+    const map = data['staged_item_elevated'];
+    if (!map || typeof map !== 'object' || Array.isArray(map))
+        return; // nothing to remove
+    if (!(itemId in map))
+        return; // absent id → no-op
+    delete map[itemId];
+    if (Object.keys(map).length === 0) {
+        delete data['staged_item_elevated'];
+    }
+    await storage.write(filePath, serializeFrontmatter(data, body));
+}
+/**
+ * Partial-merge a meeting file's `topics:` frontmatter field (CHR-W4 Piece 2).
+ *
+ * The chef's topic-review step calls this to CORRECT lexically-suggested
+ * topics — add the obviously-right ones (e.g. `status-letter-automation`),
+ * drop the wrong ones — via a deterministic surface instead of hand-editing
+ * frontmatter (the elevate-verb lesson / eng-lead N-2).
+ *
+ * Modes:
+ *  - `'set'`    → replace the whole `topics:` list with `slugs` (deduped,
+ *                 order-preserving).
+ *  - `'add'`    → union the existing list with `slugs` (existing order kept,
+ *                 new slugs appended in input order, deduped).
+ *  - `'remove'` → drop every slug in `slugs` from the existing list.
+ *
+ * Invariants:
+ *  - Read-parse-update-write: every OTHER frontmatter field is preserved
+ *    byte-for-faithful (same serializer the staged-item writers use). In
+ *    particular this NEVER touches `staged_item_status`, `staged_item_elevated`,
+ *    or any sibling staged-item map — topic assignment is orthogonal to
+ *    item commit-readiness (AC: never touches status/elevated).
+ *  - Slugs are trimmed; empty/blank slugs are ignored.
+ *  - When the resulting list is EMPTY, the `topics:` key is dropped entirely
+ *    (preserves the clean "no topics" frontmatter shape rather than leaving
+ *    `topics: []`).
+ *  - Idempotent: a `set`/`add`/`remove` that produces the same list as on
+ *    disk writes nothing and returns `changed: false`.
+ *
+ * Throws when the file does not exist (caller resolves + validates first).
+ */
+export async function writeMeetingTopicsToFile(storage, filePath, mode, slugs) {
+    const raw = await storage.read(filePath);
+    if (raw === null)
+        throw new Error(`Meeting file not found: ${filePath}`);
+    const { data, body } = parseFrontmatter(raw);
+    // Read the current topics list (tolerant: missing/malformed → []).
+    const current = [];
+    const rawTopics = data['topics'];
+    if (Array.isArray(rawTopics)) {
+        for (const t of rawTopics) {
+            if (typeof t === 'string' && t.trim() !== '')
+                current.push(t.trim());
+        }
+    }
+    // Normalize the input slugs (trim, drop blanks, preserve order, dedup).
+    const cleanInput = [];
+    const inputSeen = new Set();
+    for (const s of slugs) {
+        const slug = typeof s === 'string' ? s.trim() : '';
+        if (slug === '' || inputSeen.has(slug))
+            continue;
+        inputSeen.add(slug);
+        cleanInput.push(slug);
+    }
+    let next;
+    if (mode === 'set') {
+        next = cleanInput;
+    }
+    else if (mode === 'add') {
+        const seen = new Set(current);
+        next = [...current];
+        for (const slug of cleanInput) {
+            if (!seen.has(slug)) {
+                seen.add(slug);
+                next.push(slug);
+            }
+        }
+    }
+    else {
+        // remove
+        const toRemove = new Set(cleanInput);
+        next = current.filter((t) => !toRemove.has(t));
+    }
+    // Dedup the final list (set could carry dupes already removed above; add/
+    // remove are dedup-safe). Order-preserving.
+    const finalSeen = new Set();
+    const finalTopics = [];
+    for (const t of next) {
+        if (!finalSeen.has(t)) {
+            finalSeen.add(t);
+            finalTopics.push(t);
+        }
+    }
+    // Idempotency check — same list as on disk → no write.
+    const sameAsCurrent = finalTopics.length === current.length &&
+        finalTopics.every((t, i) => t === current[i]);
+    if (sameAsCurrent) {
+        return { topics: finalTopics, changed: false };
+    }
+    if (finalTopics.length === 0) {
+        delete data['topics'];
+    }
+    else {
+        data['topics'] = finalTopics;
+    }
+    await storage.write(filePath, serializeFrontmatter(data, body));
+    return { topics: finalTopics, changed: true };
 }
 // ---------------------------------------------------------------------------
 // Action item formatting
@@ -285,7 +542,11 @@ function formatActionItemWithOwner(item) {
     if (!item.ownerSlug) {
         return item.text;
     }
-    const arrow = item.direction === 'they_owe_me' ? '←' : '→';
+    // `·` = direction none (single-pass D3): deliberately NOT an arrow so the
+    // commitment-creating parsers (meeting-parser.ts ARROW_PATTERN /
+    // APPROVED_OWNER_PATTERN) never read an approved none-item as a
+    // directional commitment (D7 inertness).
+    const arrow = item.direction === 'they_owe_me' ? '←' : item.direction === 'none' ? '·' : '→';
     if (item.counterpartySlug) {
         return `${item.text} (@${item.ownerSlug} ${arrow} @${item.counterpartySlug})`;
     }
@@ -513,6 +774,22 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
     // back to pending retain their sibling fields for the next round.
     // Only committed items lose their bookkeeping. Closes F5 + enables
     // AC11 (week-1 unskip survival).
+    //
+    // single_pass + finding #12: the single_pass judgment maps
+    // (`staged_item_importance` / `_uncertain` / `_links`) MUST be filtered
+    // alongside the originals. Pre-fix they were absent from this list, so a
+    // full approve stripped `staged_item_owner` (an approved-ID entry) while
+    // LEAVING the judgment maps behind — an inconsistency that left orphan
+    // tier/⚠ bookkeeping for committed items and made a post-approve render
+    // show tiers without owner (the asymmetry diagnosed in finding #12). All
+    // staged sibling maps are now filtered the same way, so a committed item
+    // loses ALL its bookkeeping and the surviving (pending/skipped) items keep
+    // every map consistently.
+    // W4 B-2 / BLOCKER-2: `staged_item_elevated` is included in THIS cleanup
+    // filter (so a committed item never keeps an orphan `elevated:true` — the
+    // finding-#12 bookkeeping asymmetry) but is DELIBERATELY ABSENT from the
+    // commit filter at the top of this function (`approvedIds` reads only
+    // `'approved'` status). Elevation is render-only; it can never commit.
     for (const key of [
         'staged_item_status',
         'staged_item_edits',
@@ -520,6 +797,10 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
         'staged_item_source',
         'staged_item_confidence',
         'staged_item_skip_reason',
+        'staged_item_importance',
+        'staged_item_uncertain',
+        'staged_item_links',
+        'staged_item_elevated',
     ]) {
         const map = data[key];
         if (map === undefined)

@@ -214,6 +214,11 @@ export function buildDupeSkipReasonEntries(decisions, nowIso) {
             evidence: `cross-meeting dedup ${via} (canonical in ${slug})`,
             setBy: 'chef',
             setAt: nowIso,
+            // Issue C: the matched canonical's TEXT is the linkable target the
+            // checklist renders as `— skip: already captured as [[<text>]]`, so
+            // the user can verify the dupe is genuinely stored. Falls back to the
+            // reason string in the renderer when absent.
+            ...(d.outcome.canonical.text ? { matchedRef: d.outcome.canonical.text } : {}),
         };
     }
     return out;

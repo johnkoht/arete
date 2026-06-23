@@ -1,11 +1,17 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, SINGLE_PASS_STAGED_HEADERS, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, writeMeetingTopicsToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, deserializeContextBundle, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, writeMeetingApplyFrontmatter, appendChefSkipLog, writeWithLock, 
 // Phase 13 AC2/AC3 — meeting area write surface
 listMeetingsForBackfill, qualifyMeetingAreaMatch, applyAreaToMeeting, resetBackfilledMeetingAreas, 
 // Phase 10b-min wiring — reactive cross-meeting dedup
-wireExtractDedup, adaptFilteredItemsForDedup, decorateStagedSectionsWithDupeBadges, } from '@arete/core';
+wireExtractDedup, adaptFilteredItemsForDedup, decorateStagedSectionsWithDupeBadges, 
+// single-pass-extraction (W1.5/W2)
+resolveMeetingSeries, renderSeriesContext, AreaParserService, 
+// chef-holistic-reconcile W7 shadow-soak infra
+writeRawExtractionSnapshot, 
+// single-pass-extraction W1 — fail-loud + failure snapshot (S1/S2)
+writeFailureSnapshot, ParseError, TruncationError, EmptyExtractionError, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -667,6 +673,74 @@ export function registerMeetingCommands(program) {
             success(`Set area: ${canonicalSlug} (area_set_by: ${setBy}) on ${meetingPath}`);
         }
     });
+    // topics subcommand (CHR-W4 Piece 2) — chef topic-review write surface.
+    // Deterministic partial-merge of a meeting's `topics:` frontmatter; never
+    // touches staged-item status/elevated. Mirrors `set-area`'s shape.
+    meetingCmd
+        .command('topics <file>')
+        .description("Adjust a meeting's `topics:` frontmatter (partial-merge; body + staged-item fields preserved). Exactly one of --set/--add/--remove.")
+        .option('--set <slugs...>', 'Replace the whole topics list with these slugs')
+        .option('--add <slugs...>', 'Add these slugs to the topics list (dedup)')
+        .option('--remove <slugs...>', 'Remove these slugs from the topics list')
+        .option('--json', 'Output as JSON')
+        .action(async (file, opts) => {
+        const fail = (msg) => {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        };
+        // Exactly one mode (mutual exclusion).
+        const modes = [
+            ['set', opts.set],
+            ['add', opts.add],
+            ['remove', opts.remove],
+        ];
+        const chosen = modes.filter(([, v]) => v !== undefined);
+        if (chosen.length !== 1) {
+            fail('Specify exactly one of --set / --add / --remove');
+        }
+        const [mode, slugs] = chosen[0];
+        if (slugs === undefined || slugs.length === 0) {
+            fail(`--${mode} requires at least one slug`);
+        }
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            fail('Not in an Areté workspace');
+        }
+        // Resolve the meeting file: absolute → as-is; has a slash →
+        // workspace-relative; bare name → resources/meetings/. (Same
+        // resolution rule as `set-area`.)
+        const meetingPath = file.startsWith('/')
+            ? file
+            : file.includes('/')
+                ? join(root, file)
+                : join(root, 'resources', 'meetings', file);
+        if (!(await services.storage.exists(meetingPath))) {
+            fail(`Meeting not found: ${meetingPath}`);
+        }
+        const result = await writeMeetingTopicsToFile(services.storage, meetingPath, mode, slugs);
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                meeting: meetingPath,
+                mode,
+                topics: result.topics,
+                changed: result.changed,
+            }));
+            return;
+        }
+        if (!result.changed) {
+            info(`No change — topics already: ${result.topics.join(', ') || '(none)'}`);
+        }
+        else {
+            success(`Updated topics (${mode}): ${result.topics.join(', ') || '(none)'} on ${meetingPath}`);
+        }
+    });
     // Extract subcommand - uses AIService for LLM-based extraction
     meetingCmd
         .command('extract <file>')
@@ -790,7 +864,12 @@ export function registerMeetingCommands(program) {
             const { detectTopicsLexicalDetailed, TopicMemoryService } = await import('@arete/core');
             const { topics } = await services.topicMemory.listAll(paths);
             const identities = TopicMemoryService.toIdentities(topics);
-            const detected = detectTopicsLexicalDetailed(transcript, identities);
+            // Title-aware detection (W4 topic-assignment fix) — mirror the
+            // production extraction path so the tuning view matches reality.
+            const titleForTopics = typeof frontmatter.title === 'string' ? frontmatter.title : undefined;
+            const detected = detectTopicsLexicalDetailed(transcript, identities, {
+                title: titleForTopics,
+            });
             if (opts.json) {
                 console.log(JSON.stringify({
                     detectedTopics: detected.map((d) => ({
@@ -846,32 +925,14 @@ export function registerMeetingCommands(program) {
                     contextJson = readFileSync(opts.context, 'utf8');
                 }
                 const parsed = JSON.parse(contextJson);
-                // Handle wrapped format (success: true, ...) from `arete meeting context --json`
-                if (parsed.success === true && parsed.meeting) {
-                    // Extract the bundle fields from the response
-                    contextBundle = {
-                        meeting: parsed.meeting,
-                        agenda: (parsed.agenda ?? null),
-                        attendees: (parsed.attendees ?? []),
-                        unknownAttendees: (parsed.unknownAttendees ?? []),
-                        relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }),
-                        warnings: (parsed.warnings ?? []),
-                    };
-                }
-                else if (parsed.meeting && typeof parsed.meeting === 'object') {
-                    // Direct bundle format with required fields
-                    contextBundle = {
-                        meeting: parsed.meeting,
-                        agenda: (parsed.agenda ?? null),
-                        attendees: (parsed.attendees ?? []),
-                        unknownAttendees: (parsed.unknownAttendees ?? []),
-                        relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }),
-                        warnings: (parsed.warnings ?? []),
-                    };
-                }
-                else {
-                    throw new Error('Invalid context format: missing required "meeting" field');
-                }
+                // W2/S5: deserialize the WHOLE bundle (not a 6-field hand-copy) so
+                // areaContext / existingTasks / topicWikiContext (+ future fields)
+                // survive the --context JSON boundary. Accepts wrapped
+                // ({success:true, ...}) and direct-bundle forms; validates the
+                // required `meeting` field; shape-guards / degrades malformed optional
+                // blocks the prompt builder indexes (rather than throwing inside
+                // now-fail-loud extraction).
+                contextBundle = deserializeContextBundle(parsed);
             }
             catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
@@ -997,7 +1058,9 @@ export function registerMeetingCommands(program) {
         // importance-skip short-circuit so `--importance skip` exits cleanly on
         // workspaces missing the tier. Still runs before any LLM call, so no
         // extraction tier cost is paid if config is bad.
-        if (opts.reconcile && !config.ai?.tiers?.standard) {
+        // CHR-W0: in day-level mode batchLLMReview runs in `reconcile-day`,
+        // not here — the standard tier is not needed at extract time.
+        if (opts.reconcile && config.reconcile_mode !== 'day-level' && !config.ai?.tiers?.standard) {
             const msg = '`--reconcile` requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
             if (opts.json) {
                 console.log(JSON.stringify({ success: false, error: msg }));
@@ -1035,9 +1098,21 @@ export function registerMeetingCommands(program) {
         const mode = (currentStatus === 'processed' || currentStatus === 'approved')
             ? 'thorough'
             : (effectiveImportance === 'light' ? 'light' : 'normal');
-        // Create LLM call wrapper using AIService
+        // single-pass-extraction (W2): pipeline mode from arete.yaml
+        // (`extraction_mode: single_pass`). Default legacy = bit-identical
+        // behavior. Light-importance meetings keep the light prompt either way.
+        const singlePassMode = config.extraction_mode === 'single_pass' && mode !== 'light';
+        // Create LLM call wrapper using AIService.
+        // single_pass W1/S7: the single-pass prompt has NO category caps and can
+        // emit a large JSON body (tiered items + open questions + markers). The
+        // model-default maxTokens (~8k) can truncate that, and W1 now treats
+        // truncation as a loud failure (TruncationError). Raise the ceiling for
+        // single_pass so truncation only fires on a genuine overflow, not the
+        // common case. Legacy passes no maxTokens (model default) → unchanged,
+        // bit-identical to today.
+        const EXTRACTION_MAX_TOKENS_SINGLE_PASS = 16000;
         const callLLM = async (prompt) => {
-            const result = await services.ai.call('extraction', prompt);
+            const result = await services.ai.call('extraction', prompt, singlePassMode ? { maxTokens: EXTRACTION_MAX_TOKENS_SINGLE_PASS } : undefined);
             return result.text;
         };
         // Reconciliation review runs on the cheaper 'reconciliation' tier
@@ -1071,19 +1146,182 @@ export function registerMeetingCommands(program) {
         catch {
             activeTopicSlugs = undefined;
         }
+        // single-pass Layer-1 context assembly (W1.5 series + open commitments).
+        // Best-effort: every block degrades to absent on failure — extraction
+        // proceeds with whatever context assembled.
+        let singlePassContext;
+        if (singlePassMode) {
+            singlePassContext = {};
+            // Series context (W1.5): prior same-series meetings' items + open
+            // questions. recurring_meetings titles from area config rescue
+            // drifted titles.
+            try {
+                // NOTE: paths.resources is ALREADY absolute (getPaths joins the
+                // workspace root) — joining root again doubles the prefix and
+                // storage.list silently returns [] for the nonexistent dir. The
+                // legacy inline-reconcile block below carries that exact doubled
+                // join (pre-existing, left untouched for flags-off bit-identity —
+                // see build-report).
+                const seriesMeetingsDir = join(paths.resources, 'meetings');
+                let recurringTitles = [];
+                try {
+                    const areaParser = new AreaParserService(services.storage, root);
+                    const areas = await areaParser.listAreas();
+                    recurringTitles = areas.flatMap((a) => (a.recurringMeetings ?? [])
+                        .map((m) => m.title)
+                        .filter((t) => typeof t === 'string' && t.length > 0));
+                }
+                catch {
+                    // no area config — title+attendee matching still applies
+                }
+                const series = await resolveMeetingSeries(services.storage, seriesMeetingsDir, meetingPath, { recurringTitles });
+                if (series) {
+                    singlePassContext.seriesContext = renderSeriesContext(series);
+                }
+            }
+            catch {
+                // series context degrades to absent
+            }
+            // Open commitments filtered to attendees — dedup at source: the model
+            // marks continuation_of instead of re-emitting (Layer-1 table row 4).
+            try {
+                const attendeeSlugs = attendees.map((name) => slugifyPersonName(name));
+                if (attendeeSlugs.length > 0) {
+                    const open = await services.commitments.listOpen({ personSlugs: attendeeSlugs });
+                    const MAX_COMMITMENTS_IN_PROMPT = 20;
+                    if (open.length > 0) {
+                        singlePassContext.openCommitments = open
+                            .slice(0, MAX_COMMITMENTS_IN_PROMPT)
+                            .map((c) => `- ${c.id.slice(0, 8)}: ${c.text} (@${c.personSlug}, ${c.direction}, since ${c.date})`)
+                            .join('\n');
+                    }
+                }
+            }
+            catch {
+                // commitments context degrades to absent
+            }
+        }
+        // W4/S6 (RC4): auto-load priorItems for cross-meeting dedup when
+        // --prior-items was not passed and we're in single_pass. The winddown
+        // runs extract WITHOUT --prior-items (SKILL.md 1h), so without this the
+        // priorItems block is never populated and recent cross-meeting dups
+        // (e.g. the week.md re-stage, 10b) slip through. Mirrors the backend
+        // recipe (agent.ts:681-700): 7-day batch, current meeting EXCLUDED via
+        // loadRecentMeetingBatch's excludePath (LEARNINGS 2026-04-29 trap — a
+        // reprocess must not feed its own staged items back as "already
+        // extracted"). buildKnownItemsSection is already MARK-don't-skip (S6),
+        // so this only ADDS dedup context; it cannot suppress a supersession arc.
+        // Best-effort: a load failure degrades to no prior items.
+        if (singlePassMode && !priorItems) {
+            try {
+                // paths.resources is ALREADY absolute (getPaths joins the workspace
+                // root) — do NOT join root again (that double-prefixes and
+                // loadRecentMeetingBatch silently returns []). Same correct form as
+                // the series block above; the legacy inline-reconcile blocks below
+                // carry the doubled join (pre-existing, left untouched for flags-off
+                // bit-identity).
+                const meetingsDir = join(paths.resources, 'meetings');
+                const recentBatch = await loadRecentMeetingBatch(services.storage, meetingsDir, 7, meetingPath);
+                const loaded = recentBatch.flatMap((batch) => [
+                    ...batch.extraction.decisions.map((text) => ({ type: 'decision', text })),
+                    ...batch.extraction.learnings.map((text) => ({ type: 'learning', text })),
+                    ...batch.extraction.actionItems.map((ai) => ({ type: 'action', text: ai.description })),
+                ]);
+                if (loaded.length > 0) {
+                    priorItems = loaded;
+                    if (!opts.json)
+                        info(`Auto-loaded ${loaded.length} prior items from recent meetings (single_pass dedup)`);
+                }
+            }
+            catch {
+                // degrade to no prior items — extraction proceeds
+            }
+        }
+        // W3/RC3: resolve owner identity for single_pass so the prompt's
+        // "## Who is reading this" frame is populated and direction is
+        // owner-relative (fixes Nate-backwards, 10c). Prefer the bundle owner
+        // (read from context/profile.md by buildMeetingContext + carried through
+        // the W2 --context deserialization); fall back to `git config user.name`
+        // when profile.md is absent. Only set for single_pass — legacy is
+        // bit-identical.
+        let ownerSlug;
+        let ownerName;
+        if (singlePassMode) {
+            if (contextBundle?.owner?.slug) {
+                ownerSlug = contextBundle.owner.slug;
+                ownerName = contextBundle.owner.name;
+            }
+            else {
+                try {
+                    const gitName = execSync('git config user.name', { encoding: 'utf-8' }).trim();
+                    if (gitName) {
+                        ownerName = gitName;
+                        ownerSlug = slugifyPersonName(gitName);
+                    }
+                }
+                catch {
+                    // git unavailable — identity frame falls back to the prompt default
+                }
+            }
+        }
         // Extract intelligence
         let extractionResult;
         try {
             extractionResult = await extractMeetingIntelligence(transcript, callLLM, {
                 attendees: attendees.length > 0 ? attendees : undefined,
+                ownerSlug,
+                ownerName,
                 context: contextBundle,
                 priorItems,
                 mode,
                 activeTopicSlugs,
+                singlePass: singlePassMode,
+                singlePassContext,
             });
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
+            // W1/S1: write a FAILURE snapshot BEFORE exiting. With fail-loud
+            // propagation the success-path snapshot writer below never runs on a
+            // failure (we exit here first), so without this the targeted failure
+            // would leave no snapshot → AC2/AC7 unreachable. Classify the failure
+            // by error type for the W1 taxonomy. Best-effort: never let snapshot
+            // failure mask the original error.
+            if (config.reconcile_shadow === true && !opts.dryRun) {
+                let failureReason = 'call_error';
+                let failurePreview;
+                if (err instanceof ParseError) {
+                    failureReason = 'parse_error';
+                    failurePreview = err.preview;
+                }
+                else if (err instanceof TruncationError) {
+                    failureReason = 'truncation';
+                }
+                else if (err instanceof EmptyExtractionError) {
+                    // Finding #11/#13: call succeeded + parsed, but a real transcript
+                    // yielded nothing → over-suppression surfaced, not a silent 0.
+                    failureReason = 'empty_extraction';
+                }
+                else if (err instanceof Error) {
+                    failureReason = 'call_error';
+                }
+                else {
+                    failureReason = 'unknown';
+                }
+                try {
+                    await writeFailureSnapshot(services.storage, root, {
+                        meetingPath,
+                        extractionMode: singlePassMode ? 'single_pass' : 'legacy',
+                        promptMode: mode,
+                        failureReason,
+                        failureMessage: msg,
+                        failurePreview,
+                    });
+                }
+                catch {
+                    // instrumentation only — surface the original failure regardless
+                }
+            }
             if (opts.json) {
                 console.log(JSON.stringify({ success: false, error: `Extraction failed: ${msg}` }));
             }
@@ -1092,10 +1330,45 @@ export function registerMeetingCommands(program) {
             }
             process.exit(1);
         }
+        // CHR-W7 (shadow-soak infra): persist the RAW pre-reconcile extraction
+        // snapshot BEFORE any mutation — this point is upstream of the inline
+        // cross-meeting reconcile, processMeetingExtraction (confidence filter,
+        // completed/open-task matching, silent merges), batchLLMReview, and
+        // wireExtractDedup. Pre-mortem R2: the shadow engine consumes these,
+        // never post-inline state. Gated on `reconcile_shadow: true` (default
+        // off — zero writes, legacy bit-identical); best-effort, never fails
+        // the extraction.
+        if (config.reconcile_shadow === true && !opts.dryRun) {
+            try {
+                await writeRawExtractionSnapshot(services.storage, root, {
+                    meetingPath,
+                    // Schema requires 'legacy' | 'single_pass' (pipeline shape) —
+                    // NOT the prompt depth mode, which is recorded separately.
+                    extractionMode: singlePassMode ? 'single_pass' : 'legacy',
+                    promptMode: mode,
+                    intelligence: extractionResult.intelligence,
+                    validationWarnings: extractionResult.validationWarnings,
+                });
+            }
+            catch {
+                // instrumentation only — extraction proceeds
+            }
+        }
+        // CHR-W0 (Stage-0 day-level reconcile): when `reconcile_mode:
+        // day-level`, the inline per-file cross-meeting reconcile (this block)
+        // AND the per-file batchLLMReview below are SKIPPED — extraction stays
+        // pure and the winddown runs ONE `arete meeting reconcile-day` call at
+        // Step 2 scope instead. This is the surgical fix for the
+        // collapse-to-oldest artifact: the chef sees the undeduped day.
+        // Default 'inline' keeps today's behavior bit-identical.
+        const dayLevelReconcile = config.reconcile_mode === 'day-level';
+        if (opts.reconcile && dayLevelReconcile && !opts.json) {
+            info('reconcile_mode: day-level — inline reconcile deferred to `arete meeting reconcile-day`');
+        }
         // Run cross-meeting reconciliation if requested
         let reconciliationResult;
         let cachedReconciliationContext;
-        if (opts.reconcile) {
+        if (opts.reconcile && !dayLevelReconcile) {
             try {
                 // Load reconciliation context (area memories + committed items)
                 cachedReconciliationContext = await loadReconciliationContext(services.storage, root);
@@ -1141,8 +1414,12 @@ export function registerMeetingCommands(program) {
         // mutates `processed`.
         const dismissedSnapshots = [];
         if (shouldStage) {
-            // Extract user notes and process extraction (filtering, dedup, metadata)
-            const userNotes = extractUserNotes(body);
+            // Extract user notes and process extraction (filtering, dedup, metadata).
+            // single-pass: exclude the extractor-written sections that didn't exist
+            // pre-W1 so a re-extract doesn't read its own output as user notes.
+            const userNotes = extractUserNotes(body, singlePassMode
+                ? ['open questions', 'parser-flagged (mirror-pair suspects)']
+                : undefined);
             // Read completed items from week.md and scratchpad.md for reconciliation,
             // and read OPEN tasks from week.md and tasks.md for existing-task dedup.
             const weekContent = await services.storage.read(join(paths.now, 'week.md')) ?? '';
@@ -1161,6 +1438,8 @@ export function registerMeetingCommands(program) {
                 completedItems,
                 openTasks,
                 importance: effectiveImportance,
+                // W1 (risk 1): tier-derived approval + keep low-confidence items.
+                singlePass: singlePassMode,
             });
             // Merge reconciliation decisions into processed items.
             // silentlyMerged counts surface to the user via JSON output and the
@@ -1207,7 +1486,9 @@ export function registerMeetingCommands(program) {
             // decision is a point-in-time fact — neither has a "done" state. For
             // those types, duplicate detection happens via cross-meeting matching
             // above and is handled as silent merge into committed memory.
-            if (opts.reconcile && processed) {
+            // CHR-W0: in day-level mode this moves into `reconcile-day` (one
+            // batched review over the whole day instead of N per-file calls).
+            if (opts.reconcile && !dayLevelReconcile && processed) {
                 try {
                     const proc = processed;
                     const reviewItems = proc.filteredItems
@@ -1299,7 +1580,14 @@ export function registerMeetingCommands(program) {
             // extraction) so the formatter emits `## Core` + `## Could include`
             // when the LLM populates them. Falls back to `## Summary` when absent
             // (formatter handles the precedence — see meeting-processing.ts:625).
-            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include, extractionResult.validationWarnings);
+            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include, extractionResult.validationWarnings, 
+            // single-pass: persist open questions + mirror-pair flag section.
+            singlePassMode
+                ? {
+                    openQuestions: extractionResult.intelligence.openQuestions,
+                    telemetryEvents: extractionResult.telemetryEvents,
+                }
+                : undefined);
             // Phase 10b-min wiring — decorate staged sections with `↪ canonical
             // in <slug>` badges (definite-dupe) and `↪ possibly merges with
             // <slug>` flags (possibly-mergeable). Idempotent against re-extract.
@@ -1373,22 +1661,62 @@ export function registerMeetingCommands(program) {
                     patch['staged_item_source'] = proc.stagedItemSource;
                     patch['staged_item_confidence'] = proc.stagedItemConfidence;
                     patch['staged_item_status'] = mergedStatus;
-                    if (Object.keys(proc.stagedItemOwner).length > 0) {
+                    // Owner/direction map (finding #12). single_pass ALWAYS assigns a
+                    // direction per action item (invalid/missing → `none`), so this is
+                    // normally non-empty — but mirror the judgment-map pattern: in
+                    // single_pass write explicit `undefined` when empty so a re-extract
+                    // CLEARS a stale owner map under the partial-merge contract (rather
+                    // than silently leaving last run's owners). Legacy keeps the
+                    // length-guarded write (no key mention → partial-merge preserves →
+                    // byte-identical).
+                    if (singlePassMode) {
+                        patch['staged_item_owner'] =
+                            Object.keys(proc.stagedItemOwner).length > 0 ? proc.stagedItemOwner : undefined;
+                    }
+                    else if (Object.keys(proc.stagedItemOwner).length > 0) {
                         patch['staged_item_owner'] = proc.stagedItemOwner;
                     }
                     if (proc.stagedItemMatchedText && Object.keys(proc.stagedItemMatchedText).length > 0) {
                         patch['staged_item_matched_text'] = proc.stagedItemMatchedText;
                     }
-                    // Phase 10b-min wiring — merge cross-meeting dedup skip_reason
-                    // entries on top of any existing entries. We explicitly merge
-                    // here (not relying on partial-merge) because adding NEW IDs
-                    // requires mentioning the key. Chef-proposed entries on OTHER
-                    // IDs (not in our patch) survive via partial-merge of the
-                    // existing currentSkipReason map.
-                    if (dedupResult && Object.keys(dedupResult.skipReasonPatch).length > 0) {
+                    // single-pass judgment maps (W1/D3). Explicit `undefined` when
+                    // empty so a re-extract clears stale maps under the partial-
+                    // merge contract (same pattern as could_include above). Legacy
+                    // mode never mentions these keys — existing files untouched.
+                    if (singlePassMode) {
+                        patch['staged_item_importance'] =
+                            proc.stagedItemImportance && Object.keys(proc.stagedItemImportance).length > 0
+                                ? proc.stagedItemImportance
+                                : undefined;
+                        patch['staged_item_uncertain'] =
+                            proc.stagedItemUncertainReason && Object.keys(proc.stagedItemUncertainReason).length > 0
+                                ? proc.stagedItemUncertainReason
+                                : undefined;
+                        patch['staged_item_links'] =
+                            proc.stagedItemLinks && Object.keys(proc.stagedItemLinks).length > 0
+                                ? proc.stagedItemLinks
+                                : undefined;
+                    }
+                    // Skip-reason merge. We explicitly merge (not relying on
+                    // partial-merge) because adding NEW IDs requires mentioning the
+                    // key. Three sources, layered:
+                    //   1. existing chef/user entries (currentSkipReason) — preserved
+                    //   2. Issue C extract-time auto-skips (completed/open-task
+                    //      matches) with `matchedRef` for the `[[link]]` render
+                    //   3. Phase 10b-min cross-meeting dedup entries
+                    // (2)+(3) are definitive extract-time `setBy: 'chef'` decisions
+                    // and take precedence over a stale prior auto-skip on the same id;
+                    // a USER override ([[unskip]]) deletes the entry entirely so it
+                    // won't be in currentSkipReason to be re-clobbered.
+                    const extractSkipReason = proc.stagedItemSkipReason ?? {};
+                    const dedupSkipReason = dedupResult?.skipReasonPatch ?? {};
+                    const haveExtractSkips = Object.keys(extractSkipReason).length > 0;
+                    const haveDedupSkips = Object.keys(dedupSkipReason).length > 0;
+                    if (haveExtractSkips || haveDedupSkips) {
                         const mergedSkipReason = {
                             ...currentSkipReason,
-                            ...dedupResult.skipReasonPatch,
+                            ...extractSkipReason,
+                            ...dedupSkipReason,
                         };
                         patch['staged_item_skip_reason'] = mergedSkipReason;
                     }
@@ -1396,7 +1724,11 @@ export function registerMeetingCommands(program) {
                     // reflects whatever the file held when the lock was acquired;
                     // `updateMeetingContent` rewrites only the staged sections so
                     // user edits to other body regions are preserved.
-                    const updatedBody = updateMeetingContent(current.body, stagedSections);
+                    const updatedBody = updateMeetingContent(current.body, stagedSections, 
+                    // single-pass: extractor owns Open Questions / Parser-flagged
+                    // sections, so re-extract replaces them. Legacy: omitted, so
+                    // user sections with those names are preserved (invariant).
+                    singlePassMode ? SINGLE_PASS_STAGED_HEADERS : undefined);
                     return { frontmatter: patch, body: updatedBody };
                 }, { mtimeGuardSeconds: 0 });
                 // Fallback: a vanished/raced file makes `writeWithLock` abstain;
@@ -1423,6 +1755,27 @@ export function registerMeetingCommands(program) {
                 }
                 catch {
                     // best-effort instrumentation
+                }
+                // single-pass W3 (D4): detector telemetry → item-fates stream.
+                // The mechanical filters no longer gate items; their fires are
+                // recorded here as `type: 'extraction_telemetry'` events. Best
+                // effort; never blocks the extract write.
+                if (singlePassMode && extractionResult.telemetryEvents && extractionResult.telemetryEvents.length > 0) {
+                    try {
+                        const kindMap = { action: 'action_item', decision: 'decision', learning: 'learning', open_question: 'open_question' };
+                        for (const ev of extractionResult.telemetryEvents) {
+                            await services.memoryLog.appendExtractionTelemetry(paths, {
+                                detector: ev.detector,
+                                item_kind: kindMap[ev.itemType],
+                                item_text: ev.item,
+                                detail: ev.detail,
+                                source_path: meetingPath,
+                            });
+                        }
+                    }
+                    catch {
+                        // best-effort telemetry
+                    }
                 }
                 // Refresh qmd index unless --skip-qmd
                 if (!opts.skipQmd) {
@@ -1484,6 +1837,9 @@ export function registerMeetingCommands(program) {
             silentlyMerged,
             crossMeetingDedup,
             qmd: qmdResult ?? { indexed: false, skipped: true },
+            // CHR-W0: tells the winddown that --reconcile was deferred to the
+            // day-level call (`arete meeting reconcile-day` at Step 2).
+            ...(opts.reconcile && dayLevelReconcile ? { reconcileDeferred: 'day-level' } : {}),
         };
         // Add reconciliation stats when reconciliation was run
         if (reconciliationResult) {
@@ -1607,6 +1963,274 @@ export function registerMeetingCommands(program) {
             else {
                 warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
             }
+        }
+    });
+    // CHR-W0 (Stage-0) — day-level cross-meeting reconcile.
+    //
+    // Moves the EXISTING reconcileMeetingBatch + batchLLMReview invocations from
+    // per-file extract time to ONE call over the whole day, run by the winddown
+    // at Step 2 scope when `reconcile_mode: day-level`. Differences from the
+    // inline path, by design:
+    //   - the chef/user sees the full undeduped day first (extraction is pure);
+    //   - NO silent merges: decisions/learnings that the inline path silently
+    //     deleted are instead flipped to visible `status: 'skipped'` +
+    //     `staged_item_skip_reason` (day-level apply is post-write, so silent
+    //     merge would be data loss);
+    //   - one batched LLM review instead of N per-file calls;
+    //   - user decisions win: items already 'approved' or 'skipped' are never
+    //     touched (idempotent re-runs).
+    meetingCmd
+        .command('reconcile-day')
+        .description('Day-level cross-meeting reconcile (reconcile_mode: day-level; CHR-W0)')
+        .option('--date <date>', 'Day to reconcile, YYYY-MM-DD (default: today)')
+        .option('--days <n>', 'Context window of recent meetings in days (default: 7)', '7')
+        .option('--dry-run', 'Compute and report decisions without writing')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json)
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            else
+                error('Not in an Areté workspace');
+            process.exit(1);
+        }
+        const config = await loadConfig(services.storage, root);
+        const paths = services.workspace.getPaths(root);
+        const date = opts.date ?? (() => {
+            const d = new Date();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${d.getFullYear()}-${mm}-${dd}`;
+        })();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            if (opts.json)
+                console.log(JSON.stringify({ success: false, error: `Invalid --date: ${date}` }));
+            else
+                error(`Invalid --date: ${date}`);
+            process.exit(1);
+        }
+        const days = parseInt(opts.days || '7', 10);
+        const dryRun = Boolean(opts.dryRun);
+        // paths.resources is already absolute — do NOT join root again (the
+        // legacy inline path's doubled join silently empties the batch; this
+        // command must actually see the day).
+        const meetingsDir = join(paths.resources, 'meetings');
+        // Load batch (the day's meetings + lookback context) and sort by date
+        // prefix ASC so first-occurrence-wins keeps the OLDEST as canonical —
+        // identical semantics to the inline path's [...recent, current] order.
+        const batch = await loadRecentMeetingBatch(services.storage, meetingsDir, days);
+        batch.sort((a, b) => {
+            const da = a.meetingPath.split('/').pop() ?? '';
+            const db = b.meetingPath.split('/').pop() ?? '';
+            return da < db ? -1 : da > db ? 1 : 0;
+        });
+        const dayPaths = new Set(batch.map((b) => b.meetingPath).filter((p) => (p.split('/').pop() ?? '').startsWith(date)));
+        if (dayPaths.size === 0) {
+            const out = { success: true, date, dayMeetings: 0, applied: {}, note: 'No processed meetings for the date' };
+            if (opts.json)
+                console.log(JSON.stringify(out, null, 2));
+            else
+                info(`No processed meetings found for ${date} — nothing to reconcile.`);
+            return;
+        }
+        const context = await loadReconciliationContext(services.storage, root);
+        const reconciliation = reconcileMeetingBatch(batch, context);
+        const byFile = new Map();
+        for (const item of reconciliation.items) {
+            if (item.status !== 'duplicate' && item.status !== 'completed')
+                continue;
+            if (!dayPaths.has(item.meetingPath))
+                continue;
+            const text = typeof item.original === 'string' ? item.original : item.original.description;
+            const list = byFile.get(item.meetingPath) ?? [];
+            list.push({
+                text,
+                type: item.type,
+                status: item.status,
+                reason: item.status === 'completed' ? 'already completed (day-level reconcile)' : 'duplicate (day-level reconcile)',
+                evidence: item.annotations.duplicateOf ?? item.annotations.completedOn ?? item.annotations.why ?? '',
+            });
+            byFile.set(item.meetingPath, list);
+        }
+        // Apply mechanical decisions per file via writeWithLock. User decisions
+        // win: approved/skipped items are never touched.
+        const applied = [];
+        const skippedExisting = [];
+        const unmatched = [];
+        const applyToFile = async (filePath, decisions) => {
+            if (decisions.length === 0)
+                return;
+            if (dryRun) {
+                // Review fix (should-fix 3): dry-run must run the SAME staged-line
+                // matching + user-decision checks as the real run, READ-ONLY — the
+                // flip rule trusts a clean dry-run to predict a clean real run, so
+                // it must populate real ids, `unmatched`, and `skippedExisting`
+                // exactly as the write path would.
+                const content = await services.storage.read(filePath);
+                if (content === null) {
+                    for (const d of decisions) {
+                        unmatched.push({ file: filePath, text: d.text });
+                    }
+                    return;
+                }
+                const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+                const body = fmMatch ? fmMatch[2] : content;
+                const sections = parseStagedSections(body);
+                const allStaged = [...sections.actionItems, ...sections.decisions, ...sections.learnings];
+                const currentStatus = parseStagedItemStatus(content);
+                for (const d of decisions) {
+                    const match = allStaged.find((s) => s.text === d.text);
+                    if (!match) {
+                        unmatched.push({ file: filePath, text: d.text });
+                        continue;
+                    }
+                    const prior = currentStatus[match.id];
+                    if (prior === 'approved' || prior === 'skipped') {
+                        skippedExisting.push({ file: filePath, id: match.id, priorStatus: prior });
+                        continue;
+                    }
+                    applied.push({ file: filePath, id: match.id, text: d.text, reason: d.reason, evidence: d.evidence });
+                }
+                return;
+            }
+            await writeWithLock(services.storage, filePath, async (current) => {
+                const sections = parseStagedSections(current.body);
+                const allStaged = [...sections.actionItems, ...sections.decisions, ...sections.learnings];
+                const currentStatus = (current.frontmatter['staged_item_status'] ?? {});
+                const currentSkipReason = (current.frontmatter['staged_item_skip_reason'] ?? {});
+                const currentSource = (current.frontmatter['staged_item_source'] ?? {});
+                const mergedStatus = { ...currentStatus };
+                const mergedSkipReason = { ...currentSkipReason };
+                const mergedSource = { ...currentSource };
+                let changed = false;
+                for (const d of decisions) {
+                    const match = allStaged.find((s) => s.text === d.text);
+                    if (!match) {
+                        unmatched.push({ file: filePath, text: d.text });
+                        continue;
+                    }
+                    const prior = mergedStatus[match.id];
+                    if (prior === 'approved' || prior === 'skipped') {
+                        skippedExisting.push({ file: filePath, id: match.id, priorStatus: prior });
+                        continue;
+                    }
+                    mergedStatus[match.id] = 'skipped';
+                    mergedSource[match.id] = 'reconciled';
+                    // NOTE: `setAt` is REQUIRED — parseStagedItemSkipReason drops
+                    // entries without it (shape-validated reader).
+                    mergedSkipReason[match.id] = {
+                        reason: d.reason,
+                        evidence: d.evidence,
+                        setBy: 'chef',
+                        setAt: new Date().toISOString(),
+                    };
+                    changed = true;
+                    applied.push({ file: filePath, id: match.id, text: d.text, reason: d.reason, evidence: d.evidence });
+                }
+                if (!changed) {
+                    // Nothing to write — abstain so the file is untouched (no
+                    // mtime churn, no frontmatter re-serialization).
+                    return { abstain: 'no day-level changes for this file' };
+                }
+                return {
+                    frontmatter: {
+                        staged_item_status: mergedStatus,
+                        staged_item_source: mergedSource,
+                        staged_item_skip_reason: mergedSkipReason,
+                    },
+                    body: current.body,
+                };
+            }, { mtimeGuardSeconds: 0 });
+        };
+        for (const [filePath, decisions] of byFile) {
+            await applyToFile(filePath, decisions);
+        }
+        // ONE batched LLM quality review over the day's surviving action items
+        // (replaces N per-file batchLLMReview calls). Degrades gracefully when
+        // the standard tier is missing.
+        let llmDrops = [];
+        const canLLM = services.ai.isConfigured() && Boolean(config.ai?.tiers?.standard) && process.env.ARETE_NO_LLM !== '1';
+        if (canLLM) {
+            try {
+                const reviewItems = [];
+                for (const filePath of dayPaths) {
+                    const content = await services.storage.read(filePath);
+                    if (!content)
+                        continue;
+                    const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+                    const body = fmMatch ? fmMatch[2] : content;
+                    const statusMap = parseStagedItemStatus(content);
+                    const sections = parseStagedSections(body);
+                    for (const item of sections.actionItems) {
+                        const st = statusMap[item.id];
+                        if (st === 'skipped' || st === 'approved')
+                            continue;
+                        reviewItems.push({ text: item.text, type: 'action', id: `${filePath}::${item.id}`, file: filePath });
+                    }
+                }
+                if (reviewItems.length > 0) {
+                    const callLLMReconciliation = async (prompt) => {
+                        const r = await services.ai.call('reconciliation', prompt);
+                        return r.text;
+                    };
+                    const drops = await batchLLMReview(reviewItems.map((r) => ({ text: r.text, type: r.type, id: r.id })), context.recentCommittedItems, callLLMReconciliation);
+                    // Group drops by file and apply.
+                    const dropsByFile = new Map();
+                    for (const drop of drops) {
+                        const sep = drop.id.lastIndexOf('::');
+                        const filePath = drop.id.slice(0, sep);
+                        const item = reviewItems.find((r) => r.id === drop.id);
+                        if (!item)
+                            continue;
+                        const list = dropsByFile.get(filePath) ?? [];
+                        list.push({ text: item.text, reason: `batch LLM review: ${drop.reason}`, evidence: 'day-level batchLLMReview' });
+                        dropsByFile.set(filePath, list);
+                        llmDrops.push({ file: filePath, id: drop.id.slice(sep + 2), text: item.text, reason: drop.reason });
+                    }
+                    for (const [filePath, decisions] of dropsByFile) {
+                        await applyToFile(filePath, decisions);
+                    }
+                }
+            }
+            catch {
+                if (!opts.json)
+                    warn('Day-level batch LLM review skipped due to error');
+                llmDrops = [];
+            }
+        }
+        else if (!opts.json) {
+            info('Batch LLM review skipped (AI not configured, standard tier missing, or ARETE_NO_LLM=1)');
+        }
+        const out = {
+            success: true,
+            date,
+            dryRun,
+            windowDays: days,
+            batchMeetings: batch.length,
+            dayMeetings: dayPaths.size,
+            stats: reconciliation.stats,
+            applied,
+            llmDrops,
+            preservedUserDecisions: skippedExisting,
+            unmatched,
+        };
+        if (opts.json) {
+            console.log(JSON.stringify(out, null, 2));
+            return;
+        }
+        success(`Day-level reconcile for ${date}${dryRun ? ' (dry run)' : ''}`);
+        info(`Batch: ${batch.length} meetings (${dayPaths.size} on ${date})`);
+        info(`Duplicates: ${reconciliation.stats.duplicatesRemoved} · Completed: ${reconciliation.stats.completedMatched} · LLM drops: ${llmDrops.length}`);
+        for (const a of applied) {
+            listItem(`${a.file.split('/').pop()} ${a.id}: ${a.text.slice(0, 60)} ← ${a.reason}`);
+        }
+        if (skippedExisting.length > 0) {
+            info(`${skippedExisting.length} item(s) untouched (already approved/skipped by user)`);
+        }
+        if (unmatched.length > 0) {
+            warn(`${unmatched.length} reconciled item(s) had no matching staged line (text drift)`);
         }
     });
     // Approve subcommand - commit staged items to memory

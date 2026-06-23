@@ -40,7 +40,7 @@ const MIN_MATCH_TOKENS = 4;
  * @param body - The meeting file body content (markdown)
  * @returns User notes with excluded sections removed
  */
-export function extractUserNotes(body) {
+export function extractUserNotes(body, extraExcludedHeaders) {
     const lines = body.split('\n');
     const output = [];
     let inExcludedSection = false;
@@ -49,6 +49,10 @@ export function extractUserNotes(body) {
         'staged action items',
         'staged decisions',
         'staged learnings',
+        // Callers in single_pass mode pass the extractor-written sections that
+        // didn't exist pre-W1 ('open questions', 'parser-flagged (mirror-pair
+        // suspects)') so a re-extract doesn't read its own output as user notes.
+        ...(extraExcludedHeaders ?? []).map((h) => h.toLowerCase()),
     ]);
     for (const line of lines) {
         const headerMatch = line.match(/^##\s+(.+)$/);
@@ -200,6 +204,8 @@ export function processMeetingExtraction(result, userNotes, options) {
     }
     // For importance === 'light': auto-approve all items (set flag for later use)
     const autoApproveAll = importance === 'light';
+    // single-pass mode (W1): tier-derived approval + no silent confidence drops.
+    const singlePass = options?.singlePass === true;
     // Resolve thresholds
     const confidenceInclude = options?.confidenceInclude ?? DEFAULT_CONFIDENCE_INCLUDE;
     const confidenceApproved = options?.confidenceApproved ?? DEFAULT_CONFIDENCE_APPROVED;
@@ -234,6 +240,41 @@ export function processMeetingExtraction(result, userNotes, options) {
     const stagedItemSource = {};
     const stagedItemOwner = {};
     const stagedItemMatchedText = {};
+    // Issue C: skip-reason + matched target for extract-time auto-skips
+    // (completed-task / open-task matches). Rendered as
+    // `— skip: already captured as [[<matchedRef>]]` on the `[ ]` line.
+    const stagedItemSkipReason = {};
+    const skipNowIso = new Date().toISOString();
+    const stagedItemImportance = {};
+    const stagedItemUncertainReason = {};
+    const stagedItemLinks = {};
+    /**
+     * single-pass status derivation (pre-mortem risk 1): ONLY a non-⚠ blocker
+     * auto-approves; everything else — high, normal, uncertain, low-confidence
+     * — stages pending. Confidence is telemetry, not a gate.
+     */
+    const singlePassStatus = (judgment, lowConfidence) => {
+        if (judgment?.importance === 'blocker' && judgment.uncertain !== true && !lowConfidence) {
+            return 'approved';
+        }
+        return 'pending';
+    };
+    /** Record single-pass judgment metadata for an item id. */
+    const recordJudgment = (id, judgment) => {
+        if (!singlePass || !judgment)
+            return;
+        if (judgment.importance)
+            stagedItemImportance[id] = judgment.importance;
+        if (judgment.uncertain === true) {
+            stagedItemUncertainReason[id] = judgment.uncertaintyReason ?? '';
+        }
+        if (judgment.continuationOf || judgment.supersedes) {
+            stagedItemLinks[id] = {
+                ...(judgment.continuationOf ? { continuationOf: judgment.continuationOf } : {}),
+                ...(judgment.supersedes ? { supersedes: judgment.supersedes } : {}),
+            };
+        }
+    };
     // Track indices per type for ID generation
     let aiIndex = 0;
     let deIndex = 0;
@@ -241,7 +282,11 @@ export function processMeetingExtraction(result, userNotes, options) {
     // Process action items
     for (const item of intelligence.actionItems) {
         const confidence = item.confidence ?? 0.9;
-        if (confidence < confidenceInclude)
+        // AC8 (W3): in single_pass the sub-threshold filter no longer DROPS —
+        // the item is kept and forced pending (low confidence = a staging
+        // signal with persistence, not a silent bare-`continue`).
+        const lowConfidence = confidence < confidenceInclude;
+        if (lowConfidence && !singlePass)
             continue;
         const id = generateItemId('ai_', aiIndex);
         aiIndex++;
@@ -262,6 +307,15 @@ export function processMeetingExtraction(result, userNotes, options) {
             stagedItemConfidence[id] = confidence;
             stagedItemSource[id] = 'reconciled';
             stagedItemMatchedText[id] = matchedCompletedText;
+            // Issue C: record WHY (already completed) + the matched target so the
+            // checklist renders `— skip: already done — [[<match>]]`.
+            stagedItemSkipReason[id] = {
+                reason: 'already-completed',
+                evidence: `matched a completed task: "${matchedCompletedText}"`,
+                setBy: 'chef',
+                setAt: skipNowIso,
+                matchedRef: matchedCompletedText,
+            };
             continue;
         }
         // 1b. Open-task dedup: match against unchecked tasks already in week.md/tasks.md.
@@ -280,6 +334,15 @@ export function processMeetingExtraction(result, userNotes, options) {
             stagedItemConfidence[id] = confidence;
             stagedItemSource[id] = 'existing-task';
             stagedItemMatchedText[id] = matchedOpenTaskText;
+            // Issue C: record WHY (already tracked) + the matched target so the
+            // checklist renders `— skip: already captured as [[<match>]]`.
+            stagedItemSkipReason[id] = {
+                reason: 'already-tracked',
+                evidence: `matched an open task: "${matchedOpenTaskText}"`,
+                setBy: 'chef',
+                setAt: skipNowIso,
+                matchedRef: matchedOpenTaskText,
+            };
             continue;
         }
         // 2. Check for dedup: userNotes OR priorItems match → source: 'dedup'
@@ -288,10 +351,14 @@ export function processMeetingExtraction(result, userNotes, options) {
         const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
         const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
-        // Determine status (auto-approve all for light meetings)
+        // Determine status (auto-approve all for light meetings).
+        // single_pass: tier-derived (risk 1) — only non-⚠ blockers auto-approve.
         let status;
         if (autoApproveAll || source === 'dedup') {
             status = 'approved';
+        }
+        else if (singlePass) {
+            status = singlePassStatus(item, lowConfidence);
         }
         else {
             status = confidence > confidenceApproved ? 'approved' : 'pending';
@@ -310,6 +377,11 @@ export function processMeetingExtraction(result, userNotes, options) {
             type: 'action',
             confidence,
             ownerMeta: Object.keys(ownerMeta).length > 0 ? ownerMeta : undefined,
+            ...(singlePass && item.importance ? { importance: item.importance } : {}),
+            ...(singlePass && item.uncertain === true ? { uncertain: true } : {}),
+            ...(singlePass && item.uncertaintyReason ? { uncertaintyReason: item.uncertaintyReason } : {}),
+            ...(singlePass && item.continuationOf ? { continuationOf: item.continuationOf } : {}),
+            ...(singlePass && item.supersedes ? { supersedes: item.supersedes } : {}),
         });
         stagedItemStatus[id] = status;
         stagedItemConfidence[id] = confidence;
@@ -317,16 +389,19 @@ export function processMeetingExtraction(result, userNotes, options) {
         if (Object.keys(ownerMeta).length > 0) {
             stagedItemOwner[id] = ownerMeta;
         }
+        recordJudgment(id, item);
     }
     // Process decisions
     for (let i = 0; i < intelligence.decisions.length; i++) {
         const decision = intelligence.decisions[i];
         // Use real confidence from extraction if available, fallback to 0.9
         const confidence = intelligence.decisionConfidences?.[i] ?? 0.9;
-        if (confidence < confidenceInclude)
+        const lowConfidence = confidence < confidenceInclude;
+        if (lowConfidence && !singlePass)
             continue;
         const id = generateItemId('de_', deIndex);
         deIndex++;
+        const judgment = singlePass ? intelligence.decisionMeta?.[i] : undefined;
         const text = decision;
         // Check for dedup: userNotes OR priorItems match → source: 'dedup'
         // Skip priorItems check if item contains negation markers (to avoid suppressing contradictions)
@@ -334,10 +409,14 @@ export function processMeetingExtraction(result, userNotes, options) {
         const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
         const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
-        // Determine status (auto-approve all for light meetings)
+        // Determine status (auto-approve all for light meetings).
+        // single_pass: tier-derived (risk 1).
         let status;
         if (autoApproveAll || source === 'dedup') {
             status = 'approved';
+        }
+        else if (singlePass) {
+            status = singlePassStatus(judgment, lowConfidence);
         }
         else {
             status = confidence > confidenceApproved ? 'approved' : 'pending';
@@ -347,20 +426,28 @@ export function processMeetingExtraction(result, userNotes, options) {
             text,
             type: 'decision',
             confidence,
+            ...(judgment?.importance ? { importance: judgment.importance } : {}),
+            ...(judgment?.uncertain === true ? { uncertain: true } : {}),
+            ...(judgment?.uncertaintyReason ? { uncertaintyReason: judgment.uncertaintyReason } : {}),
+            ...(judgment?.continuationOf ? { continuationOf: judgment.continuationOf } : {}),
+            ...(judgment?.supersedes ? { supersedes: judgment.supersedes } : {}),
         });
         stagedItemStatus[id] = status;
         stagedItemConfidence[id] = confidence;
         stagedItemSource[id] = source;
+        recordJudgment(id, judgment);
     }
     // Process learnings
     for (let i = 0; i < intelligence.learnings.length; i++) {
         const learning = intelligence.learnings[i];
         // Use real confidence from extraction if available, fallback to 0.9
         const confidence = intelligence.learningConfidences?.[i] ?? 0.9;
-        if (confidence < confidenceInclude)
+        const lowConfidence = confidence < confidenceInclude;
+        if (lowConfidence && !singlePass)
             continue;
         const id = generateItemId('le_', leIndex);
         leIndex++;
+        const judgment = singlePass ? intelligence.learningMeta?.[i] : undefined;
         const text = learning;
         // Check for dedup: userNotes OR priorItems match → source: 'dedup'
         // Skip priorItems check if item contains negation markers (to avoid suppressing contradictions)
@@ -368,10 +455,14 @@ export function processMeetingExtraction(result, userNotes, options) {
         const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
         const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
-        // Determine status (auto-approve all for light meetings)
+        // Determine status (auto-approve all for light meetings).
+        // single_pass: tier-derived (risk 1).
         let status;
         if (autoApproveAll || source === 'dedup') {
             status = 'approved';
+        }
+        else if (singlePass) {
+            status = singlePassStatus(judgment, lowConfidence);
         }
         else {
             status = confidence > confidenceApproved ? 'approved' : 'pending';
@@ -381,10 +472,14 @@ export function processMeetingExtraction(result, userNotes, options) {
             text,
             type: 'learning',
             confidence,
+            ...(judgment?.importance ? { importance: judgment.importance } : {}),
+            ...(judgment?.uncertain === true ? { uncertain: true } : {}),
+            ...(judgment?.uncertaintyReason ? { uncertaintyReason: judgment.uncertaintyReason } : {}),
         });
         stagedItemStatus[id] = status;
         stagedItemConfidence[id] = confidence;
         stagedItemSource[id] = source;
+        recordJudgment(id, judgment);
     }
     return {
         filteredItems,
@@ -394,6 +489,12 @@ export function processMeetingExtraction(result, userNotes, options) {
         stagedItemOwner,
         // Only include stagedItemMatchedText if there are reconciled items
         ...(Object.keys(stagedItemMatchedText).length > 0 && { stagedItemMatchedText }),
+        // Issue C: extract-time auto-skip reasons (completed/open-task matches)
+        ...(Object.keys(stagedItemSkipReason).length > 0 && { stagedItemSkipReason }),
+        // single_pass judgment maps — only when populated (legacy shape unchanged)
+        ...(Object.keys(stagedItemImportance).length > 0 && { stagedItemImportance }),
+        ...(Object.keys(stagedItemUncertainReason).length > 0 && { stagedItemUncertainReason }),
+        ...(Object.keys(stagedItemLinks).length > 0 && { stagedItemLinks }),
     };
 }
 // ---------------------------------------------------------------------------
@@ -503,7 +604,7 @@ export function clearApprovedSections(content) {
  */
 export function formatFilteredStagedSections(filteredItems, summary, core, 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-couldInclude, validationWarnings) {
+couldInclude, validationWarnings, opts) {
     const lines = [];
     // Lead-prose section: Core takes precedence over Summary when present.
     const trimmedCore = core?.trim();
@@ -558,6 +659,30 @@ couldInclude, validationWarnings) {
         lines.push('## Staged Learnings');
         for (const item of learnings) {
             lines.push(`- ${item.id}: ${item.text}`);
+        }
+        lines.push('');
+    }
+    // Open Questions (single-pass D3 — persist-don't-render-everywhere interim).
+    // Legacy callers never pass opts, so legacy output is byte-identical.
+    const openQuestions = opts?.openQuestions ?? [];
+    if (openQuestions.length > 0) {
+        lines.push('## Open Questions');
+        openQuestions.forEach((q, index) => {
+            const id = `oq_${String(index + 1).padStart(3, '0')}`;
+            lines.push(`- ${id}: ${q}`);
+        });
+        lines.push('');
+    }
+    // Parser-flagged (single-pass W3): mirror-pair suspects KEPT + flagged —
+    // the visibility contract survives the detector's telemetry-only flip.
+    const mirrorPairEvents = (opts?.telemetryEvents ?? []).filter((e) => e.detector === 'mirror_pair');
+    if (mirrorPairEvents.length > 0) {
+        lines.push('## Parser-flagged (mirror-pair suspects)');
+        lines.push('_The mirror-pair detector flagged these staged action items as possible ' +
+            'mirror duplicates (Jaccard ≥ 0.90 + opposite direction + different owner). ' +
+            'Both items were KEPT — review and skip the wrong one._');
+        for (const e of mirrorPairEvents) {
+            lines.push(`- ${e.item} — ${e.detail}`);
         }
         lines.push('');
     }

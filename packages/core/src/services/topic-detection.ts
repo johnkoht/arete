@@ -47,7 +47,18 @@ export const STOP_TOKENS = new Set<string>([
   'discussion',
   'meeting',
   'update',
-  'status',
+  // NOTE: 'status' was a STOP_TOKEN historically. Dropped in the W4
+  // topic-assignment fix (2026-06-18, dev/work/plans/chef-holistic-reconcile/
+  // W4-topic-assignment.md). It title-blinded the detector to
+  // `status-letter-automation`: a meeting *titled* "Status Letter" tokenizes
+  // to [status, letter]; with 'status' a stop token only [letter] counts as
+  // non-stop → 1 hit, below the ≥2 rule → the obviously-correct project
+  // silently dropped. Title-awareness ALONE does not rescue this (the title
+  // contributes a single non-stop token, `letter`); dropping 'status' lets
+  // the deliberate title's [status, letter] both count (2 hits, coverage
+  // 2/3 = 0.67 ≥ 0.5). The ≥2-distinct-non-stop + ≥0.5-coverage gates still
+  // guard against floods — a body that merely says "status" once cannot reach
+  // 2 distinct non-stop hits against a multi-word slug on that token alone.
   'team',
   'weekly',
   'daily',
@@ -68,6 +79,18 @@ const DEFAULT_MAX_RESULTS = 3;
 export interface DetectTopicsOptions {
   /** Cap on number of returned slugs. Default 3 (rollout cap, Decision #6). */
   maxResults?: number;
+  /**
+   * Meeting title (W4 topic-assignment fix, 2026-06-18). When provided, the
+   * title's tokens are scored ALONGSIDE the transcript tokens — a meeting
+   * *titled* with a topic's distinctive words then matches that topic even
+   * when the transcript is sparse on those words. The title is deliberate,
+   * high-signal authoring (the user named the meeting), so this is low
+   * false-match risk; the ≥2-non-stop / ≥0.5-coverage thresholds are
+   * unchanged and still gate weak matches. Title tokens are singularized
+   * symmetrically with the transcript + slug sides (see the LEARNINGS
+   * invariant on `tokenizeSlug` ↔ `detectTopicsLexical` token spaces).
+   */
+  title?: string;
 }
 
 /**
@@ -202,13 +225,24 @@ export function detectTopicsLexicalDetailed(
   // intersect singularized slug tokens (`template`, `tier`). Without this
   // the two sides desync and plural/alias detection silently fails
   // (phase-3-5-followup-5 regression).
+  //
+  // W4 (2026-06-18): the meeting TITLE tokens (when supplied via
+  // `options.title`) are folded into the SAME scored token set. The title is
+  // deliberate, high-signal authoring, so a meeting titled with a topic's
+  // distinctive words matches even on a sparse transcript. Title tokens are
+  // appended AFTER the transcript tokens so a transcript surface (if any)
+  // wins the deterministic "first surface" reporting; either way the matched
+  // surface is a real ORIGINAL-cased token, never the singularized key.
   const rawTranscriptTokens = normalizeForJaccard(transcript);
-  const singularized = singularizeTokens(rawTranscriptTokens);
+  const rawTitleTokens =
+    options?.title !== undefined ? normalizeForJaccard(options.title) : [];
+  const rawScoredTokens = [...rawTranscriptTokens, ...rawTitleTokens];
+  const singularized = singularizeTokens(rawScoredTokens);
   const transcriptTokens = new Map<string, string>();
   for (let i = 0; i < singularized.length; i++) {
     // First surface wins so reporting is deterministic.
     if (!transcriptTokens.has(singularized[i])) {
-      transcriptTokens.set(singularized[i], rawTranscriptTokens[i]);
+      transcriptTokens.set(singularized[i], rawScoredTokens[i]);
     }
   }
   if (transcriptTokens.size === 0) return [];

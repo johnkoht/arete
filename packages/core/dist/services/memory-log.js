@@ -100,5 +100,33 @@ export class MemoryLogService {
         const next = (existing ?? '') + line;
         await this.storage.write(path, next);
     }
+    /**
+     * Append a single extraction-telemetry event (single-pass W3 / D4) to
+     * `.arete/memory/item-fates.jsonl`. One JSON line per event; same
+     * atomic-append semantics as `appendItemFate`.
+     */
+    async appendExtractionTelemetry(workspacePaths, event, options = {}) {
+        const path = join(workspacePaths.memory, ITEM_FATES_RELATIVE_PATH);
+        const ts = event.ts !== undefined && event.ts.length > 0
+            ? event.ts
+            : nowIsoSeconds(options.now);
+        const record = {
+            type: 'extraction_telemetry',
+            ts,
+            detector: event.detector,
+            item_kind: event.item_kind,
+            item_text: event.item_text,
+            detail: event.detail,
+            source_path: event.source_path,
+        };
+        const line = JSON.stringify(record) + '\n';
+        if (this.storage.append !== undefined) {
+            await this.storage.append(path, line);
+            return;
+        }
+        const existing = await this.storage.read(path);
+        const next = (existing ?? '') + line;
+        await this.storage.write(path, next);
+    }
 }
 //# sourceMappingURL=memory-log.js.map

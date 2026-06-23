@@ -104,6 +104,17 @@ export interface MeetingContextBundle {
   areaContext?: AreaContext | null;
   warnings: string[];
   /**
+   * Workspace owner identity (single_pass W3 / RC3). Read from
+   * `context/profile.md` frontmatter `name` (the canonical source, same as
+   * `entity.ts`), slugified via `slugifyPersonName`. Carries through the
+   * --context boundary (W2) so the single_pass extract command can set
+   * `ownerSlug`/`ownerName` and the prompt's "## Who is reading this" identity
+   * frame is populated — without it the model is told the direction RULES but
+   * not WHO the owner is, so it guesses direction (Nate backwards, 10c).
+   * Absent when `profile.md` has no `name` (CLI then falls back to git config).
+   */
+  owner?: { slug: string; name: string };
+  /**
    * Existing open tasks from now/week.md and now/tasks.md.
    * Included so the extraction LLM can avoid re-proposing already-tracked tasks.
    * Cap at 20 items to avoid bloating the prompt.
@@ -135,6 +146,106 @@ export interface MeetingContextBundle {
       stale?: boolean;
     }>;
   };
+}
+
+/**
+ * Deserialize a `MeetingContextBundle` from a parsed `--context` payload
+ * (single_pass W2 / S5).
+ *
+ * The previous CLI reader hand-copied only 6 fields, silently dropping
+ * `areaContext`, `existingTasks`, and `topicWikiContext` — the three
+ * highest-value blocks (delta/supersession, week.md dedup, area calibration).
+ * That re-enumeration is the bug and would rot again on the next bundle field.
+ * This carries the WHOLE object (minus the response wrapper) so every present
+ * field — including future ones — survives the JSON boundary the backend never
+ * crossed.
+ *
+ * S5 hardening: `--context` is an arbitrary file/stdin payload, and W1 made
+ * extraction fail-loud — an unchecked cast of a malformed nested block (e.g.
+ * `topicWikiContext.detectedTopics` not an array) would throw INSIDE
+ * extraction. So:
+ *   - the required `meeting` field is validated (throws a clear error if
+ *     missing/malformed — this is a genuine bad payload, not a degradable block);
+ *   - optional blocks the prompt builder INDEXES are shape-guarded and a
+ *     malformed one degrades to absent (drop the block) rather than throwing.
+ *
+ * Accepts both the wrapped form (`{success:true, ...bundle}` from
+ * `arete meeting context --json`) and a direct bundle object. Strips `success`
+ * and a top-level `error` wrapper key.
+ *
+ * @throws Error when `meeting` is missing or not an object (a bad payload).
+ */
+export function deserializeContextBundle(
+  parsed: Record<string, unknown>,
+): MeetingContextBundle {
+  // Strip the response wrapper keys; everything else is bundle data.
+  const { success: _success, error: _error, ...rest } = parsed;
+  void _success;
+  void _error;
+
+  // Required: meeting must be a present object.
+  if (!rest.meeting || typeof rest.meeting !== 'object' || Array.isArray(rest.meeting)) {
+    throw new Error('Invalid context format: missing required "meeting" field');
+  }
+
+  // Start from the whole object (carry every field, incl. future ones).
+  const bundle = { ...rest } as unknown as MeetingContextBundle;
+
+  // Default the small required structural fields if absent (back-compat with
+  // the prior reader's defaults) — these are not "degraded malformed blocks",
+  // just normalization of optional-but-expected shape.
+  if (bundle.agenda === undefined) bundle.agenda = null;
+  if (!Array.isArray(bundle.attendees)) bundle.attendees = [];
+  if (!Array.isArray(bundle.unknownAttendees)) bundle.unknownAttendees = [];
+  if (!Array.isArray(bundle.warnings)) bundle.warnings = [];
+  if (!bundle.relatedContext || typeof bundle.relatedContext !== 'object') {
+    bundle.relatedContext = { goals: [], projects: [], recentDecisions: [], recentLearnings: [] };
+  } else {
+    // Guard the arrays buildContextSection / buildKnownItemsSection index.
+    const rc = bundle.relatedContext as RelatedContext;
+    if (!Array.isArray(rc.goals)) rc.goals = [];
+    if (!Array.isArray(rc.projects)) rc.projects = [];
+    if (!Array.isArray(rc.recentDecisions)) rc.recentDecisions = [];
+    if (!Array.isArray(rc.recentLearnings)) rc.recentLearnings = [];
+  }
+
+  // Optional blocks the prompt builder INDEXES — degrade malformed to absent.
+
+  // agenda.unchecked is indexed; if agenda is present-but-malformed, drop it.
+  if (bundle.agenda !== null) {
+    const a = bundle.agenda as MeetingContextBundle['agenda'];
+    if (!a || typeof a !== 'object' || !Array.isArray(a.unchecked)) {
+      bundle.agenda = null;
+    }
+  }
+
+  // attendees[].stances / .openItems are indexed — drop any malformed entry.
+  bundle.attendees = bundle.attendees.filter(
+    (at): at is ResolvedAttendee =>
+      !!at && typeof at === 'object' && Array.isArray((at as ResolvedAttendee).stances) &&
+      Array.isArray((at as ResolvedAttendee).openItems),
+  );
+
+  // existingTasks must be a string[] — drop the block if malformed.
+  if (bundle.existingTasks !== undefined && !Array.isArray(bundle.existingTasks)) {
+    delete bundle.existingTasks;
+  }
+
+  // topicWikiContext.detectedTopics[].l2Excerpts is indexed; the truncation
+  // helper relies on detectedTopics being an array. Degrade malformed to absent.
+  if (bundle.topicWikiContext !== undefined) {
+    const twc = bundle.topicWikiContext as MeetingContextBundle['topicWikiContext'];
+    if (!twc || !Array.isArray(twc.detectedTopics)) {
+      delete bundle.topicWikiContext;
+    } else {
+      twc.detectedTopics = twc.detectedTopics.filter(
+        (t) => !!t && typeof t === 'object' && typeof t.slug === 'string' &&
+          typeof t.sections === 'string' && Array.isArray(t.l2Excerpts),
+      );
+    }
+  }
+
+  return bundle;
 }
 
 /**
@@ -980,6 +1091,10 @@ export async function buildMeetingContext(
     // Non-fatal: if task files can't be read, continue without them
   }
 
+  // 6b. Workspace owner identity (W3/RC3) — read from context/profile.md so the
+  // single_pass identity frame is populated and direction is owner-relative.
+  const owner = await readWorkspaceOwner(storage, paths);
+
   const bundle: MeetingContextBundle = {
     meeting,
     agenda,
@@ -990,14 +1105,53 @@ export async function buildMeetingContext(
     areaContext,
     warnings,
     ...(existingTasks.length > 0 && { existingTasks }),
+    ...(owner && { owner }),
   };
 
-  // 7. Topic-wiki context (delta-only extraction support)
-  const wiki = await buildTopicWikiContext(deps, paths, transcript, options.referenceDate);
+  // 7. Topic-wiki context (delta-only extraction support). The meeting title
+  // is passed so lexical detection is title-aware (W4 topic-assignment fix) —
+  // a meeting titled with a topic's distinctive words matches that topic even
+  // when the transcript is sparse on them.
+  const wiki = await buildTopicWikiContext(
+    deps,
+    paths,
+    transcript,
+    options.referenceDate,
+    frontmatter.title,
+  );
   if (wiki.context) bundle.topicWikiContext = wiki.context;
   if (wiki.warning) warnings.push(wiki.warning);
 
   return bundle;
+}
+
+/**
+ * Read the workspace owner identity from `context/profile.md` frontmatter
+ * `name` (single_pass W3 / RC3). Slugified via `slugifyPersonName` — the same
+ * canonical source/transform `entity.ts:1320-1331` uses for owner-direction
+ * classification, so the identity frame and direction logic agree.
+ *
+ * Best-effort: returns undefined when profile.md is absent or has no `name`.
+ * The CLI then falls back to `git config user.name`.
+ */
+export async function readWorkspaceOwner(
+  storage: StorageAdapter,
+  paths: WorkspacePaths,
+): Promise<{ slug: string; name: string } | undefined> {
+  try {
+    const profilePath = join(paths.context, 'profile.md');
+    const content = await storage.read(profilePath);
+    if (!content) return undefined;
+    // Extract the YAML frontmatter block and read `name`.
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) return undefined;
+    const fm = parseYaml(fmMatch[1]) as Record<string, unknown> | null;
+    const name = fm && typeof fm.name === 'string' ? fm.name.trim() : '';
+    if (!name) return undefined;
+    return { slug: slugifyPersonName(name), name };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1014,13 +1168,14 @@ async function buildTopicWikiContext(
   paths: WorkspacePaths,
   transcript: string,
   referenceDate?: Date,
+  title?: string,
 ): Promise<{ context?: TopicWikiContext; warning?: string }> {
   try {
     const { topics: allTopicPages } = await deps.topicMemory.listAll(paths);
     if (allTopicPages.length === 0) return {};
 
     const identities = TopicMemoryService.toIdentities(allTopicPages);
-    const detectedSlugs = detectTopicsLexical(transcript, identities);
+    const detectedSlugs = detectTopicsLexical(transcript, identities, { title });
     if (detectedSlugs.length === 0) return {};
 
     const pageBySlug = new Map<string, TopicPage>();

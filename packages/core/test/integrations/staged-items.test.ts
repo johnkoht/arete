@@ -43,10 +43,14 @@ import {
   generateItemId,
   parseStagedSections,
   parseStagedItemStatus,
+  parseStagedItemElevated,
   parseStagedItemEdits,
   parseStagedItemOwner,
   parseStagedItemSkipReason,
   writeItemStatusToFile,
+  writeItemElevatedToFile,
+  removeItemElevatedFromFile,
+  writeMeetingTopicsToFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
@@ -415,6 +419,57 @@ Body.`;
     assert.equal(result['ai_0001']?.setBy, 'user');
   });
 
+  it('parses the optional kind discriminator (theme-render W2)', () => {
+    const content = `---
+staged_item_skip_reason:
+  de_0001:
+    reason: superseded by 15:00 spec-sync
+    evidence: "[[de_0004@later]]"
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    matchedRef: de_0004@later
+    kind: superseded
+  ai_0009:
+    reason: dupe_of_ai_003
+    evidence: "Slack DM"
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    matchedRef: Map the roadmap
+    kind: dedup
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    assert.equal(result['de_0001']?.kind, 'superseded');
+    assert.equal(result['ai_0009']?.kind, 'dedup');
+  });
+
+  it('omits kind when absent or an unknown value (defaults to dedup semantics)', () => {
+    const content = `---
+staged_item_skip_reason:
+  ai_0001:
+    reason: dupe_of_ai_003
+    evidence: ok
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    matchedRef: Map the roadmap
+  ai_0002:
+    reason: ok
+    evidence: ok
+    setBy: chef
+    setAt: 2026-06-18T15:05:00Z
+    kind: bogus-value
+---
+
+Body.`;
+    const result = parseStagedItemSkipReason(content);
+    // Absent: no kind key at all (so render falls through to dedup framing).
+    assert.ok(!('kind' in (result['ai_0001'] ?? {})));
+    // Unknown value drops, rest of the entry survives.
+    assert.ok(!('kind' in (result['ai_0002'] ?? {})));
+    assert.equal(result['ai_0002']?.reason, 'ok');
+  });
+
   it('drops entries with invalid setBy value', () => {
     const content = `---
 staged_item_skip_reason:
@@ -525,6 +580,21 @@ describe('writeItemStatusToFile', () => {
     const frontmatter = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
     const edits = frontmatter['staged_item_edits'] as Record<string, string>;
     assert.equal(edits['de_001'], 'Updated decision text');
+  });
+
+  it('(11b/N2) a status-only write does NOT create an empty staged_item_edits map', async () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody.`;
+    storage.files.set(MEETING_FILE, content);
+
+    await writeItemStatusToFile(storage, MEETING_FILE, 'ai_001', { status: 'skipped' });
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const frontmatter = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.ok(!('staged_item_edits' in frontmatter), 'no empty staged_item_edits map written');
+    // The reader still treats the absent map as {} (no regression).
+    assert.deepEqual(parseStagedItemEdits(updated), {});
+    // Status was still recorded.
+    assert.equal(parseStagedItemStatus(updated)['ai_001'], 'skipped');
   });
 
   it('(12) throws when file not found', async () => {
@@ -1408,6 +1478,82 @@ staged_item_skip_reason:
     assert.equal(skipReason['ai_0099']['setBy'], 'chef-proposed');
   });
 
+  it('finding #12 — single_pass judgment + owner maps are filtered CONSISTENTLY by approvedIds', async () => {
+    // Reproduces the claim-portal vs john-phil-shadow asymmetry: an approved
+    // action item and a skipped one, each with a FULL single_pass overlay
+    // (owner + importance + uncertain + links). Pre-fix, commit stripped
+    // staged_item_owner for the approved id but LEFT staged_item_importance/
+    // _uncertain/_links behind — orphan bookkeeping that made a post-approve
+    // render show tiers without owner. Now every staged sibling map is filtered
+    // the same way: the approved id vanishes from ALL of them; the skipped id
+    // survives in ALL of them.
+    const fixture = `---
+title: "Single-pass overlay"
+date: "2026-06-16"
+status: processed
+attendees:
+  - name: John Koht
+  - name: Phil Whisenhunt
+staged_item_status:
+  ai_001: approved
+  ai_002: skipped
+staged_item_owner:
+  ai_001:
+    ownerSlug: john-koht
+    direction: i_owe_them
+    counterpartySlug: phil-whisenhunt
+  ai_002:
+    ownerSlug: phil-whisenhunt
+    direction: they_owe_me
+    counterpartySlug: john-koht
+staged_item_importance:
+  ai_001: high
+  ai_002: normal
+staged_item_uncertain:
+  ai_002: expressed as intention, not a firm commitment
+staged_item_links:
+  ai_001:
+    continuationOf: prior-thread
+---
+
+## Staged Action Items
+- ai_001: Ship the dual-slug verification (@john-koht → @phil-whisenhunt)
+- ai_002: Phil to undraft the PR (@phil-whisenhunt → @john-koht)
+
+## Transcript
+.
+`;
+    storage.files.set(MEETING_FILE, fixture);
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated);
+    const fmMatch = updated!.match(/^---\n([\s\S]*?)\n---/);
+    assert.ok(fmMatch);
+    const fm = parseYaml(fmMatch![1]) as Record<string, unknown>;
+
+    // For EACH staged sibling map: approved ai_001 gone, skipped ai_002 kept.
+    for (const key of [
+      'staged_item_status',
+      'staged_item_owner',
+      'staged_item_importance',
+    ] as const) {
+      const map = fm[key] as Record<string, unknown> | undefined;
+      assert.ok(map, `${key} should survive (ai_002 not approved)`);
+      assert.ok(!('ai_001' in map!), `${key}: approved ai_001 must be stripped`);
+      assert.ok('ai_002' in map!, `${key}: skipped ai_002 must survive`);
+    }
+    // _uncertain only ever had ai_002 → survives intact.
+    const uncertain = fm['staged_item_uncertain'] as Record<string, unknown> | undefined;
+    assert.ok(uncertain && 'ai_002' in uncertain, 'uncertain ai_002 survives');
+    // _links only ever had the approved ai_001 → all entries approved →
+    // the whole key is dropped (legacy post-apply shape), NOT left orphaned.
+    assert.ok(
+      !('staged_item_links' in fm),
+      'staged_item_links (only ai_001, approved) must be removed entirely — no orphan bookkeeping',
+    );
+  });
+
   it('AC9 — onSkipped observer fires per skipped item with payload', async () => {
     const observed: Array<Record<string, unknown>> = [];
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR, {
@@ -1471,5 +1617,320 @@ staged_item_status:
     assert.ok(updated);
     assert.match(updated!, /Skipped on Apply/);
     assert.match(updated!, /extract-time, no reason recorded/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 B-2: staged_item_elevated — structural elevation marker
+// ---------------------------------------------------------------------------
+
+describe('parseStagedItemElevated (W4 B-2)', () => {
+  it('returns {} when the field is absent (pre-W4 meeting)', () => {
+    assert.deepEqual(parseStagedItemElevated(FRONTMATTER_WITH_STATUS), {});
+  });
+
+  it('returns {} when there is no frontmatter', () => {
+    assert.deepEqual(parseStagedItemElevated('# heading\nno frontmatter'), {});
+  });
+
+  it('reads true entries and drops non-true values', () => {
+    const content = `---
+title: M
+staged_item_elevated:
+  ai_001: true
+  ai_002: false
+  ai_003: "true"
+  ai_004: 1
+---
+
+## Staged Action Items
+- ai_001: keep me
+`;
+    const result = parseStagedItemElevated(content);
+    // Only the strict-true entry survives — false/string/number all drop.
+    assert.deepEqual(result, { ai_001: true });
+  });
+});
+
+describe('writeItemElevatedToFile (W4 B-2)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('round-trips: written elevation is readable via parseStagedItemElevated', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.deepEqual(parseStagedItemElevated(updated), { ai_001: true });
+  });
+
+  it('does NOT touch staged_item_status (elevation ≠ commit-readiness)', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    const updated = storage.files.get(MEETING_FILE)!;
+    // ai_001 stays 'pending' — elevation only adds to the elevated map.
+    const status = parseStagedItemStatus(updated);
+    assert.equal(status['ai_001'], 'pending');
+    assert.equal(status['de_001'], 'approved');
+    assert.equal(status['le_001'], 'skipped');
+  });
+
+  it('preserves other frontmatter fields', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    const updated = storage.files.get(MEETING_FILE)!;
+    const fm = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.equal(fm['title'], 'Test Meeting');
+    assert.equal(fm['date'], '2026-03-01');
+    assert.equal(fm['status'], 'synced');
+  });
+
+  it('throws when the file is not found', async () => {
+    await assert.rejects(
+      () => writeItemElevatedToFile(storage, '/nonexistent.md', 'ai_001'),
+      /not found/,
+    );
+  });
+});
+
+describe('removeItemElevatedFromFile (W4 B-2 / FF-1 --remove)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('deletes only the named id; preserves siblings in the elevated map', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'de_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'ai_001');
+    assert.deepEqual(parseStagedItemElevated(storage.files.get(MEETING_FILE)!), { de_001: true });
+  });
+
+  it('drops the elevated key entirely when the map empties', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'ai_001');
+    const fm = parseYaml(storage.files.get(MEETING_FILE)!.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.equal('staged_item_elevated' in fm, false);
+  });
+
+  it('removing an absent id is a no-op (not an error)', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'de_999');
+    assert.deepEqual(parseStagedItemElevated(storage.files.get(MEETING_FILE)!), { ai_001: true });
+  });
+
+  it('does NOT touch staged_item_status', async () => {
+    storage.files.set(MEETING_FILE, FRONTMATTER_WITH_STATUS);
+    await writeItemElevatedToFile(storage, MEETING_FILE, 'ai_001');
+    await removeItemElevatedFromFile(storage, MEETING_FILE, 'ai_001');
+    const status = parseStagedItemStatus(storage.files.get(MEETING_FILE)!);
+    assert.equal(status['ai_001'], 'pending');
+    assert.equal(status['de_001'], 'approved');
+    assert.equal(status['le_001'], 'skipped');
+  });
+});
+
+describe('AC-B2: commitment-rot invariant — elevation never commits (W4 B-2, BLOCKING)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  // A meeting whose decision is ELEVATED (chef confident keep) but NOT
+  // approved — the exact reconcile-time on-disk shape.
+  const ELEVATED_ONLY = `---
+title: "Elevation Test"
+date: "2026-06-17"
+status: processed
+staged_item_status:
+  de_001: pending
+staged_item_elevated:
+  de_001: true
+---
+
+## Staged Decisions
+- de_001: A confidently-kept decision
+
+## Transcript
+t.
+`;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    storage.files.set(MEETING_FILE, ELEVATED_ONLY);
+  });
+
+  it('meeting approve (commitApprovedItems) alone commits NOTHING for an elevated-only item', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    // No memory file gets the elevated decision — elevation is not commit-readiness.
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.equal(decisions, undefined, 'elevated-only item must NOT reach decisions.md via meeting approve');
+  });
+
+  it('the apply checkbox-diff promotion (status→approved, then commit) IS the sole commit path', async () => {
+    // Starting from the elevated-only on-disk shape, simulate the winddown
+    // apply checkbox-diff: a left-checked `[x]` item is promoted to status
+    // 'approved' (winddown-apply.ts:505-506 via setItemStatus →
+    // writeItemStatusToFile) BEFORE commitMeeting. (No prior meeting approve —
+    // in checklist mode apply is the sole commit path; B-5 forbids the SKILL
+    // from calling meeting approve.)
+    await writeItemStatusToFile(storage, MEETING_FILE, 'de_001', { status: 'approved' });
+
+    // commit — NOW it lands in memory.
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.ok(decisions, 'after apply promotes status→approved, the item commits');
+    assert.ok(decisions!.includes('A confidently-kept decision'));
+  });
+
+  it('cleanup filter strips staged_item_elevated on commit (no orphan elevated:true)', async () => {
+    // Promote + commit, then assert the elevated map is gone from frontmatter.
+    await writeItemStatusToFile(storage, MEETING_FILE, 'de_001', { status: 'approved' });
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.deepEqual(parseStagedItemElevated(updated), {}, 'committed item must not keep an orphan elevated:true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// writeMeetingTopicsToFile (CHR-W4 Piece 2 — chef topic-review write surface)
+// ---------------------------------------------------------------------------
+
+describe('writeMeetingTopicsToFile', () => {
+  const FILE = '/workspace/meetings/status-letter.md';
+
+  const meetingWithTopics = (topics: string): string => `---
+title: "John / Jamie — Status Letter"
+date: "2026-06-18"
+status: synced
+attendees:
+  - name: John Koht
+    email: john@example.com
+${topics}staged_item_status:
+  ai_001: pending
+  de_001: approved
+staged_item_elevated:
+  de_001: true
+---
+
+## Staged Action Items
+- ai_001: Draft the status letter
+
+## Transcript
+Body text.
+`;
+
+  let storage: ReturnType<typeof createMockStorage>;
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('set: replaces the whole topics list', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n  - multi-agent-strategy\n'));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'set', [
+      'status-letter-automation',
+    ]);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['status-letter-automation']);
+    const data = parseYaml(storage.files.get(FILE)!.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.deepEqual(data['topics'], ['status-letter-automation']);
+  });
+
+  it('add: unions new slugs onto the existing list (existing order kept)', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'add', [
+      'status-letter-automation',
+      'glance-2-mvp', // already present — must not duplicate
+    ]);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['glance-2-mvp', 'status-letter-automation']);
+  });
+
+  it('remove: drops the named slugs', async () => {
+    storage.files.set(
+      FILE,
+      meetingWithTopics('topics:\n  - glance-2-mvp\n  - multi-agent-strategy\n  - status-letter-automation\n'),
+    );
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'remove', [
+      'multi-agent-strategy',
+    ]);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['glance-2-mvp', 'status-letter-automation']);
+  });
+
+  it('the retag example: +status-letter-automation, -multi-agent-strategy via add+remove', async () => {
+    storage.files.set(
+      FILE,
+      meetingWithTopics('topics:\n  - glance-2-mvp\n  - multi-agent-strategy\n'),
+    );
+    await writeMeetingTopicsToFile(storage, FILE, 'add', ['status-letter-automation']);
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'remove', ['multi-agent-strategy']);
+    assert.deepEqual(res.topics, ['glance-2-mvp', 'status-letter-automation']);
+  });
+
+  it('PRESERVES sibling frontmatter — NEVER touches staged_item_status / staged_item_elevated', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    await writeMeetingTopicsToFile(storage, FILE, 'set', ['status-letter-automation']);
+    const updated = storage.files.get(FILE)!;
+    // Staged-item maps untouched (the orthogonality AC).
+    assert.deepEqual(parseStagedItemStatus(updated), {
+      ai_001: 'pending',
+      de_001: 'approved',
+    });
+    assert.deepEqual(parseStagedItemElevated(updated), { de_001: true });
+    // Other scalar frontmatter preserved.
+    const data = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.equal(data['title'], 'John / Jamie — Status Letter');
+    assert.equal(data['date'], '2026-06-18');
+    assert.equal(data['status'], 'synced');
+    assert.ok(Array.isArray(data['attendees']));
+    // Body preserved.
+    assert.ok(updated.includes('## Transcript'));
+    assert.ok(updated.includes('- ai_001: Draft the status letter'));
+  });
+
+  it('add onto a meeting with NO topics field initializes it', async () => {
+    storage.files.set(FILE, meetingWithTopics(''));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'add', ['status-letter-automation']);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, ['status-letter-automation']);
+  });
+
+  it('remove that empties the list drops the topics key entirely', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'remove', ['glance-2-mvp']);
+    assert.equal(res.changed, true);
+    assert.deepEqual(res.topics, []);
+    const data = parseYaml(storage.files.get(FILE)!.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.ok(!('topics' in data), 'empty topics key should be dropped');
+  });
+
+  it('idempotent: a no-op set returns changed:false and does not rewrite', async () => {
+    storage.files.set(FILE, meetingWithTopics('topics:\n  - glance-2-mvp\n'));
+    const before = storage.files.get(FILE)!;
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'set', ['glance-2-mvp']);
+    assert.equal(res.changed, false);
+    assert.equal(storage.files.get(FILE)!, before, 'no-op must not rewrite the file');
+  });
+
+  it('trims and dedups input slugs; ignores blanks', async () => {
+    storage.files.set(FILE, meetingWithTopics(''));
+    const res = await writeMeetingTopicsToFile(storage, FILE, 'set', [
+      '  status-letter-automation  ',
+      'status-letter-automation',
+      '',
+      '   ',
+    ]);
+    assert.deepEqual(res.topics, ['status-letter-automation']);
+  });
+
+  it('throws when the meeting file does not exist', async () => {
+    await assert.rejects(
+      () => writeMeetingTopicsToFile(storage, '/workspace/meetings/missing.md', 'add', ['x']),
+      /Meeting file not found/,
+    );
   });
 });

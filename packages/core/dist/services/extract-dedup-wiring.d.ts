@@ -81,6 +81,8 @@ export type WireExtractDedupResult = {
         evidence: string;
         setBy: 'chef';
         setAt: string;
+        /** Issue C: linkable matched-canonical text for the `[[…]]` skip render. */
+        matchedRef?: string;
     }>;
     statusPatch: Record<string, 'skipped'>;
     reverseStampResults: Array<{

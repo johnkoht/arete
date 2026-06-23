@@ -1,6 +1,6 @@
 # Single-pass extraction — replace the harness with judgment
 
-Status: DRAFT (2026-06-10)
+Status: APPROVED-WITH-ADJUDICATIONS (2026-06-11, John) — see § Adjudications applied at bottom
 Evidence: `benchmark-evidence.md` (same dir) — 6/9 winddown audit + compliance benchmark + 4-meeting junk test
 
 ## Why now
@@ -60,9 +60,11 @@ value from a frontier model. Inverse of the usual escalation path: here the
   `open_questions[]` category (wiki pages already have an Open Questions section —
   this feeds it).
 - **D4**: Existing mechanical detectors (mirror-pair Jaccard, garbage prefixes,
-  trivial patterns) flip from filters to **logging-only telemetry** for one soak
-  period. If they fire on real junk the model missed, we learn; if silent for ~2
-  weeks of winddowns, delete.
+  trivial patterns) flip from filters to **logging-only telemetry**. If they fire
+  on real junk the model missed, we learn; if silent for ~2 weeks of winddowns,
+  **demote to sampled logging — do NOT delete** (2026-06-11 adjudication, pre-mortem
+  risk 6: they are the model-independent drift canary for future frontier-alias
+  bumps; re-review at the next model change).
 - **D5**: Ranking/collapsing is a **view concern**. Winddown staging view sorts by
   importance tier, collapses `normal` for routine meetings, never hides `blocker`.
   Data layer persists everything (no more ephemeral-warning data loss — there is no
@@ -143,6 +145,14 @@ types actually live in `models/integrations.ts:98` and `models/entities.ts:
 checked into the plan dir. `none` must be inert in commitments creation (D7)
 and person-memory action items.
 
+**open_questions[] surface (pre-mortem risk 15, folded 2026-06-11):** v1 scope
+is **persist-don't-render-everywhere**: questions parse into the extraction
+result, persist on the meeting file as a `## Open Questions` staged section
+(IDs `oq_NNN`), and surface in the winddown staging view under the meeting.
+Approval UX, wiki Open-Questions feed wiring, and cross-meeting question
+resolution are deferred to F2 — nothing is silently lost (the section persists),
+but no new approval machinery ships tonight.
+
 **Approval-volume control (pre-mortem R1).** Backend auto-approves
 `confidence > 0.8` today; at 4–5× item volume that either mass-approves into
 the commitments store or buries the evening review. In single_pass mode,
@@ -202,17 +212,37 @@ the default mode. Corpus:
    extraction against its transcript (same protocol as the 6/9 audit), human
    spot-check on any item the judge flags.
 
-**W6 — Agentic Layer 2** (after W5 soak)
-Tool-loop extraction with the 4 read-only tools + `context_consulted[]` logging.
-Ships behind its own flag; Layer 1 alone must already beat legacy (it did in the
-benchmark with far less).
+**Eval rigor (2026-06-11 adjudication, review F3 — all four taken):**
+- The ground-truth manifest (expected items + tier labels, incl. the enumerated
+  blocker set) and per-run scorecards are COMMITTED to `eval/` in this plan dir
+  (`eval/ground-truth-manifest.json`, `eval/scorecards/`). Scripts stay
+  uncommitted per house convention; *results are not the harness*.
+- The judge rubric lives at `eval/judge-rubric.md` with anchored grade
+  definitions; AC3/AC5/AC7 judge verdicts cite it.
+- **One full-meeting human audit per gate** (John, morning task): pick one corpus
+  meeting, audit the extraction end-to-end against the transcript — not only
+  judge-flagged items.
+- AC11 uses p90, not median alone (see AC11).
+
+**W6 — Agentic Layer 2** — **CUT from the 2026-06-11 build; pinned AFTER CHR-W6**
+(2026-06-11 adjudication + review F7: weakest-evidenced item, Layer 1 alone won
+the benchmark, and a tool loop landing mid-CHR-soak would shift the soak's input
+distribution). When it ships: tool-loop extraction with the 5 read-only tools
+(read_topic_page, list_commitments, read_meeting, search_wiki, find_meetings) +
+`context_consulted[]` logging, behind its own flag.
 
 ## Sequencing
 
 W1 → W1.5 → W2 → W5 (eval on flag) → **W4 (view ranking) → THEN flip the
 default mode** (pre-mortem R3: flipping before W4 ships uncapped, unranked
 staging into production evenings) → W3 → soak 2 weeks of winddowns (telemetry
-from D4 detectors + item-fates approval rates) → W6.
+from D4 detectors + item-fates approval rates) → W6 (pinned after CHR-W6).
+
+**Soak abort triggers (2026-06-11 adjudication, review F6):** during the
+post-flip soak, **3 consecutive winddowns with wall-clock > 1.5× the 6/8–6/10
+baseline OR any data-loss event ⇒ revert `extraction_mode` to `legacy`
+immediately**, log the incident in the build diary, postmortem before retry.
+Wall-clock-per-winddown is a first-class soak telemetry line.
 
 Worktree build (no branch switching in main repo). W1+W2 are one PR; W3+W4 a
 second; W6 a third.
@@ -256,9 +286,19 @@ Structural:
 - AC10 Mirror-pair + trivial detectors fire as telemetry only; 2-week soak report
   written before deletion; `## Parser-dropped` section still renders.
 - AC11 **Approval budget** (gates the default-mode flip): median
-  user-pending items per winddown ≤ 25 across the soak window, and zero
-  non-blocker items auto-approved. If breached, tighten tier mapping or
-  collapse rules before flipping.
+  user-pending items per winddown ≤ 25 **AND p90 ≤ 40** across the soak window
+  (2026-06-11 adjudication, review F3: the motivating failure was the *richest*
+  meeting; a median-only gate hides exactly that tail), and zero non-blocker
+  items auto-approved. If breached, tighten tier mapping or collapse rules
+  before flipping.
+- AC12 **Cost bound** (pre-mortem risk 18, folded 2026-06-11): per-meeting
+  extraction spend ≤ 2× legacy on the same meeting (token usage from the W5
+  scorecards); any future tool calls (W6) logged with cost.
+- AC13 **W1.5 negative case** (pre-mortem risk 8, folded 2026-06-11): an ad-hoc
+  meeting sharing attendees with a series (e.g., a John+Anthony escalation that
+  is not the weekly) gets NO series context block, and series context is labeled
+  advisory ("possibly related — verify before marking continuation") in the
+  prompt.
 
 ## Skeptical view
 
@@ -311,3 +351,31 @@ create-prd / week-plan / process-meetings + add prepare-meeting-agenda.
 `extraction_mode: legacy` is a config flip; legacy code path stays intact until
 the soak report. Schema additions are optional fields — old parsers ignore them.
 W3 deletions land only after the gate, in their own PR, revertable as a unit.
+
+## Adjudications applied (2026-06-11, John — via overnight build)
+
+Recorded so a future reader can tell "decided" from "forgotten":
+
+1. **CHR Stage-0: YES** — built as CHR-W0 (see chef-holistic-reconcile/plan.md
+   § W0), behind `reconcile_mode: inline | day-level` (default `inline`).
+2. **W6 CUT from this build**, pinned after CHR-W6 (inline edit above).
+3. **Eval rigor ×4 taken**: committed manifest + scorecards in `eval/`, judge
+   rubric doc, AC11 p90 bound, one full-meeting human audit per gate.
+4. **Soak abort triggers** added (Sequencing section).
+5. **Pre-mortem checklist closure (SP side)** — disposition per dropped box:
+   - D4 permanent telemetry (risk 6): FOLDED — demote-not-delete (D4 edit).
+   - AC12 cost bound (risk 18): FOLDED — new AC12.
+   - W1.5 negative AC (risk 8): FOLDED — new AC13 + advisory labeling.
+   - open_questions surface (risk 15): FOLDED — persist-don't-render-everywhere
+     interim, full surface deferred to F2 (W1 edit).
+   - Committed scorecards (risk 16): FOLDED — eval/ dir committed.
+   - Confidence-claim correction (0.65 not 0.5): already correct in this
+     revision (Skeptical view); no further action.
+6. **Config keys**: top-level `extraction_mode: single_pass | legacy` (default
+   `legacy`) and `reconcile_mode: inline | day-level` (default `inline`) in
+   arete.yaml. Both flips are John's call after the gates.
+7. **Coherence nit (review F8)**: W6 tool count corrected to 5. Pre-mortem
+   cross-reference labels: the plans cite pre-mortem items by mitigation order
+   (R1/R2/...) not by risk-table number; mapping — "R1"=risk 1, "R2"=risk 2,
+   "R3"=risk 3, "R5" (CHR AC6) = risk **7**, "R-jira" = risk **9**. Kept as-is
+   with this legend rather than renumbering plan text.

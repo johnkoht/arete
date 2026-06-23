@@ -60,6 +60,89 @@ export interface AIStructuredResult<T> extends AICallResult {
   data: T;
 }
 
+/**
+ * Thrown when the model response was truncated (`stopReason: 'length'`).
+ *
+ * single_pass W1 (S2): truncation is a FAILURE, not a success — a half-emitted
+ * JSON body parses to garbage/empty and used to slip through silently. This is
+ * NEVER retried (a retry would truncate identically); it surfaces loudly so the
+ * caller can bump `maxTokens` or split the input.
+ */
+export class TruncationError extends Error {
+  readonly code = 'truncation' as const;
+  constructor(message = 'AI response truncated (stopReason: length)') {
+    super(message);
+    this.name = 'TruncationError';
+  }
+}
+
+/** Max transient-retry attempts in `callWithModel` (S2). Total tries = this. */
+const AI_MAX_ATTEMPTS = 3;
+/** Base backoff (ms) for transient retries; grows ~exponentially, capped. */
+const AI_RETRY_BASE_MS = 500;
+const AI_RETRY_CAP_MS = 4000;
+
+/**
+ * Classify whether an error from the AI transport is a transient/retryable
+ * transport failure (single_pass W1 / S2). RETRYABLE = overload, rate limit
+ * (429), server errors (5xx), and network/connection blips. NOT retryable:
+ * auth/credential errors, truncation, malformed-output/parse errors,
+ * client/validation (4xx other than 429), or a deliberate empty success.
+ *
+ * Heuristic on message text + any numeric status, because pi-ai surfaces the
+ * provider error as a plain `Error` (no typed status). Conservative: defaults
+ * to NOT retryable so we never pay 3× for a non-transient failure.
+ */
+export function isRetryableTransportError(err: unknown): boolean {
+  // TruncationError and parse failures are explicitly non-retryable.
+  if (err instanceof TruncationError) return false;
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+
+  // Auth / credentials — never retry (will fail identically).
+  if (
+    message.includes('api key') ||
+    message.includes('api_key') ||
+    message.includes('unauthorized') ||
+    message.includes('authentication') ||
+    message.includes('invalid x-api-key') ||
+    message.includes('permission')
+  ) {
+    return false;
+  }
+
+  // Explicit retryable signals.
+  if (
+    message.includes('overloaded') ||
+    message.includes('overload') ||
+    message.includes('rate limit') ||
+    message.includes('rate_limit') ||
+    message.includes('too many requests') ||
+    message.includes('429') ||
+    message.includes('500') ||
+    message.includes('502') ||
+    message.includes('503') ||
+    message.includes('504') ||
+    message.includes('internal server error') ||
+    message.includes('bad gateway') ||
+    message.includes('service unavailable') ||
+    message.includes('gateway timeout') ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('econnreset') ||
+    message.includes('econnrefused') ||
+    message.includes('etimedout') ||
+    message.includes('enetunreach') ||
+    message.includes('socket hang up') ||
+    message.includes('network') ||
+    message.includes('fetch failed')
+  ) {
+    return true;
+  }
+
+  // Default: not retryable (conservative).
+  return false;
+}
+
 /** Dependency injection for testing */
 export interface AIServiceTestDeps {
   completeSimple: typeof completeSimple;
@@ -291,16 +374,53 @@ export class AIService {
       signal: options?.signal,
     };
 
-    const response = await this.deps.completeSimple(
-      model,
-      context,
-      streamOptions,
-    );
+    // Transient-retry loop (single_pass W1 / S2). Retries only the retryable
+    // transport class (overload/429/5xx/network) up to AI_MAX_ATTEMPTS with
+    // capped backoff. NEVER retries: truncation (TruncationError), auth, or a
+    // deliberate empty success (a successful response with empty text is
+    // returned, not retried). Aborts (caller signal) are surfaced immediately.
+    let lastErr: unknown;
+    let response: AssistantMessage | undefined;
+    for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS; attempt++) {
+      try {
+        const candidate = await this.deps.completeSimple(
+          model,
+          context,
+          streamOptions,
+        );
 
-    // Check for errors in the response
-    if (response.stopReason === 'error') {
-      const errorMsg = response.errorMessage ?? 'Unknown AI error';
-      throw new Error(`AI call failed: ${errorMsg}`);
+        // Truncation is a failure, not a success — surface loudly, never retry
+        // (a retry would truncate identically). S2.
+        if (candidate.stopReason === 'length') {
+          throw new TruncationError();
+        }
+
+        // Provider/transport error reported in-band via stopReason.
+        if (candidate.stopReason === 'error') {
+          const errorMsg = candidate.errorMessage ?? 'Unknown AI error';
+          throw new Error(`AI call failed: ${errorMsg}`);
+        }
+
+        response = candidate;
+        break;
+      } catch (err) {
+        lastErr = err;
+        // Caller-requested abort: surface immediately, never retry.
+        if (options?.signal?.aborted) throw err;
+        // Non-retryable (truncation, auth, client error): surface immediately.
+        if (!isRetryableTransportError(err)) throw err;
+        // Out of attempts: surface the last transient error.
+        if (attempt >= AI_MAX_ATTEMPTS) throw err;
+        // Retryable transient: back off (capped exponential) and retry.
+        const delay = Math.min(AI_RETRY_BASE_MS * 2 ** (attempt - 1), AI_RETRY_CAP_MS);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+
+    if (!response) {
+      // Loop exhausted without a response (should be unreachable — the loop
+      // either breaks with a response or throws). Surface the last error.
+      throw lastErr instanceof Error ? lastErr : new Error('AI call failed');
     }
 
     // Extract text from response

@@ -294,9 +294,21 @@ ls now/agendas/$(date +%Y-%m-%d)-*.md 2>/dev/null
 # For each meeting file from 1b, run:
 arete meeting context <file> --json > /tmp/<slug>-context.json
 arete meeting extract <file> --context /tmp/<slug>-context.json --stage --reconcile --skip-qmd --json
+# NOTE (single_pass): do NOT hand-assemble or pass --prior-items. In single_pass
+# mode `arete meeting extract` AUTO-LOADS prior items from the last 7 days of
+# meetings (current meeting excluded) for cross-meeting dedup, mirroring the
+# backend. The chef stays out of prior-item assembly.
 # Process up to 4 in parallel; for batches larger than 4, process in waves of 4
 # (start the next wave when the previous wave completes; do not skip files).
 # This stages items but does NOT approve them — approval is user-driven below.
+#
+# CHR-W0 — if arete.yaml sets `reconcile_mode: day-level` (default: inline):
+# keep passing `--reconcile` exactly as above (the CLI defers it and reports
+# `reconcileDeferred: 'day-level'` in the JSON); the per-file cross-meeting
+# reconcile + batchLLMReview are SKIPPED at extract time so extraction stays
+# pure and the chef sees the full undeduped day. The day-level reconcile runs
+# ONCE at the top of Step 2 instead (see Step 2). With the default `inline`,
+# behavior is exactly as documented above — nothing changes.
 
 # 1i. List open commitments + recent area state
 arete commitments list --json
@@ -498,6 +510,23 @@ sub-skill tightening.
 
 ### Step 2 — Reconcile (before staging, judgment in-context)
 
+**CHR-W0 (only when arete.yaml sets `reconcile_mode: day-level`;
+default `inline` = skip this paragraph):** open Step 2 by running the
+deferred cross-meeting reconcile ONCE over the whole day:
+
+```bash
+arete meeting reconcile-day --date <today> --json
+```
+
+This runs the same mechanical `reconcileMeetingBatch` + ONE batched
+LLM review that Step 1h would have run per file, but over the full
+undeduped day — duplicates of prior-day items flip to visible
+`status: 'skipped'` + `staged_item_skip_reason` (never silent
+deletion), and items the user already approved/skipped are never
+touched. Report its `applied` / `llmDrops` counts in `## Notes`.
+Then proceed with the four skip rules below as normal — they operate
+on the merged ledger and are unchanged by the flag.
+
 **New in Phase 8 (per AC2 / spec §3).** Before Step 3 applies
 defer/stage/Uncertain judgment, the chef reads the merged loop
 ledger from Step 1's cross-skill gather and applies the **four skip
@@ -518,6 +547,170 @@ intents). Order by timestamp. Each loop carries `{source, source_ref,
 counterparty, timestamp, text, evidence_pointer, kind}` per PATTERNS.md
 § "gather-only composition" → "JSON output shape conventions".
 
+#### Step 2.0 — Topic review (CHR-W4 Piece 2, runs BEFORE nomination)
+
+**The semantic layer the lexical detector can't supply.** The `topics:`
+frontmatter on each meeting from Step 1h was assigned by the lexical
+detector (`detectTopicsLexical`) — title-aware now, but still closed-vocab
+and lexical, so it can over- or under-tag. Before any reconcile/nomination
+runs, the chef reviews each of today's freshly-extracted meetings and
+CORRECTS its topics, so knowledge accrual (decisions/learnings roll-up) and
+the future theme-render land on the right project/area.
+
+For EACH meeting processed in Step 1h:
+
+1. **Read the meeting's current `topics:`** (from the Step 1h extract JSON or
+   the meeting frontmatter) and its content signal — the **title** plus the
+   staged items (action items / decisions / learnings).
+2. **Pull the active-topics list** — the canonical area + project slugs:
+   ```bash
+   arete topic list --active --slugs --json > /tmp/winddown-active-topics.json
+   ```
+   These are the only slugs you may ADD (never invent a new slug here — topic
+   creation is the alias/merge path's job, not topic review).
+3. **Adjudicate** against title + items + active-topics:
+   - **ADD** an obviously-right active slug the detector missed (the
+     `status-letter-automation` case: a meeting titled "Status Letter" whose
+     items are about the status-letter flow but that the lexical pass dropped).
+   - **DROP** a clearly-wrong slug (a generic lexical coincidence that the
+     content does not support).
+   - Leave correct slugs alone. Be CONSERVATIVE — only touch a slug you can
+     justify from the title or a staged item; when unsure, leave it.
+4. **Write via the deterministic verb** (NOT a frontmatter hand-edit — the
+   elevate-verb lesson, eng-lead N-2). The verb partial-merges ONLY the
+   `topics:` field and never touches `staged_item_status` / `staged_item_elevated`
+   / any staged-item bookkeeping:
+   ```bash
+   # add the missed project + drop the wrong one (two thin calls):
+   arete meeting topics <meeting-file> --add status-letter-automation --json
+   arete meeting topics <meeting-file> --remove multi-agent-strategy --json
+   # or replace the whole list at once:
+   arete meeting topics <meeting-file> --set status-letter-automation glance-2-mvp --json
+   ```
+   Exactly one of `--set` / `--add` / `--remove` per call; each emits
+   `{ success, meeting, mode, topics, changed }`.
+5. **NOTE every adjustment in the winddown doc** (transparency, so John can
+   spot-check / override before the theme-render relies on the assignment),
+   e.g. under `## Notes`:
+   ```
+   retagged *Status Letter*: +status-letter-automation, −multi-agent-strategy
+   ```
+   Only log meetings you actually changed (`changed: true`); a no-op review
+   needs no line.
+
+This step is orthogonal to staging/approval — it never approves, elevates, or
+skips an item; it only corrects topic assignment. Then proceed to Step 2.0b
+(theme mode) or Step 2a.
+
+#### Step 2.0b — Cluster by theme + within-theme chronological walk (theme-render v1 COARSE)
+
+**Only when `arete.yaml` sets `winddown_render: theme`** (default `prose`,
+and `checklist`, both skip this sub-step — behavior is unchanged). This is
+where the #22 supersession
+prize lands: the chef reads each theme's meetings IN TIME ORDER, so a later
+decision that reverses an earlier one is seen as an arc, not lost across two
+per-meeting blocks.
+
+The deterministic legs are a pure core helper (`clusterMeetingsByTheme` /
+`orderChronologically` in `@arete/core`) — the chef does NOT hand-cluster or
+hand-sort. The chef supplies (a) each meeting's COARSE theme (its dominant
+`topics:` entry from Step 2.0 — project-primary, area-fallback, else
+Uncategorized) and (b) each meeting's frontmatter `date:` (full ISO datetime on
+the live path); the helper returns theme-grouped clusters, each ordered
+oldest→newest. A meeting with no/blank theme routes to `## Uncategorized`
+structurally (never dropped — count conservation, AC3). A meeting with no
+parseable time falls back to staging order (never assume/crash).
+
+**Walk each cluster oldest→newest and apply judgment (semantic, not Jaccard):**
+
+1. **Supersession (the #22 fix — theme-scoped).** When a LATER item in the
+   cluster revises an EARLIER one (e.g. the afternoon spec-sync changes the
+   morning's recipient model single→multiple), mark the EARLIER item superseded:
+   - write a `staged_item_skip_reason` entry via the chef-skip path — the helper
+     `supersededSkipReason(laterRef, humanReason, laterContext)` standardizes the
+     entry (`reason: "superseded by 15:00 Anthony spec-sync — recipient model
+     changed single → multiple"`, `matchedRef: <laterRef>`, `setBy: 'chef'`);
+   - **NEVER elevate a superseded item** (no `staged_item_elevated`) — it renders
+     `[ ]` unchecked by construction, never pre-committed;
+   - the item RETAINS its meeting-scoped anchor (`id@meeting-slug`), so if the
+     chef got the direction wrong John re-checks the box and the apply rescue
+     path re-elevates it (AC5 false-supersession safety);
+   - elevate the LATER (winning) version instead.
+   - **False-supersession guard (AC5):** when a later item refines a DIFFERENT
+     FACET of the same theme (not a reversal), BOTH survive — do NOT mark either
+     superseded. When unsure, leave both and route to `## Uncertain — your call`.
+2. **Moot (#21 — theme-scoped):** the same Rule 3b moot-check (below) runs per
+   cluster — a "hold/schedule a session" action fulfilled by a later same-day
+   meeting in the cluster is skipped, not staged.
+3. **Arc reasoning is CHEF JUDGMENT, not code.** The helper only ORDERS and
+   RECORDS; the chef decides what supersedes what. Never fabricate a similarity
+   number for an arc call (Step 2a's no-fabrication rule applies here too).
+
+**Rule-4 open-commitment dedup stays GLOBAL — NOT theme-scoped.** Only
+supersession + moot are theme-scoped. Rule 4 (Step 2 / below) reconciles fresh
+captures against ALL open commitments per the CHR contract — if it were
+theme-scoped, a cross-theme duplicate commitment would escape. Run Rule 4 over
+the whole day's ledger exactly as documented, independent of the theme walk.
+
+Then proceed to Step 2a (the mechanical nomination still runs over the full
+ledger — clustering is a VIEW/ordering layer on top, it does not replace the
+nominate primitive).
+
+#### Step 2a — Systematic candidate nomination (CHR-W4, runs FIRST)
+
+**The reconcile is now ENGINE-GROUNDED, not eyeballed.** Before applying
+the judgment rules below, write the merged ledger to a tmp file and run
+the mechanical nomination primitive. It returns a systematic candidate
+list (duplicates, uncertain-band pairs, claims, memory + completed
+matches) with REAL similarity scores — the chef adjudicates these instead
+of scanning the ledger by eye.
+
+1. **Build `/tmp/winddown-ledger-<today>.json`** — oldest-first, the exact
+   `ReconcileLedgerEntry` shape:
+   `{kind, source, source_ref, item_id, item_type, text, owner,
+   counterparty, tier, uncertain, direction, continuation_of, supersedes,
+   status, timestamp, evidence_pointer}`.
+   - **ONLY TODAY's extractions** go in as `kind: "extraction"` rows. The
+     CLI loads the 7-day lookback batch itself — do NOT put lookback
+     meetings in the file (it would double-count them).
+   - **`source_ref` for extraction rows MUST be the meeting path EXACTLY
+     as `arete` emits it on disk — an ABSOLUTE, symlink-RESOLVED path**
+     (e.g. `/Users/john/.../resources/meetings/2026-06-17-weekly.md`, NOT
+     a `./`-relative or alias path). The CLI's set-membership guard
+     (`reconcile.ts:84-87`) is strict-`===`: a mismatched path makes EVERY
+     today-item self-nominate against its own on-disk lookback copy
+     (LEARNINGS 2026-04-29, ledger edition — verified live by the W4
+     contract test). When in doubt, resolve the path with
+     `realpath <file>` before writing it into the ledger.
+   - All the slack / email / meeting-intent / calendar / commitment /
+     completion rows go in too, with their NON-`extraction` kinds — they
+     pass through UN-nominated as R3 judgment evidence (the engine only
+     nominates `kind: "extraction"` rows with non-empty `text`).
+   - Load the **FULL** `arete commitments list --json` (from 1o) as
+     `commitment-outgoing` / `commitment-incoming` rows. Reconcile over
+     ALL open commitments — never a cherry-picked subset.
+
+2. **Nominate:**
+   ```bash
+   arete reconcile nominate --ledger /tmp/winddown-ledger-<today>.json --days 7 --json
+   ```
+   This is a PURE primitive — no writes, no judgment. It merges the 7-day
+   lookback batch (the CLI loads it) with the ledger, runs mechanical
+   similarity, and emits CANDIDATE pairs only.
+
+3. **Chef adjudicates** the returned `candidates[]` (kinds:
+   `duplicate` / `uncertain-band` / `claimed` / `memory` / `completed`).
+   The engine NOMINATES; the chef DECIDES — keep final judgment, but
+   grounded on the systematic candidate list + the real `similarity`
+   scores in the output. The rules below (Rule 1-5) operate on these
+   candidates plus the merged ledger.
+   - **NEVER fabricate a similarity metric.** Cite the engine's
+     `similarity` number when the candidate carries one. When you are
+     making a judgment the engine did NOT score (e.g. a fulfillment scan
+     match from slack evidence), say "overlapping counterparties + scope"
+     — do NOT invent a number like "Jaccard 0.45". A rendered doc must
+     contain no similarity score that didn't come from `nominate` output.
+
 **Re-run idempotency check (R7)** — BEFORE applying any rule, read
 `arete commitments list --json` (from 1o). For any commitment with
 `resolvedAt > today_start` (00:00:00 of the local day), **skip
@@ -528,6 +721,7 @@ today — skipped from re-proposal").
 
 #### Rule 3 — Action moot, event passed (cheapest; runs first)
 
+**Rule 3a — prep action, named event passed.**
 For each prep action ("prepare X for meeting Y", "review X before
 call Z", "find suitable staging claim for live walkthrough"): if the
 named meeting/event has already passed (event timestamp < now), mark
@@ -542,6 +736,57 @@ as **moot** and propose collapse.
 This rule catches spec anchor `ai_003` ("Find a suitable staging
 claim for live walkthrough" — Runyon walkthrough event already
 passed).
+
+**Rule 3b — scheduling/holding intent fulfilled by a same-day
+meeting (finding #21).**
+An action item whose intent is to **schedule, hold, set up, or attend
+a meeting / call / session / sync / working session** with named
+people is **moot/fulfilled** when a meeting in **TODAY's own extracted
+set** already satisfies it. Mark it skipped — do NOT stage it (even as
+a blocker). This closes the gap where Rule 3a only checks the calendar
+pull, never "a LATER meeting today already fulfilled this earlier
+scheduling/holding intent."
+
+Fire ONLY when ALL THREE hold against one today meeting (the meeting
+the intent describes):
+1. **Named attendees ⊇ the intent's named people** — the meeting's
+   attendees include every person the action named (e.g. intent names
+   "Jamie and Anthony" → the today meeting's attendees include Jamie
+   AND Anthony, plus you).
+2. **Topic / title aligns** — the action's subject overlaps the
+   meeting's title/topic (e.g. "finalize the revised status-letter
+   spec" ↔ `status-letter-spec-sync`). Word overlap on the core
+   subject, not just a generic verb.
+3. **It already happened today** — the meeting's frontmatter `date:`
+   (full ISO datetime, e.g. `2026-06-18T15:00:00-05:00`) is **earlier
+   than now**. Use that frontmatter `date:` field for the
+   already-happened check; it is present and reliable.
+
+Mark it skipped with a reason that cites the fulfilling meeting:
+`— skip: fulfilled by [[<today-meeting-slug>]] (held <time>)`.
+
+- **Evidence**: TODAY's extracted meeting set (the meetings being
+  processed this run) — NOT the calendar pull. Match attendees +
+  title from each today meeting's frontmatter.
+- **CONSERVATIVE — do not over-fire.** Fire only on a CLEAR match
+  (named attendees ⊇ + topic overlap + meeting already occurred today).
+  Anything ambiguous (partial attendee match, vague topic overlap, or
+  you can't confirm a today meeting actually held it) → route to
+  `## Uncertain — your call` with the candidate meeting noted. Do NOT
+  auto-skip on a guess.
+- **NEVER moot a future-dated intent.** "Schedule a call NEXT WEEK
+  with X" / "set up a sync tomorrow" describes a meeting that has NOT
+  happened — keep/stage it; it is out of scope for Rule 3b. The intent
+  must point at a meeting in TODAY's extracted set that already
+  occurred, not a future one to be created.
+
+This rule catches `ai_003@john-jamie-status-letter` ("schedule and
+hold a working session THIS AFTERNOON with Jamie and Anthony to
+finalize the revised spec") → moot, fulfilled by the afternoon
+`status-letter-spec-sync` meeting (attendees Jamie + Anthony + you,
+`date:` ~15:00 < now). It must NOT fire on
+`ai_003@status-letter-spec-sync` ("schedule a call with James and
+Greg next week") — that meeting does not exist yet.
 
 #### Rule 4 — Intent → already-tracked open commitment
 
@@ -802,11 +1047,61 @@ SKIP / PROPOSE / UNSKIP / CONFIRM / ABSTAIN / APPLY-SKIP. Gitignored;
 local-only soak observability.
 
 **Apply path interaction (AC3 / F5)**: `commitApprovedItems` filter at
-`staged-items.ts:487` accepts only `status === 'approved'`. Skipped
+`staged-items.ts:711` accepts only `status === 'approved'`. Skipped
 items drop. Cleanup at the same file (Step 4a, v3) filters sibling
 fields by `approvedIds` — pending + skipped + chef-proposed entries
 SURVIVE for next round if not committed. The body emits a `## Skipped
 on Apply` section listing each dropped item with its reason + setBy.
+
+#### Step 2c — Explicit fulfillment scan (the ai_001 fix, CHR-W4)
+
+Rule 1 is the fulfillment scan; CHR-W4 makes it EXPLICIT and tightens
+its outcome. For **each outgoing intent** (today's `i_owe_them` staged
+action items + open outgoing commitments), check slack / email /
+calendar / commitment evidence for "already done":
+
+- **Already-done evidence found** (a real authored slack message, sent
+  email, created calendar invite, or a commitment already
+  `resolvedAt`-today) → **propose SKIP**, not keep. Write a structural
+  skip (Rule 5 path) with `{reason, evidence, matchedRef}` where
+  `evidence` is the concrete pointer ("Slack DM → Jamie, 2026-06-04").
+  An item that is already done MUST be skipped — **never elevated /
+  pre-approved.** This is the #18 ai_001 regression: a kept-but-done
+  item got pre-approved; the fulfillment scan must catch it.
+- No evidence → the intent is live; it flows to the elevate/stage
+  decision below.
+
+#### Step 2d — Write decisions to frontmatter (CHR-W4 R4 provenance)
+
+The chef's reconcile decisions are written to the meeting frontmatter so
+they flow into the rendered approval doc. **Two distinct fields — do NOT
+confuse them:**
+
+- **Confident KEEP → `staged_item_elevated[id] = true`** (the NEW W4
+  field). This pre-checks the box `[x]` in the render WITHOUT making the
+  item commit-able. The item stays `status: 'pending'` on disk — only
+  `arete winddown apply` (the checkbox-diff) promotes a left-checked item
+  to `'approved'` just before commit. Write it via the elevation verb
+  `arete winddown elevate <meeting-slug> <id...>` (a deterministic guard over
+  the core helper — no hand-editing of frontmatter; `--remove` un-elevates).
+  NEVER write `status: 'approved'`.
+  - **CRITICAL — do NOT write `status: 'approved'` at reconcile time.**
+    `'approved'` is commit-ready and `arete meeting approve` would commit
+    it with no checkbox gate (blanket-approval by another name). Elevation
+    is the safe, render-only signal. `'approved'` must never exist on disk
+    until the user applies.
+- **Confident SKIP → `staged_item_status[id] = 'skipped'`** (or
+  `'pending'` in the week-1 gate) + `staged_item_skip_reason[id] =
+  {reason, evidence, matchedRef, setBy, setAt}` with `source: 'chef-dedup'`
+  semantics (Rule 5 path). Every skip carries its evidence pointer + the
+  matched ref it duplicates.
+- **Leave PENDING** only when genuinely uncertain (→ `## Uncertain — your
+  call`). Pending renders `[ ]` (the W4 conservative default) and should
+  be RARE: the chef decides confidently on most items — elevate the
+  genuine keeps, skip the junk/dupes/done, leave almost nothing pending.
+
+This is what makes the chef *right* and lets John skim + flip one or two
+rather than approve-hunt.
 
 ### Step 3 — Read APPEND + apply judgment
 
@@ -1077,9 +1372,120 @@ Items chef has confirmed-skipped (`staged_item_status: 'skipped'` +
 `setBy: 'chef'`) also do NOT appear here — surfaced under "Chef
 already-skipped" below.}
 
-- [ ] Send API spec to Anthony — open commitment to Anthony, 9d old
+{TIER RANKING (single-pass extraction W4 — ONLY when meetings carry
+`staged_item_importance` in frontmatter, i.e. `extraction_mode:
+single_pass`; legacy meetings render exactly as before):
+
+1. Sort: blocker → high → normal. Within a tier, keep meeting order.
+2. Render markers: `[BLOCKER]` prefix on blocker lines; `⚠ (reason)`
+   suffix for items with a `staged_item_uncertain` entry; `↩ continues
+   <ref>` / `⤴ supersedes <ref>` annotations from `staged_item_links`.
+3. **Collapse normals for routine meetings**: when a meeting
+   (`importance: normal` or `light`) contributes > 5 `normal`-tier
+   items, show the blockers + highs + first 2 normals, then ONE count
+   line: `+ N normal items — expand in <meeting file path>`. Never
+   collapse blocker or high items, and never collapse ⚠ items (they
+   need eyes).
+4. **Blockers are never hidden**: a `blocker`-tier item ALWAYS renders
+   here even if its meeting was deferred to the sidecar (an all-hands
+   can carry a blocker), even if the meeting is `importance: light`,
+   and regardless of collapse rules. Pull it out of the sidecar with a
+   `(from deferred: <meeting>)` label.
+5. `direction: none` items (`·` marker / `staged_item_owner` direction
+   `none`) follow the existing sidecar deferral rules — they are
+   visibility-only (NEVER commitments) and default to the sidecar
+   unless blocker-tier or customer-touching.
+6. `## Open Questions` items (oq_NNN) from today's meetings render as
+   a short bullet list at the END of this section under a "Open
+   questions raised today" subheading — informational, no checkbox.}
+
+{STRUCTURED RENDER MODE (winddown-approval-doc plan, W1/W2; theme-render
+v1, W3) — ADDITIVE, flag-gated. Applies when `winddown_render: checklist`
+OR `winddown_render: theme` in arete.yaml (default `prose` renders EXACTLY
+as below — byte-identical, AC6 — and stays the hand-written prose branch).
+`theme` is the same structured-doc + apply flow as `checklist`; it just
+emits the theme-grouped doc instead of the per-meeting staged block (the
+CLI auto-selects by config — see below). When `checklist` OR `theme`:
+do NOT hand-write the `## Stage for approval` staged-items prose. Instead
+RUN A CLI COMMAND that emits the deterministic checkbox block from today's
+meeting frontmatter:
+
+```bash
+arete winddown render YYYY-MM-DD --stdout
+```
+
+This reads today's staged meetings (`resources/meetings/YYYY-MM-DD-*.md`
+with status processed/approved) + their frontmatter maps
+(`staged_item_status` / `_importance` / `_uncertain` / `_links` /
+`_skip_reason`) and PRINTS the checkbox block to stdout — pre-filled from
+tier+status (`[x]` keep / `[ ]` skip+reason), `[BLOCKER]`/`[high]`/⚠
+markers, a leading `## ⛔ Blockers & ⚠ Your call first` block for uncertain
+items (option-checkboxes, NOT pre-filled), and a HIDDEN anchor on every
+line (`<!-- ai_001@slug -->` / `<!-- choice:... -->`). The CLI selects the
+grouping by config: `checklist` prints the per-meeting
+`### Action items / Decisions / Learnings` block; `theme` prints the same
+items grouped by project/area theme (oldest→newest within each), with
+superseded items rendered `[ ]` — anchors are identical and meeting-scoped
+either way, so the splice + baseline + apply flow is unchanged (D4).
+
+Use `--stdout` (NOT `--write`) here: `render` only knows the
+frontmatter-derived staged block, but the apply baseline must capture the
+COMPLETE doc you are about to compose (incl. the hand-written
+`## Proposed actions`). The baseline is persisted in Step 5 by copying the
+finalized doc — see there. (Writing the baseline from `render --write` was
+the W3-era regression: it snapshotted only the staged block, BEFORE the
+proposed actions existed, so every `act:` anchor was missing from the
+baseline and silently dropped on apply. SOAK finding #6.)
+
+SPLICE the printed block into the curated view as the `## Stage for
+approval` surface (replacing the prose staged-items list). YOU compose the
+narrative around it — the summary, `## Closed today`, `## Threads`,
+`## Tomorrow`, and `## Proposed actions` (those need reconcile/calendar
+context not in frontmatter, so they stay agent-composed). The
+`## Proposed actions` checkboxes you write by hand carry
+`<!-- act:verb:id -->` anchors; `arete winddown apply` classifies them
+ONLY because the Step-5 baseline is the complete doc that contains those
+same anchors. If you DO have the full structured view in-context (choices
++ proposed actions assembled), you may instead hand it in as JSON and
+render the full doc: `arete winddown render YYYY-MM-DD --view view.json
+--stdout` (then persist the baseline the same way in Step 5). The
+frontmatter-only no-args path above is the normal flow. Do NOT call the
+`@arete/core` renderer function directly — run the CLI command.
+
+The user toggles disagreements in their editor and runs `/winddown apply`
+(Step 5/6), which diffs the saved doc against the complete-doc baseline.
+
+**CHR-W4 B-5 — anti-hand-author + sole-commit-path (load-bearing, the
+cross-path hazard is present TODAY, not hypothetical):**
+
+1. **NEVER hand-author the staged block.** Curation flows ONE way:
+   frontmatter (`staged_item_elevated` / `staged_item_status` /
+   `staged_item_skip_reason`) → `arete winddown render` → splice →
+   `cp` baseline → `arete winddown apply`. If you hand-write the
+   `## Stage for approval` block, you strip the hidden anchors; apply
+   then refuses with a hard error ("edited doc resolves zero anchors but
+   the baseline has N" — the CHR-W4 B-3 guard, exit≠0, nothing mutated).
+   To change what's checked, use `arete winddown elevate <meeting> <id...>`
+   (or `--remove`) and re-render — do not edit the checkbox lines or the
+   frontmatter by hand.
+2. **In checklist OR theme mode, `arete winddown apply` is the SOLE
+   commit path. Do NOT call `arete meeting approve`.** Apply is the only
+   promoter: for each item the user leaves `[x]` it writes
+   `status: 'approved'` just before commit; for each `[ ]` it writes
+   `'skipped'`. A stray `arete meeting approve` would commit anything
+   already `'approved'` with no checkbox gate — but the chef NEVER writes
+   `'approved'` at reconcile time (it writes `staged_item_elevated`
+   instead, see Step 2d), so there is nothing for `meeting approve` to
+   wrongly commit AS LONG AS the SKILL does not invoke it in these
+   structured modes. The `arete meeting approve` references elsewhere in
+   this SKILL are PROSE-MODE / manual flows only; they are FORBIDDEN in
+   checklist and theme modes.}
+
+- [ ] [BLOCKER] Glance can't roll out without license-profile assignment — compliance workshop
+- [ ] Send API spec to Anthony — open commitment to Anthony, 9d old (high)
 - Decision: Adopt Sonnet for reconciliation tier — matches week focus #2 (cost gate)
-- Learning: Customer X validates pricing assumption — high-importance meeting, novel insight
+- Learning: Customer X validates pricing assumption — high-importance meeting, novel insight ⚠ (may be common knowledge)
+- + 9 normal items — expand in resources/meetings/2026-06-09-sprint-planning.md
 
 ## Chef already-skipped (post-week-1)
 
@@ -1268,11 +1674,83 @@ If the file already exists for today (re-run), append a `## Re-run at
 HH:MM` divider and re-write the latest curated view below it; do not
 silently overwrite earlier history.
 
+{STRUCTURED MODE baseline (winddown-approval-doc plan, W3; theme-render
+v1, W3) — when `winddown_render: checklist` OR `theme` (the baseline +
+apply flow is render-mode-agnostic; theme follows it identically). The
+apply BASELINE
+(`now/archive/daily-winddown/winddown-YYYY-MM-DD.baseline.md`) is the
+agent's recommendation snapshot; `arete winddown apply` diffs the user's
+edited `winddown-YYYY-MM-DD.md` against it to classify each toggle/edit.
+
+The baseline MUST be the COMPLETE finalized doc you just wrote — copy it
+VERBATIM as the LAST step before engaging the user. Apply keys purely on
+the hidden anchors and ignores all non-anchored narrative, so a full-doc
+baseline correctly contains EVERY anchor it must classify: the staged
+items, the ⛔/⚠ choices, AND the hand-composed `## Proposed actions`
+(`<!-- act:verb:id -->`). `cp`-ing the finalized doc is what makes the
+agree-path round-trip zero-drift (AC1) — the user's untouched doc is
+byte-for-byte the baseline.
+
+Do NOT derive the baseline from `arete winddown render --write`: render
+only knows the frontmatter staged block, so a render-written baseline is
+MISSING every `act:` anchor — apply then files each proposed action under
+"unknown anchor not in baseline" and SILENTLY DROPS it (half the approval
+surface never executes). That was the regression SOAK finding #6 caught.
+Always `cp` the complete doc instead.
+
+```bash
+# checklist/theme mode only — persist the COMPLETE finalized doc as the
+# apply baseline (LAST step, after the doc above is fully composed, BEFORE
+# the user edits). This `cp` happens EXACTLY ONCE per winddown, at render time.
+DATE="$(date +%Y-%m-%d)"
+cp "now/archive/daily-winddown/winddown-$DATE.md" \
+   "now/archive/daily-winddown/winddown-$DATE.baseline.md"
+```
+
+**Baseline write-once (CHR-W4 B-4 / SOAK finding #19) — load-bearing.**
+The `cp` above is the ONLY time you copy the baseline. Re-`cp` ONLY while
+still inside the pre-apply WAIT gate when a PARTIAL-EDIT instruction
+re-writes the recommendation (the baseline must track the latest
+*pre-apply* recommendation so apply diffs the user's edits against what
+the chef proposed). **NEVER re-`cp` the baseline after `arete winddown
+apply` runs.** Apply writes the post-apply doc IN PLACE — it appends a
+`## Applied` section to `winddown-<date>.md`. If you re-`cp` after apply,
+the baseline becomes byte-equal to the post-apply doc (including
+`## Applied`), and the user can no longer diff their own edits against the
+chef's original recommendation. The baseline is immutable from first
+user-engagement onward. (Apply itself never touches the baseline — it
+only reads it. This is purely a SKILL-prose discipline.)}
+
 After persisting, send the curated view as a single message. Wait for
 user response. Do not run any further primitives or writes until
 response received.
 
-Acceptable user responses:
+**WAIT-GATE — what counts as approval (SOAK finding #7 hardening).**
+The single message above opens a review; you stay in a WAIT state and
+mutate NOTHING until the user EXPLICITLY proceeds. The gate is robust to
+mid-review input that is NOT approval:
+
+- A clarifying **QUESTION** (e.g. "why did you keep CT1 open?", "what's
+  the evidence for ai_003?") → ANSWER it. Do NOT execute anything.
+  Re-state that you're waiting, then RE-WAIT.
+- A **PARTIAL EDIT** instruction (e.g. "keep CT1 open", "reframe ai_007
+  as a google survey", "drop the Doris line") → ABSORB the edit into the
+  persisted doc (`winddown-<date>.md`) — rewrite the affected line(s) and
+  re-`cp` the baseline if checklist or theme mode — or note it for apply. Then
+  RE-WAIT. A partial edit is steering the doc, NOT a go signal.
+- Mixed input (a question + an edit) → handle both as above, still WAIT.
+
+A question or partial edit MUST NEVER trip execution — even when it names
+specific CTs/actions. Only one of these EXPLICIT signals executes any
+mutation:
+
+- an explicit proceed: `proceed`, `approve all`, `go`, `apply it`,
+  `run 1, 3`, `CT1, CT2`, `approve all staged`, or
+- the user having run `arete winddown apply <date>` themselves.
+
+When in doubt, you are still waiting. Mutations route through Step 6.
+
+Acceptable user responses (each is an EXPLICIT proceed — see gate above):
 - `1, 3` → execute actions 1 and 3
 - `CT1, CT3` → approve those proposed collapses (Closed today); leave
   others in queue. Approve to commit each collapse via the action-if-
@@ -1288,25 +1766,78 @@ Acceptable user responses:
   a week of soak with zero false positives), `all` becomes safer.
 - `1 with target=@jamie` → edit and execute action 1
 - `skip 2` → drop action 2
-- `approve all staged` → commit all `## Stage for approval` items via
-  `arete meeting approve` per source meeting
-- Free-form pushback / questions → engage normally
+- `approve all staged` → commit all `## Stage for approval` items.
+  **PROSE MODE:** via `arete meeting approve` per source meeting.
+  **CHECKLIST/THEME MODE (CHR-W4 B-5):** route through `arete winddown
+  apply` — it is the SOLE commit path; do NOT call `arete meeting approve`.
+- Free-form pushback / questions / partial edits → these are NOT
+  approval (see WAIT-GATE above): answer / absorb the edit into the doc,
+  then RE-WAIT for an explicit proceed
 
 ### Step 6 — Execute approved actions + commit approved items
 
-After user approval (and only after):
+{STRUCTURED MODE apply (winddown-approval-doc plan, W3; theme-render v1,
+W3) — when `winddown_render: checklist` OR `theme` (apply is render-mode-
+agnostic — it diffs by anchor, and anchors are meeting-scoped in both). When
+the user says they've toggled the doc and run `/winddown apply` (or asks
+you to apply it), invoke:
 
 ```bash
-# Commit approved staged items per meeting
+arete winddown apply <YYYY-MM-DD>          # interactive confirm
+arete winddown apply <YYYY-MM-DD> --dry-run  # preview the plan + summary only
+arete winddown apply <YYYY-MM-DD> --json     # machine-readable plan + result
+```
+
+**ROUTE ALL EXECUTION THROUGH `apply` — do NOT hand-run primitives (SOAK
+finding #7).** `arete winddown apply <date>` is the SINGLE gated commit
+point: it diffs the doc against the baseline, prints ONE confirm summary
+(resolves + meeting approve/skip + week.md effects + draft bodies), and
+executes on `y`. Do NOT, as the primary path, conversationally hand-run
+`arete commitments resolve`, `arete meeting approve`, or week.md edits to
+"apply" what the user toggled — that bypasses the confirm summary that is
+the whole purpose of the checkbox flow, and risks executing edits the
+user was still steering. Conversational primitives are ONLY for things
+genuinely OUTSIDE apply's surface (e.g. sending an MCP DM/draft that apply
+echoes as `DRAFT <verb>:<id>` for you to send) — and even then only AFTER
+an explicit proceed has passed the Step-5 wait-gate.
+
+This reads `winddown-<date>.md` (the user's edited doc) + the
+`.baseline.md` you persisted in Step 5, diffs them, prints the CONFIRM
+SUMMARY (counts + edited-item diffs + final outbound text for any message
+action), and on `y` executes via the existing primitives: meeting
+approve/skip status writes + `commitApprovedItems`, `commitments resolve`
+(R7-idempotent), and DRAFT output for DM/Slack/email/jira/inbox actions.
+**Apply does NOT send messages** — it prints `DRAFT <verb>:<id>` with the
+final (possibly edited) body; YOU execute the actual send/draft through MCP
+exactly as in the prose flow, using the echoed verbatim text. Idempotent:
+re-running applies nothing new. Malformed/unknown anchors are surfaced in
+the summary, never silently applied — fix the doc and re-run if you see
+them. Then continue with the people-memory refresh / week.md / index steps
+below.}
+
+After user approval (and only after):
+
+**PROSE MODE only (CHR-W4 B-5):** commit approved staged items per meeting
+via `arete meeting approve`.
+**CHECKLIST/THEME MODE:** skip this `meeting approve` loop entirely —
+`winddown apply` already committed via the checkbox-diff (it is the SOLE
+commit path; in these modes the chef wrote `staged_item_elevated`, not
+`status:approved`, so a stray `meeting approve` would commit NOTHING).
+Go directly to the people-memory / week.md / index steps below.
+
+```bash
+# Commit approved staged items per meeting (PROSE MODE only)
 for meeting in <approved-meetings>; do
   arete meeting approve <meeting-slug>
 done
+```
 
+```bash
 # Run approved MCP / CLI actions per user response
 # (slack.send_dm, calendar.create_event, arete.commitments_resolve, etc.)
 # (draft) actions: confirm acknowledgment but do not execute
 
-# Refresh stakeholder memory for processed meetings
+# Refresh stakeholder memory for processed meetings  (BOTH modes)
 arete people memory refresh --days 1
 
 # Update week.md (Tasks + Daily Progress)
@@ -1365,6 +1896,13 @@ needed — the chef reads frontmatter inline. The canonical taxonomy is
 - `importance: light` → defer unless customer-touching or in APPEND
   active initiatives
 - `importance: skip` → defer always
+
+**Item-tier override (single-pass W4)**: per-ITEM
+`staged_item_importance` (when present) overrides the per-MEETING
+deferral default in one direction only — a `blocker`-tier item from
+ANY meeting (light, deferred, sidecar-bound) always surfaces in
+`## Stage for approval`. Meeting-level importance never demotes a
+blocker item; item tiers never promote a whole meeting.
 
 **When in doubt, surface to Uncertain rather than auto-defer.** This
 is especially important on the first few runs — the APPEND file may

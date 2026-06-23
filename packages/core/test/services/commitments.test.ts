@@ -588,6 +588,41 @@ describe('CommitmentsService.bulkResolve()', () => {
 // ---------------------------------------------------------------------------
 
 describe('CommitmentsService.sync()', () => {
+  it('D7 (single-pass): warns and skips a direction "none" item — zero commitments created', async (t) => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const warnings: string[] = [];
+    t.mock.method(console, 'warn', (msg: unknown) => {
+      warnings.push(String(msg));
+    });
+
+    // A `direction: none`-shaped item leaking past the upstream parser guard.
+    // PersonActionItem types direction as binary, so a leak is by definition
+    // an out-of-type value — exactly what the belt-and-suspenders guard is for.
+    const noneItem = {
+      text: 'Tim to fix case-sensitivity bug in state abbreviations',
+      direction: 'none',
+      source: 'meeting.md',
+      date: '2026-06-04',
+      hash: 'h'.repeat(64),
+      stale: false,
+    } as unknown as PersonActionItem;
+
+    await svc.sync(new Map([['tim-eng', [noneItem]]]));
+
+    assert.ok(
+      warnings.some((w) => w.includes('skipped non-directional item') && w.includes('tim-eng')),
+      `expected a non-directional skip warning; got: ${JSON.stringify(warnings)}`,
+    );
+    const written = store.get(COMMITMENTS_PATH);
+    if (written !== undefined) {
+      const parsed = JSON.parse(written) as CommitmentsFile;
+      assert.equal(parsed.commitments.length, 0, 'no commitment may be created from a none item');
+    }
+  });
+
   it('adds new items from freshItems', async () => {
     const store = new Map<string, string>();
     const storage = createMockStorage(store);

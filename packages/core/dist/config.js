@@ -13,6 +13,13 @@ const DEFAULT_CONFIG = {
     source: 'npm',
     agent_mode: undefined,
     ide_target: undefined,
+    // Single-pass-extraction plan: both flags default to legacy behavior.
+    // Flipping is John's call after the W5 eval gate / CHR-W0 review.
+    extraction_mode: 'legacy',
+    reconcile_mode: 'inline',
+    // winddown-approval-doc plan: default 'prose' = byte-identical to today's
+    // winddown (AC6). Flip to 'checklist' to enable the approval surface.
+    winddown_render: 'prose',
     ai: {
         tiers: {
             fast: undefined,
@@ -92,6 +99,19 @@ function normalizeConfig(config) {
     const pp = config.settings?.conversations?.peopleProcessing;
     if (!VALID_PEOPLE_PROCESSING.has(pp)) {
         config.settings.conversations.peopleProcessing = 'off';
+    }
+    // Clamp invalid mode flags to their safe (legacy-behavior) defaults so a
+    // typo in arete.yaml can never activate a half-configured pipeline.
+    if (config.extraction_mode !== 'legacy' && config.extraction_mode !== 'single_pass') {
+        config.extraction_mode = 'legacy';
+    }
+    if (config.reconcile_mode !== 'inline' && config.reconcile_mode !== 'day-level') {
+        config.reconcile_mode = 'inline';
+    }
+    if (config.winddown_render !== 'prose' &&
+        config.winddown_render !== 'checklist' &&
+        config.winddown_render !== 'theme') {
+        config.winddown_render = 'prose';
     }
     /**
      * Migration: qmd_collection (singular) → qmd_collections (map)

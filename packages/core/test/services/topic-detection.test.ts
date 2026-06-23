@@ -220,13 +220,107 @@ describe('detectTopicsLexical', () => {
       'discussion',
       'meeting',
       'update',
-      'status',
       'team',
       'weekly',
       'daily',
     ]) {
       assert.ok(STOP_TOKENS.has(t), `STOP_TOKENS should contain "${t}"`);
     }
+  });
+
+  it('W4: STOP_TOKENS no longer contains "status" (title-blindness fix)', () => {
+    // Dropped in the W4 topic-assignment fix so a deliberate title like
+    // "Status Letter" can match status-letter-automation. See the STOP_TOKENS
+    // doc comment for the rationale + the flood guards that still hold.
+    assert.ok(
+      !STOP_TOKENS.has('status'),
+      'STOP_TOKENS should NOT contain "status" after the W4 fix',
+    );
+  });
+});
+
+describe('detectTopicsLexical — title-aware (W4 topic-assignment fix)', () => {
+  it('W4 regression: a meeting TITLED "Status Letter" matches status-letter-automation', () => {
+    // The bug: detectTopicsLexical was title-blind, and 'status' was a stop
+    // token, so the "John / Jamie — Status Letter" meeting never matched
+    // status-letter-automation. With the title scored AND 'status' dropped
+    // from stops, the slug [status, letter, automation] gets 2 non-stop hits
+    // (status, letter) from the title, coverage 2/3 = 0.67 ≥ 0.5 → matches.
+    const identities: TopicIdentity[] = [
+      { canonical: 'status-letter-automation', aliases: [] },
+    ];
+    // Transcript is sparse on the topic's distinctive words — the match must
+    // come off the TITLE, not the body.
+    const transcript =
+      'We caught up on a few odds and ends and agreed to follow up next week.';
+    assert.deepStrictEqual(
+      detectTopicsLexical(transcript, identities, {
+        title: 'John / Jamie — Status Letter',
+      }),
+      ['status-letter-automation'],
+    );
+  });
+
+  it('W4: without a title the same sparse transcript does NOT match (proves title carried it)', () => {
+    const identities: TopicIdentity[] = [
+      { canonical: 'status-letter-automation', aliases: [] },
+    ];
+    const transcript =
+      'We caught up on a few odds and ends and agreed to follow up next week.';
+    assert.deepStrictEqual(detectTopicsLexical(transcript, identities), []);
+  });
+
+  it('W4: title tokens are scored ALONGSIDE transcript tokens (additive, not replacing)', () => {
+    // Title contributes one distinctive token, transcript the other → together
+    // they clear the ≥2 non-stop hit bar even though neither does alone.
+    const identities: TopicIdentity[] = [
+      { canonical: 'attorney-rep-logic', aliases: [] },
+    ];
+    const transcript = 'The logic for the new flow got a lot cleaner.';
+    assert.deepStrictEqual(
+      detectTopicsLexical(transcript, identities, { title: 'Attorney sync' }),
+      ['attorney-rep-logic'],
+    );
+  });
+
+  it('W4: thresholds still gate — a generic title does NOT flood weak matches', () => {
+    // A bland title shares NO distinctive non-stop tokens with the topic, and
+    // the transcript has only one. The ≥2-non-stop rule must still reject.
+    const identities: TopicIdentity[] = [
+      { canonical: 'cover-whale-templates', aliases: [] },
+    ];
+    const transcript = 'We need to cover the basics again before next week.';
+    assert.deepStrictEqual(
+      detectTopicsLexical(transcript, identities, {
+        title: 'Weekly status sync',
+      }),
+      [],
+    );
+  });
+
+  it('W4: a bare "status" mention in the body alone does NOT match a status-* slug', () => {
+    // The flood worry from dropping 'status' as a stop token: one body mention
+    // of "status" must not, by itself, drag in status-letter-automation. The
+    // ≥2-distinct-non-stop rule needs a SECOND token (letter/automation) too.
+    const identities: TopicIdentity[] = [
+      { canonical: 'status-letter-automation', aliases: [] },
+    ];
+    const transcript = 'Quick status check, nothing else to report today.';
+    assert.deepStrictEqual(detectTopicsLexical(transcript, identities), []);
+  });
+
+  it('W4: undefined title is a no-op — existing transcript-only behavior preserved', () => {
+    const identities: TopicIdentity[] = [
+      { canonical: 'cover-whale-templates', aliases: [] },
+    ];
+    const transcript =
+      'We talked about cover whale templates and how the new ones look great.';
+    const withUndefined = detectTopicsLexical(transcript, identities, {
+      title: undefined,
+    });
+    const withoutOpts = detectTopicsLexical(transcript, identities);
+    assert.deepStrictEqual(withUndefined, withoutOpts);
+    assert.deepStrictEqual(withUndefined, ['cover-whale-templates']);
   });
 });
 

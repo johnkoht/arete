@@ -129,6 +129,41 @@ describe('meeting extract command', () => {
       );
     });
 
+    it('CHR-W0: reconcile_mode: day-level skips the --reconcile standard-tier fail-fast', () => {
+      // Inversion of the test above: in day-level mode the per-file
+      // batchLLMReview moves into `arete meeting reconcile-day`, so extract
+      // does NOT require the standard tier. Same config (no standard tier),
+      // plus reconcile_mode: day-level — the run must NOT fail with the
+      // tier message. (It still fails later at the actual LLM call with the
+      // fake key, which is the house-accepted pattern in this file.)
+      const areteYaml = join(tmpDir, 'arete.yaml');
+      const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+    frontier: anthropic/claude-opus-4-6
+  tasks:
+    extraction: frontier
+reconcile_mode: day-level
+`;
+      writeFileSync(areteYaml, config, 'utf8');
+
+      const { stdout } = runCliRaw(
+        ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--reconcile', '--json', '--skip-qmd'],
+        {
+          cwd: tmpDir,
+          env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+        },
+      );
+
+      const result = JSON.parse(stdout) as { success: boolean; error?: string };
+      if (!result.success) {
+        assert.ok(
+          !(result.error ?? '').includes('ai.tiers.standard'),
+          `day-level mode must not hit the standard-tier fail-fast, got: ${result.error}`,
+        );
+      }
+    });
+
     it('errors when not in a workspace', () => {
       const nonWorkspace = createTmpDir('arete-test-non-workspace');
       try {

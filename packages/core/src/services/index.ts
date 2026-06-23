@@ -477,7 +477,7 @@ export {
   isCommitmentsV2Active,
   isCommitmentsV2ActiveFromConfig,
 } from './commitments-v2-flag.js';
-export { AIService, parseModelSpec } from './ai.js';
+export { AIService, parseModelSpec, TruncationError, isRetryableTransportError } from './ai.js';
 export type {
   AICallOptions,
   AICallResult,
@@ -493,18 +493,30 @@ export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 export {
   buildMeetingExtractionPrompt,
   buildLightExtractionPrompt,
+  buildSinglePassExtractionPrompt,
+  buildKnownItemsSection,
   parseMeetingExtractionResponse,
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
+  SINGLE_PASS_STAGED_HEADERS,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   TOPIC_BIAS_BLOCK_PROMPT,
+  ParseError,
+  PARSE_ERROR_PREVIEW_CHARS,
+  EmptyExtractionError,
+  EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS,
+  isEmptyIntelligence,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,
   ActionItem,
   ActionItemDirection,
+  ItemImportance,
+  ItemJudgment,
+  ExtractionTelemetryEvent,
+  SinglePassContextSections,
   MeetingExtractionResult,
   ValidationWarning,
   LLMCallFn as MeetingLLMCallFn,
@@ -516,6 +528,22 @@ export type {
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
+
+// Meeting series resolution (single-pass W1.5)
+export {
+  resolveMeetingSeries,
+  renderSeriesContext,
+  normalizeTitleTokens,
+  titleSimilarity,
+  attendeeOverlap,
+  matchesRecurringTitle,
+  parseOpenQuestionsSection,
+  SERIES_WINDOW_DAYS,
+  SERIES_TITLE_JACCARD,
+  SERIES_ATTENDEE_OVERLAP,
+  SERIES_MAX_PRIOR,
+} from './meeting-series.js';
+export type { SeriesMeeting, SeriesResolution } from './meeting-series.js';
 
 // Meeting processing
 export {
@@ -543,6 +571,32 @@ export type {
 // Meeting reconciliation
 export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview, parseApprovedSection } from './meeting-reconciliation.js';
 export type { MeetingExtractionBatch } from './meeting-reconciliation.js';
+
+// Reconcile-engine R2 nomination primitive (CHR W2)
+export {
+  nominateCandidates,
+  ledgerEntriesFromBatch,
+  NOMINATION_JACCARD_THRESHOLD,
+  UNCERTAIN_BAND_FLOOR,
+} from './reconcile-nominate.js';
+export type {
+  ReconcileLedger,
+  ReconcileLedgerEntry,
+  NominationCandidate,
+  NominationRef,
+  NominationResult,
+} from './reconcile-nominate.js';
+
+// Reconcile-engine W7 shadow-soak infra (raw snapshots + shadow log)
+export {
+  writeRawExtractionSnapshot,
+  writeFailureSnapshot,
+  appendReconcileShadowLog,
+  parseMeetingFilename,
+  RAW_EXTRACTIONS_DIR,
+  RECONCILE_SHADOW_LOG,
+} from './reconcile-shadow.js';
+export type { RawExtractionSnapshot, ShadowLogEntry, ExtractionFailureReason } from './reconcile-shadow.js';
 
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
@@ -579,7 +633,7 @@ export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from '.
 export type { DetectTopicsOptions, DetectedTopic } from './topic-detection.js';
 
 // Meeting context assembly
-export { buildMeetingContext } from './meeting-context.js';
+export { buildMeetingContext, deserializeContextBundle } from './meeting-context.js';
 export type {
   ResolvedAttendee,
   UnknownAttendee,

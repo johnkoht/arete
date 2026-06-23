@@ -173,6 +173,7 @@ export declare function buildDupeSkipReasonEntries(decisions: ReadonlyArray<Extr
     evidence: string;
     setBy: 'chef';
     setAt: string;
+    matchedRef?: string;
 }>;
 /**
  * Build the `staged_item_status` entries for items marked as `definite-dupe`.

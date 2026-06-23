@@ -24,10 +24,88 @@ import type { MeetingContextBundle } from './meeting-context.js';
  * Accepts a prompt string and returns the LLM's text response.
  */
 export type LLMCallFn = (prompt: string) => Promise<string>;
+/**
+ * Thrown by `parseMeetingExtractionResponse` (single_pass / W1, D5) when the
+ * model response could not be parsed as JSON. DISTINCT from a legitimate
+ * trimmed-empty / model-emitted-empty response, which returns an empty result.
+ *
+ * Carries a truncated preview of the raw response so the failure is
+ * diagnosable from the snapshot alone (S1/AC7). NEVER retried by the AI
+ * transport (a retry would re-parse identically); surfaced loudly so the CLI
+ * can write a failure snapshot and exit non-zero rather than report "0 items."
+ */
+export declare class ParseError extends Error {
+    readonly code: "parse_error";
+    /** Truncated preview of the raw LLM response (for the failure snapshot). */
+    readonly preview: string;
+    constructor(message: string, preview: string);
+}
+/** Max chars of raw response retained in a ParseError preview / snapshot. */
+export declare const PARSE_ERROR_PREVIEW_CHARS = 500;
+/**
+ * Below this transcript length (chars), a fully-empty single_pass extraction is
+ * treated as a plausibly-genuine empty meeting (D5 deliberate-empty) and is NOT
+ * flagged. At or above it, a fully-empty result is the finding #11 residual
+ * silent-empty signature — surfaced as an {@link EmptyExtractionError} rather
+ * than reported as a quiet "0 items." 500 chars ≈ a couple of utterances; the
+ * Anthony 6/16 silent-empty case was 27.9k chars (well above).
+ */
+export declare const EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS = 500;
+/**
+ * Thrown by `extractMeetingIntelligence` (single_pass only) when a non-trivial
+ * transcript (≥ {@link EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS}) yields ZERO
+ * intelligence — no action items, decisions, learnings, open questions, and no
+ * substantive summary/core. This is the residual silent-empty channel
+ * (SOAK-FINDINGS #11 / #13): the call SUCCEEDED and the JSON PARSED, but the
+ * model emitted nothing for a transcript that demonstrably has content. Per
+ * "mark, don't silently drop", surface it (CLI: failure snapshot with
+ * `empty_extraction` + non-zero exit) instead of a quiet 0. Never thrown in
+ * legacy mode. Never retried (a retry would re-extract identically).
+ */
+export declare class EmptyExtractionError extends Error {
+    readonly code: "empty_extraction";
+    /** Transcript length (chars) that produced the empty result — for the snapshot. */
+    readonly transcriptChars: number;
+    constructor(transcriptChars: number);
+}
+/**
+ * True when a parsed intelligence result carries NO substantive content:
+ * no action items, no decisions, no learnings, no open questions, and a
+ * blank/whitespace summary AND core. Used by the single_pass empty-extraction
+ * guard. A meeting with a real summary OR any item is NOT empty.
+ */
+export declare function isEmptyIntelligence(intel: MeetingIntelligence): boolean;
 /** Extraction mode determining prompt style and category limits. */
 export type ExtractionMode = 'light' | 'normal' | 'thorough';
-/** Direction of an action item relative to the owner. */
-export type ActionItemDirection = 'i_owe_them' | 'they_owe_me';
+/**
+ * Direction of an action item relative to the owner.
+ *
+ * `'none'` (single-pass D3): team-internal / not-owner-relative. Only emitted
+ * by the single_pass pipeline; legacy parsing still rejects it. `none` items
+ * NEVER become commitments (D7) — they stage for visibility only.
+ */
+export type ActionItemDirection = 'i_owe_them' | 'they_owe_me' | 'none';
+/**
+ * Importance tier (single-pass D3). Tier — not confidence — drives
+ * auto-approval in single_pass mode: only `blocker` may auto-approve
+ * (pre-mortem risk 1).
+ */
+export type ItemImportance = 'blocker' | 'high' | 'normal';
+/**
+ * Judgment metadata shared by all single-pass item kinds (D3).
+ * All fields optional — absent on legacy extractions, which keeps old
+ * parsers/consumers bit-identical.
+ */
+export type ItemJudgment = {
+    importance?: ItemImportance;
+    /** The ⚠ channel — model self-flagged uncertainty. Always stages pending. */
+    uncertain?: boolean;
+    uncertaintyReason?: string;
+    /** Claim: this item continues an existing tracked item/commitment (id or text ref). */
+    continuationOf?: string;
+    /** Claim: this item supersedes a prior item/decision (id or text ref). */
+    supersedes?: string;
+};
 /** A structured action item extracted from a meeting. */
 export type ActionItem = {
     owner: string;
@@ -38,7 +116,7 @@ export type ActionItem = {
     due?: string;
     /** LLM confidence score (0-1) for this item. */
     confidence?: number;
-};
+} & ItemJudgment;
 /** Item from a prior meeting in the same processing batch, used for deduplication. */
 export interface PriorItem {
     type: 'action' | 'decision' | 'learning';
@@ -71,6 +149,16 @@ export type MeetingIntelligence = {
      * of raw `---` lines per entry (R7 mitigation).
      */
     could_include?: string[];
+    /**
+     * Open questions raised but not resolved in the meeting (single-pass D3).
+     * Feeds the wiki Open Questions surface (full wiring deferred to F2 —
+     * persist-don't-render-everywhere interim). Absent on legacy extractions.
+     */
+    openQuestions?: string[];
+    /** Judgment metadata for decisions, parallel array indexed same as decisions. */
+    decisionMeta?: (ItemJudgment | undefined)[];
+    /** Judgment metadata for learnings, parallel array indexed same as learnings. */
+    learningMeta?: (ItemJudgment | undefined)[];
 };
 /** Validation warning for rejected items. */
 export type ValidationWarning = {
@@ -85,12 +173,31 @@ export type RawExtractedItem = {
     direction?: string;
     confidence?: number;
 };
+/**
+ * Telemetry event from a mechanical detector running in log-only mode
+ * (single-pass D4). In single_pass mode the legacy filters/caps no longer
+ * gate items — they fire these events instead, which flow to the item-fates
+ * stream. Detectors are PERMANENT drift telemetry (2026-06-11 adjudication):
+ * if silent, demote to sampled logging, never delete.
+ */
+export type ExtractionTelemetryEvent = {
+    detector: 'garbage_prefix' | 'length_limit' | 'multi_sentence' | 'trivial_pattern' | 'invalid_direction' | 'mirror_pair' | 'near_duplicate' | 'category_limit' | 'unparseable_item';
+    itemType: 'action' | 'decision' | 'learning' | 'open_question';
+    /** Preview of the flagged item's text (truncated). */
+    item: string;
+    detail: string;
+};
 /** Result of parsing extraction response (includes validation warnings). */
 export type MeetingExtractionResult = {
     intelligence: MeetingIntelligence;
     validationWarnings: ValidationWarning[];
     /** All items parsed from LLM response before validation filtering (for debugging). */
     rawItems: RawExtractedItem[];
+    /**
+     * Detector telemetry (single_pass mode only — D4 log-only flip). Absent in
+     * legacy mode so legacy result shape is unchanged.
+     */
+    telemetryEvents?: ExtractionTelemetryEvent[];
 };
 /**
  * Strip line-start `---` separators that would corrupt downstream frontmatter
@@ -321,6 +428,64 @@ export declare function mergeDetectedSlugsIntoActiveList(activeTopicSlugs: strin
  */
 export declare function buildExclusionListSection(context?: MeetingContextBundle, priorItems?: PriorItem[]): string;
 /**
+ * Pre-rendered Layer-1 context blocks for the single-pass prompt. All
+ * optional; absent blocks are simply omitted. Assembled by the caller (CLI /
+ * winddown path) so this module stays storage-free.
+ */
+export type SinglePassContextSections = {
+    /** "Who John is / how direction works" — enables `direction: none`. */
+    identityFrame?: string;
+    /**
+     * Open commitments filtered to present counterparties — dedup at source:
+     * the model marks `continuation_of` instead of re-emitting.
+     */
+    openCommitments?: string;
+    /** Prior same-series meetings' items + open questions (W1.5 resolver). */
+    seriesContext?: string;
+};
+/**
+ * Build the single-pass "known items" section (W2 — review finding 1).
+ *
+ * REPLACES `buildExclusionListSection`'s "SKIP these" framing in single_pass
+ * mode with **mark-don't-skip**: prior items are presented as already-known;
+ * the model RE-EMITS matching items WITH `continuation_of`/`supersedes`
+ * markers and never omits a superseding item. This is what keeps same-day
+ * supersession arcs alive for the day-level reconcile (CHR D3/D4/AC3 — the
+ * Anthony de_002 → workshop de_004 fixture).
+ *
+ * Same sources and budgets as the exclusion list (priorItems +
+ * recentDecisions/recentLearnings, MAX_EXCLUSION_CHARS, 10/category).
+ * Legacy mode keeps `buildExclusionListSection` untouched.
+ */
+export declare function buildKnownItemsSection(context?: MeetingContextBundle, priorItems?: PriorItem[]): string;
+/**
+ * Build the single-pass extraction prompt (W2 — judgment-first).
+ *
+ * Replaces the accreted IS/IS-NOT pattern lists with the benchmark prompt
+ * shape that recovered 5/5 audited misses + 17/17 staged items on the
+ * compliance transcript: closeability rule, one-utterance-one-type,
+ * ⚠-if-unsure, importance tiers with blocker cues, open questions, direction
+ * `none`, continuation/supersedes markers, "don't pad". Keeps the parts of
+ * the legacy prompt that carry the win: topic-wiki context + delta directive
+ * (incl. the open-question-resolution escape hatch), topic-bias block, and
+ * the meeting-context bundle (attendee stances / goals / agenda / area).
+ *
+ * Layer-1 context blocks (identity frame, open commitments, series context)
+ * arrive pre-rendered via `sections` — assembled by the caller.
+ *
+ * Only used when `extraction_mode: single_pass`; the legacy
+ * `buildMeetingExtractionPrompt` is untouched.
+ */
+export declare function buildSinglePassExtractionPrompt(transcript: string, opts?: {
+    attendees?: string[];
+    ownerSlug?: string;
+    ownerName?: string;
+    context?: MeetingContextBundle;
+    priorItems?: PriorItem[];
+    activeTopicSlugs?: string;
+    sections?: SinglePassContextSections;
+}): string;
+/**
  * Build the LLM prompt for extracting meeting intelligence.
  *
  * @param transcript - Meeting transcript text
@@ -357,8 +522,17 @@ export declare function buildLightExtractionPrompt(transcript: string): string;
  * @param ownerSlug - Optional workspace owner slug; used by the mirror-pair
  *                    dedup pass (Phase 8 followup-6) to break ties between
  *                    candidate canonical items.
+ * @param opts.singlePass - single-pass mode (W1/W3): accepts the new schema
+ *   (importance tiers, ⚠ fields, direction `none`, open_questions,
+ *   continuation/supersedes markers), applies NO category caps, and flips
+ *   every mechanical filter (garbage/trivial/mirror-pair/near-dup) to
+ *   telemetry-only — items are kept and the detector fires an
+ *   `ExtractionTelemetryEvent` instead (D4). Legacy path (default) is
+ *   bit-identical to the pre-W1 behavior.
  */
-export declare function parseMeetingExtractionResponse(response: string, limits?: CategoryLimits, ownerSlug?: string): MeetingExtractionResult;
+export declare function parseMeetingExtractionResponse(response: string, limits?: CategoryLimits, ownerSlug?: string, opts?: {
+    singlePass?: boolean;
+}): MeetingExtractionResult;
 /**
  * Extract meeting intelligence from a transcript using an LLM.
  *
@@ -385,6 +559,19 @@ export declare function extractMeetingIntelligence(transcript: string, callLLM: 
      * full rationale.
      */
     activeTopicSlugs?: string;
+    /**
+     * single-pass extraction (W1/W2/W3): judgment-first prompt + new schema,
+     * no caps, detectors telemetry-only. Driven by `extraction_mode:
+     * single_pass` in arete.yaml. Default false = legacy, bit-identical.
+     */
+    singlePass?: boolean;
+    /**
+     * Pre-rendered Layer-1 context blocks for the single-pass prompt
+     * (identity frame, open commitments, series context, known-items
+     * mark-don't-skip). Built by the caller (CLI) via
+     * `buildSinglePassContextSections`. Ignored in legacy mode.
+     */
+    singlePassContext?: SinglePassContextSections;
 }): Promise<MeetingExtractionResult>;
 /**
  * Format extraction result as markdown sections.
@@ -396,6 +583,14 @@ export declare function extractMeetingIntelligence(transcript: string, callLLM: 
  */
 export declare function formatStagedSections(result: MeetingExtractionResult): string;
 /**
+ * Extractor-written headers that only exist in single_pass mode (W1/W3).
+ * Deliberately NOT in the legacy STAGED_HEADERS set: a legacy-mode
+ * re-extract must never strip a USER-authored "## Open Questions" section
+ * (legacy bit-identical invariant). single_pass callers pass these via
+ * `updateMeetingContent`'s `extraStagedHeaders`.
+ */
+export declare const SINGLE_PASS_STAGED_HEADERS: readonly ["Open Questions", "Parser-flagged (mirror-pair suspects)"];
+/**
  * Replace or insert staged sections in meeting content.
  * Preserves content before the lead-prose heading (## Summary or ## Core)
  * and content after staged sections. Accepts either heading as the anchor
@@ -404,7 +599,12 @@ export declare function formatStagedSections(result: MeetingExtractionResult): s
  *
  * @param originalContent - The original meeting file content
  * @param stagedSections - The formatted staged sections to insert
+ * @param extraStagedHeaders - Additional extractor-owned headers to treat as
+ *   staged (single_pass passes SINGLE_PASS_STAGED_HEADERS so its own
+ *   `## Open Questions` / `## Parser-flagged` sections are replaced on
+ *   re-extract; legacy callers omit this and user sections with those names
+ *   are preserved as before)
  * @returns Updated content with staged sections replaced/inserted
  */
-export declare function updateMeetingContent(originalContent: string, stagedSections: string): string;
+export declare function updateMeetingContent(originalContent: string, stagedSections: string, extraStagedHeaders?: readonly string[]): string;
 //# sourceMappingURL=meeting-extraction.d.ts.map

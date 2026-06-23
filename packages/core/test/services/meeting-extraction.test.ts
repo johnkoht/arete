@@ -22,7 +22,13 @@ import {
   CATEGORY_LIMITS,
   MIRROR_PAIR_JACCARD_THRESHOLD,
   dedupMirrorPairs,
+  ParseError,
+  buildSinglePassExtractionPrompt,
+  EmptyExtractionError,
+  EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS,
+  isEmptyIntelligence,
 } from '../../src/services/meeting-extraction.js';
+import { deserializeContextBundle } from '../../src/services/meeting-context.js';
 import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem, TopicWikiContext } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
 
@@ -614,6 +620,73 @@ describe('parseMeetingExtractionResponse - rawItems', () => {
   it('rawItems is empty array for malformed JSON', () => {
     const result = parseMeetingExtractionResponse('not valid json');
     assert.deepEqual(result.rawItems, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Half C (W4 / de_001 fix): continuation_of / supersedes mutual exclusion
+// ---------------------------------------------------------------------------
+
+describe('Half C — continuation_of vs supersedes normalization (single_pass)', () => {
+  it('AC-C1: same-ref continuation_of + supersedes → parses to supersedes only', () => {
+    const response = JSON.stringify({
+      summary: 'Test',
+      action_items: [
+        {
+          owner: 'John',
+          description: 'Ship the consolidated rules',
+          direction: 'i_owe_them',
+          continuation_of: 'Consolidation rules',
+          supersedes: 'Consolidation rules',
+        },
+      ],
+      decisions: [],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, undefined, { singlePass: true });
+    const item = result.intelligence.actionItems[0];
+    assert.ok(item);
+    // continuationOf dropped (redundant with the stronger supersedes claim).
+    assert.equal(item.continuationOf, undefined);
+    assert.equal(item.supersedes, 'Consolidation rules');
+  });
+
+  it('same ref differing only by surrounding whitespace → still collapses to supersedes', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'A',
+          direction: 'i_owe_them',
+          continuation_of: '  de_004  ',
+          supersedes: 'de_004',
+        },
+      ],
+    });
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, undefined, { singlePass: true });
+    const item = result.intelligence.actionItems[0];
+    assert.ok(item);
+    assert.equal(item.continuationOf, undefined);
+    assert.equal(item.supersedes, 'de_004');
+  });
+
+  it('different refs → BOTH retained (continues A, replaces B is legitimate)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'A',
+          direction: 'i_owe_them',
+          continuation_of: 'Workstream A',
+          supersedes: 'Item B',
+        },
+      ],
+    });
+    const result = parseMeetingExtractionResponse(response, CATEGORY_LIMITS, undefined, { singlePass: true });
+    const item = result.intelligence.actionItems[0];
+    assert.ok(item);
+    assert.equal(item.continuationOf, 'Workstream A');
+    assert.equal(item.supersedes, 'Item B');
   });
 });
 
@@ -1415,13 +1488,63 @@ describe('extractMeetingIntelligence', () => {
     assert.equal(result.intelligence.actionItems[0].owner, 'Alice');
   });
 
-  it('returns empty result on LLM error', async () => {
+  it('PROPAGATES an LLM error (W1/D2 — no silent empty-on-error)', async () => {
+    // W1: the legacy mirror used to swallow a thrown callLLM error and return
+    // an empty result. That silent "0 items" is the regression class POSTMORTEM
+    // guardrail 4 forbids. Both branches now propagate; the caller (CLI/backend)
+    // surfaces it. Legacy SUCCESS-path parsing is unchanged (see byte-identity
+    // tests below).
     const mockLLM: LLMCallFn = async () => {
       throw new Error('API rate limit');
     };
 
-    const result = await extractMeetingIntelligence('transcript', mockLLM);
+    await assert.rejects(
+      () => extractMeetingIntelligence('transcript', mockLLM),
+      /API rate limit/,
+    );
+  });
 
+  it('single_pass PROPAGATES an LLM error (W1)', async () => {
+    const mockLLM: LLMCallFn = async () => {
+      throw new Error('Overloaded (529)');
+    };
+
+    await assert.rejects(
+      () => extractMeetingIntelligence('transcript', mockLLM, { singlePass: true }),
+      /Overloaded/,
+    );
+  });
+
+  it('single_pass throws a tagged ParseError on malformed JSON (W1/D5)', async () => {
+    const garbage = 'Here are the items: {action_items: [unclosed';
+    const mockLLM: LLMCallFn = async () => garbage;
+
+    await assert.rejects(
+      () => extractMeetingIntelligence('transcript', mockLLM, { singlePass: true }),
+      (err: unknown) => {
+        assert.ok(err instanceof ParseError, 'expected ParseError');
+        assert.equal(err.code, 'parse_error');
+        assert.ok(err.preview.length > 0, 'preview carries a raw-response excerpt');
+        assert.ok(garbage.startsWith(err.preview.slice(0, 10)));
+        return true;
+      },
+    );
+  });
+
+  it('single_pass returns empty (NOT throw) on a deliberate trimmed-empty response', async () => {
+    // D5: a genuinely empty model response is the only legitimate silent empty.
+    const mockLLM: LLMCallFn = async () => '   \n  ';
+    const result = await extractMeetingIntelligence('transcript', mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.summary, '');
+    assert.equal(result.intelligence.actionItems.length, 0);
+  });
+
+  it('legacy parse on malformed JSON returns empty (byte-identity, NOT throw)', async () => {
+    // Overarching invariant: flags OFF stays bit-identical. Legacy parse of a
+    // *successful but malformed* response still returns empty (does NOT throw);
+    // only single_pass raises ParseError.
+    const mockLLM: LLMCallFn = async () => '{not valid json';
+    const result = await extractMeetingIntelligence('transcript', mockLLM);
     assert.equal(result.intelligence.summary, '');
     assert.equal(result.intelligence.actionItems.length, 0);
     assert.equal(result.validationWarnings.length, 0);
@@ -1465,6 +1588,127 @@ describe('extractMeetingIntelligence', () => {
 
     // Should return a valid result (no type errors, no runtime errors)
     assert.equal(result.intelligence.summary, 'Meeting');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue B (finding #11/#13) — empty-for-content-transcript is FLAGGED, not silent
+// ---------------------------------------------------------------------------
+
+describe('single_pass empty-extraction guard (finding #11/#13)', () => {
+  // A content-ful transcript well above the threshold (the Anthony 6/16 case
+  // was 27.9k chars; this is ~700).
+  const CONTENT_TRANSCRIPT =
+    'John: Anthony, where are we on the determination service ticket? ' +
+    'Anthony: I started it but there are unknowns I need you to clarify before your PTO. ' +
+    'John: Lets sync tomorrow. Also the Kafka recipient routing change — did that land? ' +
+    'Anthony: Yes, merged this morning, I will verify in staging this afternoon. ' +
+    'John: Great. And the mockup share with Nate — you designed it, so can you post it in the channel? ' +
+    'Anthony: Will do by end of day. One more — the license-profile gate has to exist before the Snapsheet sunset. ' +
+    'John: Agreed, that is a blocker, lets track it explicitly so it does not slip.';
+  // Sanity: the fixture is above the threshold so the guard is exercised.
+  assert.ok(CONTENT_TRANSCRIPT.length >= EMPTY_EXTRACTION_MIN_TRANSCRIPT_CHARS);
+
+  const emptyJson = JSON.stringify({
+    summary: '',
+    action_items: [],
+    decisions: [],
+    learnings: [],
+    open_questions: [],
+  });
+
+  it('THROWS EmptyExtractionError when a non-trivial transcript yields zero intelligence', async () => {
+    const mockLLM: LLMCallFn = async () => emptyJson;
+    await assert.rejects(
+      () => extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM, { singlePass: true }),
+      (err: unknown) => {
+        assert.ok(err instanceof EmptyExtractionError, 'expected EmptyExtractionError');
+        assert.equal(err.code, 'empty_extraction');
+        assert.equal(err.transcriptChars, CONTENT_TRANSCRIPT.trim().length);
+        return true;
+      },
+    );
+  });
+
+  it('does NOT throw for a genuinely short empty meeting (below threshold, D5)', async () => {
+    const mockLLM: LLMCallFn = async () => emptyJson;
+    const short = 'Alice: hi\nBob: bye'; // well under the threshold
+    const result = await extractMeetingIntelligence(short, mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.equal(result.intelligence.summary, '');
+  });
+
+  it('does NOT throw when the content-ful transcript yields ANY item', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        summary: '',
+        action_items: [],
+        decisions: [{ text: 'License-profile gate is a blocker before Snapsheet sunset' }],
+        learnings: [],
+      });
+    const result = await extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.decisions.length, 1);
+  });
+
+  it('does NOT throw when only the summary is populated (low-signal but not empty)', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({ summary: 'Status sync, nothing actionable.', action_items: [] });
+    const result = await extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM, { singlePass: true });
+    assert.equal(result.intelligence.summary, 'Status sync, nothing actionable.');
+  });
+
+  it('LEGACY mode never throws EmptyExtractionError (byte-identity invariant)', async () => {
+    const mockLLM: LLMCallFn = async () => emptyJson;
+    const result = await extractMeetingIntelligence(CONTENT_TRANSCRIPT, mockLLM); // legacy
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.equal(result.intelligence.summary, '');
+  });
+
+  it('isEmptyIntelligence: true iff no items/decisions/learnings/oqs and blank summary+core', () => {
+    assert.equal(
+      isEmptyIntelligence({ summary: '', actionItems: [], nextSteps: [], decisions: [], learnings: [] }),
+      true,
+    );
+    assert.equal(
+      isEmptyIntelligence({ summary: 'x', actionItems: [], nextSteps: [], decisions: [], learnings: [] }),
+      false,
+    );
+    assert.equal(
+      isEmptyIntelligence({ summary: '', actionItems: [], nextSteps: [], decisions: [], learnings: [], openQuestions: ['q?'] }),
+      false,
+    );
+    assert.equal(
+      isEmptyIntelligence({ summary: '', actionItems: [], nextSteps: [], decisions: [], learnings: [], core: 'lead' }),
+      false,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue B — recurring-1:1 over-suppression: prompt MUST forbid empty-because-known
+// ---------------------------------------------------------------------------
+
+describe('buildSinglePassExtractionPrompt — anti-empty instruction (finding #13)', () => {
+  it('instructs the model to NEVER return all-empty for a transcript with content', () => {
+    const prompt = buildSinglePassExtractionPrompt('Some transcript');
+    assert.match(prompt, /Never return all-empty for a transcript with content/i);
+    assert.match(prompt, /"already known"\s+is NOT a reason to emit nothing/i);
+  });
+
+  it('still carries the mark-don\'t-skip continuation framing even when priorItems are heavy', () => {
+    // A commitment-heavy recurring 1:1 (the Anthony case): many priorItems.
+    const priorItems: PriorItem[] = Array.from({ length: 20 }, (_, i) => ({
+      type: 'action' as const,
+      text: `Open commitment number ${i} that Anthony owes`,
+      source: 'prior-1:1',
+    }));
+    const prompt = buildSinglePassExtractionPrompt('Recurring 1:1 transcript', { priorItems });
+    // The known-items block is present (mark-don't-skip), AND the anti-empty
+    // rule co-exists with it — so a heavy prior list cannot license an
+    // all-empty return.
+    assert.match(prompt, /Already-known items \(MARK, don't skip\)/);
+    assert.match(prompt, /Never return all-empty for a transcript with content/i);
+    assert.match(prompt, /continuation_of/);
   });
 });
 
@@ -5067,5 +5311,67 @@ describe('core/could_include + frontmatter sanitizer', () => {
     // `---` with trailing whitespace IS stripped
     const result5 = stripYamlDocSeparator('a\n---  \nb');
     assert.equal(result5.stripped, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W2 round-trip: deserialized bundle blocks reach the single_pass prompt (AC3)
+// ---------------------------------------------------------------------------
+
+describe('single_pass prompt carries deserialized bundle blocks (W2/AC3)', () => {
+  // Simulate the --context boundary: a `meeting context --json` payload that
+  // populated all three previously-dropped blocks, deserialized via W2, then
+  // assembled into the single_pass prompt. Pre-W2 this dropped area/
+  // existingTasks/topicWikiContext at the boundary.
+  const payload = {
+    success: true,
+    meeting: {
+      path: '/ws/resources/meetings/2026-06-16-x.md',
+      title: 'Glance sync',
+      date: '2026-06-16',
+      attendees: ['john@x.com'],
+      transcript: 'John: we shipped pricing.',
+    },
+    agenda: null,
+    attendees: [],
+    unknownAttendees: [],
+    relatedContext: { goals: [], projects: [], recentDecisions: [], recentLearnings: [] },
+    warnings: [],
+    areaContext: { name: 'Glance 2.0', sections: { focus: 'ship the recipient table' } },
+    existingTasks: ['Finish recipient-table TDD'],
+    topicWikiContext: {
+      detectedTopics: [
+        { slug: 'recipient-table', sections: '## Recipient table\nKafka event-driven.', l2Excerpts: ['prior decision'] },
+      ],
+    },
+  };
+
+  it('area / existingTasks / topicWikiContext all render in the prompt', () => {
+    const bundle = deserializeContextBundle(payload as unknown as Record<string, unknown>);
+    const prompt = buildSinglePassExtractionPrompt(bundle.meeting.transcript, {
+      context: bundle,
+      ownerSlug: 'john-koht',
+    });
+    // Area block
+    assert.ok(prompt.includes('Area Context (Glance 2.0)'), 'area block present');
+    assert.ok(prompt.includes('ship the recipient table'), 'area focus present');
+    // Existing tasks block (the week.md/tasks dedup input — fixes 10b)
+    assert.ok(prompt.includes('Existing Tasks'), 'existing-tasks block present');
+    assert.ok(prompt.includes('Finish recipient-table TDD'), 'existing task text present');
+    // Topic-wiki block + delta directive activation (hasWikiContext === true)
+    assert.ok(prompt.includes('recipient-table'), 'topic wiki slug present');
+    assert.ok(prompt.includes('Delta-only extraction'), 'delta directive activated by topicWikiContext');
+  });
+
+  it('without topicWikiContext, the delta directive does NOT activate', () => {
+    const noWiki = deserializeContextBundle({
+      ...payload,
+      topicWikiContext: undefined,
+    } as unknown as Record<string, unknown>);
+    const prompt = buildSinglePassExtractionPrompt(noWiki.meeting.transcript, {
+      context: noWiki,
+      ownerSlug: 'john-koht',
+    });
+    assert.ok(!prompt.includes('Delta-only extraction'), 'no delta directive without wiki');
   });
 });

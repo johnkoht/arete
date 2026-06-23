@@ -1301,6 +1301,13 @@ describe('processMeetingExtraction - completedItems reconciliation', () => {
     assert.equal(processed.stagedItemStatus['ai_001'], 'skipped');
     assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
     assert.equal(processed.stagedItemMatchedText?.['ai_001'], 'Send auth doc to Alex');
+    // Issue C: records WHY + matched target for the `[ ]` render.
+    const sr = processed.stagedItemSkipReason?.['ai_001'];
+    assert.ok(sr, 'expected a skip_reason for the auto-skipped reconciled item');
+    assert.equal(sr!.reason, 'already-completed');
+    assert.equal(sr!.setBy, 'chef');
+    assert.equal(sr!.matchedRef, 'Send auth doc to Alex');
+    assert.ok(typeof sr!.setAt === 'string' && sr!.setAt.length > 0, 'setAt required');
   });
 
   it('does NOT mark action item when no match (Jaccard < 0.6)', () => {
@@ -1516,6 +1523,12 @@ describe('processMeetingExtraction - openTasks dedup', () => {
       processed.stagedItemMatchedText?.['ai_001']?.toLowerCase().includes('leap'),
       `expected matched text to reference LEAP, got: ${processed.stagedItemMatchedText?.['ai_001']}`,
     );
+    // Issue C: records WHY (already-tracked) + matched target for the render.
+    const sr = processed.stagedItemSkipReason?.['ai_001'];
+    assert.ok(sr, 'expected a skip_reason for the auto-skipped open-task match');
+    assert.equal(sr!.reason, 'already-tracked');
+    assert.equal(sr!.setBy, 'chef');
+    assert.ok(sr!.matchedRef?.toLowerCase().includes('leap'), 'matchedRef references the open task');
   });
 
   // Known limitation (documented, not asserted): when the meeting extraction

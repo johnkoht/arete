@@ -10,7 +10,7 @@
  *   - Auto-approval logic (high confidence → approved, dedup → approved)
  *   - Metadata maps for staged items (status, confidence, source, owner)
  */
-import type { MeetingExtractionResult, PriorItem, ValidationWarning } from './meeting-extraction.js';
+import type { MeetingExtractionResult, PriorItem, ValidationWarning, ItemImportance, ExtractionTelemetryEvent } from './meeting-extraction.js';
 import type { Importance } from '../integrations/meetings.js';
 export type { ItemSource } from '../models/common.js';
 import type { ItemSource } from '../models/common.js';
@@ -31,6 +31,16 @@ export interface FilteredItem {
     confidence: number;
     /** Owner metadata (action items only) */
     ownerMeta?: ItemOwnerMeta;
+    /** Importance tier (single_pass only — D3). */
+    importance?: ItemImportance;
+    /** ⚠ flag (single_pass only). Uncertain items always stage pending. */
+    uncertain?: boolean;
+    /** Why the model flagged ⚠ (single_pass only). */
+    uncertaintyReason?: string;
+    /** Continuation claim — known item/commitment ref (single_pass only). */
+    continuationOf?: string;
+    /** Supersession claim — known item ref (single_pass only). */
+    supersedes?: string;
 }
 /** Processing options (thresholds can be overridden for testing) */
 export interface ProcessingOptions {
@@ -73,6 +83,17 @@ export interface ProcessingOptions {
      * - 'normal' | 'important': Standard processing (default behavior)
      */
     importance?: Importance;
+    /**
+     * single-pass mode (W1, pre-mortem risk 1):
+     * - approval derives from TIER, not confidence: ONLY `blocker` (and not ⚠)
+     *   auto-approves; high/normal/uncertain stage pending. Confidence becomes
+     *   telemetry (still recorded in stagedItemConfidence).
+     * - the `confidence < confidenceInclude` filter no longer DROPS items
+     *   (AC8: that was a silent bare-`continue` data loss) — low-confidence
+     *   items are kept and stage pending.
+     * Default false = legacy behavior, bit-identical.
+     */
+    singlePass?: boolean;
 }
 /** Result of processing meeting extraction */
 export interface ProcessedMeetingResult {
@@ -88,6 +109,33 @@ export interface ProcessedMeetingResult {
     stagedItemOwner: Record<string, ItemOwnerMeta>;
     /** Map of item ID → matched completed text (for reconciled items only) */
     stagedItemMatchedText?: Record<string, string>;
+    /**
+     * Map of item ID → skip-reason metadata for items the EXTRACT auto-skipped
+     * (completed-task / open-task matches). Issue C: records WHY the agent
+     * pre-filled `[ ]` + the matched target (`matchedRef`) so the checklist can
+     * render `— skip: already captured as [[<match>]]` and the user can verify
+     * the dupe is actually stored. setBy 'chef' (a definitive extract-time
+     * decision). Absent for non-skipped items.
+     */
+    stagedItemSkipReason?: Record<string, {
+        reason: string;
+        evidence: string;
+        setBy: 'chef';
+        setAt: string;
+        matchedRef?: string;
+    }>;
+    /** Map of item ID → importance tier (single_pass only). */
+    stagedItemImportance?: Record<string, ItemImportance>;
+    /**
+     * Map of item ID → uncertainty reason (single_pass only). Presence of a
+     * key = the ⚠ flag; value may be '' when the model gave no reason.
+     */
+    stagedItemUncertainReason?: Record<string, string>;
+    /** Map of item ID → continuation/supersession claims (single_pass only). */
+    stagedItemLinks?: Record<string, {
+        continuationOf?: string;
+        supersedes?: string;
+    }>;
 }
 /**
  * Extract user-written notes from meeting body.
@@ -96,7 +144,7 @@ export interface ProcessedMeetingResult {
  * @param body - The meeting file body content (markdown)
  * @returns User notes with excluded sections removed
  */
-export declare function extractUserNotes(body: string): string;
+export declare function extractUserNotes(body: string, extraExcludedHeaders?: string[]): string;
 /**
  * Check if text contains negation markers that indicate a possible contradiction.
  * Items with negation markers should skip prior-item dedup to avoid suppressing
@@ -189,7 +237,16 @@ export declare function clearApprovedSections(content: string): string;
  *                             curate-time (review-1 C3 visibility AC).
  * @returns Markdown string with lead + Staged sections
  */
-export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string, core?: string, couldInclude?: string[], validationWarnings?: ValidationWarning[]): string;
+export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string, core?: string, couldInclude?: string[], validationWarnings?: ValidationWarning[], opts?: {
+    /** single-pass: open questions to persist as a `## Open Questions` section. */
+    openQuestions?: string[];
+    /**
+     * single-pass: telemetry events; mirror_pair events render as a
+     * `## Parser-flagged (mirror-pair suspects)` section (the visibility
+     * contract that replaces Parser-dropped when the detector is log-only).
+     */
+    telemetryEvents?: ExtractionTelemetryEvent[];
+}): string;
 /**
  * Calculate the speaking ratio for a meeting owner based on transcript speaker labels.
  *

@@ -91,6 +91,20 @@ export interface MeetingContextBundle {
     areaContext?: AreaContext | null;
     warnings: string[];
     /**
+     * Workspace owner identity (single_pass W3 / RC3). Read from
+     * `context/profile.md` frontmatter `name` (the canonical source, same as
+     * `entity.ts`), slugified via `slugifyPersonName`. Carries through the
+     * --context boundary (W2) so the single_pass extract command can set
+     * `ownerSlug`/`ownerName` and the prompt's "## Who is reading this" identity
+     * frame is populated — without it the model is told the direction RULES but
+     * not WHO the owner is, so it guesses direction (Nate backwards, 10c).
+     * Absent when `profile.md` has no `name` (CLI then falls back to git config).
+     */
+    owner?: {
+        slug: string;
+        name: string;
+    };
+    /**
      * Existing open tasks from now/week.md and now/tasks.md.
      * Included so the extraction LLM can avoid re-proposing already-tracked tasks.
      * Cap at 20 items to avoid bloating the prompt.
@@ -123,6 +137,34 @@ export interface MeetingContextBundle {
         }>;
     };
 }
+/**
+ * Deserialize a `MeetingContextBundle` from a parsed `--context` payload
+ * (single_pass W2 / S5).
+ *
+ * The previous CLI reader hand-copied only 6 fields, silently dropping
+ * `areaContext`, `existingTasks`, and `topicWikiContext` — the three
+ * highest-value blocks (delta/supersession, week.md dedup, area calibration).
+ * That re-enumeration is the bug and would rot again on the next bundle field.
+ * This carries the WHOLE object (minus the response wrapper) so every present
+ * field — including future ones — survives the JSON boundary the backend never
+ * crossed.
+ *
+ * S5 hardening: `--context` is an arbitrary file/stdin payload, and W1 made
+ * extraction fail-loud — an unchecked cast of a malformed nested block (e.g.
+ * `topicWikiContext.detectedTopics` not an array) would throw INSIDE
+ * extraction. So:
+ *   - the required `meeting` field is validated (throws a clear error if
+ *     missing/malformed — this is a genuine bad payload, not a degradable block);
+ *   - optional blocks the prompt builder INDEXES are shape-guarded and a
+ *     malformed one degrades to absent (drop the block) rather than throwing.
+ *
+ * Accepts both the wrapped form (`{success:true, ...bundle}` from
+ * `arete meeting context --json`) and a direct bundle object. Strips `success`
+ * and a top-level `error` wrapper key.
+ *
+ * @throws Error when `meeting` is missing or not an object (a bad payload).
+ */
+export declare function deserializeContextBundle(parsed: Record<string, unknown>): MeetingContextBundle;
 /**
  * Options for building meeting context.
  */
@@ -228,5 +270,18 @@ declare function findRecentMeetingsForAttendees(storage: StorageAdapter, paths: 
  * @returns MeetingContextBundle with all assembled context
  */
 export declare function buildMeetingContext(meetingPath: string, deps: MeetingContextDeps, options?: BuildMeetingContextOptions): Promise<MeetingContextBundle>;
+/**
+ * Read the workspace owner identity from `context/profile.md` frontmatter
+ * `name` (single_pass W3 / RC3). Slugified via `slugifyPersonName` — the same
+ * canonical source/transform `entity.ts:1320-1331` uses for owner-direction
+ * classification, so the identity frame and direction logic agree.
+ *
+ * Best-effort: returns undefined when profile.md is absent or has no `name`.
+ * The CLI then falls back to `git config user.name`.
+ */
+export declare function readWorkspaceOwner(storage: StorageAdapter, paths: WorkspacePaths): Promise<{
+    slug: string;
+    name: string;
+} | undefined>;
 export { findRecentMeetings, findRecentMeetingsForAttendees, calculateCutoffDateString, extractDateFromFilename, parseMeetingFile, };
 //# sourceMappingURL=meeting-context.d.ts.map

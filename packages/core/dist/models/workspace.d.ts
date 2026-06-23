@@ -38,12 +38,55 @@ export type IntelligenceConfig = {
 export type QmdScope = 'all' | 'memory' | 'meetings' | 'context' | 'projects' | 'people' | 'areas' | 'goals' | 'now' | 'resources' | 'inbox';
 /** Map of scope to collection name. Partial because some scopes may be skipped if path doesn't exist. */
 export type QmdCollections = Partial<Record<QmdScope, string>>;
+/**
+ * Extraction pipeline mode (single-pass-extraction plan, W1/W2).
+ * - 'legacy' (default): accreted harness — caps, regex filters, exclusion list.
+ * - 'single_pass': judgment-first single pass — tiers, ⚠ channel,
+ *   direction:none, open questions, mark-don't-skip prior items; mechanical
+ *   detectors flip to telemetry-only.
+ * Legacy behavior is bit-identical when this is absent or 'legacy'.
+ */
+export type ExtractionPipelineMode = 'legacy' | 'single_pass';
+/**
+ * Cross-meeting reconcile placement (chef-holistic-reconcile plan, W0).
+ * - 'inline' (default): `--reconcile` runs per-file at extract time (today).
+ * - 'day-level': extract skips inline cross-meeting reconcile; the winddown
+ *   runs ONE `arete meeting reconcile-day` call over the whole day at Step 2.
+ */
+export type ReconcileMode = 'inline' | 'day-level';
+/**
+ * Winddown render mode (winddown-approval-doc plan, W1).
+ * - 'prose' (default): today's narrative `## Stage for approval` doc —
+ *   BYTE-IDENTICAL to pre-feature winddown (AC6 invariant).
+ * - 'checklist': the checkbox approval surface — per-meeting `### Action items
+ *   / Decisions / Learnings` checkboxes pre-filled from tier+status, Your-call
+ *   blocks for uncertain items, proposed-action checkboxes with editable
+ *   bodies, hidden anchors per line, and a persisted baseline for `/winddown
+ *   apply` round-trip.
+ * Absent or 'prose' ⇒ the checklist renderer is never invoked.
+ */
+export type WinddownRenderMode = 'prose' | 'checklist' | 'theme';
 /** Shape of the resolved config object */
 export type AreteConfig = {
     schema: number;
     version: string | null;
     source: string;
     created?: string;
+    /** Extraction pipeline mode — see ExtractionPipelineMode. Default 'legacy'. */
+    extraction_mode?: ExtractionPipelineMode;
+    /** Cross-meeting reconcile placement — see ReconcileMode. Default 'inline'. */
+    reconcile_mode?: ReconcileMode;
+    /** Winddown render mode — see WinddownRenderMode. Default 'prose' (AC6). */
+    winddown_render?: WinddownRenderMode;
+    /**
+     * CHR W7 shadow-soak instrumentation (chef-holistic-reconcile plan).
+     * When true, `meeting extract` persists a RAW pre-reconcile extraction
+     * snapshot to `dev/diary/raw-extractions/` (gitignored) before any
+     * reconcile/dedup mutation, and shadow-engine runs append to
+     * `dev/diary/reconcile-shadow.log`. Default false — zero writes, legacy
+     * behavior bit-identical.
+     */
+    reconcile_shadow?: boolean;
     /** Agent mode: builder (building Areté) or guide (end-user workspace) */
     agent_mode?: AgentMode;
     /** Target IDE: cursor or claude */

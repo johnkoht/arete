@@ -26,6 +26,27 @@ import type { ItemSource } from './common.js';
  */
 export type StagedItemStatus = Record<string, 'approved' | 'skipped' | 'pending'>;
 /**
+ * Structural elevation marker for staged items (W4 / chef-holistic-reconcile B-2).
+ *
+ * Map of item ID → `true` for items the chef CONFIDENTLY keeps during the
+ * winddown reconcile pass. Parallel to `StagedItemStatus`, but DELIBERATELY
+ * distinct: elevation means "pre-check the box `[x]` in the render", NOT
+ * "commit to memory".
+ *
+ * Why a separate field (not reuse `status: 'approved'`): `commitApprovedItems`
+ * commits anything `'approved'` with no checkbox gate, and `arete meeting
+ * approve` can be invoked outside the winddown apply path. If the chef wrote
+ * `'approved'` at reconcile time, a stray `meeting approve` would silently
+ * commit it — blanket-approval by another name. Elevation is therefore NEVER
+ * read by the commit filter; only the renderer reads it (→ `[x]`), and only the
+ * winddown apply checkbox-diff promotes a left-checked item to `'approved'`
+ * (just before commit). So `'approved'` never exists on disk until apply.
+ *
+ * Invariant: no path commits a `staged_item_elevated` item to memory except the
+ * apply checkbox-diff.
+ */
+export type StagedItemElevated = Record<string, true>;
+/**
  * Reason metadata for a chef-skipped or chef-proposed staged item.
  *
  * Sibling-field shape mirrors `StagedItemEdits` / `StagedItemOwner` / etc.
@@ -69,6 +90,32 @@ export type StagedItemSkipReasonMeta = {
     /** ISO 8601 timestamp when the entry was last written. Idempotent
      * re-writes update this on each call. */
     setAt: string;
+    /**
+     * Optional linkable target for a dedup / already-captured skip — the matched
+     * canonical item text (or topic/item ref) this item duplicates. When present,
+     * the winddown checklist renders the skip suffix as
+     * `— skip: already captured as [[<matchedRef>]]` on the `[ ]` line, so the
+     * user can verify Areté actually has the thing stored (single-pass Issue C).
+     * Absent on chef/user skips that aren't dedup-driven (those render the plain
+     * `reason`). Backward-compatible: pre-Issue-C entries have no matchedRef.
+     */
+    matchedRef?: string;
+    /**
+     * Discriminator distinguishing a SUPERSEDED skip from a plain DEDUP skip
+     * (theme-render W2). Both reuse this same skip-reason entry + carry a
+     * `matchedRef`, so without this field the render seam cannot tell them apart
+     * and renders a supersession as dedup ("already captured as …") — wrong.
+     *
+     * - `'dedup'` / ABSENT → the item duplicates an already-captured one; the
+     *   render shows `— skip: already captured as [[matchedRef]]`. ABSENCE MUST
+     *   mean dedup so pre-existing entries render byte-identically (AC7).
+     * - `'superseded'` → an arc outcome: a LATER item replaced this one. The
+     *   render surfaces the supersession verbatim (`— <reason>`) and links the
+     *   superseding target (`matchedRef`); it must NOT say "already captured as".
+     *   W3's richer arc treatment (strikethrough + `⤴ superseded by`) keys off
+     *   this same discriminator.
+     */
+    kind?: 'dedup' | 'superseded';
 };
 /** Map of itemId → skip reason metadata (set by chef OR user). */
 export type StagedItemSkipReason = Record<string, StagedItemSkipReasonMeta>;
@@ -82,8 +129,14 @@ export type StagedItemOwnerMeta = {
 };
 /** Map of itemId → owner metadata (for action items) */
 export type StagedItemOwner = Record<string, StagedItemOwnerMeta>;
-/** Direction of an action item relative to the user. */
-export type StagedItemDirection = 'i_owe_them' | 'they_owe_me';
+/**
+ * Direction of an action item relative to the user.
+ *
+ * `'none'` (single-pass-extraction D3): team-internal / not-user-relative.
+ * Never creates a commitment (D7) — visibility-only in staging. Rendered
+ * with a `·` marker instead of a direction arrow.
+ */
+export type StagedItemDirection = 'i_owe_them' | 'they_owe_me' | 'none';
 /** A single staged item extracted from a meeting file */
 export type StagedItem = {
     id: string;

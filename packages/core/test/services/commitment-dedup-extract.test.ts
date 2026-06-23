@@ -380,8 +380,40 @@ describe('buildDupeSkipReasonEntries', () => {
         evidence: 'cross-meeting dedup text-hash (canonical in meeting-x)',
         setBy: 'chef',
         setAt: '2026-06-01T10:00:00Z',
+        // Issue C: the canonical's text is the linkable [[…]] target.
+        matchedRef: 't',
       },
     });
+  });
+
+  it('Issue C — matchedRef carries the canonical item TEXT for the [[link]] render', () => {
+    const decisions: ExtractDedupDecision[] = [
+      {
+        itemId: 'ai_009',
+        itemText: 'Set up the roadmap meeting with Dave',
+        direction: 'i_owe_them',
+        outcome: {
+          kind: 'definite-dupe',
+          via: 'llm-same',
+          canonical: {
+            id: 'canon_7',
+            text: 'Set up meeting with Philip, Dave, Lindsay on team structure',
+            direction: 'i_owe_them',
+            personSlugs: [],
+            meetingSlug: 'phil-john',
+            jaccard: 0.8,
+          },
+          jaccard: 0.8,
+        },
+        candidates: [],
+        llmDecisions: [],
+      },
+    ];
+    const out = buildDupeSkipReasonEntries(decisions, '2026-06-01T10:00:00Z');
+    assert.equal(
+      out['ai_009'].matchedRef,
+      'Set up meeting with Philip, Dave, Lindsay on team structure',
+    );
   });
 
   it('does NOT emit skip_reason for possibly-mergeable items', () => {
