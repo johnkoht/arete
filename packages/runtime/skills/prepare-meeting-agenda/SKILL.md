@@ -95,6 +95,17 @@ Example agenda quality bar: `resources/meetings/2026-04-29-john-lindsay-11.md` l
 
 Do not reimplement calendar or context logic; use existing commands and patterns only.
 
+### 4a. Ground the meeting's project(s) (REQUIRED when a project is in scope — the gate against confidently-wrong agendas)
+
+The scaffold surfaces project **documents**, but a document excerpt is not verified truth: it can carry a decision that was later reversed, a Jira title that has changed, or a stale commitment ID. Saving those into an agenda is the exact failure this step prevents. So before you synthesize, **ground every project the run touches**, applying the `.agents/profiles/project-agent.md` disposition **inline** (no subagent) with live-grounding ON.
+
+1. **Resolve + dedup.** Collect the project(s) each meeting in this run touches (from the scaffold's project candidates / area-inference, or the `--project` pin). Reduce to the **unique set** across the whole run — a project that feeds two meetings is grounded ONCE, its bundle reused.
+2. **Ground each unique project once** (loop), per `.agents/profiles/project-agent.md`: read the README body directly — especially `## Decisions` and `## Open Questions` — plus recent `working/` docs; run `arete project open <slug>` for the brief signal; **verify every referenced Jira key live via the Atlassian MCP** (title/status/owner); reconcile decisions in time order and **flag any superseded** decision. This grounding is the high-effort pass — supersession/decision reconciliation is the subtle reasoning the un-grounded path gets wrong.
+3. **Write the grounded bundle to a disk artifact**: `now/.cache/agenda-grounding/<slug>.md` (create the dir; it is transient/local). The bundle is the source of record for this run's ticket, owner, decision, and commitment claims. Writing it to disk (not just holding it in chat) is deliberate — step 5a checks the saved agenda against it.
+4. **If the Atlassian MCP is unavailable/unauthenticated**, record each affected ticket as `verified: false` with the reason in the bundle. Do NOT assert an unverified ticket fact in the agenda — either omit it or surface it explicitly as unverified.
+
+These grounded bundles are a NEW input to synthesis (step 5); they do not replace the scaffold's meeting-shaped signal (attendees, commitments, recent-meeting callbacks, 1:1 prompts).
+
 ### 4b. Batch mode — anti-degradation rule (LOAD-BEARING)
 
 If you are preparing agendas for **more than one meeting in this run** (a batch), this is the confirmed failure mode (F3): the cheap section (Priorities) gets filled and the expensive qualitative synthesis (Feedback/Growth, themed sections, callbacks) gets skeletoned for all of them. **Do NOT let this happen.**
@@ -109,6 +120,7 @@ See PATTERNS.md → `get_meeting_context` → "Batch anti-degradation" for the r
 ### 5. Build Agenda — split into named, themed, time-boxed sections
 
 - **Start from the scaffold output (step 4), not the bare template.** The scaffold carries the template's generic `## ` sections (Priorities / Feedback and Growth / Support and Blockers / Next Steps) + time-boxes + pre-seeded candidates. Those generic headings are SCAFFOLDING, **not** the deliverable.
+- **Source every project fact from the grounded bundle (step 4a), not the scaffold's doc excerpt.** When a section references a ticket, owner, decision, or commitment, pull it from `now/.cache/agenda-grounding/<slug>.md` — those are the live-verified / Decisions-block facts. Prefer the bundle's canonical (non-superseded) decision over anything in a doc excerpt. The scaffold gives you the meeting shape and talking-point candidates; the bundle gives you the facts.
 - **Split the seeded candidates into 2–4 named, THEMED, time-boxed sections** — the April quality bar. A theme comes from cross-source signal: an open commitment + a related decision + a recent-meeting callback + a discussion-topic question = one themed section. Rename "Priorities (30min)" into specific themes like "Status Letters — Lock the TDD (12min)" and "POP MVP — Sequence the Roadmap (10min)". A flat generic "Priorities (30min)" bullet-dump is a FAILED agenda.
 - **Write a one-line framing lead-in per section** (why this is on the agenda now), then 2–4 specific bullets citing commitment IDs / meeting dates / prior decisions, and an "ask" or "decision needed" line where appropriate.
 - **Weave in ≥1 dated prior-conversation callback per themed section** where the source supports it — quote a date + what was decided/said ("Per the 4/28 weekly, we agreed the import script gets the DOI drop method before…"). The scaffold's `[recent meeting]` candidates and the framing block give you these dates; use them.
@@ -128,6 +140,7 @@ Before you save or present any agenda, run this check against it. State the resu
 5. **1:1 discussion topics woven in.** For a 1:1: are the person's discussion-topic / standing-prompt questions present verbatim in the Feedback/Growth-type sections?
 6. **No scaffold artifacts remain.** No `[source]` tags, no SCAFFOLD guardrail blockquote, no `## Unrouted signal` block (every item placed or deliberately dropped), no `## Cross-cutting / touches their lane` block left verbatim (pulled-up items folded into themes; the rest dropped).
 7. **Time-boxed.** If duration is known, does each section carry `(Xmin)`?
+8. **Grounded-facts gate (anti-dark-code — non-negotiable when a project is in scope).** Every Jira key, ticket title, owner, decision, and commitment ID asserted in this agenda MUST trace to an entry in the project's grounded bundle from step 4a (`now/.cache/agenda-grounding/<slug>.md`) — either `jira-live`-verified or read from the README `## Decisions` block. An agenda that states a ticket/decision/owner sourced only from a doc excerpt, the scaffold candidate text, or model memory is a FAILURE. If the bundle marked a ticket `verified: false`, the agenda must not assert it as fact (omit, or label it unverified). A superseded decision flagged in the bundle must NOT appear as current. This is the exact regression — confidently-wrong tickets and reversed decisions — that step 4a exists to prevent; do not skip it because the agenda "reads fine."
 
 If any check fails, you are NOT done. Return to step 5 and synthesize the missing depth before saving. This applies identically to every agenda in a batch. "Skeleton + empty qualitative sections" is the regression this skill exists to prevent.
 

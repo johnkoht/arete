@@ -76,6 +76,15 @@ arete project open "<name>" --json
 - **ALWAYS show the Sibling-projects and Related-wiki-pages sections when they are present in the CLI output** — never drop them as "secondary" detail; they are the cross-project and knowledge edges the user opened this flow to get. When a section is absent from the CLI output, say so in one line ("No siblings / no wiki pages matched") instead of silently omitting it.
 - Then offer to dig in: open a wiki topic, prep for a related meeting, review open commitments.
 
+### 3a. When the user works from here — adopt the project-agent disposition
+
+Opening is read-only and the brief is a *starting signal*, not verified truth. The moment the user starts **working or reviewing** from this project — drafting or updating an agenda, deciding something, asking "is this still right?", reconciling tickets — **adopt the `.agents/profiles/project-agent.md` disposition** for the rest of the conversation:
+
+- **Read the real body, not just the brief.** `arete project open` does NOT surface the README's own `## Decisions` block and returns zero Jira — read `## Decisions` / `## Open Questions` and recent `working/` docs directly.
+- **Verify Jira live.** Before repeating any ticket title/status/owner, check it against the Atlassian MCP. Flag any decision that a later one superseded; don't silently pick.
+
+This is the SAME disposition agenda prep uses (one shared source, so the two can't drift). **Live-grounding is on-when-working, OFF on a bare open / "catch me up"** — keep plain opens fast and read-only. This is a reasoning posture, not a write: it does not change the read-only-on-open boundary below.
+
 ### 4. Boundaries
 
 - **Never write to the project README on open** — no topics cache, no status updates, no frontmatter edits. If the user asks to update the project, that is a different flow; do the edits they explicitly approve, never as a side-effect of opening.

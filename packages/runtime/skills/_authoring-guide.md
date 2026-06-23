@@ -358,6 +358,12 @@ The agent reads PATTERNS.md, follows the referenced pattern's steps, and returns
 
 > **Note**: Expert agent patterns run in the same conversation — the agent does not spawn a new agent or call a subagent. The pattern steps execute in the current context, with the context bundle already in scope.
 
+### Grounding dispositions (profiles, applied inline)
+
+A **profile** — authored in `packages/runtime/profiles/`, installed to the workspace at `.agents/profiles/{name}.md` — can be referenced by a skill as a *disposition the agent adopts inline*, same principle as expert patterns: no subagent, runs in the current context. (This is the inline-prose variant of the frontmatter `profile:` field documented in `skills/LEARNINGS.md`; use the frontmatter field for skill-WIDE adoption, an inline reference when the disposition is scoped to one step or a conditional mode.) Use it when a skill needs the agent to take on a consistent, reusable reasoning posture (e.g. "ground every project fact against the real body + live Jira before asserting") across more than one skill, so the behavior can't drift between callers.
+
+`prepare-meeting-agenda` (step 4a) and `project` (step 3a) both reference `.agents/profiles/project-agent.md` so agenda prep and `/project` ground identically. When grounding produces facts the skill will later act on, write them to a **disk artifact** (e.g. `now/.cache/agenda-grounding/<slug>.md`) and add a self-check that the output traces back to it — an inline reasoning result that only lives in chat is the "dark-code" failure mode (extracted but never provably consumed). Do NOT reach for a spawned subagent to get isolation/parallelism unless a real, measured need justifies it and a spike proves the round-trip; the inline disposition is the default.
+
 ---
 
 ## See Also
