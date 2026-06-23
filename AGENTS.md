@@ -72,6 +72,7 @@
 |arete skill route "<query>":Route to skill only (for agents before loading skill)
 |arete brief --for "task" --skill <name>:Assemble primitive briefing (context + memory + entities + relationships)
 |arete plan-context --week|--day|--project <slug>:Pre-seeded planning bundle — active projects (status + whatsNew + selectedDocs[] + openQuestions[]), active topics, goals, last week's plan. --week (all active), --day (today's areas), --project (single project current-state). Composes the project-read engine; pure read. Canonical current-state source over memory/wiki (see read_before_asserting)
+|arete week-memory add|list|resolve|archive:Per-week store of interpretive overrides — a handful of corrections (framing-override|deprioritization|week-constraint) the system would otherwise re-derive wrong. `add --type <t> --statement <s> --why <w> [--suppresses <id-or-text>]`; `list [--active]`; `resolve <id>` (retire, keep); `archive` (week-stamped, idempotent). Backing file now/week-memory.md (agent-managed). Captured during week-plan; consumed by daily-plan/winddown to suppress stale framings; surfaced in plan-context as weekMemory[]. All accept --json
 |arete context --for "query":Get relevant workspace files for a task (includes meetings, conversations, projects)
 |arete context --for "query" --inventory:Show context freshness dashboard with coverage gaps
 |arete memory search "query":Search explicit decisions, learnings, and observations only

@@ -3,7 +3,7 @@
  */
 
 export { slugify } from './slugify.js';
-export { parseDate, formatDuration } from './dates.js';
+export { parseDate, formatDuration, isoWeekStamp } from './dates.js';
 export {
   renderTemplate,
   renderTemplateString,

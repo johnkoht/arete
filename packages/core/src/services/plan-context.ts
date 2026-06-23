@@ -40,6 +40,7 @@ import {
   type ProjectDocSelection,
   type ProjectWhatsNew,
 } from './brief-assemblers.js';
+import { listWeekMemory, type WeekMemoryEntry } from './week-memory.js';
 
 /**
  * PER-PROJECT expanded-body budget (chars) — each chosen project gets this,
@@ -124,6 +125,14 @@ export interface PlanContextBundle {
   goals: PlanContextGoal[];
   /** Prior `now/week.md` content (null when absent — never an error). */
   lastWeek: string | null;
+  /**
+   * Active week-memory overrides (status==='active'; resolved excluded).
+   * Both --day and --week return the SAME full active set — entries have no
+   * area field, the set is intentionally tiny, and area-filtering could hide a
+   * relevant override (so week-constraints are always surfaced). Absent store
+   * → [] (the core read never throws).
+   */
+  weekMemory: WeekMemoryEntry[];
   generatedAt: string;
   /**
    * Why `projects[]` is what it is — present only when the --day scope could
@@ -434,12 +443,22 @@ export async function assemblePlanContext(
     lastWeek = null;
   }
 
+  // ---- 7. Week-memory overrides ----------------------------------------
+  // Both --day and --week surface the SAME full active set: entries have no
+  // area field, the set is intentionally tiny, and area-filtering could hide a
+  // relevant override (so week-constraints are always included). Absent store
+  // returns [] — the core read never throws.
+  const weekMemory: WeekMemoryEntry[] = await listWeekMemory(deps.storage, paths.root, {
+    active: true,
+  });
+
   return {
     mode,
     projects,
     topics,
     goals,
     lastWeek,
+    weekMemory,
     generatedAt: referenceDate.toISOString(),
     ...(reason ? { reason } : {}),
   };

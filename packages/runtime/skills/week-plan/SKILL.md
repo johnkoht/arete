@@ -273,6 +273,25 @@ Wait for user response. Acceptable shapes:
 - Free-form pushback / question → engage normally; loop until
   priorities are agreed
 
+#### Step 3.5 — Week-memory capture pass (after Engage 1)
+
+After the user confirms / edits priorities (and BEFORE priorities are written), scan each confirmation/edit against the **Capture Rule** (see `## Capture Rule` below). For every correction that passes the "would a fresh daily-plan agent re-derive this wrong tomorrow?" test, record it as a week-memory entry — capture on *correction*, not on importance. The three qualifying types are `framing-override`, `deprioritization`, and `week-constraint`; plain plan-text edits and vocabulary/terminology preferences do NOT qualify.
+
+**De-dup before adding.** Read the active entries first, then add only what is genuinely new:
+
+```bash
+arete week-memory list --json
+# For each qualifying correction (NOT already present as an identical type+statement):
+arete week-memory add \
+  --type framing-override \
+  --statement "Lindsay email is NOT overdue — it's a proactive Wednesday update" \
+  --why "John: it's a proactive Wed update, not a manager-facing overdue item" \
+  --suppresses "<lindsay-commitment-id-or-free-text 'Lindsay email'>" \
+  --json
+```
+
+An entry with an identical `type`+`statement` is a no-op — the core handles the de-dup — but check the list first so you don't even propose a redundant `add`. Use `--suppresses` only on `framing-override` entries (the target daily-plan should NOT surface). This pass is silent: do NOT engage the user per-entry here; the recap at Engage 2 is the single glance.
+
 ### Step 4 — Apply judgment for Engage 2 (draft the plan)
 
 With confirmed priorities, build the full week plan:
@@ -354,11 +373,40 @@ What's your call? Approve to write to `now/week.md`, or edit specific tasks.
 
 Wait for user response.
 
-### Step 6 — Write the plan + execute approved actions
+#### Step 5.5 — Second capture pass + "Holding for the week" recap (after Engage 2)
 
-After approval:
+(a) **Second capture pass.** Scan the draft refinements the user made during Engage 2 against the **Capture Rule** (same test, same three types, same de-dup-against-`list --json` discipline as Step 3.5). A refinement that changes how the system should interpret/surface something → `arete week-memory add`; a plain text edit → skip.
+
+(b) **"Holding for the week" recap.** After the second pass, surface a 3–5 bullet recap of everything captured this session (across both passes). This is a **glance, NOT a per-item approval gate** — John reviews it in one shot and corrects in one shot if something looks off; do not prompt to approve each entry. Render from the live store:
 
 ```bash
+arete week-memory list --active --json
+```
+
+```markdown
+## Holding for the week
+
+- [framing-override] Lindsay email is NOT overdue — proactive Wed update (suppresses the Lindsay commitment)
+- [deprioritization] Analytics is in Josiah's court — fine to slip past PTO
+- [deprioritization] Liability PRD punts to my return from PTO
+- [week-constraint] 3-day pre-PTO sprint; OOO 6/25–30; Lindsay back 6/29 — leave nothing that stalls
+
+These are the interpretive overrides daily-plan / daily-winddown will honor this week. Looks right, or correct any?
+```
+
+If John corrects an entry here, `arete week-memory resolve <id>` the wrong one and `add` the corrected one (one shot — not a loop).
+
+### Step 6 — Write the plan + execute approved actions
+
+After approval, archive any stale prior-week overrides BEFORE populating the new week, then write the plan:
+
+```bash
+# Archive a stale prior-week week-memory file before the new week
+# begins. Week-stamped + idempotent: a same-week re-run is a safe
+# no-op (it only archives + resets when the live file belongs to a
+# prior week). Belt-and-suspenders with weekly-winddown's archive.
+arete week-memory archive
+
 # Write plan to now/week.md (preserves any user-edited
 # template structure; uses templates/plans/week-priorities.md if
 # customized)
@@ -437,6 +485,10 @@ Rationale: a passed-in week bundle tempts the agent to skip the day's
 per-meeting recall and agenda offers, which is the exact fidelity loss WS-4
 fixes. Reused context is an INPUT, not a license to skip steps. (See
 daily-plan/SKILL.md Steps 3, 3.6, 4.5, 5.)
+
+## Capture Rule
+
+Week-memory capture (Steps 3.5 + 5.5) follows the shared spec at [`../_shared/week-memory-capture.md`](../_shared/week-memory-capture.md): capture a correction ONLY when a fresh daily-plan agent reading only the vault would re-derive it wrong tomorrow; the only qualifying types are `framing-override`, `deprioritization`, and `week-constraint`; plain plan-text edits and vocabulary/terminology preferences do NOT qualify.
 
 ## References
 

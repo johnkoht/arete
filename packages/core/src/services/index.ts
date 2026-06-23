@@ -3,6 +3,26 @@
  */
 
 export { ContextService } from './context.js';
+// Week-memory store (weekly-working-memory plan, Step 1)
+export {
+  readWeekMemory,
+  listWeekMemory,
+  addWeekMemoryEntry,
+  resolveWeekMemory,
+  archiveWeekMemory,
+  WEEK_MEMORY_FILE,
+  WEEK_MEMORY_ARCHIVE_DIR,
+} from './week-memory.js';
+export type {
+  WeekMemoryEntry,
+  WeekMemoryType,
+  WeekMemoryStatus,
+  AddWeekMemoryInput,
+  AddWeekMemoryResult,
+  ResolveWeekMemoryResult,
+  ArchiveWeekMemoryResult,
+  Clock as WeekMemoryClock,
+} from './week-memory.js';
 export { MemoryService, getMemoryItemsForTopics, parseMemorySections } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';

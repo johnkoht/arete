@@ -97,6 +97,11 @@ arete commitments list --json
 
 # 1f. Read recent area files for state
 ls areas/
+
+# 1g-mem. Week-memory active entries (interpretive overrides for the week).
+# This skill does NOT consume `arete plan-context` — read week memory with an
+# explicit, named gather call. Empty/absent file → `[]`.
+arete week-memory list --active --json > /tmp/weekly-winddown-week-memory.json
 ```
 
 **Sequenced (after gather)**:
@@ -217,6 +222,18 @@ themes, energy / focus quality.}
 - Cover Whale launch — 3 meetings, 5 commitments, decision moved Tue
 - Glance comms — 2 meetings, 1 stalled commitment to Anthony
 
+## Carried interpretive context
+
+{From the 1g-mem gather. List any STILL-`active` week-memory entries
+(those that did not resolve during the week). The archive at Step 4 is
+UNCONDITIONAL — these entries do NOT auto-copy into next week. Surface
+them here so genuinely cross-week truths get explicitly RE-STATED by
+next week's week-plan rather than silently carried or silently dropped.
+Omit the section if no active entries remain.}
+
+- [week-constraint] OOO 6/25–30; Lindsay back 6/29 — still in effect into next week. Re-state at week-plan?
+- [deprioritization] Liability PRD punts to my return from PTO — still relevant; re-state next week if the punt holds.
+
 ## Stage for next week
 
 - [ ] Send API spec to Anthony — open commitment, 11d old
@@ -284,6 +301,21 @@ EOF
 If the file already exists for today (re-run within the same week),
 append a `## Re-run at HH:MM` divider rather than silently
 overwriting.
+
+**Archive the week's interpretive overrides.** After persisting the
+curated view, archive week memory so the week's overrides file moves to
+`now/archive/week-plan/week-memory-YYYY-WNN.md` and the live file resets
+empty:
+
+```bash
+arete week-memory archive
+```
+
+The archive reset is **unconditional** — any still-`active` entries do
+NOT auto-copy into next week. They were surfaced under `## Carried
+interpretive context` (Step 3) precisely so a genuinely cross-week truth
+gets explicitly RE-STATED by next week's week-plan, not silently carried.
+The next week-plan therefore starts from an empty live file.
 
 After persisting, send the curated review. Wait for response.
 Standard response format (see PATTERNS.md Pattern 3).
@@ -378,7 +410,9 @@ week decision):
 - **PATTERNS.md** — chef-orchestrator patterns 1–4, action verbs.
 - **APPEND** — `.arete/skills-local/weekly-winddown.md`.
 - **CLI primitives** — same as daily-winddown plus
-  `arete search ... --timeline --days 7` for thread arcs.
+  `arete search ... --timeline --days 7` for thread arcs, and
+  `arete week-memory list --active --json` (gather, Step 1g-mem) +
+  `arete week-memory archive` (unconditional reset, Step 4).
 - **Sidecar** — `now/archive/weekly-winddown/deferred-week-YYYY-WNN.md`.
 - **Related skills**: `daily-winddown`, `week-plan` (consumes this
   skill's "stage for next week" output). The former `week-review`

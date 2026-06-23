@@ -26,6 +26,7 @@ import { join } from 'path';
 import { loadAreaAliasMap } from './area-parser.js';
 import { getActiveTopics } from '../models/active-topics.js';
 import { listActiveProjects, selectProjectDocs, assembleProjectWhatsNew, loadMeetingIndex, } from './brief-assemblers.js';
+import { listWeekMemory } from './week-memory.js';
 /**
  * PER-PROJECT expanded-body budget (chars) — each chosen project gets this,
  * NOT a shared total divided down (the divided model starved real docs to
@@ -318,12 +319,21 @@ export async function assemblePlanContext(mode, paths, deps, opts = {}) {
     catch {
         lastWeek = null;
     }
+    // ---- 7. Week-memory overrides ----------------------------------------
+    // Both --day and --week surface the SAME full active set: entries have no
+    // area field, the set is intentionally tiny, and area-filtering could hide a
+    // relevant override (so week-constraints are always included). Absent store
+    // returns [] — the core read never throws.
+    const weekMemory = await listWeekMemory(deps.storage, paths.root, {
+        active: true,
+    });
     return {
         mode,
         projects,
         topics,
         goals,
         lastWeek,
+        weekMemory,
         generatedAt: referenceDate.toISOString(),
         ...(reason ? { reason } : {}),
     };

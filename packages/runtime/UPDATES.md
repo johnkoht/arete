@@ -4,6 +4,16 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Weekly working memory — stop re-explaining the same things every day
+
+Areté now keeps a small, per-week note of the *corrections* you make during week planning, so the daily flow stops re-surfacing things you've already reframed. If you tell the agent "that's not blocked, it's waiting on legal" or "the migration is parked until Q3, stop nudging me" while planning your week, it remembers — and `daily-plan` and the winddown skills quietly honor it (and tell you when they do).
+
+It's deliberately small: a handful of interpretive overrides, not a log of everything that happened. Three kinds — a **framing-override** (you read a situation differently than the system did), a **deprioritization** (something's parked), or a **week-constraint** (you're out Thursday/Friday). It **resets each week** when you plan the new one, so corrections don't pile up forever.
+
+You don't manage this by hand — it's captured for you during `week-plan`. If you want to see or adjust it, `arete week-memory list` shows the active entries; `arete week-memory add/resolve` let you add or retire one directly.
+
+---
+
 ## Resolving commitments in the web UI now actually finishes the job
 
 Marking a commitment done (or dropped) in the web UI used to only flip its status in the background file — the linked task on your week/tasks list stayed unchecked, and it could still surface in search. Now the web UI does the same thing as `arete commitments resolve`: it checks off the linked task (only when you resolve — dropping a commitment leaves the task alone, since dropped ≠ done) and refreshes search shortly after. Resolving a big batch at once is safe too — concurrent resolves no longer overwrite each other.

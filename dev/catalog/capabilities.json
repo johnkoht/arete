@@ -1031,6 +1031,53 @@
         "First live use: glance-2-mvp -> glance-operations rename (2026-06-11, arete-reserv)"
       ],
       "lastVerified": "2026-06-11"
+    },
+    {
+      "id": "week-memory-cli",
+      "name": "Week Working Memory CLI",
+      "type": "cli-command",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "Per-week store of interpretive overrides — a handful of corrections (framing-override | deprioritization | week-constraint) the system would otherwise re-derive wrong. CLI add/list/resolve/archive over the core store; backing file now/week-memory.md (agent-managed, seeded into new workspaces). `add` dedups identical active entries; `resolve` retires by 8-char-prefix or full id without deleting; `archive` is week-stamped + idempotent (same-week = no-op, prior-week = move to now/archive/week-plan/week-memory-YYYY-Www.md + reset). plan-context surfaces all active entries as weekMemory: WeekMemoryEntry[].",
+      "implementationPaths": [
+        "packages/core/src/services/week-memory.ts",
+        "packages/cli/src/commands/week-memory.ts",
+        "packages/core/src/services/plan-context.ts",
+        "packages/core/src/workspace-structure.ts",
+        "packages/runtime/skills/_shared/week-memory-capture.md"
+      ],
+      "entrypoints": [
+        "arete week-memory add --type <framing-override|deprioritization|week-constraint> --statement <s> --why <w> [--suppresses <id-or-text>] [--json]",
+        "arete week-memory list [--active] [--json]",
+        "arete week-memory resolve <id> [--json]",
+        "arete week-memory archive [--json]"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/week-memory.ts",
+        "packages/cli/src/commands/LEARNINGS.md",
+        "packages/runtime/skills/_shared/week-memory-capture.md"
+      ],
+      "skills": [
+        "week-plan",
+        "daily-plan",
+        "daily-winddown",
+        "weekly-winddown"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Backing file now/week-memory.md is agent-managed (do not hand-edit; use the CLI); seeded into new workspaces via workspace-structure.ts",
+        "Captured automatically during week-plan from John's corrections (not a log of everything); see _shared/week-memory-capture.md for the capture rule",
+        "Consumed by daily-plan / winddown to suppress overdue/stale framings with an observable note; retired via resolve; reset weekly via archive",
+        "plan-context bundle exposes weekMemory: WeekMemoryEntry[] (all active entries) alongside selectedDocs/whatsNew/topics/goals",
+        "Mirrors commitments.ts CLI structure: createServices for StorageAdapter + root, {success,...} JSON under --json, id idShort = first 8 chars"
+      ],
+      "lastVerified": "2026-06-22"
     }
   ]
 }

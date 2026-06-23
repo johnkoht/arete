@@ -136,6 +136,19 @@ Your business and product knowledge. Fill in business-overview.md, users-persona
 
 Quick capture space for notes and ideas.
 `,
+    'now/week-memory.md': `---
+week: ""
+entries: []
+---
+
+# Week Memory
+
+<!-- AGENT-MANAGED. Do not hand-edit; use \`arete week-memory\`. -->
+<!-- Interpretive overrides for the CURRENT week: corrections, deprioritizations, -->
+<!-- and week-shape constraints a fresh daily-plan agent would re-derive wrong. -->
+<!-- Spun up at week-plan, pruned by daily-winddown, archived at weekly-winddown. -->
+<!-- This is NOT the sacred user-owned Notes section and NOT part of week.md. -->
+`,
     'now/tasks.md': `# Tasks
 
 Your task backlog organized by GTD buckets.

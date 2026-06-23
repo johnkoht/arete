@@ -145,6 +145,37 @@ This is a deeper-than-prerequisite check: 2a nudges about freshness;
     a hard today-scope.
   - A `lowConfidence` project means its doc was picked on recency, not a strong
     topic match — verify before asserting its state.
+  - **Week-memory overrides (`weekMemory[]`):** the same `--day` bundle now
+    carries a `weekMemory` array — the active interpretive overrides for the
+    week (`framing-override` / `deprioritization` / `week-constraint` entries,
+    each `{ id, type, statement, why, suppresses?, status, created }`). These are
+    the corrections John already made at week-plan; honor them so the day's plan
+    does not re-derive them wrong. Apply them during scoring/surfacing (Step 3.5)
+    as follows — **never silently**:
+    - **(a) Suppress matched items.** For each `framing-override` whose
+      `suppresses` target matches a scored task/commitment (by commitment id, or
+      free-text fallback), do NOT surface that item as overdue / red. E.g. with
+      "Lindsay email is NOT overdue — proactive Wed update", do not flag the
+      Lindsay commitment overdue. Emit a one-line note recording the suppression,
+      e.g. `_suppressed overdue flag on <id> per week-memory (proactive Wed update)_`.
+    - **(b) Unmatched override → loud note, never silent.** When a `suppresses`
+      target matches NO scored task, emit a one-line "override unmatched" note —
+      e.g. `_week-memory override 'Lindsay email' could not be matched to a
+      scored task — surfacing normally_` — rather than failing silently. This is
+      the key anti-pattern from the review: a present-but-unapplied override that
+      lets the red flag still fire with no trace is harder to diagnose than a
+      total miss.
+    - **(c) `week-constraint` as the day's framing lens.** Apply each
+      `week-constraint` entry as the lens for the day's recommendations (e.g. a
+      "3-day pre-PTO sprint, leave nothing that stalls" constraint biases toward
+      unblock-others tasks).
+    - **Suppression downgrades visibility — it NEVER drops a genuine future
+      `@due` deadline.** A real deadline still surfaces (honors the existing
+      `@due` invariant, Step 3.6); suppression only removes the *overdue/red*
+      framing, it does not hide the task.
+    - Suppression is best-effort matching; when unsure whether a `suppresses`
+      target matches, prefer to surface (with the unmatched note) over silently
+      hiding.
 
 ### 3.5. Score and Select Tasks
 
@@ -393,6 +424,14 @@ After writing, confirm:
 | Daily winddown | Clear `@due` from previous day's incomplete items | daily-winddown skill |
 
 This lifecycle ensures the Today view always reflects the current day's focus without stale items accumulating.
+
+## Capture Rule
+
+Daily-plan does not capture week-memory — it CONSUMES it (via the `weekMemory[]`
+field of the `arete plan-context --day` bundle, Step 3). The shared spec at
+[`../_shared/week-memory-capture.md`](../_shared/week-memory-capture.md) defines
+what those entries mean and the three types (`framing-override`,
+`deprioritization`, `week-constraint`) you'll be acting on.
 
 ## References
 

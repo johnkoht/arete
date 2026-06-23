@@ -28,6 +28,7 @@ import type { EntityService } from './entity.js';
 import type { TopicMemoryService } from './topic-memory.js';
 import type { AreaMemoryService } from './area-memory.js';
 import type { WorkspacePaths } from '../models/index.js';
+import { type WeekMemoryEntry } from './week-memory.js';
 /**
  * PER-PROJECT expanded-body budget (chars) — each chosen project gets this,
  * NOT a shared total divided down (the divided model starved real docs to
@@ -99,6 +100,14 @@ export interface PlanContextBundle {
     goals: PlanContextGoal[];
     /** Prior `now/week.md` content (null when absent — never an error). */
     lastWeek: string | null;
+    /**
+     * Active week-memory overrides (status==='active'; resolved excluded).
+     * Both --day and --week return the SAME full active set — entries have no
+     * area field, the set is intentionally tiny, and area-filtering could hide a
+     * relevant override (so week-constraints are always surfaced). Absent store
+     * → [] (the core read never throws).
+     */
+    weekMemory: WeekMemoryEntry[];
     generatedAt: string;
     /**
      * Why `projects[]` is what it is — present only when the --day scope could
