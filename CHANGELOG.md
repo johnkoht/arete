@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — Weekly working memory: per-week interpretive overrides
+## [0.20.0] — 2026-06-22 — Weekly working memory: per-week interpretive overrides
 
 A small per-week store of *corrections* the system would otherwise re-derive wrong. When you reframe something during week planning ("that's not blocked, it's waiting on legal"; "the migration is parked until Q3"), Areté captures it once and the daily flow stops re-surfacing it. It's a handful of interpretive overrides — not a log of everything — and it resets each week. Backed by `now/week-memory.md` (agent-managed) and surfaced into the planning skills via `arete plan-context`.
 
