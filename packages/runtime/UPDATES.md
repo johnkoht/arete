@@ -4,6 +4,16 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Meeting agendas now verify project facts before writing them down
+
+Agenda prep used to surface the *right* project document, but it would still copy whatever that document said — including a decision that had since been reversed, a Jira ticket described by an old title, or a stale commitment ID. So an agenda could confidently state something that wasn't true anymore.
+
+Now, before building an agenda, Areté **grounds every project the meeting touches**: it reads the project's actual `## Decisions` and `## Open Questions` (not just the brief excerpt), verifies each referenced Jira ticket live (title, status, owner), and flags any decision a later one superseded. Those verified facts — not the document excerpt — are what land in the agenda, and a self-check refuses to save an agenda that asserts an unverified ticket or a reversed decision. If a project feeds two meetings in the same batch, it's grounded once and reused.
+
+`/project` shares the exact same behavior: the moment you start *working* from a project (drafting an agenda, reconciling tickets, deciding something), it grounds facts live the same way — while a plain "open the project" stays fast and read-only. One shared disposition, so the two can't drift.
+
+---
+
 ## Resolving commitments in the web UI now actually finishes the job
 
 Marking a commitment done (or dropped) in the web UI used to only flip its status in the background file — the linked task on your week/tasks list stayed unchecked, and it could still surface in search. Now the web UI does the same thing as `arete commitments resolve`: it checks off the linked task (only when you resolve — dropping a commitment leaves the task alone, since dropped ≠ done) and refreshes search shortly after. Resolving a big batch at once is safe too — concurrent resolves no longer overwrite each other.
