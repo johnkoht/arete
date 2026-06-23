@@ -30,6 +30,7 @@ import { registerIndexSearchCommand } from './commands/index-search.js';
 import { registerAvailabilityCommands } from './commands/availability.js';
 import { registerCalendarCommands } from './commands/calendar.js';
 import { registerCommitmentsCommand } from './commands/commitments.js';
+import { registerWeekMemoryCommand } from './commands/week-memory.js';
 import { registerViewCommand } from './commands/view.js';
 import { registerMomentumCommand } from './commands/momentum.js';
 import { registerCredentialsCommand } from './commands/credentials.js';
@@ -107,6 +108,8 @@ ${chalk.bold('Commitments')}
   commitments list [--direction]   List open commitments
   commitments create <text>        Create a commitment
   commitments resolve <id>         Resolve or drop a commitment
+  week-memory add --type <t>       Add an interpretive override for the week
+  week-memory list [--active]      List week-memory entries
 
 ${chalk.bold('Availability & Calendar')}
   availability find --with <name>  Find mutual availability with a colleague
@@ -159,6 +162,7 @@ registerSeedCommand(program);
 registerAvailabilityCommands(program);
 registerCalendarCommands(program);
 registerCommitmentsCommand(program);
+registerWeekMemoryCommand(program);
 registerViewCommand(program);
 registerMomentumCommand(program);
 registerCredentialsCommand(program);

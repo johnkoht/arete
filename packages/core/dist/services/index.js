@@ -2,6 +2,8 @@
  * Services barrel export.
  */
 export { ContextService } from './context.js';
+// Week-memory store (weekly-working-memory plan, Step 1)
+export { readWeekMemory, listWeekMemory, addWeekMemoryEntry, resolveWeekMemory, archiveWeekMemory, WEEK_MEMORY_FILE, WEEK_MEMORY_ARCHIVE_DIR, } from './week-memory.js';
 export { MemoryService, getMemoryItemsForTopics, parseMemorySections } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
