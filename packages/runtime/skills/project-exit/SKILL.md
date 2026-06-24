@@ -68,7 +68,7 @@ item is source-attributed ("in this chat you decided X"). Apply ONLY approved it
 
 | Durable proposals | Surface |
 |---|---|
-| **0** | Silent fast path — NO approval prompt. Just do step 4 (resume note) + step 5 (clear marker) and report in one line. |
+| **0** | Silent fast path — NO approval prompt. Just do step 4 (resume note) + step 5 (clear marker), report in one line, then step 7 (usage log, if enabled). |
 | **1–2** | A single inline yes/no, not the full winddown menu. |
 | **3+** | The full per-item approved surface. |
 
@@ -110,6 +110,10 @@ overwrite / merge / keep prior?") rather than silently clobbering richer context
 
 One line each: what was saved, what was linked, which commitments, where the resume note lives,
 and that the marker is cleared.
+
+### 7. Post-report instrumentation
+
+After you report — including the one-line silent fast-path report — if `usage_log` is `true` in `arete.yaml`, apply the **Usage Logging** pattern (PATTERNS.md § Usage Logging): append one objective entry to `dev/soak/project-exit.md`. Otherwise do nothing. This step runs on both the full flow and the fast path; record the model tier, what was captured/written-back, and whether the fast path was taken.
 
 ## Boundaries
 

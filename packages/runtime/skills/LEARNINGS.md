@@ -185,3 +185,15 @@ When editing a SKILL.md description, if it contains `:` confirm it's quoted, the
 - **If the disposition produces facts the skill later acts on, write them to a disk artifact and add a self-check that traces output back to it.** A reasoning result that lives only in chat is the "dark-code" failure mode (produced but never provably consumed). Example: `prepare-meeting-agenda` writes the grounded bundle to `now/.cache/agenda-grounding/<slug>.md` and step 5a fails any agenda whose ticket/decision claims don't trace to it.
 
 **Rule of thumb**: frontmatter `profile:` for skill-wide persona; inline reference for a step-scoped or conditional disposition. Don't reach for a spawned subagent to get isolation/parallelism unless a measured need justifies it and a spike proves the round-trip — the inline disposition is the default (see `_authoring-guide.md` → "Grounding dispositions").
+
+## 2026-06-23: A flag-gated terminal step must carry its gate in the SKILL.md ref line AND anchor after the report step
+
+**Context**: Adding the soak-logging `## Usage Logging` pattern (flag-gated on `usage_log`) referenced from `daily-winddown`, `project-exit`, `update-project`.
+
+**Two non-obvious authoring rules surfaced by the pre-mortem:**
+
+1. **Carry the gate in the reference line, not only in the shared pattern.** A ref like "as the final step, apply Usage Logging" sends the agent *into* the pattern unconditionally — it may create a directory or do work before reaching the STOP gate inside PATTERNS.md, breaking the inert-off invariant. The ref line itself must read "if `usage_log` is true … otherwise do nothing." The pattern's gate is a backstop, not the only gate.
+
+2. **Anchor the step after the skill's always-run report step — never in a trailing `## References`/`## Rollback` block.** A long SKILL.md (daily-winddown is 2000+ lines) has its *executable workflow* end far above its documentation sections; a step dropped into References is read as docs, not executed. For `project-exit`, also update the silent-fast-path enumeration to chain to the new step, or a weaker model reads "report in one line" as terminal.
+
+**Workspace-sync gotcha (relevant to ALL skill edits):** `.arete/skills/` copies in a workspace are synced **skip-if-exists** (`packages/core/src/services/workspace.ts:273-307`) — for BOTH per-skill subdirs and root `.md` files (PATTERNS.md is *not* in `SKILLS_DOC_FILES`, despite the stale `:293` comment). Once a workspace exists, no `arete update`/install ever refreshes these files. A canonical edit reaches a live workspace ONLY via a manual `cp`. Anything consuming workspace-generated data (e.g. the `soak-review` skill) should diff the live copy against canonical before trusting it.
