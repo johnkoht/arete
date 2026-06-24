@@ -1570,3 +1570,42 @@ contributes and degrades structurally when absent).
 **See also**: `gather-only composition` (feeds R1), `curate-with-reason-
 labels` + `surface-deferred-as-sidecar` (render R3 output),
 `do-all-work-then-engage` (the engine runs inside step 4, judgment).
+
+## Usage Logging
+
+**Purpose**: An opt-in, objective record of what a skill run actually did, so a feature being soak-tested leaves a discoverable per-run trail a cold reviewer can resolve later ("I've been testing X, check the logs"). Objective only — what ran, which config arm, the model tier, anomalies. The subjective gut-reaction is harvested separately at review time (BUILD `/soak-review`), never mid-run, so this never nags a daily user.
+
+**The gate is the first thing you do — read `usage_log` from `arete.yaml`; if the key is absent or `false`, STOP: do nothing, create no directory, take no extra step.** Only if `usage_log` is `true` do you proceed. Nothing below — not even a `mkdir` — happens otherwise. This hard gate is what lets the pattern ship inert by default.
+
+**Used by**: skills that reference this pattern as a gated terminal step — currently `daily-winddown`, `project-exit`, `update-project`. Adding another skill is one reference line in that skill plus flipping the flag; no change here.
+
+When `usage_log: true`, after the skill has finished all of its real work and reported, append exactly ONE entry to `dev/soak/<skill-id>.md`, resolved **absolutely from the workspace root** (the directory containing `arete.yaml`) — never a bare relative `dev/soak/` that could land under a subdirectory CWD. `<skill-id>` is the skill's own id (e.g. `daily-winddown`). Create the `dev/soak/` directory if missing. The file is append-only: never rewrite prior entries.
+
+### Entry format (one per run)
+
+```
+## 2026-06-20T18:42 · daily-winddown · feat/single-pass-extraction · Opus 4.8
+
+- **Config:** extraction_mode=single_pass · reconcile_mode=inline · winddown_render=theme · reconcile_shadow=true
+- **Commands:** meeting extract ×6 · winddown render 2026-06-20 · winddown apply 2026-06-20
+- **Artifacts:** winddown-2026-06-20.md (62 anchors) · .baseline.md · raw-extractions/ (6 snapshots)
+- **Outcome:** 23 approved→memory · 27 skipped · 6 commitments · 2 meetings scheduled
+- **Anomalies:** Anthony 1:1 extracted 0 items (chef flagged + recovered); staged_item_owner present
+- **Agent notes:** dedup caught ai_005→2530e74b; no hand-author fallback
+```
+
+Header line: `## <ISO timestamp> · <skill-id> · <git branch> · <model tier>`.
+
+Hard rules:
+
+- **Model tier is mandatory and you write your own.** State the model actually running this skill (e.g. `Opus 4.8`, `Sonnet 4.6`). This is the highest-value field: a run that silently dropped to a weaker model and hand-composed instead of calling the primitive is the exact confounder this log exists to catch — so a Sonnet run that logs says "Sonnet" loudly.
+- **Every field is present in every entry.** If a field is empty, write `· —` rather than dropping the bullet, so all entries share one greppable shape. The bold labels (`Config`, `Commands`, `Artifacts`, `Outcome`, `Anomalies`, `Agent notes`) are fixed.
+- **Pointers, never bodies.** Reference heavy artifacts by name + a one-line stat (`winddown-2026-06-20.md (62 anchors)`); never paste a winddown doc, extraction, or transcript into the log.
+- **Objective only.** No "felt worse", no opinions — that is `/soak-review`'s job. Record `Anomalies` as fail-loud breadcrumbs (empty extractions, fallbacks, dead pipelines you noticed), not judgments.
+- **Append, don't reconcile.** One entry per run, appended; do not merge, dedup, or rewrite earlier entries (review resets the file).
+
+### Content (per-skill)
+
+The calling SKILL.md anchors this as a terminal step **after its always-run report step** (never inside a trailing `## References`/`## Rollback` block) and carries the gate in its own reference line. Each skill fills `Config` with the `arete.yaml` flags it actually reads, and `Commands`/`Artifacts`/`Outcome` with its own primitives and counts.
+
+**See also**: `do-all-work-then-engage` (this logging is the very last step, after engage).

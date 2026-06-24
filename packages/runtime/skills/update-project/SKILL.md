@@ -104,6 +104,10 @@ John responds per item (`1, 3`, `skip 2`, `1 with <edit>`, `all`, `none`). Every
 
 One line per applied item + anything skipped. For the soak window (first 3 runs, MC3): also record items-proposed vs items-approved counts and anything John then edited by hand — that hand-edit is a missed proposal and the soak's most valuable signal.
 
+### 6. Usage log (soak instrumentation)
+
+After the report, if `usage_log` is `true` in `arete.yaml`, apply the **Usage Logging** pattern (PATTERNS.md § Usage Logging): append one objective entry to `dev/soak/update-project.md`. Otherwise do nothing. Record the model tier, items-proposed vs items-approved, and anything hand-edited (the missed-proposal signal).
+
 ## Boundaries
 
 - **Never write without an approved item.** Opening, scanning, and proposing are all pure reads (the CLI surfaces are tested write-free; this skill adds no write of its own before approval).
