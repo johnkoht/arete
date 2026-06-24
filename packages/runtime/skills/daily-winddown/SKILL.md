@@ -1918,6 +1918,10 @@ arete index
 arete events log winddown --event end
 ```
 
+### Step 8 — Usage log (soak instrumentation)
+
+After everything above, if `usage_log` is `true` in `arete.yaml`, apply the **Usage Logging** pattern (PATTERNS.md § Usage Logging) — append one objective entry to `dev/soak/daily-winddown.md`; otherwise do nothing. Record the model tier you actually ran on, the `extraction_mode`/`reconcile_mode`/`winddown_render`/`reconcile_shadow` arm, the primitives invoked, and any fallback or empty-extraction anomaly.
+
 ## Action verbs this skill may propose
 
 The chef proposes only verbs the user's APPEND file lists. Defaults
