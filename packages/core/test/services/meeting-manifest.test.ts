@@ -112,7 +112,10 @@ describe('generateMeetingManifest', () => {
       topics: ['roadmap'],
     });
 
-    const result = await generateMeetingManifest(paths, storage);
+    // Pin a wide window so these fixed-date fixtures never age out of the
+    // default 90-day recency window. This test covers week-grouping and stat
+    // sums, not the recency window (which has its own dedicated test below).
+    const result = await generateMeetingManifest(paths, storage, { windowDays: 100000 });
     assert.equal(result.meetingCount, 3);
 
     const manifestPath = join(meetingsDir, 'MANIFEST.md');
