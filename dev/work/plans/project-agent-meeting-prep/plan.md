@@ -1,8 +1,8 @@
 ---
 slug: project-agent-meeting-prep
 status: approved
-has_pre_mortem: false
-has_review: false
+has_pre_mortem: true
+has_review: true
 has_prd: false
 created: 2026-06-22
 approved: 2026-06-22

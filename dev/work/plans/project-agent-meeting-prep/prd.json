@@ -1,0 +1,98 @@
+{
+  "name": "project-agent-meeting-prep",
+  "branchName": "feature/project-agent-meeting-prep",
+  "goal": "Extract a reusable project-agent disposition (load-full-body + ground-claims-live + flag-supersession) into a single shipped profile, consumed two ways: adopt (/project interactive) and spawn (agenda-prep fans out one grounding agent per unique project, then synthesizes agendas from grounded bundles). v1 is markdown-dominant; the WS-5 disk cache is deferred.",
+  "userStories": [
+    {
+      "id": "task-1-profile-and-bundle-schema",
+      "title": "Author the project-agent disposition + grounded-bundle schema (WS-A)",
+      "description": "Create packages/runtime/profiles/project-agent.md matching sibling-profile format (frontmatter name/description + prose body). Defines the disposition: load full project body via arete project open / plan-context --project; verify ticket/owner/decision claims against the live source before asserting; flag superseded decisions (flag-not-resolve). Documents live-grounding mode (always-on spawn / on-when-working /project / off on bare open). Defines the grounded-bundle schema EXACTLY ONCE here (single source): slug, area, decisions[] (superseded? flag + conflict note), tickets[] ({key,title,status,owner,verifiedAt} verified live), openQuestions[], whatsNew, commitments[] (verified IDs), provenance per item.",
+      "acceptanceCriteria": [
+        "File exists at packages/runtime/profiles/project-agent.md (NOT repo root, NOT .pi/) with valid frontmatter name: project-agent + description",
+        "Body matches sibling-profile prose structure and reads as disposition, not procedure",
+        "Grounded-bundle schema defined once here with all fields incl. decisions[].superseded? (flag-only, no resolution logic)",
+        "Live-grounding mode documented: always-on (spawn), on-when-working (/project), off on bare open",
+        "grep -nE 'subagent\\(|agentScope|\\.pi/|Task\\(' returns nothing — zero harness/tool coupling",
+        "Markdown soft-wrapped (one line per paragraph)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-agenda-spawn-orchestration",
+      "title": "Wire spawn-mode orchestration into prepare-meeting-agenda (WS-B + WS-C)",
+      "description": "Edit packages/runtime/skills/prepare-meeting-agenda/SKILL.md to add the grounded fan-out pipeline as a batch/multi-project path that augments (never replaces) the arete agenda scaffold gate: resolve projects per meeting (area->project + --project) -> dedup to unique project set across the batch -> fan out one grounding agent per unique project (adopt project-agent.md disposition, live-grounding ON, meeting title/attendees as relevance query; harness-agnostic with inline-degradation fallback) -> synthesize each agenda from scaffold signal + relevant grounded bundle(s). Make the F3 relaxation conditional on isolation holding.",
+      "acceptanceCriteria": [
+        "New pipeline is additive: the arete agenda scaffold step-4 gate and existing curate/frame flow remain intact; grounded bundles are a NEW synthesis input",
+        "Spawn instruction is harness-agnostic with explicit inline-degradation fallback; no tool names; grep -nE 'subagent\\(|agentScope|\\.pi/|Task\\(' over the file returns nothing",
+        "Dedup keyed by unique project across the batch with the 'grounded exactly once' assertion in prose",
+        "F3 relaxation is conditional: per-agenda degradation prevented only when grounded+synthesized in an isolated subagent; inline/degraded runs keep the F3 rule AND the AC1 self-check (:120-132) fully in force; AC1 text remains verbatim-equivalent",
+        "Skill references the grounded-bundle schema by pointer to project-agent.md; does not re-describe the field list",
+        "Carve-outs documented: single-meeting-single-project -> adopt inline (no spawn); single-meeting-multi-project -> fan out grounding, one agenda; batch -> full pipeline; no parallel per-meeting synthesis until a batch grows large"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-project-adopt-unification",
+      "title": "Unify /project onto the shared disposition (WS-D adopt)",
+      "description": "Edit packages/runtime/skills/project/SKILL.md so adopt mode references project-agent.md as its disposition. Add additive, read-only live-grounding: when actively WORKING a project (not a bare open), verify ticket/decision claims live and flag supersession before asserting. The bare arete project open data path stays deterministic, read-only, fast, ungrounded.",
+      "acceptanceCriteria": [
+        "/project references project-agent.md for its disposition (shared source with spawn mode)",
+        "Live-grounding is additive read-only verification (never writes; preserves write-invariant at project/SKILL.md:29,80-82), gated on-when-working, explicitly OFF on a bare arete project open",
+        "'No LLM in the data path' / read-only boundaries remain true for retrieval; grounding is a reasoning layer on top, not in the CLI data path",
+        "Skill references the bundle schema by pointer, not a re-description"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-authoring-guide-reconcile",
+      "title": "Reconcile the authoring guide (WS-D guide)",
+      "description": "Edit packages/runtime/skills/_authoring-guide.md so the inline-only note (~:359) is RECONCILED, not contradicted: distinguish 'inline expert patterns (default)' from a newly sanctioned 'subagent-fan-out' pattern for batch + multi-project work, with graceful inline degradation.",
+      "acceptanceCriteria": [
+        "_authoring-guide.md documents subagent-fan-out as a distinct sanctioned pattern AND reconciles the :359 inline-only note (no dangling contradiction)",
+        "New section covers when-to-spawn vs when-to-adopt-inline, the dedup-by-unique-project rule, the lean-prime principle (full bodies stay inside grounding agents; only compact bundles return), and the harness-agnostic + inline-degradation requirement"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-defer-cache-confirm-supersession",
+      "title": "Defer the cache with a correct-design note; confirm supersession scope (WS-E)",
+      "description": "Update dev/work/backlog/plan-context-injection-followups.md item #5 (and the plan's WS-E) to record the cache as deferred for this effort with the staleness rationale and the correct design for when it is built (cache only file-derived fields under mtime keying, always re-verify tickets[] live, no TTL; critical test = changed-ticket scenario NOT served from cache). Confirm supersession stays flag-only.",
+      "acceptanceCriteria": [
+        "Backlog item #5 records the deferral, the staleness rationale, the correct future design, and the required changed-ticket test",
+        "No cache code added: grep -rl 'cache/plan-context' packages/ shows no new implementation",
+        "Supersession remains flag-not-resolve; no resolution/ranking logic anywhere"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-discoverability-docs-dryrun",
+      "title": "Discoverability, docs, dry-run validation (close-out)",
+      "description": "Update user-facing docs (GUIDE.md and/or packages/runtime/UPDATES.md) describing the project-agent disposition and grounded agenda-prep flow. Update dev/catalog/capabilities.json if applicable. Run a dry-run sanity pass tracing the new skill prose end-to-end against a real meeting+project to confirm the pipeline reads coherently and carve-outs route correctly.",
+      "acceptanceCriteria": [
+        "GUIDE.md (and/or packages/runtime/UPDATES.md) describes the new disposition + grounded agenda-prep flow for users",
+        "arete route still routes agenda-prep and /project queries correctly (no routing regression)",
+        "Catalog/discoverability entries updated if applicable, or explicitly noted N/A",
+        "Dry-run: pipeline + carve-outs traced against one real meeting/project, read coherently, documented in progress notes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-06-23T00:00:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
