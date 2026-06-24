@@ -176,6 +176,16 @@ When editing a SKILL.md description, if it contains `:` confirm it's quoted, the
 
 ---
 
+## 2026-06-23: Profiles can be adopted INLINE (step-scoped), not only via the frontmatter `profile:` field
+
+**Context**: The documented profile mechanism (above) attaches a profile to a skill via the frontmatter `profile:` field, which makes the generated slash command adopt it for the WHOLE skill. But sometimes a disposition should govern only ONE step, or only a conditional mode — e.g. `prepare-meeting-agenda` grounds project facts only in step 4a, and `/project` adopts the grounding posture only when the user starts *working* (not on a bare read-only open). For those, reference the profile **inline in prose** instead.
+
+**How**: In the skill body, instruct the agent to "adopt the `.agents/profiles/<name>.md` disposition" at the relevant step. Two gotchas:
+- **Use the runtime path `.agents/profiles/<name>.md`, NOT the source `profiles/<name>.md`.** Profiles install to `.agents/profiles/` (`workspace.ts` copies every `.md`, no registry to update). The source path won't resolve in the user workspace.
+- **If the disposition produces facts the skill later acts on, write them to a disk artifact and add a self-check that traces output back to it.** A reasoning result that lives only in chat is the "dark-code" failure mode (produced but never provably consumed). Example: `prepare-meeting-agenda` writes the grounded bundle to `now/.cache/agenda-grounding/<slug>.md` and step 5a fails any agenda whose ticket/decision claims don't trace to it.
+
+**Rule of thumb**: frontmatter `profile:` for skill-wide persona; inline reference for a step-scoped or conditional disposition. Don't reach for a spawned subagent to get isolation/parallelism unless a measured need justifies it and a spike proves the round-trip — the inline disposition is the default (see `_authoring-guide.md` → "Grounding dispositions").
+
 ## 2026-06-23: A flag-gated terminal step must carry its gate in the SKILL.md ref line AND anchor after the report step
 
 **Context**: Adding the soak-logging `## Usage Logging` pattern (flag-gated on `usage_log`) referenced from `daily-winddown`, `project-exit`, `update-project`.
