@@ -110,7 +110,7 @@ export function createReviewRouter(workspaceRoot: string): Hono {
               source: item.source,
               confidence: item.confidence,
               ownerSlug: item.ownerSlug,
-              direction: item.direction,
+              direction: item.direction === 'none' ? undefined : item.direction,
               counterpartySlug: item.counterpartySlug,
             });
           }

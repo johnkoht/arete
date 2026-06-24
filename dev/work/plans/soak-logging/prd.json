@@ -1,0 +1,96 @@
+{
+  "name": "soak-logging",
+  "branchName": "feature/soak-logging",
+  "goal": "Flag-gated objective per-run usage log baked into opted-in skills via one shared `## Usage Logging` pattern in PATTERNS.md (referenced as a gated terminal step by daily-winddown, project-exit, update-project), plus a soak-review BUILD skill (Tier 2). Content-only markdown; inert when usage_log absent/false.",
+  "globalConstraints": [
+    "Run ENTIRELY in the worktree feature/soak-logging. Never switch branches in the main repo.",
+    "~/code/arete-reserv is READ-ONLY during the build. No writes/commits/cp there until the post-merge re-sync gate.",
+    "Content-only: NO npm run build, NO dist commit. packages/runtime has no build step; skills ship as raw markdown. The usual commit-dist rule does NOT apply.",
+    "Preserve the inert-off invariant: the STOP gate is the literal first sentence of the pattern AND restated in every SKILL.md ref line (R1). No state mutation (not even mkdir) before the gate.",
+    "Do not break existing PATTERNS.md references (daily-winddown refs it 9x). Append the new section; do not reorder existing ones."
+  ],
+  "requiredReading": [
+    "dev/work/plans/soak-logging/plan.md - full design, entry format, scope tiers",
+    "dev/work/plans/soak-logging/pre-mortem.md - mitigations R1/R3/R4/R5/R6 (embed per-task)",
+    "dev/work/plans/soak-logging/review.md - structural verification + Observation A (project-exit Step 7)",
+    "packages/runtime/skills/PATTERNS.md - existing ## Section pattern style (do-all-work-then-engage, reconcile-engine)",
+    "memory/entries/2026-06-22_winddown-approval-stack-learnings.md - 'fail loud, never silently switch formats' -> why model-tier is mandatory"
+  ],
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Add ## Usage Logging pattern to PATTERNS.md",
+      "area": "runtime-skills",
+      "description": "Append a new ## Usage Logging section after the last pattern in packages/runtime/skills/PATTERNS.md, matching existing pattern prose style. The literal first sentence is the hard gate: read usage_log from arete.yaml; if absent or false, STOP - do nothing, create no directory. If true, after the skill's real work append ONE entry to the absolute workspace path <workspace-root>/dev/soak/<skill-id>.md using the labeled format from the plan. Model tier mandatory (model writes its own tier). Every field present each entry; use ' · —' for an empty field rather than dropping the bullet. Pointers to heavy artifacts, never inline bodies.",
+      "acceptanceCriteria": [
+        "AC1.1 The STOP gate is the literal first sentence of the section (R1).",
+        "AC1.2 Append path is absolute/workspace-root-anchored, never a bare relative dev/soak/ (R6).",
+        "AC1.3 Entry format has all bold labels (Config, Commands, Artifacts, Outcome, Anomalies, Agent notes) + the dated header line with model tier; format note requires every field present, '—' for empty (R4).",
+        "AC1.4 No existing pattern reordered; daily-winddown's 9 PATTERNS.md references still resolve."
+      ],
+      "mitigations": [
+        "R1: gate first sentence, no mkdir before gate.",
+        "R4: all fields present, '—' for empty.",
+        "R6: absolute workspace-anchored path."
+      ],
+      "tests": "Manual: grep the new section; confirm gate is first sentence; confirm format block intact.",
+      "files": ["packages/runtime/skills/PATTERNS.md"]
+    },
+    {
+      "id": "T2",
+      "title": "daily-winddown gated terminal-step ref line",
+      "area": "runtime-skills",
+      "description": "Add a single gated terminal-step line after daily-winddown's always-run report/apply step (Step 6), BEFORE the trailing ## References / ## Rollback blocks (R5). Wording carries the gate: 'After the final report, if usage_log is true in arete.yaml, apply the Usage Logging pattern (PATTERNS.md § Usage Logging); otherwise do nothing.'",
+      "acceptanceCriteria": [
+        "AC2.1 Line carries the gate itself, not only PATTERNS.md (R1).",
+        "AC2.2 Placed after the report step, NOT inside ## References / ## Rollback (R5)."
+      ],
+      "mitigations": ["R1: gate in the line.", "R5: anchored to always-run report step."],
+      "tests": "Manual: locate the line; confirm placement after report step and before References.",
+      "files": ["packages/runtime/skills/daily-winddown/SKILL.md"]
+    },
+    {
+      "id": "T3",
+      "title": "project-exit Step 7 (Post-report instrumentation)",
+      "area": "runtime-skills",
+      "description": "Add a new Step 7 (Post-report instrumentation) carrying the gate, so logging survives the silent fast-path (0 durable proposals) which still runs the report step (review Obs A). Same gated wording as T2.",
+      "acceptanceCriteria": [
+        "AC3.1 Step 7 exists, carries the gate (R1).",
+        "AC3.2 Step 7 is reached on BOTH the full flow and the silent fast-path."
+      ],
+      "mitigations": ["R1: gate in step.", "R5/ObsA: Step 7 after report, survives fast-path."],
+      "tests": "Manual: confirm Step 7 present and reachable from both flows described in the skill.",
+      "files": ["packages/runtime/skills/project-exit/SKILL.md"]
+    },
+    {
+      "id": "T4",
+      "title": "update-project gated terminal-step ref line",
+      "area": "runtime-skills",
+      "description": "Add the gated terminal-step line after update-project's Step 5 (Report). Same gated wording as T2.",
+      "acceptanceCriteria": [
+        "AC4.1 Line carries the gate (R1).",
+        "AC4.2 Placed after Step 5 (Report)."
+      ],
+      "mitigations": ["R1: gate in line.", "R5: after report step."],
+      "tests": "Manual: locate the line after Step 5.",
+      "files": ["packages/runtime/skills/update-project/SKILL.md"]
+    },
+    {
+      "id": "T5",
+      "title": "Author soak-review BUILD skill (Tier 2)",
+      "area": "build-skill",
+      "description": "Author a soak-review skill in the current BUILD harness (.pi/skills/soak-review/). It reads ~/code/arete-reserv/dev/soak/<feature>.md + pointed-at artifacts + arete-reserv git diff since last checkpoint, diffs against the last review checkpoint (new runs only), prompts for a one-line gut reaction per run/cluster, and synthesizes into SOAK-FINDINGS.md grouped by severity with fixes cheapest-first (tier bump -> prompt tighten -> architecture). FIRST STEP: diff the live workspace skill copies (~/code/arete-reserv/.arete/skills/{PATTERNS.md, <skill>/SKILL.md}) against canonical and flag drift before trusting the log (R3). Separable commit from T1-T4.",
+      "acceptanceCriteria": [
+        "AC5.1 First step diffs workspace skill copies vs canonical and flags drift (R3).",
+        "AC5.2 Reads across the repo boundary by absolute path; checkpoints to avoid re-reviewing old runs.",
+        "AC5.3 Output is severity-grouped findings with cheapest-first fixes; prompts for subjective reaction (the subjective field deliberately omitted from the capture file)."
+      ],
+      "mitigations": [
+        "R3: workspace-vs-canonical diff as first step.",
+        "R7: separable commit; capture (T1-T4) has standalone value if review harness moves."
+      ],
+      "tests": "Manual dry-run against an existing dev/soak entry once capture has produced one.",
+      "files": [".pi/skills/soak-review/SKILL.md"]
+    }
+  ]
+}
